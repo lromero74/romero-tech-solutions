@@ -1,11 +1,11 @@
 import express from 'express';
 import { getPool } from '../config/database.js';
-import { authenticateToken } from '../middleware/authMiddleware.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 // Get all location data for service area management
-router.get('/all', authenticateToken, async (req, res) => {
+router.get('/all', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
 
@@ -79,7 +79,7 @@ router.get('/all', authenticateToken, async (req, res) => {
 });
 
 // Get current service areas (what we serve)
-router.get('/served', authenticateToken, async (req, res) => {
+router.get('/served', authMiddleware, async (req, res) => {
   try {
     const pool = await getPool();
 
@@ -97,7 +97,7 @@ router.get('/served', authenticateToken, async (req, res) => {
 });
 
 // Update service areas
-router.post('/served', authenticateToken, async (req, res) => {
+router.post('/served', authMiddleware, async (req, res) => {
   try {
     const { selections } = req.body;
     const pool = await getPool();
@@ -146,7 +146,7 @@ router.post('/served', authenticateToken, async (req, res) => {
 });
 
 // Get hierarchical data for specific location type and parent
-router.get('/children/:locationType/:parentId', authenticateToken, async (req, res) => {
+router.get('/children/:locationType/:parentId', authMiddleware, async (req, res) => {
   try {
     const { locationType, parentId } = req.params;
     const pool = await getPool();
