@@ -23,6 +23,27 @@ export const esTranslations = {
 
   'home.services.title': 'Nuestros Servicios',
   'home.services.subtitle': 'Soluciones integrales de TI para todas sus necesidades tecnológicas',
+
+  // Services Items
+  'home.services.items.support.title': 'Soporte de TI y Reparación de Computadoras',
+  'home.services.items.support.description': 'Reparación profesional de computadoras, solución de problemas y soporte técnico para todas sus necesidades tecnológicas.',
+  'home.services.items.support.features.remote': 'Solución de problemas y soporte remoto',
+  'home.services.items.support.features.onsite': 'Visitas de servicio en el sitio',
+  'home.services.items.support.features.maintenance': 'Mantenimiento preventivo',
+
+  'home.services.items.network.title': 'Soluciones de Red y WiFi',
+  'home.services.items.network.description': 'Configuración completa de redes, configuración WiFi y soluciones de conectividad para hogares y empresas.',
+  'home.services.items.network.features.setup': 'Configuración y configuración de red',
+  'home.services.items.network.features.security': 'Implementación de seguridad de red',
+  'home.services.items.network.features.optimization': 'Optimización WiFi y solución de problemas',
+
+  'home.services.items.printer.title': 'Configuración y Soporte de Impresoras',
+  'home.services.items.printer.description': 'Instalación profesional de impresoras, configuración, solución de problemas y soporte de mantenimiento continuo.',
+  'home.services.items.printer.features.installation': 'Instalación y configuración de impresoras',
+  'home.services.items.printer.features.troubleshooting': 'Solución de problemas y reparaciones de impresoras',
+  'home.services.items.printer.features.maintenance': 'Mantenimiento continuo y suministros',
+
+  // Legacy services (keeping for backwards compatibility)
   'home.services.computerRepair': 'Reparación de Computadoras',
   'home.services.computerRepairDesc': 'Diagnósticos de hardware, solución de problemas de software y optimización del sistema',
   'home.services.printerSetup': 'Configuración de Impresoras',
@@ -31,6 +52,28 @@ export const esTranslations = {
   'home.services.networkSetupDesc': 'Configuración WiFi, configuración de enrutadores y soluciones de conectividad',
   'home.services.security': 'Seguridad y Eliminación de Virus',
   'home.services.securityDesc': 'Eliminación de malware, configuración de antivirus y protección del sistema',
+
+  // About Section (for Home page)
+  'home.about.title': '¿Por Qué Elegir Romero Tech Solutions?',
+  'home.about.description': 'Con más de 30 años de experiencia sirviendo desde instalaciones militares hasta empresas Fortune 500, aportamos experiencia de nivel empresarial a sus necesidades tecnológicas locales.',
+  'home.about.stats.experience': 'Años de Experiencia',
+  'home.about.stats.clients': 'Clientes Felices',
+  'home.about.stats.support': 'Soporte Disponible',
+  'home.about.stats.satisfaction': 'Tasa de Satisfacción',
+  'home.about.cta': 'Conozca Más Sobre Nosotros',
+  'home.about.badge.title': 'Expertos de Confianza',
+  'home.about.badge.subtitle': 'Sus Héroes Tecnológicos del Vecindario',
+
+  // Contact Section (for Home page)
+  'home.contact.title': '¿Listo para Hacer que Su Tecnología Funcione?',
+  'home.contact.subtitle': 'Contáctenos hoy para soporte y servicio de TI rápido y profesional',
+  'home.contact.phone.title': 'Llámenos',
+  'home.contact.phone.description': 'Hable directamente con nuestro equipo experto',
+  'home.contact.email.title': 'Envíenos un Correo',
+  'home.contact.email.description': 'Envíenos sus preguntas tecnológicas',
+  'home.contact.location.title': 'Área de Servicio',
+  'home.contact.location.description': 'Sirviendo el área metropolitana de Escondido',
+  'home.contact.cta': 'Comenzar Hoy',
 
   'home.whyChoose.title': '¿Por Qué Elegirnos?',
   'home.whyChoose.subtitle': 'Con más de 30 años de experiencia sirviendo desde instalaciones militares hasta empresas Fortune 500, aportamos experiencia de nivel empresarial a sus necesidades tecnológicas locales.',

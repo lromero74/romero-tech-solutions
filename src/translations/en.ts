@@ -23,6 +23,27 @@ export const enTranslations = {
 
   'home.services.title': 'Our Services',
   'home.services.subtitle': 'Comprehensive IT solutions for all your technology needs',
+
+  // Services Items
+  'home.services.items.support.title': 'IT Support & Computer Repair',
+  'home.services.items.support.description': 'Professional computer repair, troubleshooting, and technical support for all your technology needs.',
+  'home.services.items.support.features.remote': 'Remote troubleshooting and support',
+  'home.services.items.support.features.onsite': 'On-site service visits',
+  'home.services.items.support.features.maintenance': 'Preventive maintenance',
+
+  'home.services.items.network.title': 'Network & WiFi Solutions',
+  'home.services.items.network.description': 'Complete network setup, WiFi configuration, and connectivity solutions for homes and businesses.',
+  'home.services.items.network.features.setup': 'Network setup and configuration',
+  'home.services.items.network.features.security': 'Network security implementation',
+  'home.services.items.network.features.optimization': 'WiFi optimization and troubleshooting',
+
+  'home.services.items.printer.title': 'Printer Setup & Support',
+  'home.services.items.printer.description': 'Professional printer installation, configuration, troubleshooting, and ongoing maintenance support.',
+  'home.services.items.printer.features.installation': 'Printer installation and setup',
+  'home.services.items.printer.features.troubleshooting': 'Printer troubleshooting and repairs',
+  'home.services.items.printer.features.maintenance': 'Ongoing maintenance and supplies',
+
+  // Legacy services (keeping for backwards compatibility)
   'home.services.computerRepair': 'Computer Repair',
   'home.services.computerRepairDesc': 'Hardware diagnostics, software troubleshooting, and system optimization',
   'home.services.printerSetup': 'Printer Setup',
@@ -31,6 +52,28 @@ export const enTranslations = {
   'home.services.networkSetupDesc': 'WiFi configuration, router setup, and connectivity solutions',
   'home.services.security': 'Security & Virus Removal',
   'home.services.securityDesc': 'Malware removal, antivirus setup, and system protection',
+
+  // About Section (for Home page)
+  'home.about.title': 'Why Choose Romero Tech Solutions?',
+  'home.about.description': 'With over 30 years of experience serving everyone from military installations to Fortune 500 companies, we bring enterprise-level expertise to your local technology needs.',
+  'home.about.stats.experience': 'Years Experience',
+  'home.about.stats.clients': 'Happy Clients',
+  'home.about.stats.support': 'Support Available',
+  'home.about.stats.satisfaction': 'Satisfaction Rate',
+  'home.about.cta': 'Learn More About Us',
+  'home.about.badge.title': 'Trusted Experts',
+  'home.about.badge.subtitle': 'Your Neighborhood Tech Heroes',
+
+  // Contact Section (for Home page)
+  'home.contact.title': 'Ready to Get Your Tech Working?',
+  'home.contact.subtitle': 'Contact us today for fast, professional IT support and service',
+  'home.contact.phone.title': 'Call Us',
+  'home.contact.phone.description': 'Speak directly with our expert team',
+  'home.contact.email.title': 'Email Us',
+  'home.contact.email.description': 'Send us your tech questions',
+  'home.contact.location.title': 'Service Area',
+  'home.contact.location.description': 'Serving the greater Escondido area',
+  'home.contact.cta': 'Get Started Today',
 
   'home.whyChoose.title': 'Why Choose Us?',
   'home.whyChoose.subtitle': 'With over 30 years of experience serving everyone from military installations to Fortune 500 companies, we bring enterprise-level expertise to your local technology needs.',
