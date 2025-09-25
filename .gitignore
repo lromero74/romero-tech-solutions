@@ -58,3 +58,4 @@ amplify/backend/amplify-meta.json
 amplify/backend/.temp
 build/
 .amplifyrc
+CLAUDE.md
