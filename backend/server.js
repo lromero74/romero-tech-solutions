@@ -19,7 +19,9 @@ import { sessionService } from './services/sessionService.js';
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
 
-dotenv.config();
+// Load environment variables with priority: .env.local > .env
+dotenv.config({ path: '.env.local' }); // Higher priority - local development with production DB
+dotenv.config(); // Lower priority - default configuration
 
 const app = express();
 const PORT = process.env.PORT || 3001;
