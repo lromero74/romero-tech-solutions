@@ -248,7 +248,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
   const refreshClients = async () => {
     try {
-      const data = await adminService.getUsers({ role: 'client' });
+      const data = await adminService.getUsers({ role: 'client', limit: 1000 });
       const rawClients = data.users || [];
       // Enhance clients with addresses using current businesses and service locations
       const enhancedClients = enhanceClientsWithAddresses(rawClients, businesses, serviceLocations);
@@ -346,7 +346,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         adminService.getEmployeesWithLoginStatus(),
         adminService.getBusinesses(),
         adminService.getServiceLocations(),
-        adminService.getUsers({ role: 'client' }),
+        adminService.getUsers({ role: 'client', limit: 1000 }),
         adminService.getServices(),
         adminService.getServiceRequests()
       ]);
