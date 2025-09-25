@@ -290,6 +290,32 @@ export const esTranslations = {
   'login.mfa.codeSentSuccess': 'Código de verificación enviado exitosamente',
   'login.mfa.codeResendFailed': 'Falló el reenvío del código de verificación',
 
+  // Coming Soon Page
+  'comingSoon.badge': 'Próximamente',
+  'comingSoon.title': 'Portal Cliente',
+  'comingSoon.titleHighlight': '¡Próximamente!',
+  'comingSoon.subtitle': 'Estamos construyendo una increíble plataforma de experiencia del cliente que revolucionará cómo interactúa con nuestros servicios.',
+  'comingSoon.callButton': 'Llamar (619) 940-5550',
+  'comingSoon.emailButton': 'Envíenos un Correo',
+
+  // Coming Soon Features
+  'comingSoon.features.realtime.title': 'Actualizaciones en Tiempo Real',
+  'comingSoon.features.realtime.description': 'Rastree sus solicitudes de servicio y obtenga notificaciones instantáneas sobre el progreso.',
+  'comingSoon.features.secure.title': 'Acceso Seguro',
+  'comingSoon.features.secure.description': 'Seguridad de grado empresarial para proteger sus datos comerciales sensibles.',
+  'comingSoon.features.management.title': 'Gestión Fácil',
+  'comingSoon.features.management.description': 'Interfaz intuitiva para gestionar todos sus servicios de TI desde un solo lugar.',
+
+  // Coming Soon Contact Section
+  'comingSoon.contact.title': '¿Necesita Soporte Inmediato?',
+  'comingSoon.contact.subtitle': 'Mientras construimos su nuevo portal cliente, nuestro equipo siempre está listo para ayudarle con cualquier necesidad de TI.',
+  'comingSoon.contact.call.title': 'Llámenos',
+  'comingSoon.contact.call.description': 'Hable directamente con nuestros expertos técnicos',
+  'comingSoon.contact.call.button': '(619) 940-5550',
+  'comingSoon.contact.email.title': 'Envíenos un Correo',
+  'comingSoon.contact.email.description': 'Envíenos sus preguntas y le responderemos rápidamente',
+  'comingSoon.contact.email.button': 'Enviar Correo',
+
   // Dashboard
   'dashboard.auth.title': 'Autenticación Requerida',
   'dashboard.auth.subtitle': 'Por favor inicie sesión para acceder a su panel.',

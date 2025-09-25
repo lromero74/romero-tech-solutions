@@ -150,8 +150,8 @@ function AppContent() {
     }
   };
 
-  // Don't show header/footer for role-specific dashboard pages, confirmation page, and hidden client login
-  if (currentPage === 'admin' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'clogin' || (currentPage === 'dashboard' && isAuthenticated && (isAdmin || isTechnician || isClient))) {
+  // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated
+  if (currentPage === 'admin' || currentPage === 'technician' || currentPage === 'confirm-email' || (currentPage === 'clogin' && isAuthenticated && isClient) || (currentPage === 'dashboard' && isAuthenticated && (isAdmin || isTechnician || isClient))) {
     return renderPage();
   }
 

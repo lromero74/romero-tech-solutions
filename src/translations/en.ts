@@ -290,6 +290,32 @@ export const enTranslations = {
   'login.mfa.codeSentSuccess': 'Verification code sent successfully',
   'login.mfa.codeResendFailed': 'Failed to resend verification code',
 
+  // Coming Soon Page
+  'comingSoon.badge': 'Coming Soon',
+  'comingSoon.title': 'Client Portal',
+  'comingSoon.titleHighlight': 'Coming Soon!',
+  'comingSoon.subtitle': "We're building an amazing client experience platform that will revolutionize how you interact with our services.",
+  'comingSoon.callButton': 'Call (619) 940-5550',
+  'comingSoon.emailButton': 'Email Us',
+
+  // Coming Soon Features
+  'comingSoon.features.realtime.title': 'Real-Time Updates',
+  'comingSoon.features.realtime.description': 'Track your service requests and get instant notifications on progress.',
+  'comingSoon.features.secure.title': 'Secure Access',
+  'comingSoon.features.secure.description': 'Enterprise-grade security to protect your sensitive business data.',
+  'comingSoon.features.management.title': 'Easy Management',
+  'comingSoon.features.management.description': 'Intuitive interface to manage all your IT services from one place.',
+
+  // Coming Soon Contact Section
+  'comingSoon.contact.title': 'Need Immediate Support?',
+  'comingSoon.contact.subtitle': "While we're building your new client portal, our team is always ready to help you with any IT needs.",
+  'comingSoon.contact.call.title': 'Call Us',
+  'comingSoon.contact.call.description': 'Speak directly with our technical experts',
+  'comingSoon.contact.call.button': '(619) 940-5550',
+  'comingSoon.contact.email.title': 'Email Us',
+  'comingSoon.contact.email.description': "Send us your questions and we'll respond quickly",
+  'comingSoon.contact.email.button': 'Send Email',
+
   // Dashboard
   'dashboard.auth.title': 'Authentication Required',
   'dashboard.auth.subtitle': 'Please sign in to access your dashboard.',
