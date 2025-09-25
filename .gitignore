@@ -1,0 +1,60 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Environment variables (CRITICAL - Contains secrets)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+backend/.env*
+backend/.env
+backend/.env.local
+backend/.env.production
+backend/.env.development.local
+backend/.env.test.local
+backend/.env.production.local
+
+# Database backups (may contain sensitive data)
+backend/database_backups/
+database_backups/
+
+# Deployment files
+amplify-deployment.zip
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS generated files
+Thumbs.db
+
+# AWS Amplify
+amplify/backend/awscloudformation
+amplify/backend/.temp
+amplify/#current-cloud-backend
+amplify/.config/local-*
+amplify/logs
+amplify/mock-data
+amplify/backend/amplify-meta.json
+amplify/backend/.temp
+build/
+.amplifyrc

@@ -1,0 +1,699 @@
+import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { AuthUser, UserRole, ClientRegistrationRequest } from '../types/database';
+import { authService } from '../services/authService';
+import { clientRegistrationService } from '../services/clientRegistrationService';
+import { Hub } from 'aws-amplify/utils';
+import SessionManager, { SessionConfig } from '../utils/sessionManager';
+import { systemSettingsService } from '../services/systemSettingsService';
+import ConfirmationDialog from '../components/common/ConfirmationDialog';
+
+interface EnhancedAuthContextType {
+  user: AuthUser | null;
+  isLoading: boolean;
+  isAuthenticated: boolean;
+  role: UserRole | null;
+  isAdmin: boolean;
+  isTechnician: boolean;
+  isClient: boolean;
+  isFirstAdmin: boolean;
+  signIn: (email: string, password: string) => Promise<AuthUser>;
+  signUpAdmin: (userData: { email: string; password: string; name: string }) => Promise<{ user: any; isFirstAdmin: boolean }>;
+  signUpClient: (registrationData: ClientRegistrationRequest) => Promise<{ success: boolean; message: string; emailConfirmationSent: boolean }>;
+  confirmClientEmail: (token: string, email: string) => Promise<{ success: boolean; message: string; user?: AuthUser }>;
+  resendConfirmationEmail: (email: string) => Promise<{ success: boolean; message: string }>;
+  signOut: () => Promise<void>;
+  hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
+  refreshUser: () => Promise<void>;
+  // MFA methods
+  sendAdminMfaCode: (email: string, password: string) => Promise<void>;
+  verifyAdminMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
+  // Session management
+  sessionConfig: SessionConfig | null;
+  updateSessionConfig: (config: Partial<SessionConfig>) => void;
+  extendSession: () => void;
+  isSessionActive: boolean;
+  sessionWarning: { isVisible: boolean; timeLeft: number };
+  sessionToken: string | null;
+}
+
+const EnhancedAuthContext = createContext<EnhancedAuthContextType | undefined>(undefined);
+
+interface EnhancedAuthProviderProps {
+  children: ReactNode;
+}
+
+export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ children }) => {
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasError, setHasError] = useState(false);
+  const [sessionManager] = useState(() => SessionManager.getInstance());
+  const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [sessionWarning, setSessionWarning] = useState({ isVisible: false, timeLeft: 0 });
+  const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
+
+  // Helper function to determine if a user requires MFA
+  const requiresMfa = async (user: AuthUser | any): Promise<boolean> => {
+    if (!user) return false;
+
+    try {
+      // Check if MFA is required based on system settings
+      const mfaRequired = await systemSettingsService.getMfaRequired();
+
+      // MFA applies to all employees when enabled in system settings
+      // Clients are not subject to MFA (they have separate authentication flow)
+      if (mfaRequired && (user.role === 'admin' || user.role === 'technician' || user.role === 'sales')) {
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Error checking MFA requirement:', error);
+      // Default to requiring MFA for admin users for security (fallback)
+      return user.role === 'admin';
+    }
+  };
+
+  const checkAuthState = async () => {
+    try {
+      setIsLoading(true);
+      setHasError(false);
+
+      // First validate with backend session if we have a token
+      const storedSessionToken = localStorage.getItem('sessionToken');
+      setSessionToken(storedSessionToken);
+      let currentUser = null;
+
+      if (storedSessionToken) {
+        try {
+          // Validate session with backend
+          const sessionResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/validate-session`, {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${storedSessionToken}`,
+              'Content-Type': 'application/json',
+            }
+          });
+
+          if (sessionResponse.ok) {
+            // Session is valid, get current user
+            currentUser = await authService.getCurrentAuthUser();
+
+            // SECURITY: If this is a user with MFA enabled being restored from localStorage/session,
+            // check if they should be forced through MFA again
+            if (currentUser && await requiresMfa(currentUser)) {
+              // Check if this is a session restore after timeout (no recent login activity)
+              const storedTimestamp = localStorage.getItem('authTimestamp');
+              if (storedTimestamp) {
+                const timeSinceAuth = Date.now() - parseInt(storedTimestamp);
+                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
+
+                // If the stored session is old, force re-authentication with MFA
+                if (timeSinceAuth > maxAge) {
+                  console.log('🔒 User session too old, forcing re-authentication with MFA');
+                  localStorage.removeItem('sessionToken');
+                  setSessionToken(null);
+                  localStorage.removeItem('user');
+                  localStorage.removeItem('authUser');
+                  localStorage.removeItem('authTimestamp');
+                  currentUser = null;
+                }
+              }
+            }
+          } else {
+            // Session is invalid, clear it
+            localStorage.removeItem('sessionToken');
+            setSessionToken(null);
+            localStorage.removeItem('user');
+            localStorage.removeItem('authUser');
+            localStorage.removeItem('authTimestamp');
+          }
+        } catch (error) {
+          console.warn('EnhancedAuthContext: Backend session validation failed:', error);
+          // SECURITY: For users with MFA enabled, don't fall back to localStorage restoration
+          // Force them to go through proper login with MFA
+          const storedUser = localStorage.getItem('authUser');
+          if (storedUser) {
+            try {
+              const parsedUser = JSON.parse(storedUser);
+              if (parsedUser && await requiresMfa(parsedUser)) {
+                console.log('🔒 User with MFA detected with failed backend validation, forcing re-login with MFA');
+                localStorage.removeItem('sessionToken');
+                setSessionToken(null);
+                localStorage.removeItem('user');
+                localStorage.removeItem('authUser');
+                localStorage.removeItem('authTimestamp');
+                currentUser = null;
+              } else {
+                // Users without MFA can fall back to Cognito validation
+                currentUser = await authService.getCurrentAuthUser();
+              }
+            } catch (parseError) {
+              // If we can't parse the stored user, clear everything and force re-login
+              localStorage.removeItem('sessionToken');
+              setSessionToken(null);
+              localStorage.removeItem('user');
+              localStorage.removeItem('authUser');
+              localStorage.removeItem('authTimestamp');
+              currentUser = null;
+            }
+          } else {
+            currentUser = null;
+          }
+        }
+      } else {
+        // No session token - check if there's a stored user with MFA that should be forced to re-authenticate
+        const storedUser = localStorage.getItem('authUser');
+        if (storedUser) {
+          try {
+            const parsedUser = JSON.parse(storedUser);
+            if (parsedUser && await requiresMfa(parsedUser)) {
+              console.log('🔒 User with MFA without session token detected, forcing re-login with MFA');
+              localStorage.removeItem('user');
+              localStorage.removeItem('authUser');
+              localStorage.removeItem('authTimestamp');
+              currentUser = null;
+            } else {
+              // Users without MFA can try Cognito restoration
+              currentUser = await authService.getCurrentAuthUser();
+            }
+          } catch (parseError) {
+            // If we can't parse the stored user, clear everything
+            localStorage.removeItem('user');
+            localStorage.removeItem('authUser');
+            localStorage.removeItem('authTimestamp');
+            currentUser = null;
+          }
+        } else {
+          currentUser = null;
+        }
+      }
+
+      setUser(currentUser);
+
+      // Initialize session management if user is authenticated
+      if (currentUser) {
+        const defaultConfig: SessionConfig = {
+          timeout: 15, // 15 minutes default
+          warningTime: 2 // 2 minutes warning
+        };
+
+        // Try to load config from database first, then local storage, then default
+        let sessionConfig: SessionConfig;
+        try {
+          console.log('🔍 Attempting to load session config from database...');
+          const dbConfig = await systemSettingsService.getSessionConfig();
+          console.log('🔍 Database response:', dbConfig);
+          if (dbConfig) {
+            sessionConfig = dbConfig;
+            console.log('📥 Using database session config:', sessionConfig);
+          } else {
+            console.log('⚠️ No database config found, checking local storage...');
+            const existingConfig = sessionManager.getConfig();
+            if (existingConfig) {
+              sessionConfig = existingConfig;
+              console.log('📥 Using local session config:', sessionConfig);
+            } else {
+              sessionConfig = defaultConfig;
+              console.log('📥 Using default session config:', sessionConfig);
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Failed to load database config during login, using fallback:', error);
+          const existingConfig = sessionManager.getConfig();
+          if (existingConfig) {
+            sessionConfig = existingConfig;
+            console.log('📥 Using local session config (fallback):', sessionConfig);
+          } else {
+            sessionConfig = defaultConfig;
+            console.log('📥 Using default session config (fallback):', sessionConfig);
+          }
+        }
+
+        setSessionConfig(sessionConfig);
+
+        // Reset session warning state for new session
+        setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+        // Initialize session if not already active
+        if (!sessionManager.isSessionActive()) {
+          sessionManager.initSession(sessionConfig);
+        }
+
+        setIsSessionActive(true);
+      } else {
+        sessionManager.endSession();
+        setIsSessionActive(false);
+        setSessionConfig(null);
+      }
+    } catch (error) {
+      console.error('EnhancedAuthContext: Error checking auth state:', error);
+      // For now, don't throw error if backend/API is not available
+      // This allows the auth form to still render
+      setUser(null);
+      setHasError(false); // Don't consider this an error, just no user
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const refreshUser = async () => {
+    await checkAuthState();
+  };
+
+  const handleTimeout = () => {
+    setUser(null);
+    setIsSessionActive(false);
+    setSessionWarning({ isVisible: false, timeLeft: 0 });
+    sessionManager.endSession();
+    setShowTimeoutDialog(true);
+  };
+
+  const handleTimeoutConfirm = () => {
+    setShowTimeoutDialog(false);
+    window.location.href = '/';
+  };
+
+  // Database settings are now loaded during checkAuthState, so this useEffect is no longer needed
+  // Keeping this comment as a reminder that we load DB config during login instead of after
+
+  useEffect(() => {
+    // Initialize auth state check with error handling
+    const initializeAuth = async () => {
+      try {
+        await checkAuthState();
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        setIsLoading(false);
+        setUser(null);
+      }
+    };
+
+    initializeAuth();
+
+    // Set up API service unauthorized handler
+    const setupApiService = async () => {
+      const { apiService } = await import('../services/apiService');
+      apiService.setUnauthorizedHandler(() => {
+        console.log('🔐 API service detected unauthorized response');
+        // Only show timeout dialog if user was actually logged in
+        const currentUser = localStorage.getItem('authUser');
+        const sessionToken = localStorage.getItem('sessionToken');
+
+        if (currentUser && sessionToken) {
+          console.log('🔐 User was logged in - showing timeout dialog');
+          handleTimeout();
+        } else {
+          console.log('🔐 User was not logged in - ignoring 401 response');
+        }
+      });
+    };
+
+    setupApiService();
+
+    // Set up session management event handlers
+    sessionManager.onExpired(() => {
+      handleTimeout();
+    });
+
+    sessionManager.onWarning((timeLeft) => {
+      console.log(`🚨 Session warning triggered - ${timeLeft} minutes remaining`);
+      setSessionWarning({ isVisible: true, timeLeft });
+    });
+
+    // Set up auth event listener with error handling
+    let unsubscribe: (() => void) | undefined;
+    try {
+      unsubscribe = Hub.listen('auth', ({ payload }) => {
+        try {
+          switch (payload.event) {
+            case 'signInWithRedirect':
+            case 'signedIn':
+              checkAuthState();
+              break;
+            case 'signedOut':
+              setUser(null);
+              sessionManager.endSession();
+              setIsSessionActive(false);
+              setSessionConfig(null);
+              setSessionWarning({ isVisible: false, timeLeft: 0 });
+              break;
+            default:
+              break;
+          }
+        } catch (error) {
+          console.error('Error handling auth event:', error);
+        }
+      });
+    } catch (error) {
+      console.error('Error setting up auth listener:', error);
+    }
+
+    return () => {
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (error) {
+          console.error('Error cleaning up auth listener:', error);
+        }
+      }
+      sessionManager.cleanup();
+    };
+  }, []);
+
+  const handleSignIn = async (email: string, password: string): Promise<AuthUser> => {
+    try {
+      const user = await authService.signIn({ email, password });
+      setUser(user);
+
+      // Update sessionToken from localStorage after successful sign in
+      const newSessionToken = localStorage.getItem('sessionToken');
+      setSessionToken(newSessionToken);
+
+      return user;
+    } catch (error) {
+      console.error('Error signing in:', error);
+      throw error;
+    }
+  };
+
+  const handleSignUpAdmin = async (userData: { email: string; password: string; name: string }) => {
+    try {
+      const result = await authService.signUpAdmin(userData);
+      // Don't automatically sign in after signup, let admin confirm email first
+      return result;
+    } catch (error) {
+      console.error('Error signing up admin:', error);
+      throw error;
+    }
+  };
+
+  const handleSignUpClient = async (registrationData: ClientRegistrationRequest) => {
+    try {
+      const result = await clientRegistrationService.registerClient(registrationData);
+      return {
+        success: result.success,
+        message: result.message,
+        emailConfirmationSent: result.emailConfirmationSent
+      };
+    } catch (error: any) {
+      console.error('Error registering client:', error);
+      throw new Error(error.message || 'Client registration failed');
+    }
+  };
+
+  const handleConfirmClientEmail = async (token: string, email: string) => {
+    try {
+      const result = await clientRegistrationService.confirmClientEmail(token, email);
+      if (result.success && result.user) {
+        setUser(result.user);
+      }
+      return result;
+    } catch (error: any) {
+      console.error('Error confirming client email:', error);
+      return {
+        success: false,
+        message: error.message || 'Email confirmation failed'
+      };
+    }
+  };
+
+  const handleResendConfirmationEmail = async (email: string) => {
+    try {
+      const result = await clientRegistrationService.resendConfirmationEmail(email);
+      return result;
+    } catch (error: any) {
+      console.error('Error resending confirmation email:', error);
+      throw new Error(error.message || 'Failed to resend confirmation email');
+    }
+  };
+
+  const handleSignOut = async (): Promise<void> => {
+    try {
+      // Disable unauthorized handling to prevent timeout dialogs during logout
+      const { apiService } = await import('../services/apiService');
+      apiService.disableUnauthorizedHandling();
+
+      await authService.signOut();
+      setUser(null);
+      setSessionToken(null);
+      // Clear session timers to prevent timeout popup after manual logout
+      sessionManager.endSession();
+      setIsSessionActive(false);
+      setSessionConfig(null);
+      setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+      // Re-enable for next login (after a delay to let pending requests complete)
+      setTimeout(() => {
+        apiService.enableUnauthorizedHandling();
+      }, 1000);
+    } catch (error) {
+      console.error('Error signing out:', error);
+      throw error;
+    }
+  };
+
+  const hasPermission = (requiredRole: UserRole | UserRole[]): boolean => {
+    if (!user) return false;
+    return authService.hasPermission(user.role, requiredRole);
+  };
+
+  // Session management methods
+  const updateSessionConfig = async (config: Partial<SessionConfig>) => {
+    if (sessionConfig) {
+      const newConfig = { ...sessionConfig, ...config };
+      setSessionConfig(newConfig);
+      sessionManager.updateConfig(newConfig);
+
+      // Also save to database
+      try {
+        await systemSettingsService.updateSessionConfig(newConfig);
+        console.log('✅ Session config saved to database:', newConfig);
+      } catch (error) {
+        console.error('❌ Failed to save session config to database:', error);
+        // Don't revert local changes - they'll still work for this session
+      }
+    }
+  };
+
+  const extendSession = async () => {
+    try {
+      // Call backend to extend session
+      const result = await authService.extendSession();
+
+      if (result.success) {
+        // Update local session manager with the extended session info
+        sessionManager.extendSession();
+        setSessionWarning({ isVisible: false, timeLeft: 0 });
+      } else {
+        console.error('❌ Failed to extend session on server:', result.message);
+        // Still hide the warning since user tried to extend
+        setSessionWarning({ isVisible: false, timeLeft: 0 });
+      }
+    } catch (error) {
+      console.error('❌ Error extending session:', error);
+      // Still hide the warning since user tried to extend
+      setSessionWarning({ isVisible: false, timeLeft: 0 });
+    }
+  };
+
+  // MFA handlers
+  const handleSendAdminMfaCode = async (email: string, password: string) => {
+    try {
+      await authService.sendAdminMfaCode(email, password);
+    } catch (error) {
+      console.error('Error sending admin MFA code:', error);
+      throw error;
+    }
+  };
+
+  const handleVerifyAdminMfaCode = async (email: string, mfaCode: string) => {
+    try {
+      const user = await authService.verifyAdminMfaCode(email, mfaCode);
+      setUser(user);
+
+      // Update sessionToken from localStorage after successful MFA
+      const newSessionToken = localStorage.getItem('sessionToken');
+      setSessionToken(newSessionToken);
+
+      // Initialize session management after successful MFA
+      const defaultConfig: SessionConfig = {
+        timeout: 15, // 15 minutes default
+        warningTime: 2 // 2 minutes warning
+      };
+
+      // Try to load config from database first, then local storage, then default
+      let sessionConfig: SessionConfig;
+      try {
+        console.log('🔍 [MFA] Attempting to load session config from database...');
+        const dbConfig = await systemSettingsService.getSessionConfig();
+        console.log('🔍 [MFA] Database response:', dbConfig);
+        if (dbConfig) {
+          sessionConfig = dbConfig;
+          console.log('📥 [MFA] Using database session config:', sessionConfig);
+        } else {
+          console.log('⚠️ [MFA] No database config found, checking local storage...');
+          const existingConfig = sessionManager.getConfig();
+          if (existingConfig) {
+            sessionConfig = existingConfig;
+            console.log('📥 [MFA] Using local session config:', sessionConfig);
+          } else {
+            sessionConfig = defaultConfig;
+            console.log('📥 [MFA] Using default session config:', sessionConfig);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [MFA] Failed to load database config, using fallback:', error);
+        const existingConfig = sessionManager.getConfig();
+        if (existingConfig) {
+          sessionConfig = existingConfig;
+          console.log('📥 [MFA] Using local session config (fallback):', sessionConfig);
+        } else {
+          sessionConfig = defaultConfig;
+          console.log('📥 [MFA] Using default session config (fallback):', sessionConfig);
+        }
+      }
+
+      setSessionConfig(sessionConfig);
+
+      // Reset session warning state for new session
+      setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+      // Initialize session if not already active
+      if (!sessionManager.isSessionActive()) {
+        sessionManager.initSession(sessionConfig);
+      }
+
+      setIsSessionActive(true);
+
+      return user;
+    } catch (error) {
+      console.error('Error verifying admin MFA code:', error);
+      throw error;
+    }
+  };
+
+  // Computed properties
+  const isAuthenticated = !!user;
+  const role = user?.role || null;
+  const isAdmin = user?.role === 'admin';
+  const isTechnician = user?.role === 'technician';
+  const isClient = user?.role === 'client';
+  const isFirstAdmin = user?.isFirstAdmin || false;
+
+  const value: EnhancedAuthContextType = {
+    user,
+    isLoading,
+    isAuthenticated,
+    role,
+    isAdmin,
+    isTechnician,
+    isClient,
+    isFirstAdmin,
+    signIn: handleSignIn,
+    signUpAdmin: handleSignUpAdmin,
+    signUpClient: handleSignUpClient,
+    confirmClientEmail: handleConfirmClientEmail,
+    resendConfirmationEmail: handleResendConfirmationEmail,
+    signOut: handleSignOut,
+    hasPermission,
+    refreshUser,
+    // MFA methods
+    sendAdminMfaCode: handleSendAdminMfaCode,
+    verifyAdminMfaCode: handleVerifyAdminMfaCode,
+    // Session management
+    sessionConfig,
+    updateSessionConfig,
+    extendSession,
+    isSessionActive,
+    sessionWarning,
+    sessionToken
+  };
+
+  // Add error boundary behavior
+  if (hasError) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Authentication Error</h1>
+          <p className="text-gray-600 mb-4">There was an issue initializing authentication.</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+          >
+            Reload Page
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <EnhancedAuthContext.Provider value={value}>
+      {children}
+      <ConfirmationDialog
+        isOpen={showTimeoutDialog}
+        onClose={handleTimeoutConfirm}
+        onConfirm={handleTimeoutConfirm}
+        title="Session Timeout"
+        message="Your session has expired due to inactivity. You have been signed out for security."
+        confirmButtonText="OK"
+        confirmButtonColor="grey"
+        iconType="timeout"
+        showCancelButton={false}
+      />
+    </EnhancedAuthContext.Provider>
+  );
+};
+
+export const useEnhancedAuth = () => {
+  const context = useContext(EnhancedAuthContext);
+  if (context === undefined) {
+    throw new Error('useEnhancedAuth must be used within an EnhancedAuthProvider');
+  }
+  return context;
+};
+
+// Higher-order component for role-based route protection
+export const withRoleProtection = <P extends object>(
+  Component: React.ComponentType<P>,
+  requiredRoles: UserRole | UserRole[],
+  fallbackComponent?: React.ComponentType
+) => {
+  return (props: P) => {
+    const { hasPermission, isLoading } = useEnhancedAuth();
+
+    if (isLoading) {
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!hasPermission(requiredRoles)) {
+      if (fallbackComponent) {
+        const FallbackComponent = fallbackComponent;
+        return <FallbackComponent />;
+      }
+
+      return (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-6xl mb-4">🔒</div>
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Denied</h1>
+            <p className="text-gray-600">You don't have permission to access this page.</p>
+          </div>
+        </div>
+      );
+    }
+
+    return <Component {...props} />;
+  };
+};
+
+export default EnhancedAuthContext;

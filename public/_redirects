@@ -1,0 +1,4 @@
+# SPA Routing Rules for Romero Tech Solutions MSP Platform
+/*    /index.html   200
+/admin    /index.html   200
+/admin/*    /index.html   200

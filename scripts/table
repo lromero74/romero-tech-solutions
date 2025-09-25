@@ -1,0 +1,8 @@
+#!/bin/bash
+
+# Navigate to the backend directory where node_modules is located
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR/../backend"
+
+# Run the Node.js script with all arguments passed through
+node "print-table.js" "$@"

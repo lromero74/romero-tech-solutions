@@ -1,0 +1,19 @@
+{
+  "name": "Romero Tech Solutions",
+  "short_name": "RomeroTech",
+  "icons": [
+    {
+      "src": "/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "theme_color": "#2563eb",
+  "background_color": "#ffffff",
+  "display": "standalone"
+}

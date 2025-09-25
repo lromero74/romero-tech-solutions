@@ -1,0 +1,95 @@
+{
+  "commands": {
+    "backup": {
+      "description": "Create comprehensive backup of database and project files",
+      "usage": "/backup [options]",
+      "script": "./backup.js",
+      "category": "maintenance",
+      "options": [
+        {
+          "flag": "--message MESSAGE, -m MESSAGE",
+          "description": "Add a descriptive comment to the backup (like a git commit message)"
+        },
+        {
+          "flag": "--help, -h",
+          "description": "Show help information"
+        }
+      ],
+      "examples": [
+        {
+          "command": "/backup",
+          "description": "Creates timestamped backup in ~/WebSite/Backups/ with database dump and project tarball"
+        },
+        {
+          "command": "/backup --help",
+          "description": "Show detailed help information and usage examples"
+        },
+        {
+          "command": "/backup -m \"Fixed authentication bugs\"",
+          "description": "Create backup with descriptive message"
+        }
+      ],
+      "requirements": [
+        "PostgreSQL client tools (pg_dump)",
+        "Node.js environment variables configured (.env)",
+        "Write access to ~/WebSite/Backups/ directory"
+      ],
+      "outputs": [
+        "Database SQL dump file",
+        "Gzipped project tarball (excluding node_modules, .git, etc.)",
+        "Backup manifest JSON with restore instructions"
+      ]
+    },
+    "list-backups": {
+      "description": "List all available backups with details and restore instructions",
+      "usage": "/list-backups [options]",
+      "script": "./list-backups.js",
+      "category": "maintenance",
+      "options": [
+        {
+          "flag": "--detailed, -d",
+          "description": "Show detailed information including file contents"
+        },
+        {
+          "flag": "--recent N, -r N",
+          "description": "Show only the N most recent backups"
+        },
+        {
+          "flag": "--size, -s",
+          "description": "Sort by total backup size (largest first)"
+        },
+        {
+          "flag": "--help, -h",
+          "description": "Show help information"
+        }
+      ],
+      "examples": [
+        {
+          "command": "/list-backups",
+          "description": "List all available backups"
+        },
+        {
+          "command": "/list-backups -d",
+          "description": "Show detailed information including file contents"
+        },
+        {
+          "command": "/list-backups -r 5",
+          "description": "Show only the 5 most recent backups"
+        },
+        {
+          "command": "/list-backups -d -s",
+          "description": "Detailed view sorted by backup size"
+        }
+      ],
+      "requirements": [
+        "Read access to ~/WebSite/Backups/ directory"
+      ],
+      "outputs": [
+        "Backup list with timestamps and sizes",
+        "File contents for each backup",
+        "Restore commands for database and project files",
+        "Summary statistics"
+      ]
+    }
+  }
+}
