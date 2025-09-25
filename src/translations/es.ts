@@ -276,6 +276,20 @@ export const esTranslations = {
   'login.fillAllFields': 'Por favor complete todos los campos',
   'login.loginFailed': 'Inicio de sesión fallido. Por favor verifique sus credenciales.',
 
+  // MFA/Verification
+  'login.mfa.title': 'Verificación por Correo Electrónico',
+  'login.mfa.subtitle': 'Ingrese el código de verificación enviado a',
+  'login.mfa.codeLabel': 'Código de Verificación',
+  'login.mfa.codePlaceholder': '000000',
+  'login.mfa.codeHelper': 'Ingrese el código de 6 dígitos enviado a su correo electrónico',
+  'login.mfa.verifyButton': 'Verificar e Iniciar Sesión',
+  'login.mfa.resendCode': 'Reenviar Código',
+  'login.mfa.backToLogin': '← Volver al Inicio de Sesión',
+  'login.mfa.enterCode': 'Por favor ingrese el código de verificación',
+  'login.mfa.verificationFailed': 'Verificación fallida',
+  'login.mfa.codeSentSuccess': 'Código de verificación enviado exitosamente',
+  'login.mfa.codeResendFailed': 'Falló el reenvío del código de verificación',
+
   // Dashboard
   'dashboard.auth.title': 'Autenticación Requerida',
   'dashboard.auth.subtitle': 'Por favor inicie sesión para acceder a su panel.',

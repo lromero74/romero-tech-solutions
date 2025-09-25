@@ -276,6 +276,20 @@ export const enTranslations = {
   'login.fillAllFields': 'Please fill in all fields',
   'login.loginFailed': 'Login failed. Please check your credentials.',
 
+  // MFA/Verification
+  'login.mfa.title': 'Email Verification',
+  'login.mfa.subtitle': 'Enter the verification code sent to',
+  'login.mfa.codeLabel': 'Verification Code',
+  'login.mfa.codePlaceholder': '000000',
+  'login.mfa.codeHelper': 'Enter the 6-digit code sent to your email',
+  'login.mfa.verifyButton': 'Verify & Sign In',
+  'login.mfa.resendCode': 'Resend Code',
+  'login.mfa.backToLogin': '← Back to Login',
+  'login.mfa.enterCode': 'Please enter the verification code',
+  'login.mfa.verificationFailed': 'Verification failed',
+  'login.mfa.codeSentSuccess': 'Verification code sent successfully',
+  'login.mfa.codeResendFailed': 'Failed to resend verification code',
+
   // Dashboard
   'dashboard.auth.title': 'Authentication Required',
   'dashboard.auth.subtitle': 'Please sign in to access your dashboard.',

@@ -63,7 +63,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const handleMfaSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!mfaCode) {
-      setError('Please enter the verification code');
+      setError(t('login.mfa.enterCode'));
       return;
     }
 
@@ -74,7 +74,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       await verifyAdminMfaCode(mfaEmail, mfaCode);
       onSuccess();
     } catch (error: any) {
-      setError(error.message || 'Verification failed');
+      setError(error.message || t('login.mfa.verificationFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -98,10 +98,10 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       await sendAdminMfaCode(mfaEmail, mfaPassword);
       setError('');
       // Show success message briefly
-      setError('Verification code sent successfully');
+      setError(t('login.mfa.codeSentSuccess'));
       setTimeout(() => setError(''), 3000);
     } catch (error: any) {
-      setError(error.message || 'Failed to resend verification code');
+      setError(error.message || t('login.mfa.codeResendFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -145,11 +145,11 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
               )}
             </div>
             <h2 className="mt-6 text-3xl font-extrabold text-white">
-              {showMfaVerification ? 'Email Verification' : t('login.title')}
+              {showMfaVerification ? t('login.mfa.title') : t('login.title')}
             </h2>
             <p className="mt-2 text-sm text-blue-100">
               {showMfaVerification
-                ? `Enter the verification code sent to ${mfaEmail}`
+                ? `${t('login.mfa.subtitle')} ${mfaEmail}`
                 : t('login.subtitle')
               }
             </p>
@@ -174,7 +174,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
 
                 <div>
                   <label htmlFor="mfaCode" className="block text-sm font-medium text-white">
-                    Verification Code
+                    {t('login.mfa.codeLabel')}
                   </label>
                   <div className="mt-1 relative">
                     <input
@@ -186,13 +186,13 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       value={mfaCode}
                       onChange={(e) => setMfaCode(e.target.value)}
                       className="appearance-none relative block w-full px-3 py-2 pl-10 border border-white/20 placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm text-center text-lg tracking-widest"
-                      placeholder="000000"
+                      placeholder={t('login.mfa.codePlaceholder')}
                       maxLength={6}
                     />
                     <KeyRound className="h-5 w-5 text-gray-300 absolute left-3 top-2.5" />
                   </div>
                   <p className="mt-1 text-xs text-blue-200">
-                    Enter the 6-digit code sent to your email
+                    {t('login.mfa.codeHelper')}
                   </p>
                 </div>
 
@@ -206,7 +206,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                     ) : (
                       <>
-                        <span>Verify & Sign In</span>
+                        <span>{t('login.mfa.verifyButton')}</span>
                         <Shield className="ml-2 h-5 w-5" />
                       </>
                     )}
@@ -218,7 +218,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                     disabled={isLoading}
                     className="w-full text-sm text-blue-300 hover:text-blue-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    Resend Code
+                    {t('login.mfa.resendCode')}
                   </button>
 
                   <button
@@ -226,7 +226,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                     onClick={handleBackToLogin}
                     className="w-full text-sm text-gray-300 hover:text-white transition-colors"
                   >
-                    ← Back to Login
+                    {t('login.mfa.backToLogin')}
                   </button>
                 </div>
               </form>
