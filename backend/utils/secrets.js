@@ -48,11 +48,12 @@ class SecretsManager {
   async getDatabaseCredentials(secretName) {
     const secret = await this.getSecret(secretName);
 
+    // Map AWS RDS secret format to our database config format
     return {
-      host: secret.host,
-      port: secret.port,
-      database: secret.dbname,
-      user: secret.username,
+      host: secret.host || process.env.DB_HOST,
+      port: secret.port || process.env.DB_PORT || 5432,
+      database: secret.dbname || process.env.DB_NAME,
+      user: secret.username || process.env.DB_USER,
       password: secret.password
     };
   }
