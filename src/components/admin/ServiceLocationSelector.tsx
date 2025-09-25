@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation } from 'lucide-react';
+import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation, Minimize2 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import adminService from '../../services/adminService';
 
@@ -24,6 +24,7 @@ interface ServiceLocationSelectorProps {
   disabled?: boolean;
   highlightCityId?: number | null;
   targetScrollY?: number | null;
+  onExpandedCountChange?: (count: number, collapseAllFn: () => void) => void;
 }
 
 interface LocationNode extends LocationItem {
@@ -38,7 +39,8 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   onSelectionChange,
   disabled = false,
   highlightCityId = null,
-  targetScrollY = null
+  targetScrollY = null,
+  onExpandedCountChange
 }) => {
   const { theme } = useTheme();
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -214,6 +216,37 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
   }, [selections]);
 
+  // Calculate expanded nodes count
+  const getExpandedCount = (nodes: LocationNode[]): number => {
+    let count = 0;
+    nodes.forEach(node => {
+      if (node.expanded) count++;
+      if (node.children) count += getExpandedCount(node.children);
+    });
+    return count;
+  };
+
+  const expandedCount = getExpandedCount(locationTree);
+
+  // Collapse all expanded nodes
+  const handleCollapseAll = () => {
+    const collapseNodes = (nodes: LocationNode[]): LocationNode[] => {
+      return nodes.map(node => ({
+        ...node,
+        expanded: false,
+        children: node.children ? collapseNodes(node.children) : undefined
+      }));
+    };
+    setLocationTree(collapseNodes(locationTree));
+  };
+
+  // Notify parent of expanded count changes
+  useEffect(() => {
+    if (onExpandedCountChange) {
+      onExpandedCountChange(expandedCount, handleCollapseAll);
+    }
+  }, [expandedCount, onExpandedCountChange]);
+
   // Handle city highlighting by expanding tree to show the highlighted city
   useEffect(() => {
     if (highlightCityId !== null) {
@@ -358,6 +391,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
           Selecting a parent automatically includes all children.
         </p>
       </div>
+
 
       <div className="p-4">
         {locationTree.length === 0 ? (

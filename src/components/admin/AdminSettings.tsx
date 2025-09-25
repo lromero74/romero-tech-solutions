@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Settings, Clock, Shield, Save, RotateCcw, MapPin, ChevronUp, ChevronDown } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { Settings, Clock, Shield, Save, RotateCcw, MapPin, ChevronUp, ChevronDown, Minimize2 } from 'lucide-react';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { SessionConfig } from '../../utils/sessionManager';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -35,6 +35,8 @@ const AdminSettings: React.FC = () => {
   const [servedLocationDetails, setServedLocationDetails] = useState<any[]>([]);
   const [highlightCityId, setHighlightCityId] = useState<number | null>(null);
   const [targetScrollY, setTargetScrollY] = useState<number | null>(null);
+  const [expandedCount, setExpandedCount] = useState(0);
+  const [collapseAllFn, setCollapseAllFn] = useState<(() => void) | null>(null);
 
   // Scroll indicators state
   const [scrollState, setScrollState] = useState({
@@ -116,6 +118,17 @@ const AdminSettings: React.FC = () => {
       setHighlightCityId(null);
       setTargetScrollY(null);
     }, 3000);
+  };
+
+  const handleExpandedCountChange = useCallback((count: number, collapseAllFunction: () => void) => {
+    setExpandedCount(count);
+    setCollapseAllFn(() => collapseAllFunction);
+  }, []);
+
+  const handleCollapseAllClick = () => {
+    if (collapseAllFn) {
+      collapseAllFn();
+    }
   };
 
   // Handle scrolling the main container to position highlighted city at click position
@@ -451,6 +464,7 @@ const AdminSettings: React.FC = () => {
             onSelectionChange={handleServiceLocationSelectionChange}
             highlightCityId={highlightCityId}
             targetScrollY={targetScrollY}
+            onExpandedCountChange={handleExpandedCountChange}
           />
 
           {/* Service Location Actions */}
@@ -533,6 +547,28 @@ const AdminSettings: React.FC = () => {
           >
             <ChevronUp className="w-3 h-3 animate-bounce" />
             <span className="font-medium">More above</span>
+          </div>
+        )}
+
+        {/* Collapse All indicator - positioned below "More above" */}
+        {expandedCount > 0 && (
+          <div
+            className="absolute right-4 z-30 flex items-center space-x-2"
+            style={{ top: `${headerHeight + (scrollState.canScrollUp ? 28 : 4)}px` }}
+          >
+            <div className="flex items-center bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md px-2 py-1">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-medium mr-2">
+                {expandedCount} expanded
+              </span>
+              <button
+                onClick={handleCollapseAllClick}
+                className="inline-flex items-center text-xs font-medium text-blue-700 dark:text-blue-300 hover:text-blue-900 dark:hover:text-blue-100 transition-colors"
+              >
+                <Minimize2 className="w-3 h-3 mr-1" />
+                Collapse All
+              </button>
+            </div>
           </div>
         )}
 
