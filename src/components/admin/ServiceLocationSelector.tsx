@@ -235,7 +235,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     return (
       <div key={`${node.location_type}-${node.id}`} className="select-none">
         <div
-          className={`flex items-center py-2 px-3 hover:${themeClasses[theme].hover} rounded-lg cursor-pointer transition-colors`}
+          className={`flex items-center py-2 px-3 hover:${themeClasses.bg.hover} rounded-lg cursor-pointer transition-colors`}
           style={{ paddingLeft: `${paddingLeft + 12}px` }}
         >
           {hasChildren && (
@@ -271,7 +271,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
           <div className="flex items-center space-x-2 flex-1">
             {getLocationIcon(node.location_type)}
-            <span className={`${themeClasses[theme].text} capitalize font-medium`}>
+            <span className={`${themeClasses.text.primary} capitalize font-medium`}>
               {node.name}
             </span>
             {node.code && (
@@ -293,10 +293,10 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
   if (loading) {
     return (
-      <div className={`p-6 ${themeClasses[theme].cardBg} rounded-lg border ${themeClasses[theme].border}`}>
+      <div className={`p-6 ${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary}`}>
         <div className="flex items-center space-x-2">
           <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500"></div>
-          <span className={themeClasses[theme].text}>Loading service locations...</span>
+          <span className={themeClasses.text.primary}>Loading service locations...</span>
         </div>
       </div>
     );
@@ -304,7 +304,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
   if (error) {
     return (
-      <div className={`p-6 ${themeClasses[theme].cardBg} rounded-lg border border-red-300 dark:border-red-700`}>
+      <div className={`p-6 ${themeClasses.bg.card} rounded-lg border border-red-300 dark:border-red-700`}>
         <div className="text-red-600 dark:text-red-400">
           Error loading locations: {error}
         </div>
@@ -313,9 +313,9 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   }
 
   return (
-    <div className={`${themeClasses[theme].cardBg} rounded-lg border ${themeClasses[theme].border}`}>
+    <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary}`}>
       <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h3 className={`text-lg font-semibold ${themeClasses[theme].text} flex items-center space-x-2`}>
+        <h3 className={`text-lg font-semibold ${themeClasses.text.primary} flex items-center space-x-2`}>
           <MapPin className="w-5 h-5" />
           <span>Service Area Selection</span>
         </h3>
