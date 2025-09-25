@@ -48,31 +48,31 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   const [selections, setSelections] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const initialSelectionsApplied = useRef(false);
 
   // Load initial data
   useEffect(() => {
     loadLocationData();
   }, []);
 
-  // Convert initial selections to Set format
-  useEffect(() => {
-    const initialSelectionSet = new Set(
-      initialSelections.map(s => `${s.location_type}:${s.location_id}`)
-    );
-    setSelections(initialSelectionSet);
-  }, [initialSelections]);
 
   const loadLocationData = async () => {
     try {
       const data = await adminService.getAllLocations();
       setLocations(data.locations);
-      buildLocationTree(data.locations);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load locations');
     } finally {
       setLoading(false);
     }
   };
+
+  // Build tree when both location data and initial selections are available
+  useEffect(() => {
+    if (locations.length > 0) {
+      buildLocationTree(locations);
+    }
+  }, [locations, initialSelections]);
 
   const buildLocationTree = (locationData: LocationItem[]) => {
     // Group by type and build hierarchy
@@ -81,6 +81,17 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     const cities = locationData.filter(l => l.location_type === 'city');
     const zipcodes = locationData.filter(l => l.location_type === 'zipcode');
     const areaCodes = locationData.filter(l => l.location_type === 'area_code');
+
+    // Build initial selection set from props
+    const initialSelectionSet = new Set(
+      initialSelections.map(s => `${s.location_type}:${s.location_id}`)
+    );
+
+    // Apply initial selections during tree construction
+    if (initialSelections.length > 0 && !initialSelectionsApplied.current) {
+      setSelections(initialSelectionSet);
+      initialSelectionsApplied.current = true;
+    }
 
     const tree: LocationNode[] = states.map(state => ({
       ...state,
@@ -113,7 +124,13 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
         }))
     }));
 
-    setLocationTree(tree);
+    // If we have initial selections, apply them immediately to the tree
+    const finalTree = initialSelections.length > 0
+      ? updateTreeWithSelections(tree, initialSelectionSet)
+      : tree;
+
+
+    setLocationTree(finalTree);
   };
 
   // Update tree with selections and propagate changes
@@ -213,8 +230,11 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
   // Update the tree whenever selections change
   useEffect(() => {
-    setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
+    if (locationTree.length > 0) { // Only update if tree is built
+      setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
+    }
   }, [selections]);
+
 
   // Calculate expanded nodes count
   const getExpandedCount = (nodes: LocationNode[]): number => {
@@ -326,10 +346,10 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
             className="mr-3 p-0.5"
           >
             {node.selected ? (
-              <CheckSquare className="w-5 h-5 text-blue-500" />
+              <CheckSquare className="w-5 h-5 text-green-500" />
             ) : node.indeterminate ? (
-              <div className="w-5 h-5 border-2 border-blue-500 bg-blue-100 dark:bg-blue-900 flex items-center justify-center rounded">
-                <div className="w-2 h-2 bg-blue-500 rounded-sm" />
+              <div className="w-5 h-5 border-2 border-yellow-500 bg-yellow-100 dark:bg-yellow-900 flex items-center justify-center rounded">
+                <div className="w-2 h-2 bg-yellow-500 rounded-sm" />
               </div>
             ) : (
               <Square className="w-5 h-5 text-gray-400" />

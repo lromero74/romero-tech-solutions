@@ -234,6 +234,9 @@ const AdminSettings: React.FC = () => {
       setServiceLocationSaveStatus('saved');
       console.log('✅ Service location selections saved successfully');
 
+      // Refresh the served location details after save
+      await loadServiceLocationSelections();
+
       // Clear saved status after 3 seconds
       setTimeout(() => setServiceLocationSaveStatus('idle'), 3000);
     } catch (error) {
