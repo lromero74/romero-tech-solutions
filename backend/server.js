@@ -11,6 +11,7 @@ import clientRegistrationRoutes from './routes/clientRegistration.js';
 import uploadRoutes from './routes/uploads.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import locationRoutes from './routes/locations.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -127,6 +128,7 @@ app.use('/uploads', express.static('uploads'));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/locations', locationRoutes);
 app.use('/api/clients', clientRegistrationRoutes);
 app.use('/api/uploads', uploadRoutes);
 

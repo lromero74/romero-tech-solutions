@@ -1,8 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Shield, Save, RotateCcw } from 'lucide-react';
+import { Settings, Clock, Shield, Save, RotateCcw, MapPin } from 'lucide-react';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { SessionConfig } from '../../utils/sessionManager';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import ServiceLocationSelector from './ServiceLocationSelector';
+
+interface ServiceLocationSelection {
+  location_type: string;
+  location_id: number;
+  notes?: string;
+}
 
 const AdminSettings: React.FC = () => {
   const { theme } = useTheme();
@@ -15,6 +22,11 @@ const AdminSettings: React.FC = () => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [showValidationErrors, setShowValidationErrors] = useState(false);
 
+  // Service Location Management state
+  const [serviceLocationSelections, setServiceLocationSelections] = useState<ServiceLocationSelection[]>([]);
+  const [serviceLocationHasChanges, setServiceLocationHasChanges] = useState(false);
+  const [serviceLocationSaveStatus, setServiceLocationSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   // Load current config when component mounts or sessionConfig changes
   useEffect(() => {
     if (sessionConfig) {
@@ -22,6 +34,33 @@ const AdminSettings: React.FC = () => {
       setHasChanges(false);
     }
   }, [sessionConfig]);
+
+  // Load initial service location selections
+  useEffect(() => {
+    loadServiceLocationSelections();
+  }, []);
+
+  const loadServiceLocationSelections = async () => {
+    try {
+      const response = await fetch('/api/locations/served', {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const selections: ServiceLocationSelection[] = data.servedLocations.map((loc: any) => ({
+          location_type: loc.location_type,
+          location_id: loc.location_id,
+          notes: loc.notes
+        }));
+        setServiceLocationSelections(selections);
+      }
+    } catch (error) {
+      console.error('Failed to load service location selections:', error);
+    }
+  };
 
   const handleInputChange = (field: keyof SessionConfig, value: string) => {
     const numericValue = parseInt(value) || 0;
@@ -83,6 +122,40 @@ const AdminSettings: React.FC = () => {
       (defaults.timeout !== sessionConfig.timeout || defaults.warningTime !== sessionConfig.warningTime) :
       true;
     setHasChanges(changed);
+  };
+
+  const handleServiceLocationSelectionChange = (selections: ServiceLocationSelection[]) => {
+    setServiceLocationSelections(selections);
+    setServiceLocationHasChanges(true);
+  };
+
+  const handleSaveServiceLocations = async () => {
+    setServiceLocationSaveStatus('saving');
+    try {
+      const response = await fetch('/api/locations/served', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({ selections: serviceLocationSelections })
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save service location selections');
+      }
+
+      setServiceLocationHasChanges(false);
+      setServiceLocationSaveStatus('saved');
+      console.log('✅ Service location selections saved successfully');
+
+      // Clear saved status after 3 seconds
+      setTimeout(() => setServiceLocationSaveStatus('idle'), 3000);
+    } catch (error) {
+      console.error('Error saving service locations:', error);
+      setServiceLocationSaveStatus('error');
+      setTimeout(() => setServiceLocationSaveStatus('idle'), 3000);
+    }
   };
 
   return (
@@ -237,6 +310,71 @@ const AdminSettings: React.FC = () => {
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Service Location Management */}
+      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg`}>
+        <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
+          <div className="flex items-center">
+            <MapPin className={`w-5 h-5 ${themeClasses.text.muted} mr-2`} />
+            <div>
+              <h2 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Service Area Management</h2>
+              <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+                Define the geographic areas where your company provides services
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-6">
+          <ServiceLocationSelector
+            initialSelections={serviceLocationSelections}
+            onSelectionChange={handleServiceLocationSelectionChange}
+          />
+
+          {/* Service Location Actions */}
+          <div className="flex items-center justify-between mt-6">
+            <div className="text-sm text-gray-600 dark:text-gray-400">
+              {serviceLocationSelections.length > 0 ? (
+                `${serviceLocationSelections.length} location${serviceLocationSelections.length !== 1 ? 's' : ''} selected for service coverage`
+              ) : (
+                'No service areas configured'
+              )}
+            </div>
+
+            <button
+              onClick={handleSaveServiceLocations}
+              disabled={!serviceLocationHasChanges || serviceLocationSaveStatus === 'saving'}
+              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 ${
+                serviceLocationHasChanges && serviceLocationSaveStatus !== 'saving'
+                  ? 'bg-blue-600 hover:bg-blue-700'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {serviceLocationSaveStatus === 'saving' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : serviceLocationSaveStatus === 'saved' ? (
+                <>
+                  <span className="text-green-200 mr-2">✓</span>
+                  Saved
+                </>
+              ) : serviceLocationSaveStatus === 'error' ? (
+                <>
+                  <span className="text-red-200 mr-2">✗</span>
+                  Error
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Service Areas
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
