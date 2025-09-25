@@ -945,17 +945,22 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 // Set loading state for this specific client
                 setLoadingClientOperations(prev => ({ ...prev, [client.id]: true }));
                 await clientCRUD.deleteEntity(client.id);
-                await refreshClients();
-              } catch (error) {
-                console.error('Failed to delete client:', error);
-                throw error;
-              } finally {
-                // Clear loading state for this specific client
+                // Clear loading state BEFORE refreshing to avoid race condition
                 setLoadingClientOperations(prev => {
                   const newState = { ...prev };
                   delete newState[client.id];
                   return newState;
                 });
+                await refreshClients();
+              } catch (error) {
+                console.error('Failed to delete client:', error);
+                // Clear loading state on error
+                setLoadingClientOperations(prev => {
+                  const newState = { ...prev };
+                  delete newState[client.id];
+                  return newState;
+                });
+                throw error;
               }
             }}
             onSoftDeleteClient={async (client) => {
