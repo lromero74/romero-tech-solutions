@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import adminService from '../../services/adminService';
 
 interface LocationItem {
   location_type: string;
@@ -21,6 +22,8 @@ interface ServiceLocationSelectorProps {
   initialSelections?: ServiceLocationSelection[];
   onSelectionChange: (selections: ServiceLocationSelection[]) => void;
   disabled?: boolean;
+  highlightCityId?: number | null;
+  targetScrollY?: number | null;
 }
 
 interface LocationNode extends LocationItem {
@@ -33,7 +36,9 @@ interface LocationNode extends LocationItem {
 const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   initialSelections = [],
   onSelectionChange,
-  disabled = false
+  disabled = false,
+  highlightCityId = null,
+  targetScrollY = null
 }) => {
   const { theme } = useTheme();
   const [locations, setLocations] = useState<LocationItem[]>([]);
@@ -57,15 +62,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
   const loadLocationData = async () => {
     try {
-      const response = await fetch('/api/locations/all', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) throw new Error('Failed to load location data');
-
-      const data = await response.json();
+      const data = await adminService.getAllLocations();
       setLocations(data.locations);
       buildLocationTree(data.locations);
     } catch (err) {
@@ -217,6 +214,38 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
   }, [selections]);
 
+  // Handle city highlighting by expanding tree to show the highlighted city
+  useEffect(() => {
+    if (highlightCityId !== null) {
+      // Find the city and expand its path
+      const expandPathToCity = (nodes: LocationNode[]): LocationNode[] => {
+        return nodes.map(node => {
+          const updatedNode = { ...node };
+
+          if (node.children) {
+            updatedNode.children = expandPathToCity(node.children);
+
+            // Check if any child or descendant is the target city
+            const hasTargetCity = (n: LocationNode): boolean => {
+              if (n.location_type === 'city' && n.id === highlightCityId) {
+                return true;
+              }
+              return n.children ? n.children.some(hasTargetCity) : false;
+            };
+
+            if (updatedNode.children.some(hasTargetCity)) {
+              updatedNode.expanded = true;
+            }
+          }
+
+          return updatedNode;
+        });
+      };
+
+      setLocationTree(expandPathToCity);
+    }
+  }, [highlightCityId, targetScrollY]);
+
   const getLocationIcon = (locationType: string) => {
     switch (locationType) {
       case 'state': return <Globe className="w-4 h-4 text-blue-500" />;
@@ -235,18 +264,23 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     return (
       <div key={`${node.location_type}-${node.id}`} className="select-none">
         <div
-          className={`flex items-center py-2 px-3 hover:${themeClasses.bg.hover} rounded-lg cursor-pointer transition-colors`}
+          className={`flex items-center py-2 px-3 hover:${themeClasses.bg.hover} rounded-lg cursor-pointer transition-colors ${
+            node.location_type === 'city' && node.id === highlightCityId
+              ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500 ring-opacity-50'
+              : ''
+          }`}
           style={{ paddingLeft: `${paddingLeft + 12}px` }}
+          {...(node.location_type === 'city' ? { 'data-city-id': node.id } : {})}
         >
           {hasChildren && (
             <button
               onClick={() => toggleExpansion(node.id, node.location_type)}
-              className="mr-2 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded"
+              className={`mr-2 p-0.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded ${themeClasses.text.primary}`}
             >
               {node.expanded ? (
-                <ChevronDown className="w-4 h-4" />
+                <ChevronDown className={`w-4 h-4 ${themeClasses.text.primary}`} />
               ) : (
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className={`w-4 h-4 ${themeClasses.text.primary}`} />
               )}
             </button>
           )}
@@ -325,7 +359,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
         </p>
       </div>
 
-      <div className="p-4 max-h-96 overflow-y-auto">
+      <div className="p-4">
         {locationTree.length === 0 ? (
           <div className="text-center py-8 text-gray-500 dark:text-gray-400">
             No location data available

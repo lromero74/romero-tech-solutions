@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Settings, Clock, Shield, Save, RotateCcw, MapPin } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Settings, Clock, Shield, Save, RotateCcw, MapPin, ChevronUp, ChevronDown } from 'lucide-react';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { SessionConfig } from '../../utils/sessionManager';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 import ServiceLocationSelector from './ServiceLocationSelector';
+import adminService from '../../services/adminService';
 
 interface ServiceLocationSelection {
   location_type: string;
@@ -11,8 +12,13 @@ interface ServiceLocationSelection {
   notes?: string;
 }
 
+interface ServedLocationData {
+  location_type: string;
+  location_id: number;
+  notes?: string;
+}
+
 const AdminSettings: React.FC = () => {
-  const { theme } = useTheme();
   const { sessionConfig, updateSessionConfig } = useEnhancedAuth();
   const [formData, setFormData] = useState<SessionConfig>({
     timeout: 15,
@@ -26,6 +32,21 @@ const AdminSettings: React.FC = () => {
   const [serviceLocationSelections, setServiceLocationSelections] = useState<ServiceLocationSelection[]>([]);
   const [serviceLocationHasChanges, setServiceLocationHasChanges] = useState(false);
   const [serviceLocationSaveStatus, setServiceLocationSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [servedLocationDetails, setServedLocationDetails] = useState<any[]>([]);
+  const [highlightCityId, setHighlightCityId] = useState<number | null>(null);
+  const [targetScrollY, setTargetScrollY] = useState<number | null>(null);
+
+  // Scroll indicators state
+  const [scrollState, setScrollState] = useState({
+    canScrollUp: false,
+    canScrollDown: false,
+    isNearTop: true,
+    isNearBottom: false
+  });
+
+  // Header measurement for scroll indicators
+  const headerRef = useRef<HTMLDivElement>(null);
+  const [headerHeight, setHeaderHeight] = useState(80); // fallback value
 
   // Load current config when component mounts or sessionConfig changes
   useEffect(() => {
@@ -40,27 +61,89 @@ const AdminSettings: React.FC = () => {
     loadServiceLocationSelections();
   }, []);
 
+  // Measure header height for scroll indicators
+  useEffect(() => {
+    if (headerRef.current) {
+      const height = headerRef.current.offsetHeight;
+      setHeaderHeight(height);
+    }
+  }, [sessionConfig, serviceLocationSelections]); // Recalculate when data changes
+
   const loadServiceLocationSelections = async () => {
     try {
-      const response = await fetch('/api/locations/served', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const selections: ServiceLocationSelection[] = data.servedLocations.map((loc: any) => ({
-          location_type: loc.location_type,
-          location_id: loc.location_id,
-          notes: loc.notes
-        }));
-        setServiceLocationSelections(selections);
-      }
+      const data = await adminService.getServedLocations();
+      const selections: ServiceLocationSelection[] = data.servedLocations.map((loc: ServedLocationData) => ({
+        location_type: loc.location_type,
+        location_id: loc.location_id,
+        notes: loc.notes
+      }));
+      setServiceLocationSelections(selections);
+      setServedLocationDetails(data.servedLocations);
     } catch (error) {
       console.error('Failed to load service location selections:', error);
     }
   };
+
+  // Handle scroll events for fade indicators
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const target = e.currentTarget;
+    const scrollTop = target.scrollTop;
+    const scrollHeight = target.scrollHeight;
+    const clientHeight = target.clientHeight;
+    const threshold = 10; // pixels
+
+    const canScrollUp = scrollTop > threshold;
+    const canScrollDown = scrollTop < scrollHeight - clientHeight - threshold;
+    const isNearTop = scrollTop <= threshold;
+    const isNearBottom = scrollTop >= scrollHeight - clientHeight - threshold;
+
+    setScrollState({
+      canScrollUp,
+      canScrollDown,
+      isNearTop,
+      isNearBottom
+    });
+  };
+
+  const handleCityBadgeClick = (cityId: number, event: React.MouseEvent) => {
+    // Calculate the click position relative to the viewport
+    const clickY = event.clientY;
+    setHighlightCityId(cityId);
+    setTargetScrollY(clickY);
+
+    // Clear highlight after 3 seconds
+    setTimeout(() => {
+      setHighlightCityId(null);
+      setTargetScrollY(null);
+    }, 3000);
+  };
+
+  // Handle scrolling the main container to position highlighted city at click position
+  useEffect(() => {
+    if (highlightCityId !== null && targetScrollY !== null) {
+      setTimeout(() => {
+        const highlightedElement = document.querySelector(`[data-city-id="${highlightCityId}"]`);
+        // Target the specific main scroll container for AdminSettings
+        const mainScrollContainer = document.querySelector('.h-full.overflow-y-auto') as HTMLDivElement;
+
+        if (highlightedElement && mainScrollContainer) {
+          const elementRect = highlightedElement.getBoundingClientRect();
+          const containerRect = mainScrollContainer.getBoundingClientRect();
+
+          // Calculate how much we need to scroll to position the center of the element at targetScrollY
+          // Account for the container's position relative to the viewport
+          const elementCenterY = elementRect.top + (elementRect.height / 2);
+          const targetYRelativeToContainer = targetScrollY - containerRect.top;
+          const scrollOffset = elementCenterY - containerRect.top - targetYRelativeToContainer;
+
+          mainScrollContainer.scrollTo({
+            top: mainScrollContainer.scrollTop + scrollOffset,
+            behavior: 'smooth'
+          });
+        }
+      }, 150); // Small delay to ensure DOM is updated after expansion
+    }
+  }, [highlightCityId, targetScrollY]);
 
   const handleInputChange = (field: keyof SessionConfig, value: string) => {
     const numericValue = parseInt(value) || 0;
@@ -132,18 +215,7 @@ const AdminSettings: React.FC = () => {
   const handleSaveServiceLocations = async () => {
     setServiceLocationSaveStatus('saving');
     try {
-      const response = await fetch('/api/locations/served', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({ selections: serviceLocationSelections })
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to save service location selections');
-      }
+      await adminService.updateServedLocations(serviceLocationSelections);
 
       setServiceLocationHasChanges(false);
       setServiceLocationSaveStatus('saved');
@@ -159,14 +231,19 @@ const AdminSettings: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center">
-        <Settings className={`w-8 h-8 ${themeClasses.text.muted} mr-3`} />
-        <div>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Admin Settings</h1>
-          <p className={`${themeClasses.text.secondary}`}>Configure system settings and security preferences</p>
+    <div className="h-full relative" style={{ height: 'calc(100vh - 80px)' }}>
+      <div className="h-full overflow-y-auto" onScroll={handleScroll}>
+        {/* Sticky Header */}
+        <div ref={headerRef} className={`sticky top-0 z-20 ${themeClasses.bg.primary} pb-4 pt-2 mb-6 flex items-center`}>
+          <Settings className={`w-8 h-8 ${themeClasses.text.muted} mr-3`} />
+          <div>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Admin Settings</h1>
+            <p className={`${themeClasses.text.secondary}`}>Configure system settings and security preferences</p>
+          </div>
         </div>
-      </div>
+
+        {/* Content */}
+        <div className="space-y-6 pr-2">
 
       {/* Session Management Settings */}
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg`}>
@@ -328,9 +405,52 @@ const AdminSettings: React.FC = () => {
         </div>
 
         <div className="px-6 py-6">
+          {/* Service Area Summary */}
+          {serviceLocationSelections.length > 0 && (
+            <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg border ${themeClasses.border.primary}`}>
+              <h4 className={`text-sm font-medium ${themeClasses.text.primary} mb-3 flex items-center`}>
+                <MapPin className="w-4 h-4 mr-2 text-blue-500" />
+                Current Service Areas
+              </h4>
+              <div className="flex flex-wrap gap-2">
+                {servedLocationDetails
+                  .filter(loc => loc.location_type === 'city')
+                  .sort((a, b) => (a.location_name || '').localeCompare(b.location_name || ''))
+                  .slice(0, 8)
+                  .map((location) => (
+                    <button
+                      key={`${location.location_type}-${location.location_id}`}
+                      onClick={(event) => handleCityBadgeClick(location.location_id, event)}
+                      className={`inline-flex items-center px-2 py-1 rounded-full text-xs cursor-pointer transition-colors duration-200 ${themeClasses.bg.primary} ${themeClasses.text.secondary} border ${themeClasses.border.primary} hover:bg-blue-50 dark:hover:bg-blue-900/20 hover:border-blue-300 dark:hover:border-blue-600`}
+                    >
+                      <div className="w-2 h-2 bg-green-500 rounded-full mr-2"></div>
+                      {location.location_name}
+                    </button>
+                  ))}
+                {servedLocationDetails.filter(loc => loc.location_type === 'city').length > 8 && (
+                  <div className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${themeClasses.text.muted}`}>
+                    +{servedLocationDetails.filter(loc => loc.location_type === 'city').length - 8} more
+                  </div>
+                )}
+              </div>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                <span className="inline-flex items-center mr-4">
+                  <div className="w-2 h-2 bg-green-500 rounded-full mr-1"></div>
+                  Full Coverage
+                </span>
+                <span className="inline-flex items-center">
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full mr-1"></div>
+                  Partial Coverage
+                </span>
+              </div>
+            </div>
+          )}
+
           <ServiceLocationSelector
             initialSelections={serviceLocationSelections}
             onSelectionChange={handleServiceLocationSelectionChange}
+            highlightCityId={highlightCityId}
+            targetScrollY={targetScrollY}
           />
 
           {/* Service Location Actions */}
@@ -388,6 +508,40 @@ const AdminSettings: React.FC = () => {
           <li>• Changes take effect immediately for the current session</li>
           <li>• Settings are preserved across browser sessions</li>
         </ul>
+        </div>
+        </div>
+
+        {/* Scroll Indicators */}
+        {/* Top fade gradient - positioned exactly at the bottom edge of sticky header */}
+        {scrollState.canScrollUp && (
+          <div
+            className="absolute left-0 right-0 h-12 bg-gradient-to-b from-white to-transparent dark:from-gray-800 dark:to-transparent pointer-events-none z-20"
+            style={{ top: `${headerHeight - 1}px` }}
+          />
+        )}
+
+        {/* Bottom fade gradient - positioned relative to the container, not scrollable content */}
+        {scrollState.canScrollDown && (
+          <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-white to-transparent dark:from-gray-800 dark:to-transparent pointer-events-none z-20" />
+        )}
+
+        {/* Scroll indicators - positioned just below the fade gradient */}
+        {scrollState.canScrollUp && (
+          <div
+            className="absolute right-4 z-30 flex items-center space-x-1 text-gray-500 dark:text-gray-400 text-xs pointer-events-none"
+            style={{ top: `${headerHeight + 4}px` }}
+          >
+            <ChevronUp className="w-3 h-3 animate-bounce" />
+            <span className="font-medium">More above</span>
+          </div>
+        )}
+
+        {scrollState.canScrollDown && (
+          <div className="absolute bottom-1 right-4 z-30 flex items-center space-x-1 text-gray-500 dark:text-gray-400 text-xs pointer-events-none">
+            <ChevronDown className="w-3 h-3 animate-bounce" />
+            <span className="font-medium">More below</span>
+          </div>
+        )}
       </div>
     </div>
   );

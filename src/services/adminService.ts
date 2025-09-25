@@ -652,6 +652,55 @@ export class AdminService {
       throw error;
     }
   }
+
+  // Service Area Management Methods
+  async getServedLocations(): Promise<{ servedLocations: any[] }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/locations/served');
+      return result;
+    } catch (error) {
+      console.error('Error fetching served locations:', error);
+      throw error;
+    }
+  }
+
+  async getAllLocations(): Promise<{ locations: any[] }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/locations/all');
+      return result;
+    } catch (error) {
+      console.error('Error fetching all locations:', error);
+      throw error;
+    }
+  }
+
+  async updateServedLocations(selections: Array<{
+    location_type: string;
+    location_id: number;
+    notes?: string;
+  }>): Promise<{ success: boolean; servedLocations: any[]; message: string }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.post('/locations/served', { selections });
+      return result;
+    } catch (error) {
+      console.error('Error updating served locations:', error);
+      throw error;
+    }
+  }
+
+  async getLocationChildren(locationType: string, parentId: number): Promise<{ children: any[] }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get(`/locations/children/${locationType}/${parentId}`);
+      return result;
+    } catch (error) {
+      console.error('Error fetching location children:', error);
+      throw error;
+    }
+  }
 }
 
 export const adminService = new AdminService();
