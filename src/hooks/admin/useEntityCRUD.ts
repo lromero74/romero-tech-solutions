@@ -114,7 +114,7 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           result = await adminService.deleteUser(id);
           break;
         case 'clients':
-          result = await adminService.deleteUser(id, true); // hardDelete = true for permanent deletion
+          result = await adminService.deleteUser(id, true); // hardDelete = true for permanent deletion (force deploy)
           break;
         case 'businesses':
           result = await adminService.deleteBusiness(id);
