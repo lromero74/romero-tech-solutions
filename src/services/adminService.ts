@@ -701,6 +701,97 @@ export class AdminService {
       throw error;
     }
   }
+
+  // Service Area Validation Methods
+  async getServiceAreas(): Promise<any[]> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/admin/service-areas');
+      return result;
+    } catch (error) {
+      console.error('Error fetching service areas:', error);
+      throw error;
+    }
+  }
+
+  async validateServiceArea(address: {
+    city: string;
+    state: string;
+    zipCode: string;
+    country?: string;
+  }): Promise<{
+    isValid: boolean;
+    reason?: string;
+    suggestedAreas?: string[];
+  }> {
+    try {
+      console.log('🌍 AdminService: Validating service area for:', address);
+      const apiService = await this.getApiService();
+      console.log('🌍 AdminService: Making API call to /admin/service-areas/validate');
+      const result = await apiService.post('/admin/service-areas/validate', address);
+      console.log('🌍 AdminService: API response:', result);
+      return result;
+    } catch (error) {
+      console.error('🌍 AdminService: Error validating service area:', error);
+      // For testing, let's throw the error instead of masking it
+      throw error;
+    }
+  }
+
+  async lookupZipCode(zipCode: string): Promise<{
+    found: boolean;
+    data?: {
+      zipCode: string;
+      city: string;
+      state: string;
+      country: string;
+    };
+    message?: string;
+  }> {
+    try {
+      console.log('🔍 AdminService.lookupZipCode: Entry point, ZIP:', zipCode);
+      console.log('🔍 AdminService.lookupZipCode: Getting API service...');
+      const apiService = await this.getApiService();
+      console.log('🔍 AdminService.lookupZipCode: API service obtained, making request to:', `/admin/service-areas/lookup-zip/${zipCode}`);
+      const result = await apiService.get(`/admin/service-areas/lookup-zip/${zipCode}`);
+      console.log('🔍 AdminService.lookupZipCode: Raw API response:', result);
+      return result;
+    } catch (error) {
+      console.error('🔍 AdminService.lookupZipCode: Error occurred:', error);
+      throw error;
+    }
+  }
+
+  async getLocationTypes(): Promise<{
+    locationTypes: any[];
+    totalCount: number;
+  }> {
+    try {
+      console.log('📋 AdminService: Fetching location types...');
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/admin/location-types');
+      console.log('📋 AdminService: Location types response:', result);
+      return result;
+    } catch (error) {
+      console.error('📋 AdminService: Error fetching location types:', error);
+      throw error;
+    }
+  }
+
+  async getLocationTypesByCategory(): Promise<{
+    categories: any[];
+  }> {
+    try {
+      console.log('📋 AdminService: Fetching location types by category...');
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/admin/location-types/categories');
+      console.log('📋 AdminService: Location types categories response:', result);
+      return result;
+    } catch (error) {
+      console.error('📋 AdminService: Error fetching location types categories:', error);
+      throw error;
+    }
+  }
 }
 
 export const adminService = new AdminService();

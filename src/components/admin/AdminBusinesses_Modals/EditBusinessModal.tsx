@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Building, Plus, Trash2, AlertTriangle, AlertCircle } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
+import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
+import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
+import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+import AlertModal from '../../shared/AlertModal';
 
 interface AuthorizedDomain {
   id?: string;
@@ -64,16 +68,20 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 }) => {
   const [formData, setFormData] = useState({
     businessName: '',
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
     isActive: true,
     logo: '',
     logoPositionX: 50,
     logoPositionY: 50,
     logoScale: 100,
     logoBackgroundColor: ''
+  });
+
+  const [address, setAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'USA'
   });
 
   const [authorizedDomains, setAuthorizedDomains] = useState<AuthorizedDomain[]>([]);
@@ -88,6 +96,9 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [enableBackgroundColor, setEnableBackgroundColor] = useState(false);
   const [originalEnableBackgroundColor, setOriginalEnableBackgroundColor] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
+  // Service area validation state
+  const [serviceAreaValid, setServiceAreaValid] = useState(true); // Start as true for edit mode
+  const [showServiceAreaError, setShowServiceAreaError] = useState(false);
 
   // Check for duplicate business name in real-time
   const checkDuplicateName = (name: string) => {
@@ -169,16 +180,20 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
 
       setFormData({
         businessName: business.businessName,
-        street: business.address.street,
-        city: business.address.city,
-        state: business.address.state,
-        zipCode: business.address.zipCode,
         isActive: business.isActive,
         logo: business.logo || '',
         logoPositionX: business.logoPositionX || 50,
         logoPositionY: business.logoPositionY || 50,
         logoScale: business.logoScale || 100,
         logoBackgroundColor: business.logoBackgroundColor || ''
+      });
+
+      setAddress({
+        street: business.address.street,
+        city: business.address.city,
+        state: business.address.state,
+        zipCode: business.address.zipCode,
+        country: 'USA'
       });
       setOriginalBusiness(business);
     }
@@ -263,6 +278,13 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       return;
     }
 
+    // Check service area validation
+    if (!serviceAreaValid) {
+      setShowServiceAreaError(true);
+      setLoading(false);
+      return;
+    }
+
     if (authorizedDomains.length === 0) {
       setError('At least one authorized domain is required');
       setLoading(false);
@@ -283,10 +305,10 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         businessName: formData.businessName,
         authorizedDomains: authorizedDomains,
         address: {
-          street: formData.street,
-          city: formData.city,
-          state: formData.state,
-          zipCode: formData.zipCode
+          street: address.street,
+          city: address.city,
+          state: address.state,
+          zipCode: address.zipCode
         },
         isActive: formData.isActive,
         logo: enableLogo ? formData.logo : null,
@@ -476,59 +498,33 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 )}
               </div>
 
-              {/* Street Address */}
+              {/* Address with Auto-Completion */}
               <div className="md:col-span-2">
                 <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                  Street Address
+                  Business Address
                 </label>
-                <input
-                  type="text"
-                  value={formData.street}
-                  onChange={(e) => setFormData(prev => ({ ...prev, street: e.target.value }))}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Enter street address"
+                <AddressFormWithAutoComplete
+                  address={address}
+                  onAddressChange={setAddress}
+                  disabled={false}
+                  showLabels={false}
+                  required={false}
                 />
               </div>
 
-              {/* City */}
-              <div>
-                <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                  City
-                </label>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Enter city"
-                />
-              </div>
-
-              {/* State */}
-              <div>
-                <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                  State
-                </label>
-                <input
-                  type="text"
-                  value={formData.state}
-                  onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Enter state"
-                />
-              </div>
-
-              {/* Zip Code */}
-              <div>
-                <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                  Zip Code
-                </label>
-                <input
-                  type="text"
-                  value={formData.zipCode}
-                  onChange={(e) => setFormData(prev => ({ ...prev, zipCode: e.target.value }))}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Enter zip code"
+              {/* Service Area Validation */}
+              <div className="md:col-span-2">
+                <ServiceAreaValidator
+                  address={{
+                    city: address.city,
+                    state: address.state,
+                    zipCode: address.zipCode,
+                    country: address.country
+                  }}
+                  onValidationChange={(isValid, errors) => {
+                    console.log('🌍 EditBusinessModal validation change:', { isValid, errors });
+                    setServiceAreaValid(isValid);
+                  }}
                 />
               </div>
 
@@ -732,6 +728,38 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                 className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm font-medium rounded-md"
               >
                 Discard Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Service Area Error Dialog */}
+      {showServiceAreaError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className={`${themeClasses.bg.modal} rounded-lg p-6 max-w-md w-full mx-4 shadow-xl`}>
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Address Outside Service Area
+                </h3>
+              </div>
+            </div>
+            <div className="mb-6">
+              <p className={`text-sm ${themeClasses.text.secondary}`}>
+                The address you entered is outside our current service area. Please enter an address within our service area or contact us to discuss expanding services to your area.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowServiceAreaError(false)}
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                OK
               </button>
             </div>
           </div>

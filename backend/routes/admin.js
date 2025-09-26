@@ -12,6 +12,8 @@ import serviceLocationsRoutes from './admin/serviceLocations.js';
 import passwordComplexityRoutes from './admin/passwordComplexity.js';
 import locationContactsRoutes from './admin/locationContacts.js';
 import systemSettingsRoutes from './admin/systemSettings.js';
+import serviceAreasRoutes from './admin/serviceAreas.js';
+import locationTypesRoutes from './admin/locationTypes.js';
 
 const router = express.Router();
 
@@ -30,5 +32,7 @@ router.use('/', serviceLocationsRoutes);
 router.use('/', passwordComplexityRoutes);
 router.use('/', locationContactsRoutes);
 router.use('/', systemSettingsRoutes);
+router.use('/', serviceAreasRoutes);
+router.use('/', locationTypesRoutes);
 
 export default router;

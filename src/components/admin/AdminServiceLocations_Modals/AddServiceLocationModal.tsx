@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
+import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
+import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
+import LocationTypeSelector from '../../shared/LocationTypeSelector';
+import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+import AlertModal from '../../shared/AlertModal';
 
 interface Business {
   id: string;
@@ -54,27 +59,41 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     address_label: '',
     location_name: '',
     location_type: 'office',
-    street: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    country: 'USA',
     contact_person: '',
     contact_phone: '',
     notes: '',
     is_headquarters: false
   });
 
+  const [address, setAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'USA'
+  });
+
   const [businesses, setBusinesses] = useState<Business[]>([]);
   const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
+  const [showServiceAreaError, setShowServiceAreaError] = useState(false);
+
+  // Field-level validation modal state
+  const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
+  const [fieldValidationData, setFieldValidationData] = useState<{
+    reason?: string;
+    suggestedAreas?: string[];
+  }>({});
 
   // Track if this is the first render to avoid marking as changed during initial load
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Toggle for adding first user
   const [addFirstUser, setAddFirstUser] = useState(true);
+
+  // Service area validation state - start as false until validation passes
+  const [serviceAreaValid, setServiceAreaValid] = useState(false);
 
   // Fetch businesses on component mount
   useEffect(() => {
@@ -101,13 +120,15 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   // Handle prefill address data
   useEffect(() => {
     if (showModal && prefillAddress) {
-      setFormData(prev => ({
-        ...prev,
+      setAddress({
         street: prefillAddress.street,
         city: prefillAddress.city,
         state: prefillAddress.state,
-        zip_code: prefillAddress.zipCode,
-        country: prefillAddress.country || 'USA',
+        zipCode: prefillAddress.zipCode,
+        country: prefillAddress.country || 'USA'
+      });
+      setFormData(prev => ({
+        ...prev,
         address_label: 'Main Office' // Default label
       }));
     }
@@ -121,19 +142,23 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         address_label: '',
         location_name: '',
         location_type: 'office',
-        street: '',
-        city: '',
-        state: '',
-        zip_code: '',
-        country: 'USA',
         contact_person: '',
         contact_phone: '',
         notes: '',
         is_headquarters: false
       });
+      setAddress({
+        street: '',
+        city: '',
+        state: '',
+        zipCode: '',
+        country: 'USA'
+      });
       setHasUnsavedChanges(false);
       setShowConfirmClose(false);
       setIsInitialLoad(true);
+      // Reset service area validation
+      setServiceAreaValid(false);
     }
   }, [showModal]);
 
@@ -187,9 +212,38 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     onClose();
   };
 
+  // Handle field-level blur validation
+  const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
+    console.log('🔄 AddServiceLocationModal handleFieldBlur called:', { field, value });
+    try {
+      const result = await validateServiceAreaField(field, value, {
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode,
+        country: address.country
+      });
+
+      if (result && !result.isValid) {
+        setFieldValidationData({
+          reason: result.reason,
+          suggestedAreas: result.suggestedAreas
+        });
+        setShowFieldValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Field blur validation error:', error);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.business_id || !formData.address_label || !formData.street || !formData.city || !formData.state || !formData.zip_code) {
+    if (!formData.business_id || !formData.address_label || !address.street || !address.city || !address.state || !address.zipCode) {
+      return;
+    }
+
+    // Check service area validation
+    if (!serviceAreaValid) {
+      setShowServiceAreaError(true);
       return;
     }
 
@@ -199,11 +253,11 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         address_label: formData.address_label,
         location_name: formData.location_name || undefined,
         location_type: formData.location_type,
-        street: formData.street,
-        city: formData.city,
-        state: formData.state,
-        zip_code: formData.zip_code,
-        country: formData.country,
+        street: address.street,
+        city: address.city,
+        state: address.state,
+        zip_code: address.zipCode,
+        country: address.country,
         contact_person: formData.contact_person || undefined,
         contact_phone: formData.contact_phone || undefined,
         notes: formData.notes || undefined,
@@ -301,18 +355,13 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                   <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
                     Location Type *
                   </label>
-                  <select
-                    required
+                  <LocationTypeSelector
                     value={formData.location_type}
-                    onChange={(e) => setFormData(prev => ({ ...prev, location_type: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  >
-                    <option value="office">Office</option>
-                    <option value="warehouse">Warehouse</option>
-                    <option value="retail">Retail</option>
-                    <option value="manufacturing">Manufacturing</option>
-                    <option value="other">Other</option>
-                  </select>
+                    onChange={(value) => setFormData(prev => ({ ...prev, location_type: value }))}
+                    required={true}
+                    placeholder="Select location type..."
+                    showSearch={true}
+                  />
                 </div>
 
                 {/* Is Headquarters */}
@@ -333,78 +382,18 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                   </div>
                 </div>
 
-                {/* Street Address */}
+                {/* Address with Auto-Completion */}
                 <div className="md:col-span-2">
                   <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Street Address *
+                    Service Location Address *
                   </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.street}
-                    onChange={(e) => setFormData(prev => ({ ...prev, street: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="123 Main Street"
-                  />
-                </div>
-
-                {/* City */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    City *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.city}
-                    onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="City"
-                  />
-                </div>
-
-                {/* State */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    State *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.state}
-                    onChange={(e) => setFormData(prev => ({ ...prev, state: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="State"
-                  />
-                </div>
-
-                {/* ZIP Code */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    ZIP Code *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.zip_code}
-                    onChange={(e) => setFormData(prev => ({ ...prev, zip_code: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="12345"
-                  />
-                </div>
-
-                {/* Country */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Country *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={formData.country}
-                    onChange={(e) => setFormData(prev => ({ ...prev, country: e.target.value }))}
-                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="USA"
+                  <AddressFormWithAutoComplete
+                    address={address}
+                    onAddressChange={setAddress}
+                    disabled={false}
+                    showLabels={false}
+                    required={true}
+                    onFieldBlur={handleFieldBlur}
                   />
                 </div>
 
@@ -447,6 +436,22 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                     rows={3}
                     className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="Additional notes about this location..."
+                  />
+                </div>
+
+                {/* Service Area Validation */}
+                <div className="md:col-span-2">
+                  <ServiceAreaValidator
+                    address={{
+                      city: address.city,
+                      state: address.state,
+                      zipCode: address.zipCode,
+                      country: address.country
+                    }}
+                    onValidationChange={(isValid) => {
+                      setServiceAreaValid(isValid);
+                    }}
+                    showSuggestions={true}
                   />
                 </div>
 
@@ -522,6 +527,44 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Service Area Validation Error Dialog */}
+      {showServiceAreaError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70] p-4">
+          <div className={`${themeClasses.bg.modal} rounded-lg shadow-xl border ${themeClasses.border.primary} p-6 max-w-md w-full`}>
+            <div className="flex items-center space-x-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-500" />
+              <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>Service Area Validation Required</h3>
+            </div>
+            <div className="mb-6">
+              <p className={`text-sm ${themeClasses.text.secondary} mb-2`}>
+                Please review and address the service area validation issues shown above before submitting the form.
+              </p>
+              <p className={`text-xs ${themeClasses.text.muted}`}>
+                We can only provide services in our designated coverage areas.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => setShowServiceAreaError(false)}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Field Validation Modal */}
+      <AlertModal
+        isOpen={showFieldValidationModal}
+        onClose={() => setShowFieldValidationModal(false)}
+        type="error"
+        title="Service Area Not Available"
+        message={fieldValidationData.reason || 'This location is outside our current service area.'}
+        suggestedAreas={fieldValidationData.suggestedAreas}
+      />
     </>
   );
 };

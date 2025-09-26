@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 import { X, Save, Building, Plus, Trash2, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
+import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
+import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
+import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+import AlertModal from '../../shared/AlertModal';
 
 interface AuthorizedDomain {
   domain: string;
@@ -51,6 +55,7 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
 }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
+  const [showServiceAreaError, setShowServiceAreaError] = useState(false);
 
   // Check for duplicate business name in real-time
   const checkDuplicateName = (name: string) => {
@@ -84,6 +89,17 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   });
   const [openServiceLocationModal, setOpenServiceLocationModal] = useState(true);
 
+  // Service area validation state - start as false until validation passes
+  const [serviceAreaValid, setServiceAreaValid] = useState(false);
+
+  // Field-level validation modal state
+  const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
+  const [fieldValidationData, setFieldValidationData] = useState<{
+    reason?: string;
+    suggestedAreas?: string[];
+    geographicallyRelevant?: boolean;
+  }>({});
+
   // Logo-related state
   const [enableLogo, setEnableLogo] = useState(false);
   const [logo, setLogo] = useState('');
@@ -92,6 +108,30 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   const [logoScale, setLogoScale] = useState(100);
   const [enableBackgroundColor, setEnableBackgroundColor] = useState(false);
   const [logoBackgroundColor, setLogoBackgroundColor] = useState('');
+
+  // Handle field-level blur validation
+  const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
+    console.log('🔄 AddBusinessModal handleFieldBlur called:', { field, value });
+    try {
+      const result = await validateServiceAreaField(field, value, {
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode,
+        country: address.country
+      });
+
+      if (result && !result.isValid) {
+        setFieldValidationData({
+          reason: result.reason,
+          suggestedAreas: result.suggestedAreas,
+          geographicallyRelevant: result.geographicallyRelevant
+        });
+        setShowFieldValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Field blur validation error:', error);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +155,13 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
 
     if (!address.street.trim() || !address.city.trim() || !address.state.trim() || !address.zipCode.trim()) {
       alert('All address fields are required');
+      return;
+    }
+
+    // Check service area validation
+    console.log('🔍 Form submission: serviceAreaValid =', serviceAreaValid);
+    if (!serviceAreaValid) {
+      setShowServiceAreaError(true);
       return;
     }
 
@@ -153,6 +200,9 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
         country: 'USA'
       });
       setOpenServiceLocationModal(true);
+
+      // Reset service area validation
+      setServiceAreaValid(false);
 
       // Reset logo fields
       setEnableLogo(false);
@@ -287,57 +337,35 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
             </div>
           </div>
 
-          {/* Address */}
+          {/* Address with Auto-Completion */}
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
               Business Address *
             </label>
-            <div className="space-y-3">
-              <input
-                type="text"
-                value={address.street}
-                onChange={(e) => setAddress({...address, street: e.target.value})}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                placeholder="Street Address"
-                required
-              />
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={address.city}
-                  onChange={(e) => setAddress({...address, city: e.target.value})}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="City"
-                  required
-                />
-                <input
-                  type="text"
-                  value={address.state}
-                  onChange={(e) => setAddress({...address, state: e.target.value})}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="State"
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={address.zipCode}
-                  onChange={(e) => setAddress({...address, zipCode: e.target.value})}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="ZIP Code"
-                  required
-                />
-                <input
-                  type="text"
-                  value={address.country}
-                  onChange={(e) => setAddress({...address, country: e.target.value})}
-                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                  placeholder="Country"
-                />
-              </div>
-            </div>
+            <AddressFormWithAutoComplete
+              address={address}
+              onAddressChange={setAddress}
+              disabled={false}
+              showLabels={false}
+              required={true}
+              onFieldBlur={handleFieldBlur}
+            />
           </div>
+
+          {/* Service Area Validation */}
+          <ServiceAreaValidator
+            address={{
+              city: address.city,
+              state: address.state,
+              zipCode: address.zipCode,
+              country: address.country
+            }}
+            onValidationChange={(isValid, errors) => {
+              console.log('🔍 ServiceAreaValidator callback:', { isValid, errors });
+              setServiceAreaValid(isValid);
+            }}
+            showSuggestions={true}
+          />
 
           {/* Logo Upload Section */}
           <div className="mt-6">
@@ -463,6 +491,52 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Service Area Validation Error Dialog */}
+      {showServiceAreaError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className={`${themeClasses.bg.modal} rounded-lg p-6 max-w-md w-full mx-4 shadow-xl`}>
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-500" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Service Area Validation Required
+                </h3>
+              </div>
+            </div>
+            <div className="mb-6">
+              <p className={`text-sm ${themeClasses.text.secondary}`}>
+                Please review and address the service area validation issues shown above before submitting the form.
+              </p>
+              <p className={`text-xs ${themeClasses.text.muted} mt-2`}>
+                We can only provide services in our designated coverage areas.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowServiceAreaError(false)}
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Field Validation Modal */}
+      <AlertModal
+        isOpen={showFieldValidationModal}
+        onClose={() => setShowFieldValidationModal(false)}
+        type="error"
+        title="Service Area Not Available"
+        message={fieldValidationData.reason || 'This location is outside our current service area.'}
+        suggestedAreas={fieldValidationData.suggestedAreas}
+        geographicallyRelevant={fieldValidationData.geographicallyRelevant}
+      />
     </div>
   );
 };

@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { X, Save, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
+import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
+import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
+import LocationTypeSelector from '../../shared/LocationTypeSelector';
+import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+import AlertModal from '../../shared/AlertModal';
 
 interface Business {
   id: string;
@@ -66,22 +71,35 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     address_label: '',
     location_name: '',
     location_type: 'office',
-    street: '',
-    city: '',
-    state: '',
-    zip_code: '',
-    country: 'USA',
     contact_person: '',
     contact_phone: '',
     notes: '',
     is_active: true,
     is_headquarters: false
   });
+
+  const [address, setAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'USA'
+  });
   const [originalServiceLocation, setOriginalServiceLocation] = useState<ServiceLocation | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [availableBusinesses, setAvailableBusinesses] = useState<Business[]>([]);
   const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   const [businessError, setBusinessError] = useState('');
+  // Service area validation state
+  const [serviceAreaValid, setServiceAreaValid] = useState(true); // Start as true for edit mode
+  const [showServiceAreaError, setShowServiceAreaError] = useState(false);
+
+  // Field-level validation modal state
+  const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
+  const [fieldValidationData, setFieldValidationData] = useState<{
+    reason?: string;
+    suggestedAreas?: string[];
+  }>({});
 
   useEffect(() => {
     if (serviceLocation) {
@@ -90,11 +108,6 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
         address_label: serviceLocation.address_label || '',
         location_name: serviceLocation.location_name || '',
         location_type: serviceLocation.location_type || 'office',
-        street: serviceLocation.street || '',
-        city: serviceLocation.city || '',
-        state: serviceLocation.state || '',
-        zip_code: serviceLocation.zip_code || '',
-        country: serviceLocation.country || 'USA',
         contact_person: serviceLocation.contact_person || '',
         contact_phone: serviceLocation.contact_phone || '',
         notes: serviceLocation.notes || '',
@@ -102,7 +115,16 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
         is_headquarters: serviceLocation.is_headquarters
       };
 
+      const addressData = {
+        street: serviceLocation.street || '',
+        city: serviceLocation.city || '',
+        state: serviceLocation.state || '',
+        zipCode: serviceLocation.zip_code || '',
+        country: serviceLocation.country || 'USA'
+      };
+
       setFormData(locationData);
+      setAddress(addressData);
       setOriginalServiceLocation({
         ...serviceLocation,
         address_label: serviceLocation.address_label || '',
@@ -169,11 +191,11 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
       formData.address_label !== originalServiceLocation.address_label ||
       formData.location_name !== (originalServiceLocation.location_name || '') ||
       formData.location_type !== originalServiceLocation.location_type ||
-      formData.street !== originalServiceLocation.street ||
-      formData.city !== originalServiceLocation.city ||
-      formData.state !== originalServiceLocation.state ||
-      formData.zip_code !== originalServiceLocation.zip_code ||
-      formData.country !== originalServiceLocation.country ||
+      address.street !== originalServiceLocation.street ||
+      address.city !== originalServiceLocation.city ||
+      address.state !== originalServiceLocation.state ||
+      address.zipCode !== originalServiceLocation.zip_code ||
+      address.country !== originalServiceLocation.country ||
       formData.contact_person !== (originalServiceLocation.contact_person || '') ||
       formData.contact_phone !== (originalServiceLocation.contact_phone || '') ||
       formData.notes !== (originalServiceLocation.notes || '') ||
@@ -182,9 +204,37 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     );
   };
 
+  // Handle field-level blur validation
+  const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
+    try {
+      const result = await validateServiceAreaField(field, value, {
+        city: address.city,
+        state: address.state,
+        zipCode: address.zipCode,
+        country: address.country
+      });
+
+      if (result && !result.isValid) {
+        setFieldValidationData({
+          reason: result.reason,
+          suggestedAreas: result.suggestedAreas
+        });
+        setShowFieldValidationModal(true);
+      }
+    } catch (error) {
+      console.error('Field blur validation error:', error);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceLocation) return;
+
+    // Check service area validation
+    if (!serviceAreaValid) {
+      setShowServiceAreaError(true);
+      return;
+    }
 
     if (hasChanges()) {
       handleConfirmUpdate();
@@ -210,20 +260,20 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     if (formData.location_type !== originalServiceLocation?.location_type) {
       updates.location_type = formData.location_type;
     }
-    if (formData.street !== originalServiceLocation?.street) {
-      updates.street = formData.street;
+    if (address.street !== originalServiceLocation?.street) {
+      updates.street = address.street;
     }
-    if (formData.city !== originalServiceLocation?.city) {
-      updates.city = formData.city;
+    if (address.city !== originalServiceLocation?.city) {
+      updates.city = address.city;
     }
-    if (formData.state !== originalServiceLocation?.state) {
-      updates.state = formData.state;
+    if (address.state !== originalServiceLocation?.state) {
+      updates.state = address.state;
     }
-    if (formData.zip_code !== originalServiceLocation?.zip_code) {
-      updates.zip_code = formData.zip_code;
+    if (address.zipCode !== originalServiceLocation?.zip_code) {
+      updates.zip_code = address.zipCode;
     }
-    if (formData.country !== originalServiceLocation?.country) {
-      updates.country = formData.country;
+    if (address.country !== originalServiceLocation?.country) {
+      updates.country = address.country;
     }
     if (formData.contact_person !== (originalServiceLocation?.contact_person || '')) {
       updates.contact_person = formData.contact_person;
@@ -280,39 +330,24 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
       address_label: '',
       location_name: '',
       location_type: 'office',
-      street: '',
-      city: '',
-      state: '',
-      zip_code: '',
-      country: 'USA',
       contact_person: '',
       contact_phone: '',
       notes: '',
       is_active: true,
       is_headquarters: false
     });
+    setAddress({
+      street: '',
+      city: '',
+      state: '',
+      zipCode: '',
+      country: 'USA'
+    });
     setOriginalServiceLocation(null);
     setShowConfirmModal(false);
     onClose();
   };
 
-  const locationTypes = [
-    { value: 'office', label: 'Office' },
-    { value: 'warehouse', label: 'Warehouse' },
-    { value: 'retail', label: 'Retail Store' },
-    { value: 'datacenter', label: 'Data Center' },
-    { value: 'branch', label: 'Branch Office' },
-    { value: 'remote', label: 'Remote Location' },
-    { value: 'other', label: 'Other' }
-  ];
-
-  const states = [
-    'AL', 'AK', 'AZ', 'AR', 'CA', 'CO', 'CT', 'DE', 'FL', 'GA',
-    'HI', 'ID', 'IL', 'IN', 'IA', 'KS', 'KY', 'LA', 'ME', 'MD',
-    'MA', 'MI', 'MN', 'MS', 'MO', 'MT', 'NE', 'NV', 'NH', 'NJ',
-    'NM', 'NY', 'NC', 'ND', 'OH', 'OK', 'OR', 'PA', 'RI', 'SC',
-    'SD', 'TN', 'TX', 'UT', 'VT', 'VA', 'WA', 'WV', 'WI', 'WY'
-  ];
 
   if (!showModal) return null;
 
@@ -418,119 +453,48 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
                   </div>
                 </div>
 
+                {/* Location Type Selector */}
                 <div>
                   <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
                     Location Type *
                   </label>
-                  <select
-                    name="location_type"
+                  <LocationTypeSelector
                     value={formData.location_type}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    style={{
-                      colorScheme: theme === 'dark' ? 'dark' : 'light'
-                    }}
-                  >
-                    {locationTypes.map(type => (
-                      <option
-                        key={type.value}
-                        value={type.value}
-                        className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                      >
-                        {type.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Address */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Street Address *
-                  </label>
-                  <input
-                    type="text"
-                    name="street"
-                    value={formData.street}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="123 Main St"
+                    onChange={(value) => setFormData(prev => ({ ...prev, location_type: value }))}
+                    disabled={false}
+                    required={true}
+                    placeholder="Select location type..."
+                    showSearch={true}
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                      City *
-                    </label>
-                    <input
-                      type="text"
-                      name="city"
-                      value={formData.city}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                      placeholder="City"
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                      State *
-                    </label>
-                    <select
-                      name="state"
-                      value={formData.state}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                      style={{
-                        colorScheme: theme === 'dark' ? 'dark' : 'light'
-                      }}
-                    >
-                      <option value="" className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100">Select State</option>
-                      {states.map(state => (
-                        <option
-                          key={state}
-                          value={state}
-                          className="bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-                        >
-                          {state}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                      ZIP Code *
-                    </label>
-                    <input
-                      type="text"
-                      name="zip_code"
-                      value={formData.zip_code}
-                      onChange={handleInputChange}
-                      required
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                      placeholder="12345"
-                    />
-                  </div>
-                </div>
-
+                {/* Address with Auto-completion */}
                 <div>
                   <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Country *
+                    Service Location Address *
                   </label>
-                  <input
-                    type="text"
-                    name="country"
-                    value={formData.country}
-                    onChange={handleInputChange}
-                    required
-                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                    placeholder="USA"
+                  <AddressFormWithAutoComplete
+                    address={address}
+                    onAddressChange={setAddress}
+                    disabled={false}
+                    showLabels={false}
+                    required={true}
+                    onFieldBlur={handleFieldBlur}
+                  />
+                </div>
+
+                {/* Service Area Validation */}
+                <div>
+                  <ServiceAreaValidator
+                    address={{
+                      city: address.city,
+                      state: address.state,
+                      zipCode: address.zipCode
+                    }}
+                    onValidationChange={(isValid, errors) => {
+                      console.log('🌍 EditServiceLocationModal validation change:', { isValid, errors });
+                      setServiceAreaValid(isValid);
+                    }}
                   />
                 </div>
 
@@ -662,6 +626,48 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
           </div>
         </div>
       )}
+
+      {/* Service Area Error Dialog */}
+      {showServiceAreaError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className={`${themeClasses.bg.modal} rounded-lg p-6 max-w-md w-full mx-4 shadow-xl`}>
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Address Outside Service Area
+                </h3>
+              </div>
+            </div>
+            <div className="mb-6">
+              <p className={`text-sm ${themeClasses.text.secondary}`}>
+                The address you entered is outside our current service area. Please enter an address within our service area or contact us to discuss expanding services to your area.
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowServiceAreaError(false)}
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Field Validation Modal */}
+      <AlertModal
+        isOpen={showFieldValidationModal}
+        onClose={() => setShowFieldValidationModal(false)}
+        type="error"
+        title="Service Area Not Available"
+        message={fieldValidationData.reason || 'This location is outside our current service area.'}
+        suggestedAreas={fieldValidationData.suggestedAreas}
+      />
     </>
   );
 };

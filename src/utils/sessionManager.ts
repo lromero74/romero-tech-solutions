@@ -80,9 +80,9 @@ class SessionManager {
     const now = Date.now();
     const timeSinceLastActivity = now - this.sessionData.lastActivity;
 
-    // Only update if it's been more than 30 seconds since last activity update
-    // This prevents excessive timer resets from minor UI interactions
-    if (timeSinceLastActivity < 30000) return; // 30 seconds throttle
+    // Only update if it's been more than 5 seconds since last activity update
+    // This prevents excessive timer resets from minor UI interactions while maintaining responsiveness
+    if (timeSinceLastActivity < 5000) return; // 5 seconds throttle (reduced from 30)
 
     // Reduced logging for activity updates to prevent spam
     if (timeSinceLastActivity > 60000) { // Only log if more than 1 minute since last
@@ -141,8 +141,25 @@ class SessionManager {
     }, timeoutMs);
   }
 
-  private expireSession() {
+  private async expireSession() {
     console.log(`🔴 EXPIRE SESSION: Starting session expiration process`);
+
+    // Before expiring locally, check with server to confirm session is actually expired
+    try {
+      console.log(`🔴 EXPIRE SESSION: Verifying session status with server...`);
+      const { authService } = await import('../services/authService');
+      const result = await authService.sessionHeartbeat();
+
+      if (result.success && result.session?.isActive) {
+        console.log(`🔄 EXPIRE SESSION: Server says session is still active! Synchronizing...`);
+        this.updateFromServerSession(result.session);
+        return; // Don't expire the session, it's still valid on server
+      }
+
+      console.log(`🔴 EXPIRE SESSION: Server confirms session is expired`);
+    } catch (error) {
+      console.warn(`⚠️ EXPIRE SESSION: Could not verify with server, proceeding with local expiry:`, error);
+    }
 
     if (this.sessionData) {
       console.log(`🔴 EXPIRE SESSION: Setting session to inactive`);
@@ -306,14 +323,19 @@ class SessionManager {
       console.log('🔄 Server session sync - significant difference:', difference + 's');
     }
 
-    // TEMPORARILY DISABLE server session adjustment to debug local timeout
-    // The server heartbeat might be preventing local timeout from working
-    if (false && Math.abs(serverExpiresAt - clientExpiresAt) > 30000) { // 30 second tolerance
+    // Synchronize client session with server session state
+    // If there's a significant difference, trust the server's session state
+    if (Math.abs(serverExpiresAt - clientExpiresAt) > 30000) { // 30 second tolerance
       console.log('🔄 Adjusting client session based on server state');
+      console.log(`🔄 Server expires at: ${new Date(serverExpiresAt).toLocaleTimeString()}`);
+      console.log(`🔄 Client expires at: ${new Date(clientExpiresAt).toLocaleTimeString()}`);
+
       // Adjust the last activity time to match server expectations
       this.sessionData.lastActivity = serverExpiresAt - (this.sessionData.config.timeout * 60 * 1000);
       this.saveSession();
       this.scheduleTimeout(); // Re-schedule with adjusted time
+
+      console.log('🔄 Client session synchronized with server');
     }
   }
 
