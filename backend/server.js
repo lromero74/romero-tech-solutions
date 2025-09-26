@@ -12,6 +12,7 @@ import uploadRoutes from './routes/uploads.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import locationRoutes from './routes/locations.js';
+import publicRoutes from './routes/public.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -130,6 +131,7 @@ app.use('/uploads', express.static('uploads'));
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/public', publicRoutes); // Public routes without authentication
 app.use('/api/locations', locationRoutes);
 app.use('/api/clients', clientRegistrationRoutes);
 app.use('/api/uploads', uploadRoutes);

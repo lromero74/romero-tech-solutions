@@ -103,13 +103,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     availableRoles
   } = useAdminData();
 
-  // Refresh online status whenever the view changes (navigation)
-  useEffect(() => {
-    refreshOnlineStatus();
-  }, [currentView, refreshOnlineStatus]);
-
   // Get current user for authorization checks
-  const { user } = useEnhancedAuth();
+  const { user, isAuthenticated } = useEnhancedAuth();
+
+  // Refresh online status whenever the view changes (navigation) - only if authenticated
+  useEffect(() => {
+    if (isAuthenticated && user) {
+      refreshOnlineStatus();
+    }
+  }, [currentView, refreshOnlineStatus, isAuthenticated, user]);
 
   // Initialize filter hooks
   const employeeFilters = useEmployeeFilters();

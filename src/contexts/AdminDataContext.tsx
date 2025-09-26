@@ -300,6 +300,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
   };
 
   const refreshOnlineStatus = async () => {
+    // Don't make API calls if no session token
+    if (!sessionToken) {
+      console.log('🔐 No session token - skipping online status refresh');
+      return;
+    }
+
     try {
       // Only refresh login status without full data reload
       const data = await adminService.getEmployeesWithLoginStatus();
@@ -322,12 +328,18 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         });
       });
     } catch (err) {
-      // Silently handle errors to avoid disrupting UX
+      // Silently handle errors to avoid disrupting UX during logout
       console.warn('Failed to refresh online status:', err);
     }
   };
 
   const refreshAllData = async () => {
+    // Don't make API calls if no session token
+    if (!sessionToken) {
+      console.log('🔐 No session token - skipping data refresh');
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -388,10 +400,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     }
   }, [businesses, serviceLocations]);
 
-  // Initial data fetch
+  // Initial data fetch - only if session token exists
   useEffect(() => {
-    refreshAllData();
-  }, []);
+    if (sessionToken) {
+      refreshAllData();
+    }
+  }, [sessionToken]);
 
   // WebSocket connection for real-time employee status updates
   useEffect(() => {

@@ -323,12 +323,110 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     setSuccess('');
   };
 
+  // Enhanced input validation and sanitization
+  const sanitizeForContext = (value: string, fieldType: string): string => {
+    // Prevent null byte injection and excessive length
+    const sanitized = value.replace(/\0/g, '').slice(0, 1000);
+
+    switch (fieldType) {
+      case 'password':
+        // For passwords, prevent script injection but preserve special characters for strong passwords
+        return sanitized
+          .replace(/<script[^>]*>.*?<\/script>/gi, '')
+          .replace(/javascript:/gi, '')
+          .replace(/on\w+\s*=/gi, '')
+          .replace(/data:/gi, '')  // Prevent data URLs
+          .replace(/vbscript:/gi, ''); // Prevent VBScript
+      case 'email':
+        // Strict email sanitization - only allow valid email characters
+        return sanitized
+          .replace(/[<>"'`\\]/g, '')  // Remove HTML/script chars and backslashes
+          .replace(/[^\w@.-]/g, '');  // Only allow word chars, @, dot, hyphen
+      case 'name':
+        // Allow letters, spaces, hyphens, apostrophes for names but prevent injection
+        return sanitized
+          .replace(/[<>"'`\\]/g, '')  // Remove potential injection chars
+          .replace(/[^a-zA-Z\s.\-']/g, ''); // Only allow safe name characters
+      default:
+        // Conservative default - remove all potentially dangerous characters
+        return sanitized.replace(/[<>"'`\\&]/g, '');
+    }
+  };
+
+  const validateInput = (name: string, value: string): string | null => {
+    const sanitizedValue = sanitizeForContext(value, name);
+
+    switch (name) {
+      case 'email': {
+        const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+        if (!emailRegex.test(sanitizedValue)) {
+          return 'Please enter a valid email address';
+        }
+        if (sanitizedValue.length > 254) {
+          return 'Email address is too long';
+        }
+        break;
+      }
+      case 'password':
+        if (sanitizedValue.length < 8) {
+          return 'Password must be at least 8 characters long';
+        }
+        if (sanitizedValue.length > 128) {
+          return 'Password is too long';
+        }
+        if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)/.test(sanitizedValue)) {
+          return 'Password must contain at least one uppercase letter, one lowercase letter, and one number';
+        }
+        // Enhanced security checks for injection patterns
+        if (/<script|javascript:|on\w+\s*=|data:|vbscript:|&lt;|&gt;|&#|%3C|%3E/i.test(value)) {
+          return 'Password contains invalid characters';
+        }
+        // Check for common weak patterns
+        if (/^(.)\1{7,}$/.test(sanitizedValue)) {
+          return 'Password cannot be all the same character';
+        }
+        if (/123456|password|admin|qwerty/i.test(sanitizedValue)) {
+          return 'Password cannot contain common weak patterns';
+        }
+        break;
+      case 'name':
+        if (sanitizedValue.length > 100) {
+          return 'Name is too long';
+        }
+        if (!/^[a-zA-Z\s.-]+$/.test(sanitizedValue)) {
+          return 'Name can only contain letters, spaces, periods, and hyphens';
+        }
+        break;
+    }
+    return null;
+  };
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
 
-    if (errors[name]) {
+    // Apply context-aware sanitization
+    const sanitizedValue = sanitizeForContext(value, name);
+
+    setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
+
+    // Real-time validation
+    const validationError = validateInput(name, value); // Validate against original value
+    if (validationError) {
+      setErrors(prev => ({ ...prev, [name]: validationError }));
+    } else if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+
+    // Additional password confirmation validation
+    if (name === 'confirmPassword' || (name === 'password' && formData.confirmPassword)) {
+      const password = name === 'password' ? sanitizedValue : formData.password;
+      const confirmPassword = name === 'confirmPassword' ? sanitizedValue : formData.confirmPassword;
+
+      if (password !== confirmPassword && confirmPassword) {
+        setErrors(prev => ({ ...prev, confirmPassword: 'Passwords do not match' }));
+      } else {
+        setErrors(prev => ({ ...prev, confirmPassword: '' }));
+      }
     }
   };
 
@@ -740,6 +838,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                       required={isSignUp}
                       value={formData.name}
                       onChange={handleInputChange}
+                      maxLength={100}
+                      pattern="[a-zA-Z\s.-]+"
+                      title="Name can only contain letters, spaces, periods, and hyphens"
                       className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
                         errors.name ? 'border-red-300' : 'border-gray-300'
                       } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
@@ -763,6 +864,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                     required
                     value={formData.email}
                     onChange={handleInputChange}
+                    maxLength={254}
+                    pattern="[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}"
+                    title="Please enter a valid email address"
                     className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
                       errors.email ? 'border-red-300' : 'border-gray-300'
                     } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
@@ -785,6 +889,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                     required
                     value={formData.password}
                     onChange={handleInputChange}
+                    minLength={8}
+                    maxLength={128}
+                    title="Password must be at least 8 characters with uppercase, lowercase, and number"
                     className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
                       errors.password ? 'border-red-300' : 'border-gray-300'
                     } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
@@ -808,6 +915,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                       required={isSignUp}
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
+                      minLength={8}
+                      maxLength={128}
+                      title="Must match your password"
                       className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
                         errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
                       } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}

@@ -93,6 +93,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
   // Service area validation state
   const [serviceAreaValid, setServiceAreaValid] = useState(true); // Start as true for edit mode
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
+  const [showZipValidationError, setShowZipValidationError] = useState(false);
 
   // Field-level validation modal state
   const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
@@ -229,6 +230,12 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!serviceLocation) return;
+
+    // Check ZIP code format - must be exactly 5 digits
+    if (!/^\d{5}$/.test(address.zipCode.trim())) {
+      setShowZipValidationError(true);
+      return;
+    }
 
     // Check service area validation
     if (!serviceAreaValid) {
@@ -667,6 +674,15 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
         title="Service Area Not Available"
         message={fieldValidationData.reason || 'This location is outside our current service area.'}
         suggestedAreas={fieldValidationData.suggestedAreas}
+      />
+
+      {/* ZIP Code Validation Modal */}
+      <AlertModal
+        isOpen={showZipValidationError}
+        onClose={() => setShowZipValidationError(false)}
+        type="error"
+        title="Invalid ZIP Code"
+        message="ZIP code must be exactly 5 digits. Please enter a complete ZIP code (e.g., 92026)."
       />
     </>
   );

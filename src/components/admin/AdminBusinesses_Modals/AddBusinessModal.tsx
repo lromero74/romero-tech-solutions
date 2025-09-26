@@ -1,15 +1,19 @@
 import React, { useState } from 'react';
-import { X, Save, Building, Plus, Trash2, AlertTriangle } from 'lucide-react';
+import { X, Save, Building, Plus, Trash2, AlertTriangle, Globe, CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
 import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+import { validateDomain } from '../../../utils/domainValidation';
 import AlertModal from '../../shared/AlertModal';
 
 interface AuthorizedDomain {
   domain: string;
   description?: string;
+  isValid?: boolean;
+  validationError?: string;
+  isValidating?: boolean;
 }
 
 interface Business {
@@ -53,9 +57,40 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   businesses = [],
   onOpenServiceLocationModal
 }) => {
+  // State declarations first
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
+  const [showZipValidationError, setShowZipValidationError] = useState(false);
+
+  // Form state
+  const [businessName, setBusinessName] = useState('');
+  const [authorizedDomains, setAuthorizedDomains] = useState<AuthorizedDomain[]>([
+    { domain: '', description: '' }
+  ]);
+  const [address, setAddress] = useState({
+    street: '',
+    city: '',
+    state: '',
+    zipCode: '',
+    country: 'USA'
+  });
+  const [openServiceLocationModal, setOpenServiceLocationModal] = useState(true);
+
+  // Service area validation state - start as false until validation passes
+  const [serviceAreaValid, setServiceAreaValid] = useState(false);
+  // Trigger for immediate validation (timestamp)
+  const [triggerValidation, setTriggerValidation] = useState<number>(0);
+  // Debounce timer for business name validation
+  const [nameValidationTimer, setNameValidationTimer] = useState<NodeJS.Timeout | null>(null);
+
+  // Field-level validation modal state
+  const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
+  const [fieldValidationData, setFieldValidationData] = useState<{
+    reason?: string;
+    suggestedAreas?: string[];
+  }>({});
+
 
   // Check for duplicate business name in real-time
   const checkDuplicateName = (name: string) => {
@@ -75,30 +110,35 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
     return false;
   };
 
-  // Form state
-  const [businessName, setBusinessName] = useState('');
-  const [authorizedDomains, setAuthorizedDomains] = useState<AuthorizedDomain[]>([
-    { domain: '', description: '' }
-  ]);
-  const [address, setAddress] = useState({
-    street: '',
-    city: '',
-    state: '',
-    zipCode: '',
-    country: 'USA'
-  });
-  const [openServiceLocationModal, setOpenServiceLocationModal] = useState(true);
+  // Debounced business name validation
+  const debouncedNameValidation = (name: string) => {
+    // Clear existing timer
+    if (nameValidationTimer) {
+      clearTimeout(nameValidationTimer);
+    }
 
-  // Service area validation state - start as false until validation passes
-  const [serviceAreaValid, setServiceAreaValid] = useState(false);
+    // Only validate if name has substantial content (3+ characters)
+    if (name.trim().length < 3) {
+      return;
+    }
 
-  // Field-level validation modal state
-  const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
-  const [fieldValidationData, setFieldValidationData] = useState<{
-    reason?: string;
-    suggestedAreas?: string[];
-    geographicallyRelevant?: boolean;
-  }>({});
+    // Set new timer with longer delay for better UX
+    const timer = setTimeout(() => {
+      checkDuplicateName(name);
+    }, 1000); // 1 second delay - much more reasonable
+
+    setNameValidationTimer(timer);
+  };
+
+  // Cleanup timer on unmount
+  React.useEffect(() => {
+    return () => {
+      if (nameValidationTimer) {
+        clearTimeout(nameValidationTimer);
+      }
+    };
+  }, [nameValidationTimer]);
+
 
   // Logo-related state
   const [enableLogo, setEnableLogo] = useState(false);
@@ -110,27 +150,18 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   const [logoBackgroundColor, setLogoBackgroundColor] = useState('');
 
   // Handle field-level blur validation
-  const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
+  const handleFieldBlur = async (field: 'city' | 'state' | 'zipCode', value: string) => {
     console.log('🔄 AddBusinessModal handleFieldBlur called:', { field, value });
-    try {
-      const result = await validateServiceAreaField(field, value, {
-        city: address.city,
-        state: address.state,
-        zipCode: address.zipCode,
-        country: address.country
-      });
 
-      if (result && !result.isValid) {
-        setFieldValidationData({
-          reason: result.reason,
-          suggestedAreas: result.suggestedAreas,
-          geographicallyRelevant: result.geographicallyRelevant
-        });
-        setShowFieldValidationModal(true);
-      }
-    } catch (error) {
-      console.error('Field blur validation error:', error);
+    // For ZIP code field, always trigger full service area validation
+    if (field === 'zipCode') {
+      console.log('🔄 ZIP field blurred, triggering service area validation for:', value);
+      setTriggerValidation(Date.now());
+      return;
     }
+
+    // Don't validate individual city/state fields - only validate complete addresses
+    console.log('🔄 Skipping individual field validation for', field, '- will validate complete address on ZIP blur');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -145,7 +176,7 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
       return;
     }
 
-    // Filter out empty domains
+    // Filter out empty domains and validate domain requirements
     const validDomains = authorizedDomains.filter(d => d.domain.trim() !== '');
 
     if (validDomains.length === 0) {
@@ -153,8 +184,39 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
       return;
     }
 
+    // Check for domain validation errors
+    const invalidDomains = validDomains.filter(d => d.isValid === false);
+    if (invalidDomains.length > 0) {
+      const firstInvalid = invalidDomains[0];
+      alert(`Domain validation error: ${firstInvalid.validationError || 'Invalid domain format'}`);
+      return;
+    }
+
+    // Check for domains still being validated (only for non-empty domains)
+    const validatingDomains = validDomains.filter(d => d.domain.trim() && d.isValidating);
+    if (validatingDomains.length > 0) {
+      alert('Please wait for domain validation to complete before submitting.');
+      return;
+    }
+
+    // Check that all non-empty domains have completed validation successfully
+    // Allow submission if domains are still validating but warn the user
+    const unvalidatedDomains = validDomains.filter(d => d.domain.trim() && d.isValid !== true && !d.isValidating);
+    if (unvalidatedDomains.length > 0) {
+      const proceed = window.confirm('Some domains could not be validated. Do you want to proceed anyway?');
+      if (!proceed) {
+        return;
+      }
+    }
+
     if (!address.street.trim() || !address.city.trim() || !address.state.trim() || !address.zipCode.trim()) {
       alert('All address fields are required');
+      return;
+    }
+
+    // Check ZIP code format - must be exactly 5 digits
+    if (!/^\d{5}$/.test(address.zipCode.trim())) {
+      setShowZipValidationError(true);
       return;
     }
 
@@ -242,7 +304,61 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   const updateDomainField = (index: number, field: keyof AuthorizedDomain, value: string) => {
     const updated = [...authorizedDomains];
     updated[index] = { ...updated[index], [field]: value };
+
+    // If updating domain field, just clear any previous validation state
+    if (field === 'domain') {
+      // Clear validation state - we'll validate on blur
+      updated[index].isValidating = false;
+      updated[index].isValid = undefined;
+      updated[index].validationError = undefined;
+    }
+
     setAuthorizedDomains(updated);
+  };
+
+  const validateDomainField = async (index: number, domain: string) => {
+    if (!domain || !domain.trim()) {
+      const updated = [...authorizedDomains];
+      updated[index].isValidating = false;
+      updated[index].isValid = undefined;
+      updated[index].validationError = undefined;
+      setAuthorizedDomains(updated);
+      return;
+    }
+
+    try {
+      console.log(`🌐 DOMAIN VALIDATION: Validating domain at index ${index}:`, domain);
+
+      // NOW set the validating state when validation actually starts
+      const updatedStart = [...authorizedDomains];
+      updatedStart[index].isValidating = true;
+      updatedStart[index].isValid = undefined;
+      updatedStart[index].validationError = undefined;
+      setAuthorizedDomains(updatedStart);
+
+      // Add a race condition with a maximum timeout to prevent hanging
+      const validationPromise = validateDomain(domain, { checkDNS: true, timeout: 2000 });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Validation timeout')), 3000)
+      );
+
+      const result = await Promise.race([validationPromise, timeoutPromise]);
+
+      const updated = [...authorizedDomains];
+      updated[index].isValidating = false;
+      updated[index].isValid = result.isValid;
+      updated[index].validationError = result.error;
+
+      setAuthorizedDomains(updated);
+      console.log(`🌐 DOMAIN VALIDATION: Result for ${domain}:`, result);
+    } catch (error) {
+      console.error('Domain validation error:', error);
+      const updated = [...authorizedDomains];
+      updated[index].isValidating = false;
+      updated[index].isValid = false;
+      updated[index].validationError = error.message === 'Validation timeout' ? 'Validation timed out' : 'Validation failed';
+      setAuthorizedDomains(updated);
+    }
   };
 
   if (!showModal) return null;
@@ -274,8 +390,8 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
               value={businessName}
               onChange={(e) => {
                 setBusinessName(e.target.value);
-                // Use setTimeout to debounce the validation slightly to avoid showing dialog while actively typing
-                setTimeout(() => checkDuplicateName(e.target.value), 100);
+                // Use debounced validation - only checks after user stops typing
+                debouncedNameValidation(e.target.value);
               }}
               onBlur={(e) => checkDuplicateName(e.target.value)}
               className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
@@ -303,34 +419,78 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
             </div>
             <div className="space-y-3">
               {authorizedDomains.map((domain, index) => (
-                <div key={index} className="flex gap-2">
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={domain.domain}
-                      onChange={(e) => updateDomainField(index, 'domain', e.target.value)}
-                      className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                      placeholder="example.com"
-                    />
+                <div key={index} className="space-y-2">
+                  <div className="flex gap-2">
+                    <div className="flex-1 relative">
+                      <input
+                        type="text"
+                        value={domain.domain}
+                        onChange={(e) => updateDomainField(index, 'domain', e.target.value)}
+                        onBlur={(e) => {
+                          const value = e.target.value.trim();
+                          if (value) {
+                            validateDomainField(index, value);
+                          }
+                        }}
+                        className={`w-full px-3 py-2 pr-10 border ${
+                          domain.isValid === false
+                            ? 'border-red-500 focus:ring-red-500 focus:border-red-500'
+                            : domain.isValid === true
+                            ? 'border-green-500 focus:ring-green-500 focus:border-green-500'
+                            : themeClasses.border.primary + ' focus:ring-blue-500 focus:border-blue-500'
+                        } rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2`}
+                        placeholder="example.com"
+                      />
+                      {/* Validation Status Icon */}
+                      {domain.isValidating && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                      )}
+                      {domain.isValid === true && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <CheckCircle className="w-4 h-4 text-green-600" />
+                        </div>
+                      )}
+                      {domain.isValid === false && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        value={domain.description || ''}
+                        onChange={(e) => updateDomainField(index, 'description', e.target.value)}
+                        className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                        placeholder="Description (optional)"
+                      />
+                    </div>
+                    {authorizedDomains.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeDomainField(index)}
+                        className={`px-3 py-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 ${themeClasses.bg.secondary} hover:${themeClasses.bg.hover} rounded-md border ${themeClasses.border.primary} transition-colors`}
+                        title="Remove domain"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
-                  <div className="flex-1">
-                    <input
-                      type="text"
-                      value={domain.description || ''}
-                      onChange={(e) => updateDomainField(index, 'description', e.target.value)}
-                      className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
-                      placeholder="Description (optional)"
-                    />
-                  </div>
-                  {authorizedDomains.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removeDomainField(index)}
-                      className={`px-3 py-2 text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 ${themeClasses.bg.secondary} hover:${themeClasses.bg.hover} rounded-md border ${themeClasses.border.primary} transition-colors`}
-                      title="Remove domain"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                  {/* Validation Error Message */}
+                  {domain.isValid === false && domain.validationError && (
+                    <div className="flex items-center text-sm text-red-600 dark:text-red-400">
+                      <AlertTriangle className="w-3 h-3 mr-1 flex-shrink-0" />
+                      <span>{domain.validationError}</span>
+                    </div>
+                  )}
+                  {/* Success Message */}
+                  {domain.isValid === true && (
+                    <div className="flex items-center text-sm text-green-600 dark:text-green-400">
+                      <Globe className="w-3 h-3 mr-1 flex-shrink-0" />
+                      <span>Domain verified and reachable</span>
+                    </div>
                   )}
                 </div>
               ))}
@@ -349,6 +509,10 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
               showLabels={false}
               required={true}
               onFieldBlur={handleFieldBlur}
+              onZipLookupSuccess={() => {
+                console.log('🚀 ZIP lookup succeeded, triggering immediate validation');
+                setTriggerValidation(Date.now());
+              }}
             />
           </div>
 
@@ -365,6 +529,7 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
               setServiceAreaValid(isValid);
             }}
             showSuggestions={true}
+            triggerValidation={triggerValidation}
           />
 
           {/* Logo Upload Section */}
@@ -536,6 +701,15 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
         message={fieldValidationData.reason || 'This location is outside our current service area.'}
         suggestedAreas={fieldValidationData.suggestedAreas}
         geographicallyRelevant={fieldValidationData.geographicallyRelevant}
+      />
+
+      {/* ZIP Code Validation Modal */}
+      <AlertModal
+        isOpen={showZipValidationError}
+        onClose={() => setShowZipValidationError(false)}
+        type="error"
+        title="Invalid ZIP Code"
+        message="ZIP code must be exactly 5 digits. Please enter a complete ZIP code (e.g., 92026)."
       />
     </div>
   );

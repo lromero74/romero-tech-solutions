@@ -727,8 +727,8 @@ export class AdminService {
     try {
       console.log('🌍 AdminService: Validating service area for:', address);
       const apiService = await this.getApiService();
-      console.log('🌍 AdminService: Making API call to /admin/service-areas/validate');
-      const result = await apiService.post('/admin/service-areas/validate', address);
+      console.log('🌍 AdminService: Making API call to /public/service-areas/validate');
+      const result = await apiService.post('/public/service-areas/validate', address);
       console.log('🌍 AdminService: API response:', result);
       return result;
     } catch (error) {

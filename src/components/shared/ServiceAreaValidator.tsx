@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, MapPin, CheckCircle, Info } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { validateServiceArea, formatServiceAreasDisplay, getActiveServiceAreas } from '../../utils/serviceAreaValidation';
@@ -14,13 +14,15 @@ interface ServiceAreaValidatorProps {
   onValidationChange: (isValid: boolean, errors: { [key: string]: string }) => void;
   showSuggestions?: boolean;
   disabled?: boolean;
+  triggerValidation?: number; // Timestamp to trigger immediate validation
 }
 
 const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
   address,
   onValidationChange,
   showSuggestions = true,
-  disabled = false
+  disabled = false,
+  triggerValidation
 }) => {
   const [validationState, setValidationState] = useState<{
     isValidating: boolean;
@@ -44,6 +46,12 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
 
   const [showErrorModal, setShowErrorModal] = useState(false);
 
+  // Track processed trigger values to prevent infinite loops
+  const processedTriggerRef = useRef<number>(0);
+
+  // Track last validated address to prevent redundant validations
+  const lastValidatedAddressRef = useRef<string>('');
+
   // Load service areas on mount
   useEffect(() => {
     const loadServiceAreas = async () => {
@@ -59,89 +67,161 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
     loadServiceAreas();
   }, []);
 
-  // Validate address when it changes
+  // Monitor ZIP code changes and invalidate state immediately if ZIP becomes incomplete
   useEffect(() => {
     if (disabled) {
       return;
     }
 
-    const validateAddress = async () => {
-      // Don't validate if required fields are empty - block submission until all fields complete
-      if (!address.city?.trim() || !address.state?.trim() || !address.zipCode?.trim()) {
-        setValidationState({
-          isValidating: false,
-          isValid: false
-        });
-        onValidationChange(false, {
-          serviceArea: 'Please complete all address fields (City, State, ZIP Code) before validation can proceed.'
-        });
+    // If ZIP code is empty or incomplete, immediately invalidate
+    if (!address.zipCode?.trim() || address.zipCode.trim().length < 5) {
+      console.log('🌍 ZIP code incomplete, invalidating service area validation');
+      setValidationState({
+        isValidating: false,
+        isValid: false
+      });
+      setShowErrorModal(false);
+      onValidationChange(false, {
+        serviceArea: 'Please enter a complete 5-digit ZIP code to validate service area.'
+      });
+      // Clear the last validated address since this is now invalid
+      lastValidatedAddressRef.current = '';
+    }
+  }, [address.zipCode, disabled, onValidationChange]);
+
+  // Validation function
+  const validateAddress = async () => {
+    if (disabled) {
+      return;
+    }
+
+    // Only require ZIP code - it will auto-populate city and state
+    if (!address.zipCode?.trim()) {
+      setValidationState({
+        isValidating: false,
+        isValid: false
+      });
+      setShowErrorModal(false); // Clear any existing error modal
+      onValidationChange(false, {
+        serviceArea: 'Please enter a ZIP code to validate service area.'
+      });
+      return;
+    }
+
+    // Check if ZIP code is valid length - if not, mark as invalid service area
+    if (address.zipCode.trim().length < 5) {
+      setValidationState({
+        isValidating: false,
+        isValid: false,
+        reason: `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`
+      });
+      setShowErrorModal(false); // Clear any existing error modal
+      onValidationChange(false, {
+        serviceArea: `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`
+      });
+      return;
+    }
+
+    // Create address string for comparison
+    const currentAddressString = `${address.city?.trim()}-${address.state?.trim()}-${address.zipCode?.trim()}-${address.country?.trim() || 'USA'}`;
+
+    // Skip validation if address hasn't changed
+    if (lastValidatedAddressRef.current === currentAddressString) {
+      console.log('🌍 Skipping validation - address unchanged:', currentAddressString);
+      return;
+    }
+
+    // Clear all previous states when starting validation
+    setValidationState(prev => ({ ...prev, isValidating: true }));
+    setShowErrorModal(false); // Clear any existing error modal
+
+    try {
+      console.log('🌍 Starting service area validation for:', address);
+      const result = await validateServiceArea(address);
+      console.log('🌍 Service area validation result:', result);
+
+      const newState = {
+        isValidating: false,
+        isValid: result.isValid,
+        reason: result.reason,
+        suggestedAreas: result.suggestedAreas
+      };
+
+      setValidationState(newState);
+
+      // Notify parent component
+      const errors: { [key: string]: string } = {};
+      if (!result.isValid && result.reason) {
+        errors.serviceArea = result.reason;
+        if (result.suggestedAreas && result.suggestedAreas.length > 0) {
+          errors.suggestedAreas = `We currently service: ${result.suggestedAreas.join(', ')}`;
+        }
+        // Show error modal for invalid results only
+        setShowErrorModal(true);
+      } else {
+        // Ensure error modal is closed for valid results
+        setShowErrorModal(false);
+      }
+
+      console.log('🌍 Notifying parent of validation result:', { isValid: result.isValid, errors });
+      onValidationChange(result.isValid, errors);
+
+      // Save this address as validated to prevent redundant validations
+      lastValidatedAddressRef.current = currentAddressString;
+
+    } catch (error) {
+      console.error('Service area validation error:', error);
+      // For testing purposes, let's be more strict when validation fails
+      setValidationState({
+        isValidating: false,
+        isValid: false,
+        reason: `Service area validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      });
+      onValidationChange(false, {
+        serviceArea: 'Unable to verify service area. Please contact support.'
+      });
+      // Show error modal for validation failure
+      setShowErrorModal(true);
+    }
+  };
+
+
+  // Immediate validation trigger (for ZIP auto-complete)
+  useEffect(() => {
+    if (triggerValidation && triggerValidation > 0 && !disabled) {
+      // Prevent processing the same trigger value multiple times
+      if (processedTriggerRef.current >= triggerValidation) {
         return;
       }
 
-      setValidationState(prev => ({ ...prev, isValidating: true }));
+      processedTriggerRef.current = triggerValidation;
+      console.log('🚀 Immediate validation triggered by triggerValidation prop:', triggerValidation);
 
-      try {
-        console.log('🌍 Starting service area validation for:', address);
-        const result = await validateServiceArea(address);
-        console.log('🌍 Service area validation result:', result);
-
-        const newState = {
-          isValidating: false,
-          isValid: result.isValid,
-          reason: result.reason,
-          suggestedAreas: result.suggestedAreas
-        };
-
-        setValidationState(newState);
-
-        // Notify parent component
-        const errors: { [key: string]: string } = {};
-        if (!result.isValid && result.reason) {
-          errors.serviceArea = result.reason;
-          if (result.suggestedAreas && result.suggestedAreas.length > 0) {
-            errors.suggestedAreas = `We currently service: ${result.suggestedAreas.join(', ')}`;
-          }
-          // Show error modal instead of inline error
-          setShowErrorModal(true);
-        }
-
-        console.log('🌍 Notifying parent of validation result:', { isValid: result.isValid, errors });
-        onValidationChange(result.isValid, errors);
-
-      } catch (error) {
-        console.error('Service area validation error:', error);
-        // For testing purposes, let's be more strict when validation fails
-        setValidationState({
-          isValidating: false,
-          isValid: false,
-          reason: `Service area validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
-        });
-        onValidationChange(false, {
-          serviceArea: 'Unable to verify service area. Please contact support.'
-        });
-        // Show error modal for validation failure
-        setShowErrorModal(true);
+      if (!address.zipCode?.trim() || address.zipCode.trim().length < 5) {
+        console.log('🚀 Immediate validation skipped - incomplete ZIP code');
+        return;
       }
-    };
 
-    // Debounce validation - increased to prevent excessive validation calls during typing
-    const timeoutId = setTimeout(validateAddress, 2000); // 2 second debounce to reduce validation spam
-    return () => clearTimeout(timeoutId);
-
-  }, [address.city, address.state, address.zipCode, address.country, disabled, onValidationChange]);
+      console.log('🚀 Immediate validation triggered by triggerValidation prop:', triggerValidation);
+      validateAddress();
+    }
+  }, [triggerValidation, disabled]);
 
   if (disabled) {
     return null;
   }
 
-  // Always show something when validation is in progress or has completed
-  if (validationState.isValid === null) {
+  // Show placeholder when validation is null OR if ZIP is incomplete
+  const showPlaceholder = validationState.isValid === null ||
+    (!address.zipCode?.trim() || address.zipCode.trim().length < 5);
+
+  if (showPlaceholder) {
     // Return placeholder while waiting for validation
     return (
       <div className="mt-4 space-y-3">
         <div className={`flex items-center p-3 rounded-md ${themeClasses.bg.secondary} border ${themeClasses.border.primary}`}>
           <span className={`text-sm ${themeClasses.text.muted}`}>
-            Service area validation will start once address is complete...
+            Service area validation will start once ZIP code is complete...
           </span>
         </div>
       </div>

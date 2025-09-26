@@ -36,8 +36,8 @@ export const validateServiceArea = async (address: AddressData): Promise<Validat
     console.error('Error validating service area:', error);
     // Don't block form submission if validation service is down
     return {
-      isValid: true,
-      reason: 'Unable to verify service area at this time. Please proceed and we will contact you if needed.'
+      isValid: false,
+      reason: 'Unable to verify service area at this time. Please check your connection and try again.'
     };
   }
 };

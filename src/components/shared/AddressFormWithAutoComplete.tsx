@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Lock, Unlock, AlertCircle } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { adminService } from '../../services/adminService';
 
@@ -18,6 +18,7 @@ interface AddressFormWithAutoCompleteProps {
   showLabels?: boolean;
   required?: boolean;
   onFieldBlur?: (field: keyof AddressData, value: string) => void;
+  onZipLookupSuccess?: () => void; // Called when ZIP lookup succeeds and fields are auto-populated
 }
 
 const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = ({
@@ -26,10 +27,10 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
   disabled = false,
   showLabels = true,
   required = false,
-  onFieldBlur
+  onFieldBlur,
+  onZipLookupSuccess
 }) => {
   const [isLookingUp, setIsLookingUp] = useState(false);
-  const [fieldsLocked, setFieldsLocked] = useState(false);
   const [zipLookupMessage, setZipLookupMessage] = useState<string | null>(null);
   const [lastAutoCompleteZip, setLastAutoCompleteZip] = useState<string | null>(null);
 
@@ -37,33 +38,43 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
   const handleZipCodeChange = async (newZipCode: string) => {
     console.log('🔍 AddressFormWithAutoComplete: ZIP code changed to:', newZipCode);
 
-    // Update the ZIP code immediately
-    const updatedAddress = { ...address, zipCode: newZipCode };
+    // Validate ZIP code format - only allow digits and limited length
+    const cleanZip = newZipCode.replace(/\D/g, ''); // Remove non-digits
+
+    // Limit to 5 digits for standard ZIP or 9 for ZIP+4 (but we'll focus on 5)
+    const limitedZip = cleanZip.slice(0, 5);
+
+    // If the input was invalid (had non-digits), show the cleaned version
+    if (limitedZip !== newZipCode) {
+      console.log('🔍 ZIP code cleaned from', newZipCode, 'to', limitedZip);
+    }
+
+    // Update the ZIP code with the cleaned value
+    const updatedAddress = { ...address, zipCode: limitedZip };
     onAddressChange(updatedAddress);
 
     // Clear previous messages
     setZipLookupMessage(null);
 
-    // If ZIP code is less than 5 digits or user is typing, unlock fields
-    if (newZipCode.length < 5) {
-      console.log('🔍 ZIP code too short, unlocking fields');
-      setFieldsLocked(false);
+    // If ZIP code is less than 5 digits, clear previous lookup
+    if (limitedZip.length < 5) {
+      console.log('🔍 ZIP code too short, clearing previous lookup');
       setLastAutoCompleteZip(null);
       return;
     }
 
     // If this is the same ZIP we already auto-completed, don't lookup again
-    if (newZipCode === lastAutoCompleteZip) {
+    if (limitedZip === lastAutoCompleteZip) {
       console.log('🔍 ZIP code already looked up, skipping');
       return;
     }
 
     // Perform ZIP code lookup
-    console.log('🔍 Starting ZIP lookup for:', newZipCode);
+    console.log('🔍 Starting ZIP lookup for:', limitedZip);
     setIsLookingUp(true);
     try {
       console.log('🔍 Calling adminService.lookupZipCode...');
-      const result = await adminService.lookupZipCode(newZipCode);
+      const result = await adminService.lookupZipCode(limitedZip);
       console.log('🔍 ZIP lookup response received:', result);
 
       if (result.found && result.data) {
@@ -72,7 +83,7 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
         // Auto-populate fields from ZIP lookup
         const autoCompleteAddress = {
           ...address,
-          zipCode: newZipCode,
+          zipCode: limitedZip,
           city: result.data.city,
           state: result.data.state,
           country: result.data.country
@@ -83,18 +94,20 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
         console.log('🔍 Calling onAddressChange with:', autoCompleteAddress);
         onAddressChange(autoCompleteAddress);
         console.log('🔍 onAddressChange call completed');
-        setFieldsLocked(true);
-        setLastAutoCompleteZip(newZipCode);
+        // Trigger immediate service area validation
+        if (onZipLookupSuccess) {
+          console.log('🔍 Calling onZipLookupSuccess callback to trigger validation');
+          onZipLookupSuccess();
+        }
+        setLastAutoCompleteZip(limitedZip);
         setZipLookupMessage(`✅ Auto-completed from ZIP code (${result.data.city}, ${result.data.state})`);
       } else {
         console.log('❌ ZIP not found in service areas:', result.message);
-        setFieldsLocked(false);
         setLastAutoCompleteZip(null);
         setZipLookupMessage(`⚠️ ${result.message || 'ZIP code not found in our service areas'}`);
       }
     } catch (error) {
       console.error('❌ Error looking up ZIP code:', error);
-      setFieldsLocked(false);
       setLastAutoCompleteZip(null);
       setZipLookupMessage('❌ Unable to lookup ZIP code');
     } finally {
@@ -103,15 +116,8 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
     }
   };
 
-  // Handle other field changes - unlock if fields are locked and user tries to edit
+  // Handle field changes (only street and zipCode are editable)
   const handleFieldChange = (field: keyof AddressData, value: string) => {
-    if (fieldsLocked && field !== 'zipCode' && field !== 'street') {
-      // User is trying to edit a locked field, unlock everything
-      setFieldsLocked(false);
-      setLastAutoCompleteZip(null);
-      setZipLookupMessage('🔓 Fields unlocked for manual editing');
-    }
-
     const updatedAddress = { ...address, [field]: value };
     onAddressChange(updatedAddress);
   };
@@ -151,17 +157,11 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
               value={address.city}
               onChange={(e) => handleFieldChange('city', e.target.value)}
               onBlur={(e) => onFieldBlur && onFieldBlur('city', e.target.value)}
-              disabled={disabled || fieldsLocked}
-              className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                disabled || fieldsLocked ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              placeholder="Enter city"
+              disabled={disabled}
+              readOnly={true}
+              className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} opacity-50 cursor-not-allowed`}
+              placeholder="Auto-filled from ZIP"
             />
-            {fieldsLocked && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Lock className="w-4 h-4 text-gray-400" />
-              </div>
-            )}
           </div>
         </div>
 
@@ -178,18 +178,12 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
               value={address.state}
               onChange={(e) => handleFieldChange('state', e.target.value.toUpperCase())}
               onBlur={(e) => onFieldBlur && onFieldBlur('state', e.target.value)}
-              disabled={disabled || fieldsLocked}
-              className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                disabled || fieldsLocked ? 'opacity-50 cursor-not-allowed' : ''
-              }`}
-              placeholder="CA"
+              disabled={disabled}
+              readOnly={true}
+              className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} opacity-50 cursor-not-allowed`}
+              placeholder="Auto-filled"
               maxLength={2}
             />
-            {fieldsLocked && (
-              <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                <Lock className="w-4 h-4 text-gray-400" />
-              </div>
-            )}
           </div>
         </div>
 
@@ -207,6 +201,12 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
               onChange={(e) => {
                 console.log('🔍 ZIP input onChange triggered with value:', e.target.value);
                 handleZipCodeChange(e.target.value);
+              }}
+              onBlur={(e) => {
+                console.log('🔍 ZIP input onBlur triggered, will trigger validation');
+                if (onFieldBlur) {
+                  onFieldBlur('zipCode', e.target.value);
+                }
               }}
               disabled={disabled}
               className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} focus:outline-none focus:ring-2 focus:ring-blue-500 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -250,31 +250,14 @@ const AddressFormWithAutoComplete: React.FC<AddressFormWithAutoCompleteProps> = 
             type="text"
             value={address.country}
             onChange={(e) => handleFieldChange('country', e.target.value)}
-            disabled={disabled || fieldsLocked}
-            className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-              disabled || fieldsLocked ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-            placeholder="Enter country"
+            disabled={disabled}
+            readOnly={true}
+            className={`w-full px-3 py-2 border rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} ${themeClasses.border.primary} opacity-50 cursor-not-allowed`}
+            placeholder="Auto-filled from ZIP"
           />
-          {fieldsLocked && (
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-              <Lock className="w-4 h-4 text-gray-400" />
-            </div>
-          )}
         </div>
       </div>
 
-      {/* Unlock fields instruction */}
-      {fieldsLocked && (
-        <div className={`p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800`}>
-          <div className="flex items-center text-sm text-blue-800 dark:text-blue-200">
-            <Unlock className="w-4 h-4 mr-2 flex-shrink-0" />
-            <span>
-              Fields are locked based on ZIP code. Modify the ZIP code or click on any locked field to edit manually.
-            </span>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

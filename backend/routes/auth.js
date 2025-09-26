@@ -27,12 +27,71 @@ import {
 
 const router = express.Router();
 
+// Smart rate limiting - only count failed authentication attempts
+const failedAttempts = new Map(); // Store failed login attempts by IP
+
+const recordFailedAttempt = (clientIP) => {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+
+  if (!failedAttempts.has(clientIP)) {
+    failedAttempts.set(clientIP, []);
+  }
+
+  const attempts = failedAttempts.get(clientIP);
+  attempts.push(now);
+
+  // Remove attempts older than the window
+  const recentAttempts = attempts.filter(attemptTime => now - attemptTime < windowMs);
+  failedAttempts.set(clientIP, recentAttempts);
+};
+
+const clearFailedAttempts = (clientIP) => {
+  failedAttempts.delete(clientIP);
+};
+
+const checkFailedAttempts = (clientIP) => {
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  const maxAttempts = 5; // Maximum 5 failed attempts per 15 minutes
+
+  if (!failedAttempts.has(clientIP)) {
+    return { blocked: false };
+  }
+
+  const attempts = failedAttempts.get(clientIP);
+  const recentAttempts = attempts.filter(attemptTime => now - attemptTime < windowMs);
+  failedAttempts.set(clientIP, recentAttempts);
+
+  if (recentAttempts.length >= maxAttempts) {
+    return {
+      blocked: true,
+      retryAfter: Math.ceil((recentAttempts[0] + windowMs - now) / 1000)
+    };
+  }
+
+  return { blocked: false };
+};
+
 // POST /api/auth/login - User login
 router.post('/login', async (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+
+  // Check if IP is blocked due to too many failed attempts
+  const rateLimitCheck = checkFailedAttempts(clientIP);
+  if (rateLimitCheck.blocked) {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many failed login attempts. Please try again later.',
+      retryAfter: rateLimitCheck.retryAfter
+    });
+  }
+
   try {
     const { email, password } = req.body;
 
     if (!email || !password) {
+      recordFailedAttempt(clientIP); // Count missing credentials as failed attempt
       return res.status(400).json({
         success: false,
         message: 'Email and password are required'

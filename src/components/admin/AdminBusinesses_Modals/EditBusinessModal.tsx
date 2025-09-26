@@ -99,6 +99,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   // Service area validation state
   const [serviceAreaValid, setServiceAreaValid] = useState(true); // Start as true for edit mode
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
+  const [showZipValidationError, setShowZipValidationError] = useState(false);
 
   // Check for duplicate business name in real-time
   const checkDuplicateName = (name: string) => {
@@ -274,6 +275,13 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     }
 
     if (checkDuplicateName(formData.businessName)) {
+      setLoading(false);
+      return;
+    }
+
+    // Check ZIP code format - must be exactly 5 digits
+    if (!/^\d{5}$/.test(address.zipCode.trim())) {
+      setShowZipValidationError(true);
       setLoading(false);
       return;
     }
@@ -757,6 +765,38 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               <button
                 type="button"
                 onClick={() => setShowServiceAreaError(false)}
+                className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ZIP Code Validation Error Modal */}
+      {showZipValidationError && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[70]">
+          <div className={`${themeClasses.bg.modal} rounded-lg p-6 max-w-md w-full mx-4 shadow-xl`}>
+            <div className="flex items-center mb-4">
+              <div className="flex-shrink-0">
+                <AlertCircle className="h-6 w-6 text-red-400" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Invalid ZIP Code
+                </h3>
+              </div>
+            </div>
+            <div className="mb-6">
+              <p className={`text-sm ${themeClasses.text.secondary}`}>
+                ZIP code must be exactly 5 digits. Please enter a complete ZIP code (e.g., 92026).
+              </p>
+            </div>
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowZipValidationError(false)}
                 className="px-4 py-2 border border-transparent rounded-md text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               >
                 OK
