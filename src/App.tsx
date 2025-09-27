@@ -7,8 +7,6 @@ import ParticleBackground from './components/common/ParticleBackground';
 import AdminRegistration from './components/AdminRegistration';
 import UnauthenticatedDashboard from './components/UnauthenticatedDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import MockTechnicianDashboard from './pages/MockTechnicianDashboard';
-import MockClientDashboard from './pages/MockClientDashboard';
 import SimpleDashboard from './pages/SimpleDashboard';
 import ClientLogin from './pages/ClientLogin';
 import Home from './pages/Home';
@@ -76,7 +74,7 @@ function AppContent() {
         return <AdminRegistration onSuccess={() => setCurrentPage('dashboard')} />;
       }
 
-      return <MockTechnicianDashboard />;
+      return <SimpleDashboard />;
     }
 
     // Handle email confirmation page
@@ -92,7 +90,7 @@ function AppContent() {
     // Handle hidden client login page
     if (currentPage === 'clogin') {
       if (isAuthenticated && isClient) {
-        return <MockClientDashboard />;
+        return <SimpleDashboard />;
       }
       return <ClientLogin onSuccess={() => setCurrentPage('dashboard')} />;
     }
@@ -120,11 +118,11 @@ function AppContent() {
       }
 
       if (isTechnician) {
-        return <MockTechnicianDashboard />;
+        return <SimpleDashboard />;
       }
 
       if (isClient) {
-        return <MockClientDashboard />;
+        return <SimpleDashboard />;
       }
 
       // For other roles, show simple dashboard

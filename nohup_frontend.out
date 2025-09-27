@@ -1,0 +1,21 @@
+
+> vite-react-typescript-starter@0.0.0 dev
+> vite
+
+Forced re-optimization of dependencies
+
+  VITE v5.4.8  ready in 228 ms
+
+  ➜  Local:   http://localhost:5173/
+  ➜  Network: use --host to expose
+9:05:36 PM [vite] page reload src/App-test.tsx
+9:05:36 PM [vite] page reload src/components/MockAdminRegistration.tsx
+9:05:36 PM [vite] page reload src/contexts/MockAuthContext.tsx
+9:05:36 PM [vite] page reload src/pages/AdminDashboard.old.tsx
+9:05:36 PM [vite] hmr update /src/pages/MockClientDashboard.tsx, /src/index.css
+9:05:36 PM [vite] hmr update /src/pages/MockTechnicianDashboard.tsx, /src/index.css
+9:05:37 PM [vite] Pre-transform error: Failed to load url /src/pages/MockClientDashboard.tsx (resolved id: /Users/louis/Downloads/RomeroTechSolutions_Zips/project/src/pages/MockClientDashboard.tsx) in /Users/louis/Downloads/RomeroTechSolutions_Zips/project/src/App.tsx. Does the file exist?
+9:05:37 PM [vite] Pre-transform error: Failed to load url /src/pages/MockTechnicianDashboard.tsx (resolved id: /Users/louis/Downloads/RomeroTechSolutions_Zips/project/src/pages/MockTechnicianDashboard.tsx) in /Users/louis/Downloads/RomeroTechSolutions_Zips/project/src/App.tsx. Does the file exist?
+9:05:52 PM [vite] hmr update /src/App.tsx, /src/index.css
+9:06:16 PM [vite] hmr update /src/App.tsx, /src/index.css
+9:06:20 PM [vite] hmr update /src/App.tsx, /src/index.css
