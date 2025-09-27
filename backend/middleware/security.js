@@ -20,7 +20,7 @@ export const generalLimiter = rateLimit({
 // Admin API rate limiting
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 2000 : 500, // dev: 2000 requests, production: 500 requests
+  max: isDevelopment ? 2000 : 1000, // dev: 2000 requests, production: 1000 requests
   message: {
     success: false,
     message: 'Too many admin requests from this IP, please try again later.',

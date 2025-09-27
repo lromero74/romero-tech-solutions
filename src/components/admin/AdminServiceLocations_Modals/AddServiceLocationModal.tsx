@@ -198,7 +198,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscapeKey);
     };
-  }, [showModal, hasUnsavedChanges]);
+  }, [showModal, handleClose]);
 
   const handleClose = useCallback(() => {
     if (hasUnsavedChanges) {

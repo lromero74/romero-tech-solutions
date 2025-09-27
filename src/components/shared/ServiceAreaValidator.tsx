@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, MapPin, CheckCircle, Info } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { validateServiceArea, formatServiceAreasDisplay, getActiveServiceAreas } from '../../utils/serviceAreaValidation';
 import AlertModal from './AlertModal';
@@ -20,7 +20,7 @@ interface ServiceAreaValidatorProps {
 const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
   address,
   onValidationChange,
-  showSuggestions = true,
+  // showSuggestions = true,
   disabled = false,
   triggerValidation
 }) => {

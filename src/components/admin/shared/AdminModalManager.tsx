@@ -47,7 +47,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
   onCloseModal,
   selectedEntities,
   serviceLocationPrefillBusinessName,
-  onRefresh,
+  // onRefresh,
   deleteConfirmation,
   onDeleteConfirm
 }) => {
@@ -59,11 +59,11 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
   const businessCRUD = useEntityCRUD<Business>('businesses');
   const serviceLocationCRUD = useEntityCRUD<ServiceLocation>('serviceLocations');
   const employeeCRUD = useEntityCRUD<Employee>('employees');
-  const serviceCRUD = useEntityCRUD<Service>('services');
-  const serviceRequestCRUD = useEntityCRUD<ServiceRequest>('serviceRequests');
+  // const serviceCRUD = useEntityCRUD<Service>('services');
+  // const serviceRequestCRUD = useEntityCRUD<ServiceRequest>('serviceRequests');
 
   // Client handlers
-  const handleAddClient = async (clientData: any) => {
+  const handleAddClient = async (clientData: unknown) => {
     try {
       const result = await clientCRUD.createEntity(clientData);
       // Use targeted refresh instead of full refresh for better performance and reliability
@@ -76,7 +76,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     }
   };
 
-  const handleUpdateClient = async (clientData: any) => {
+  const handleUpdateClient = async (clientData: unknown) => {
     if (!selectedEntities.client?.id) return;
     try {
       await clientCRUD.updateEntity(selectedEntities.client.id, clientData);
@@ -89,35 +89,33 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     }
   };
 
-  // Employee handlers
-  const handleAddEmployee = async (employeeData: any) => {
-    try {
-      const result = await employeeCRUD.createEntity(employeeData);
-      // Use targeted refresh instead of full refresh for better performance and reliability
-      await refreshEmployees();
-      onCloseModal('addEmployee');
-      return result; // Return the result for potential modal flow continuation
-    } catch (error) {
-      console.error('Error adding employee:', error);
-      throw error; // Re-throw to let the modal handle the error
-    }
-  };
+  // Employee handlers - currently unused but kept for future implementation
+  // const handleAddEmployee = async (employeeData: unknown) => {
+  //   try {
+  //     const result = await employeeCRUD.createEntity(employeeData);
+  //     await refreshEmployees();
+  //     onCloseModal('addEmployee');
+  //     return result;
+  //   } catch (error) {
+  //     console.error('Error adding employee:', error);
+  //     throw error;
+  //   }
+  // };
 
-  const handleUpdateEmployee = async (employeeData: any) => {
-    if (!selectedEntities.employee?.id) return;
-    try {
-      await employeeCRUD.updateEntity(selectedEntities.employee.id, employeeData);
-      // Use targeted refresh instead of full refresh for better performance and reliability
-      await refreshEmployees();
-      onCloseModal('editEmployee');
-    } catch (error) {
-      console.error('Error updating employee:', error);
-      throw error; // Re-throw to let the modal handle the error
-    }
-  };
+  // const handleUpdateEmployee = async (employeeData: unknown) => {
+  //   if (!selectedEntities.employee?.id) return;
+  //   try {
+  //     await employeeCRUD.updateEntity(selectedEntities.employee.id, employeeData);
+  //     await refreshEmployees();
+  //     onCloseModal('editEmployee');
+  //   } catch (error) {
+  //     console.error('Error updating employee:', error);
+  //     throw error;
+  //   }
+  // };
 
   // Business handlers
-  const handleAddBusiness = async (businessData: any) => {
+  const handleAddBusiness = async (businessData: unknown) => {
     try {
       console.log('🟢 Creating business:', businessData);
       await businessCRUD.createEntity(businessData);
@@ -136,7 +134,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     }
   };
 
-  const handleUpdateBusiness = async (businessData: any) => {
+  const handleUpdateBusiness = async (businessData: unknown) => {
     if (!selectedEntities.business?.id) return;
     try {
       await businessCRUD.updateEntity(selectedEntities.business.id, businessData);
@@ -149,7 +147,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
   };
 
   // Service Location handlers
-  const handleAddServiceLocation = async (serviceLocationData: any) => {
+  const handleAddServiceLocation = async (serviceLocationData: unknown) => {
     try {
       const result = await serviceLocationCRUD.createEntity(serviceLocationData);
       // Use targeted refresh instead of full refresh for better performance and reliability
@@ -162,7 +160,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     }
   };
 
-  const handleUpdateServiceLocation = async (serviceLocationData: any) => {
+  const handleUpdateServiceLocation = async (serviceLocationData: unknown) => {
     if (!selectedEntities.serviceLocation?.id) return;
     try {
       await serviceLocationCRUD.updateEntity(selectedEntities.serviceLocation.id, serviceLocationData);
