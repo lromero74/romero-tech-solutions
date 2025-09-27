@@ -60,3 +60,6 @@ amplify/backend/.temp
 build/
 .amplifyrc
 CLAUDE.md
+
+# Runtime log files
+nohup*.out
