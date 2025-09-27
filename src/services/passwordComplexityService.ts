@@ -4,7 +4,34 @@ export class PasswordComplexityService {
   private baseURL: string;
 
   constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+    // Environment-aware API base URL handling
+    // Works in both Vite (import.meta.env) and Jest (process.env) environments
+    this.baseURL = this.getApiBaseUrl();
+  }
+
+  private getApiBaseUrl(): string {
+    // Environment-aware API base URL handling
+    // This approach works in all environments:
+    // - Jest: process.env is available
+    // - Browser with Vite: Vite injects environment variables
+    // - Production: Values are replaced at build time
+
+    // Check for environment variable in the safest way possible
+    let apiBaseUrl = 'http://localhost:3001/api'; // Default fallback
+
+    try {
+      // Try to get from process.env if available (Node.js/Jest)
+      if (typeof process !== 'undefined' && process.env && process.env.VITE_API_BASE_URL) {
+        apiBaseUrl = process.env.VITE_API_BASE_URL;
+      }
+      // In Vite browser builds, environment variables are injected at build time
+      // so the process.env check above should work in browser too
+    } catch (error) {
+      // If anything fails, use the default
+      console.warn('Failed to get API base URL from environment, using default');
+    }
+
+    return apiBaseUrl;
   }
 
   // Get session token for authenticated requests

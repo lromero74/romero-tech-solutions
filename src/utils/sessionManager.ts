@@ -9,6 +9,29 @@ interface SessionData {
   isActive: boolean;
 }
 
+interface ServerSession {
+  isActive: boolean;
+  expiresAt: string;
+  lastActivity?: number;
+  config?: SessionConfig;
+  [key: string]: unknown;
+}
+
+// Type guard to validate server session response
+function isValidServerSession(obj: unknown): obj is ServerSession {
+  return (
+    obj &&
+    typeof obj === 'object' &&
+    obj !== null &&
+    'isActive' in obj &&
+    'expiresAt' in obj &&
+    typeof (obj as Record<string, unknown>).isActive === 'boolean' &&
+    typeof (obj as Record<string, unknown>).expiresAt === 'string' &&
+    (obj as Record<string, unknown>).expiresAt &&
+    ((obj as Record<string, unknown>).expiresAt as string).length > 0
+  );
+}
+
 class SessionManager {
   private static instance: SessionManager;
   private sessionData: SessionData | null = null;
@@ -152,8 +175,12 @@ class SessionManager {
 
       if (result.success && result.session?.isActive) {
         console.log(`🔄 EXPIRE SESSION: Server says session is still active! Synchronizing...`);
-        this.updateFromServerSession(result.session);
-        return; // Don't expire the session, it's still valid on server
+        if (isValidServerSession(result.session)) {
+          this.updateFromServerSession(result.session);
+          return; // Don't expire the session, it's still valid on server
+        } else {
+          console.warn(`🔄 EXPIRE SESSION: Invalid server session format, proceeding with expiry`);
+        }
       }
 
       console.log(`🔴 EXPIRE SESSION: Server confirms session is expired`);
@@ -299,7 +326,11 @@ class SessionManager {
 
       if (result.success && result.session) {
         // Update local session data based on server response
-        this.updateFromServerSession(result.session);
+        if (isValidServerSession(result.session)) {
+          this.updateFromServerSession(result.session);
+        } else {
+          console.warn('⚠️ Server sync failed: Invalid session format');
+        }
       } else {
         console.warn('⚠️ Server sync failed:', result.message);
       }
@@ -310,7 +341,7 @@ class SessionManager {
     }
   }
 
-  private updateFromServerSession(serverSession: { expiresAt: string; [key: string]: unknown }) {
+  private updateFromServerSession(serverSession: ServerSession) {
     if (!this.sessionData) return;
 
     // Update expiry based on server response
