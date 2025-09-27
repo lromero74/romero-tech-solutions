@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+import { validateFileUpload, sanitizeInputMiddleware } from '../utils/inputValidation.js';
 
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
@@ -42,13 +43,20 @@ const storage = multer.diskStorage({
   }
 });
 
-// File filter for images only
+// Enhanced file filter with comprehensive validation
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif'];
-  if (allowedTypes.includes(file.mimetype)) {
+  // Determine file type based on route
+  let fileType = 'images';
+  if (req.path.includes('/profile')) {
+    fileType = 'avatars';
+  }
+
+  const validation = validateFileUpload(file, fileType);
+
+  if (validation.isValid) {
     cb(null, true);
   } else {
-    cb(new Error('Only image files (JPEG, PNG, GIF) are allowed'), false);
+    cb(new Error(validation.error), false);
   }
 };
 
@@ -60,6 +68,9 @@ const upload = multer({
   },
   fileFilter: fileFilter
 });
+
+// Apply input sanitization middleware to all routes
+router.use(sanitizeInputMiddleware);
 
 // POST /api/uploads/logo - Upload company logo
 router.post('/logo', upload.single('logo'), (req, res) => {

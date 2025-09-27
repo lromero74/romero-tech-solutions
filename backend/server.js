@@ -14,6 +14,7 @@ import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import locationRoutes from './routes/locations.js';
 import publicRoutes from './routes/public.js';
+import securityRoutes from './routes/security.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -30,6 +31,21 @@ import {
   adminIPWhitelist,
   securityHeaders
 } from './middleware/security.js';
+
+// Import enhanced security utilities
+import {
+  trackFailedLoginMiddleware,
+  trackRateLimitMiddleware,
+  trackSuspiciousInputMiddleware
+} from './utils/securityMonitoring.js';
+
+import {
+  apiVersioningMiddleware,
+  secureErrorHandler,
+  performStartupSecurityCheck
+} from './utils/productionHardening.js';
+
+import { sanitizeInputMiddleware } from './utils/inputValidation.js';
 
 // Load environment variables with priority: .env.local > .env
 dotenv.config({ path: '.env.local' }); // Higher priority - local development with production DB
@@ -117,6 +133,17 @@ app.use(securityHeaders);
 // Apply speed limiter globally to slow down repeated requests
 app.use(speedLimiter);
 
+// Enhanced security monitoring middleware
+app.use(trackRateLimitMiddleware);
+app.use(trackSuspiciousInputMiddleware);
+app.use(trackFailedLoginMiddleware);
+
+// API versioning middleware
+app.use('/api', apiVersioningMiddleware('1.0', ['1.0']));
+
+// Input sanitization middleware
+app.use(sanitizeInputMiddleware);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -172,6 +199,7 @@ app.use('/uploads', express.static('uploads'));
 // API Routes with security middleware
 app.use('/api/auth', authLimiter, authRoutes); // Strict auth rate limiting
 app.use('/api/admin', adminLimiter, adminIPWhitelist, adminRoutes); // Admin rate limiting + IP whitelist
+app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only)
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes
 app.use('/api/locations', generalLimiter, locationRoutes); // General rate limiting
 app.use('/api/clients', generalLimiter, clientRegistrationRoutes); // General rate limiting
@@ -186,37 +214,8 @@ app.use('*', (req, res) => {
   });
 });
 
-// Global error handler
-app.use((error, req, res, next) => {
-  console.error('Global error handler:', error);
-
-  // Handle specific error types
-  if (error.name === 'ValidationError') {
-    return res.status(400).json({
-      success: false,
-      message: 'Validation error',
-      errors: error.details
-    });
-  }
-
-  if (error.name === 'UnauthorizedError') {
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized access'
-    });
-  }
-
-  // Default error response
-  const statusCode = error.statusCode || error.status || 500;
-  const message = error.message || 'Internal server error';
-
-  res.status(statusCode).json({
-    success: false,
-    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : message,
-    ...(process.env.NODE_ENV === 'development' && { stack: error.stack }),
-    timestamp: new Date().toISOString()
-  });
-});
+// Enhanced secure global error handler
+app.use(secureErrorHandler);
 
 // Session cleanup process
 let cleanupInterval = null;
@@ -258,6 +257,10 @@ const stopSessionCleanup = () => {
 // Start server
 const startServer = async () => {
   try {
+    // Perform comprehensive startup security validation
+    console.log('🔒 Starting comprehensive security validation...');
+    const securityValidation = await performStartupSecurityCheck();
+
     // Test database connection
     console.log('🔍 Testing database connection...');
     const dbConnected = await testConnection();
