@@ -20,6 +20,16 @@ import { sessionService } from './services/sessionService.js';
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
 
+// Import security middleware
+import {
+  generalLimiter,
+  adminLimiter,
+  authLimiter,
+  speedLimiter,
+  adminIPWhitelist,
+  securityHeaders
+} from './middleware/security.js';
+
 // Load environment variables with priority: .env.local > .env
 dotenv.config({ path: '.env.local' }); // Higher priority - local development with production DB
 dotenv.config(); // Lower priority - default configuration
@@ -79,6 +89,12 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 
+// Apply security headers globally
+app.use(securityHeaders);
+
+// Apply speed limiter globally to slow down repeated requests
+app.use(speedLimiter);
+
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
@@ -128,13 +144,13 @@ app.get('/health/db', async (req, res) => {
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
 
-// API Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/admin', adminRoutes);
-app.use('/api/public', publicRoutes); // Public routes without authentication
-app.use('/api/locations', locationRoutes);
-app.use('/api/clients', clientRegistrationRoutes);
-app.use('/api/uploads', uploadRoutes);
+// API Routes with security middleware
+app.use('/api/auth', authLimiter, authRoutes); // Strict auth rate limiting
+app.use('/api/admin', adminLimiter, adminIPWhitelist, adminRoutes); // Admin rate limiting + IP whitelist
+app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes
+app.use('/api/locations', generalLimiter, locationRoutes); // General rate limiting
+app.use('/api/clients', generalLimiter, clientRegistrationRoutes); // General rate limiting
+app.use('/api/uploads', generalLimiter, uploadRoutes); // General rate limiting
 
 // 404 handler
 app.use('*', (req, res) => {
