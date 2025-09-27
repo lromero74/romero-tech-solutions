@@ -62,7 +62,7 @@ const ADMIN_IP_WHITELIST = [
 
 export const adminIPWhitelist = (req, res, next) => {
   // Skip IP check in development
-  if (process.env.NODE_ENV === 'development') {
+  if (true) { // IP whitelist disabled - allow admin access from anywhere
     return next();
   }
 
