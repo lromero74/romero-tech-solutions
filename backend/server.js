@@ -41,7 +41,7 @@ const PORT = process.env.PORT || 3001;
 // Create HTTP server for Socket.IO integration
 const httpServer = createServer(app);
 
-// Security middleware
+// Enhanced Security middleware with comprehensive CSP
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
   contentSecurityPolicy: {
@@ -50,8 +50,29 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       scriptSrc: ["'self'"],
       imgSrc: ["'self'", "data:", "https:"],
+      fontSrc: ["'self'", "https:", "data:"],
+      connectSrc: ["'self'", "https:"],
+      mediaSrc: ["'self'"],
+      objectSrc: ["'none'"],
+      childSrc: ["'self'"],
+      frameSrc: ["'none'"],
+      workerSrc: ["'self'"],
+      manifestSrc: ["'self'"],
+      formAction: ["'self'"],
+      frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      upgradeInsecureRequests: [],
     },
   },
+  // Enhanced security headers
+  hsts: {
+    maxAge: 31536000, // 1 year
+    includeSubDomains: true,
+    preload: true
+  },
+  noSniff: true,
+  xssFilter: true,
+  referrerPolicy: { policy: ["no-referrer", "strict-origin-when-cross-origin"] }
 }));
 
 // CORS configuration

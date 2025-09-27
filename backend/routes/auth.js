@@ -181,6 +181,17 @@ router.post('/login', async (req, res) => {
       ipAddress
     );
 
+    // Set HttpOnly session cookie for enhanced security
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      path: '/'
+    };
+
+    res.cookie('sessionToken', session.sessionToken, cookieOptions);
+
     // Return successful login response with session
     const userData = {
       id: user.id,
@@ -215,7 +226,8 @@ router.post('/login', async (req, res) => {
 // POST /api/auth/logout - User logout
 router.post('/logout', async (req, res) => {
   try {
-    const { sessionToken } = req.body;
+    // Get session token from cookie or request body (backward compatibility)
+    const sessionToken = req.cookies?.sessionToken || req.body?.sessionToken;
 
     if (!sessionToken) {
       return res.status(400).json({
@@ -225,6 +237,14 @@ router.post('/logout', async (req, res) => {
     }
 
     const sessionEnded = await sessionService.endSession(sessionToken);
+
+    // Clear the HttpOnly session cookie
+    res.clearCookie('sessionToken', {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      path: '/'
+    });
 
     if (sessionEnded) {
       res.status(200).json({
@@ -252,7 +272,8 @@ router.post('/logout', async (req, res) => {
 // GET /api/auth/validate-session - Validate session token
 router.get('/validate-session', async (req, res) => {
   try {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    // Check for session token in HttpOnly cookie first, then fallback to Authorization header
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
     if (!sessionToken) {
       return res.status(401).json({
@@ -295,7 +316,8 @@ router.get('/validate-session', async (req, res) => {
 // POST /api/auth/heartbeat - Keep session alive and get current status
 router.post('/heartbeat', async (req, res) => {
   try {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    // Check for session token in HttpOnly cookie first, then fallback to Authorization header
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
     if (!sessionToken) {
       return res.status(401).json({
@@ -349,7 +371,8 @@ router.post('/heartbeat', async (req, res) => {
 // POST /api/auth/extend-session - Explicitly extend session (for extend button)
 router.post('/extend-session', async (req, res) => {
   try {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    // Check for session token in HttpOnly cookie first, then fallback to Authorization header
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
     if (!sessionToken) {
       return res.status(401).json({
@@ -601,6 +624,17 @@ router.post('/verify-admin-mfa', async (req, res) => {
       businessName: null,
       isFirstAdmin: true
     };
+
+    // Set HttpOnly session cookie for enhanced security
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      path: '/'
+    };
+
+    res.cookie('sessionToken', session.sessionToken, cookieOptions);
 
     console.log(`✅ Admin login successful with MFA for: ${user.email}`);
 
