@@ -95,6 +95,8 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
 
   // Service area validation state - start as false until validation passes
   const [serviceAreaValid, setServiceAreaValid] = useState(false);
+  // Trigger for immediate validation (timestamp)
+  const [triggerValidation, setTriggerValidation] = useState<number>(0);
 
   // Fetch businesses on component mount
   useEffect(() => {
@@ -214,7 +216,17 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   }, [showModal, handleClose]);
 
   // Handle field-level blur validation
-  const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
+  const handleFieldBlur = async (field: 'city' | 'state' | 'zipCode', value: string) => {
+    console.log('🔄 AddServiceLocationModal handleFieldBlur called:', { field, value });
+
+    // For ZIP code field, always trigger full service area validation
+    if (field === 'zipCode') {
+      console.log('🔄 ZIP field blurred, triggering service area validation for:', value);
+      setTriggerValidation(Date.now());
+      return;
+    }
+
+    // For city/state fields, use the existing field validation logic
     try {
       const result = await validateServiceAreaField(field, value, {
         city: address.city,
@@ -248,7 +260,9 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     }
 
     // Check service area validation
+    console.log('🌍 Submit check - serviceAreaValid:', serviceAreaValid);
     if (!serviceAreaValid) {
+      console.log('🌍 Blocking submit - service area not valid');
       setShowServiceAreaError(true);
       return;
     }
@@ -436,10 +450,12 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                       zipCode: address.zipCode,
                       country: address.country
                     }}
-                    onValidationChange={(isValid) => {
+                    onValidationChange={(isValid, errors) => {
+                      console.log('🌍 Service area validation result:', { isValid, errors });
                       setServiceAreaValid(isValid);
                     }}
                     showSuggestions={true}
+                    triggerValidation={triggerValidation}
                   />
                 </div>
 

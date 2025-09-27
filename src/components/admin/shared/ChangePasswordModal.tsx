@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, Eye, EyeOff, AlertTriangle, Check, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import {
@@ -63,6 +63,12 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     }
   }, [isOpen]);
 
+  const handleClose = useCallback(() => {
+    if (!isSubmitting) {
+      onClose();
+    }
+  }, [isSubmitting, onClose]);
+
   // ESC key handler
   useEffect(() => {
     const handleEscKey = (event: KeyboardEvent) => {
@@ -78,13 +84,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [isOpen, isSubmitting]);
-
-  const handleClose = () => {
-    if (!isSubmitting) {
-      onClose();
-    }
-  };
+  }, [isOpen, isSubmitting, handleClose]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

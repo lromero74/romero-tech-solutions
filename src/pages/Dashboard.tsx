@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { databaseService, DashboardData } from '../services/databaseService';
 import { LogOut, Plus, Edit, Trash2, Save, X } from 'lucide-react';
@@ -11,13 +11,7 @@ const Dashboard: React.FC = () => {
   const [newItem, setNewItem] = useState({ title: '', description: '', data: {} });
   const [showAddForm, setShowAddForm] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadDashboardData();
-    }
-  }, [user]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     try {
       if (user?.userId) {
         const data = await databaseService.getDashboardData(user.userId);
@@ -28,7 +22,13 @@ const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (user) {
+      loadDashboardData();
+    }
+  }, [user, loadDashboardData]);
 
   const handleAddItem = async () => {
     try {

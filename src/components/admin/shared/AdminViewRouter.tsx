@@ -18,7 +18,8 @@ import EditClientModal from '../AdminClients_Modals/EditClientModal';
 import AddClientModal from '../AdminClients_Modals/AddClientModal';
 // import EditEmployeeModal from '../AdminEmployees_Modals/EditEmployeeModal';
 import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServiceLocationModal';
-import { useAdminData } from '../../../contexts/AdminDataContext';
+import AddServiceLocationModal from '../AdminServiceLocations_Modals/AddServiceLocationModal';
+import { useAdminData, Business, Client, Employee, ServiceLocation } from '../../../contexts/AdminDataContext';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
 import { useEmployeeFilters } from '../../../hooks/admin/useEmployeeFilters';
 import { useClientFilters } from '../../../hooks/admin/useClientFilters';
@@ -150,8 +151,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Service Location modal state
   const [showEditServiceLocationModal, setShowEditServiceLocationModal] = useState(false);
   const [selectedServiceLocation, setSelectedServiceLocation] = useState(null);
-  // const [showAddServiceLocationModal, setShowAddServiceLocationModal] = useState(false);
-  // const [serviceLocationPrefillData, setServiceLocationPrefillData] = useState(null);
+  const [showAddServiceLocationModal, setShowAddServiceLocationModal] = useState(false);
+  const [serviceLocationPrefillData, setServiceLocationPrefillData] = useState(null);
 
   // Employee modal state
   // const [showEditEmployeeModal, setShowEditEmployeeModal] = useState(false);
@@ -277,7 +278,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   const handleDeleteBusiness = (business: unknown) => {
     // Count related records that will be deleted
-    const businessData = business as any; // Type assertion for legacy business object
+    const businessData = business as Business;
     const relatedServiceLocations = serviceLocations.filter(sl => sl.business_name === businessData.businessName);
     const relatedClients = clients.filter(client => client.businessName === businessData.businessName);
 
@@ -373,7 +374,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   // Client modal handlers
   const handleEditClient = (client: unknown) => {
-    setSelectedClient(client as any);
+    setSelectedClient(client as Client);
     setShowEditClientModal(true);
   };
 
@@ -434,7 +435,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   // Service Location modal handlers
   const handleEditServiceLocation = (location: unknown) => {
-    setSelectedServiceLocation(location as any);
+    setSelectedServiceLocation(location as ServiceLocation);
     setShowEditServiceLocationModal(true);
   };
 
@@ -447,15 +448,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   //   setShowAddServiceLocationModal(true);
   // };
 
-  // const handleCloseAddServiceLocationModal = () => {
-  //   setShowAddServiceLocationModal(false);
-  //   setServiceLocationPrefillData(null);
-  // };
+  const handleCloseAddServiceLocationModal = () => {
+    setShowAddServiceLocationModal(false);
+    setServiceLocationPrefillData(null);
+  };
 
-  // const handleOpenServiceLocationModalFromBusiness = (businessName: string, address: { street: string; city: string; state: string; zipCode: string; country?: string; }) => {
-  //   setServiceLocationPrefillData({ businessName, address });
-  //   setShowAddServiceLocationModal(true);
-  // };
+  const handleOpenServiceLocationModalFromBusiness = (businessName: string, address: { street: string; city: string; state: string; zipCode: string; country?: string; }) => {
+    setServiceLocationPrefillData({ businessName, address });
+    setShowAddServiceLocationModal(true);
+  };
 
   // const handleOpenAddUserModalFromServiceLocation = (businessId: string, serviceLocationId?: string) => {
   //   if (serviceLocationId) {
@@ -464,18 +465,18 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   //   setShowAddClientModal(true);
   // };
 
-  // const handleCreateServiceLocation = async (locationData: unknown) => {
-  //   try {
-  //     const result = await serviceLocationCRUD.createEntity(locationData);
-  //     setShowAddServiceLocationModal(false);
-  //     // Refresh service location data
-  //     await refreshAllData();
-  //     return result;
-  //   } catch (error) {
-  //     console.error('Failed to create service location:', error);
-  //     throw error;
-  //   }
-  // };
+  const handleCreateServiceLocation = async (locationData: unknown) => {
+    try {
+      const result = await serviceLocationCRUD.createEntity(locationData);
+      setShowAddServiceLocationModal(false);
+      // Refresh service location data
+      await refreshAllData();
+      return result;
+    } catch (error) {
+      console.error('Failed to create service location:', error);
+      throw error;
+    }
+  };
 
   const handleUpdateServiceLocation = async (locationId: string, updates: unknown) => {
     try {
@@ -492,7 +493,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   // Employee modal handlers - commented out as they are not currently used
   // const handleEditEmployee = (employee: unknown) => {
-  //   setSelectedEmployee(employee as any);
+  //   setSelectedEmployee(employee as Employee);
   //   setShowEditEmployeeModal(true);
   // };
 
@@ -503,7 +504,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   // const handleSubmitEditEmployee = async (employeeData: unknown) => {
   //   try {
-  //     const empData = employeeData as any;
+  //     const empData = employeeData as Employee;
   //     await handleUpdateEmployee(empData.id, employeeData);
   //     setShowEditEmployeeModal(false);
   //     setSelectedEmployee(null);
@@ -514,7 +515,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // };
 
   // const handleEmployeeChange = (employee: unknown) => {
-  //   setSelectedEmployee(employee as any);
+  //   setSelectedEmployee(employee as Employee);
   // };
 
   // Wrapper function to update employee and refresh data
@@ -532,7 +533,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Employee delete handlers
   const handleSoftDeleteEmployee = async (employee: unknown) => {
     try {
-      const empData = employee as any; // Type assertion for legacy employee object
+      const empData = employee as Employee;
       const shouldRestore = empData.softDelete; // If currently deleted, restore it
       // const actionType = shouldRestore ? 'restore' : 'soft delete'; // Unused variable
       const entityName = `${empData.firstName} ${empData.lastName}`;
@@ -576,7 +577,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   const handleHardDeleteEmployee = async (employee: unknown) => {
     try {
-      const empData = employee as any;
+      const empData = employee as Employee;
       const entityName = `${empData.firstName} ${empData.lastName}`;
 
       setConfirmationDialog({
@@ -609,7 +610,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   const handleTerminateEmployee = async (employee: unknown) => {
     try {
-      const empData = employee as any;
+      const empData = employee as Employee;
       const entityName = `${empData.firstName} ${empData.lastName}`;
 
       setConfirmationDialog({
@@ -656,7 +657,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   const handleRehireEmployee = async (employee: unknown) => {
     try {
-      const empData = employee as any;
+      const empData = employee as Employee;
       const entityName = `${empData.firstName} ${empData.lastName}`;
       setConfirmationDialog({
         isOpen: true,
@@ -744,7 +745,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                   throw new Error('Employee not found');
                 }
 
-                let updates: any = {};
+                let updates: {
+                  isActive?: boolean;
+                  isOnVacation?: boolean;
+                  isOutSick?: boolean;
+                  isOnOtherLeave?: boolean;
+                } = {};
 
                 switch (statusType) {
                   case 'active':
@@ -1519,6 +1525,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onClose={handleCloseAddBusinessModal}
         onSubmit={handleCreateBusiness}
         businesses={businesses}
+        onOpenServiceLocationModal={handleOpenServiceLocationModalFromBusiness}
       />
 
       {/* Client Edit Modal */}
@@ -1544,6 +1551,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onSubmit={handleUpdateServiceLocation}
       />
 
+      {/* Add Service Location Modal */}
+      <AddServiceLocationModal
+        showModal={showAddServiceLocationModal}
+        onClose={handleCloseAddServiceLocationModal}
+        onSubmit={handleCreateServiceLocation}
+        businesses={businesses}
+        prefillBusinessName={serviceLocationPrefillData?.businessName}
+        prefillAddress={serviceLocationPrefillData?.address}
+      />
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog

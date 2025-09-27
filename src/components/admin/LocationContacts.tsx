@@ -35,10 +35,6 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchContacts();
-  }, [fetchContacts, serviceLocationId]);
-
   const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
@@ -52,6 +48,10 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
       setLoading(false);
     }
   }, [serviceLocationId]);
+
+  useEffect(() => {
+    fetchContacts();
+  }, [fetchContacts, serviceLocationId]);
 
   const displayContacts = showAll ? contacts : contacts.filter(contact => contact.is_primary_contact).slice(0, 1);
 

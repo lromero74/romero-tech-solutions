@@ -86,11 +86,11 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
 
   // Field-level validation modal state
   const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
-  // Removed unused state: fieldValidationData
-  // const [fieldValidationData, setFieldValidationData] = useState<{
-  //   reason?: string;
-  //   suggestedAreas?: string[];
-  // }>({});
+  const fieldValidationData = {
+    reason: 'This location is outside our current service area.',
+    suggestedAreas: undefined,
+    geographicallyRelevant: undefined
+  };
 
 
   // Check for duplicate business name in real-time
@@ -699,9 +699,9 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
         onClose={() => setShowFieldValidationModal(false)}
         type="error"
         title="Service Area Not Available"
-        message={fieldValidationData.reason || 'This location is outside our current service area.'}
-        suggestedAreas={fieldValidationData.suggestedAreas}
-        geographicallyRelevant={fieldValidationData.geographicallyRelevant}
+        message={fieldValidationData?.reason || 'This location is outside our current service area.'}
+        suggestedAreas={fieldValidationData?.suggestedAreas}
+        geographicallyRelevant={fieldValidationData?.geographicallyRelevant}
       />
 
       {/* ZIP Code Validation Modal */}

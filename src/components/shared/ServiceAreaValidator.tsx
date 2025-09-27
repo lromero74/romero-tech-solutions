@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { validateServiceArea, formatServiceAreasDisplay, getActiveServiceAreas } from '../../utils/serviceAreaValidation';
@@ -73,24 +73,12 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       return;
     }
 
-    // If ZIP code is empty or incomplete, immediately invalidate
-    if (!address.zipCode?.trim() || address.zipCode.trim().length < 5) {
-      console.log('🌍 ZIP code incomplete, invalidating service area validation');
-      setValidationState({
-        isValidating: false,
-        isValid: false
-      });
-      setShowErrorModal(false);
-      onValidationChange(false, {
-        serviceArea: 'Please enter a complete 5-digit ZIP code to validate service area.'
-      });
-      // Clear the last validated address since this is now invalid
-      lastValidatedAddressRef.current = '';
-    }
-  }, [address.zipCode, disabled, onValidationChange]);
+    // This useEffect only runs once on mount to set initial state
+    // ZIP validation will be handled by triggerValidation mechanism
+  }, [disabled]);
 
   // Validation function
-  const validateAddress = async () => {
+  const validateAddress = useCallback(async () => {
     if (disabled) {
       return;
     }
@@ -183,7 +171,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       // Show error modal for validation failure
       setShowErrorModal(true);
     }
-  };
+  }, [address, disabled, onValidationChange]);
 
 
   // Immediate validation trigger (for ZIP auto-complete)
@@ -202,10 +190,18 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
         return;
       }
 
-      console.log('🚀 Immediate validation triggered by triggerValidation prop:', triggerValidation);
+      // Reset validation state to ensure fresh validation
+      setValidationState({
+        isValidating: false,
+        isValid: null
+      });
+      lastValidatedAddressRef.current = '';
+
+      console.log('🚀 Running fresh validation for ZIP code:', address.zipCode);
       validateAddress();
     }
-  }, [triggerValidation, disabled]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerValidation, disabled, validateAddress]);
 
   if (disabled) {
     return null;
