@@ -16,10 +16,10 @@ export const esTranslations = {
   'home.hero.quoteButton': 'Envíenos un Correo',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Años de Experiencia',
-  'home.hero.stat2': '100%',
-  'home.hero.stat2Label': 'Tasa de Satisfacción',
-  'home.hero.stat3': '24/7',
-  'home.hero.stat3Label': 'Soporte de Emergencia',
+  'home.hero.stat2': 'Satisfacción del',
+  'home.hero.stat2Label': 'Cliente Primordial',
+  'home.hero.stat3': 'Soporte de',
+  'home.hero.stat3Label': 'Emergencia Disponible',
 
   'home.services.title': 'Nuestros Servicios',
   'home.services.subtitle': 'Soluciones integrales de TI para todas sus necesidades tecnológicas',
@@ -57,8 +57,8 @@ export const esTranslations = {
   'home.about.title': '¿Por Qué Elegir Romero Tech Solutions?',
   'home.about.description': 'Con más de 30 años de experiencia sirviendo desde instalaciones militares hasta empresas Fortune 500, aportamos experiencia de nivel empresarial a sus necesidades tecnológicas locales.',
   'home.about.stats.experience': 'Años de Experiencia',
-  'home.about.stats.clients': 'Clientes Felices',
-  'home.about.stats.support': 'Soporte Disponible',
+  'home.about.stats.clients': 'Satisfacción del Cliente',
+  'home.about.stats.support': 'Soporte de Emergencia',
   'home.about.stats.satisfaction': 'Tasa de Satisfacción',
   'home.about.cta': 'Conozca Más Sobre Nosotros',
   'home.about.badge.title': 'Expertos de Confianza',
@@ -96,7 +96,7 @@ export const esTranslations = {
   'home.finalCta.quoteButton': 'Envíenos un Correo',
   'home.finalCta.sameDay': 'Servicio el Mismo Día Disponible',
   'home.finalCta.trusted': '30+ Años de Experiencia Confiable',
-  'home.finalCta.satisfaction': '100% Satisfacción Garantizada',
+  'home.finalCta.satisfaction': 'Satisfacción del Cliente Garantizada',
 
   // About Page
   'about.hero.badge': 'Sus Guardianes Digitales Desde 1994',
@@ -144,7 +144,7 @@ export const esTranslations = {
   'about.values.guaranteedDesc': 'Soluciones de grado profesional con garantías porque respaldamos nuestro trabajo.',
 
   'about.finalCta.title': '¿Listo para Unirse a Nuestra Familia?',
-  'about.finalCta.subtitle': '¡No deje que los problemas tecnológicos sean su kriptonita! Únase a cientos de clientes satisfechos que duermen mejor sabiendo que su tecnología está protegida por verdaderos héroes.',
+  'about.finalCta.subtitle': '¡No deje que los problemas tecnológicos sean su kriptonita! Únase a nuestra creciente familia de clientes satisfechos que duermen mejor sabiendo que su tecnología está protegida por verdaderos héroes.',
   'about.finalCta.callButton': 'Llame a Sus Héroes: (619) 940-5550',
   'about.finalCta.consultButton': 'Envíenos un Correo',
   'about.finalCta.location': 'Sirviendo con Orgullo Escondido y Más Allá',
@@ -156,7 +156,7 @@ export const esTranslations = {
   'services.hero.subtitle': 'Desde reparaciones simples hasta soluciones complejas: lo manejamos todo con más de 30 años de experiencia',
 
   'services.main.title': 'Nuestros Servicios',
-  'services.main.subtitle': 'Cada servicio respaldado por décadas de experiencia y una garantía de satisfacción del 100%',
+  'services.main.subtitle': 'Cada servicio respaldado por décadas de experiencia y nuestro compromiso con la satisfacción del cliente',
   'services.computerRepair': 'Reparación y Mantenimiento de Computadoras',
   'services.computerRepairDesc': 'Diagnósticos completos de computadoras, reparaciones de hardware, solución de problemas de software y optimización del sistema.',
   'services.computerRepairFeatures': 'Diagnósticos de hardware,Instalación de software,Limpieza del sistema,Optimización del rendimiento',
@@ -188,7 +188,7 @@ export const esTranslations = {
   'services.process.resultsDesc': 'Pruebas y soporte de seguimiento',
 
   // Contact Page
-  'contact.hero.badge': 'Listos para Ayudar 24/7',
+  'contact.hero.badge': 'Listos para Ayudar',
   'contact.hero.title': '¿Necesita',
   'contact.hero.titleHighlight': 'Héroes Tecnológicos?',
   'contact.hero.subtitle': '¡Estamos esperando! Ya sea una reparación de emergencia o mantenimiento de rutina, sus héroes tecnológicos del vecindario están a solo una llamada de distancia.',
@@ -210,7 +210,7 @@ export const esTranslations = {
   'contact.hours.saturdayTime': '9:00 AM - 4:00 PM',
   'contact.hours.sunday': 'Domingo',
   'contact.hours.sundayTime': 'Solo Llamadas de Emergencia',
-  'contact.hours.emergency': 'Soporte de Emergencia: Disponible 24/7 para sistemas comerciales críticos',
+  'contact.hours.emergency': 'Soporte de Emergencia: Disponible para sistemas comerciales críticos',
 
   'contact.serviceArea.title': 'Dónde Servimos',
   'contact.serviceArea.escondido': 'Escondido',
@@ -224,15 +224,15 @@ export const esTranslations = {
   'contact.emergencyCta.sosButton': 'Enviar Correo SOS',
   'contact.emergencyCta.sameDay': 'Respuesta el Mismo Día',
   'contact.emergencyCta.trusted': '30+ Años Confiables',
-  'contact.emergencyCta.customers': '100+ Clientes Felices',
-  'contact.emergencyCta.satisfaction': '100% Satisfacción',
+  'contact.emergencyCta.customers': 'Clientes Satisfechos',
+  'contact.emergencyCta.satisfaction': 'Prioridad de Satisfacción del Cliente',
 
   'contact.faq.title': '¿Tiene Preguntas?',
   'contact.faq.subtitle': '¡Tenemos respuestas! Estas son las preguntas más comunes de nuestros clientes',
   'contact.faq.onsite.question': '¿Ofrecen servicio en el sitio?',
   'contact.faq.onsite.answer': '¡Absolutamente! Proporcionamos servicio en el sitio en toda el área de Escondido y comunidades circundantes. También ofrecemos soporte remoto para muchos problemas.',
   'contact.faq.response.question': '¿Cuáles son sus tiempos de respuesta?',
-  'contact.faq.response.answer': 'Típicamente respondemos a las llamadas dentro de 2-4 horas durante el horario comercial. El soporte de emergencia está disponible 24/7 para sistemas comerciales críticos.',
+  'contact.faq.response.answer': 'Típicamente respondemos a las llamadas dentro de 2-4 horas durante el horario comercial. El soporte de emergencia está disponible para sistemas comerciales críticos.',
   'contact.faq.customers.question': '¿Trabajan tanto con clientes residenciales como comerciales?',
   'contact.faq.customers.answer': '¡Sí! Proporcionamos soporte integral de TI tanto para clientes residenciales como para empresas de todos los tamaños en todo el condado de San Diego.',
   'contact.faq.payment.question': '¿Qué métodos de pago aceptan?',
@@ -245,7 +245,7 @@ export const esTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Soporte Profesional de TI',
-  'footer.description': 'Proporcionando servicios confiables de soporte para PC, impresoras y redes al área de Escondido, CA con más de 30 años de experiencia sirviendo a docenas de clientes satisfechos.',
+  'footer.description': 'Proporcionando servicios confiables de soporte para PC, impresoras y redes al área de Escondido, CA con más de 30 años de experiencia sirviendo a clientes satisfechos.',
   'footer.contactUs': 'Contáctenos',
   'footer.services': 'Nuestros Servicios',
   'footer.pcRepair': 'Reparación y Mantenimiento de PC',
@@ -328,5 +328,15 @@ export const esTranslations = {
   'common.yearsExperience': 'Años de Experiencia',
   'common.satisfactionRate': 'Tasa de Satisfacción',
   'common.emergencySupport': 'Soporte de Emergencia',
-  'common.happyCustomers': 'Clientes Felices'
+  'common.happyCustomers': 'Clientes Felices',
+
+  // About page stats (updated to remove exaggerated claims)
+  'about.stats.experience': '30+',
+  'about.stats.experienceLabel': 'Años de Experiencia',
+  'about.stats.customers': 'Clientes',
+  'about.stats.customersLabel': 'Satisfechos',
+  'about.stats.support': 'Soporte de',
+  'about.stats.supportLabel': 'Emergencia Disponible',
+  'about.stats.satisfaction': 'Satisfacción del',
+  'about.stats.satisfactionLabel': 'Cliente Prioritaria'
 };

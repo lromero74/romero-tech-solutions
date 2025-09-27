@@ -7,10 +7,10 @@ const About: React.FC = () => {
   const { t } = useLanguage();
 
   const achievements = [
-    { number: '30+', label: t('common.yearsExperience'), icon: Award },
-    { number: '100+', label: t('common.happyCustomers'), icon: Users },
-    { number: '24/7', label: t('common.emergencySupport'), icon: Clock },
-    { number: '100%', label: t('common.satisfactionRate'), icon: Star }
+    { number: t('about.stats.experience'), label: t('about.stats.experienceLabel'), icon: Award },
+    { number: t('about.stats.customers'), label: t('about.stats.customersLabel'), icon: Users },
+    { number: t('about.stats.support'), label: t('about.stats.supportLabel'), icon: Clock },
+    { number: t('about.stats.satisfaction'), label: t('about.stats.satisfactionLabel'), icon: Star }
   ];
 
   const values = [

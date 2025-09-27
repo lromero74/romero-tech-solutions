@@ -149,20 +149,20 @@ const Home: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-8 mb-8">
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">15+</div>
-                  <div className="text-gray-600">{t('home.about.stats.experience')}</div>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{t('home.hero.stat1')}</div>
+                  <div className="text-gray-600">{t('home.hero.stat1Label')}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">500+</div>
-                  <div className="text-gray-600">{t('home.about.stats.clients')}</div>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{t('home.hero.stat2')}</div>
+                  <div className="text-gray-600">{t('home.hero.stat2Label')}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">24/7</div>
-                  <div className="text-gray-600">{t('home.about.stats.support')}</div>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{t('home.hero.stat3')}</div>
+                  <div className="text-gray-600">{t('home.hero.stat3Label')}</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-3xl font-bold text-blue-600 mb-2">100%</div>
-                  <div className="text-gray-600">{t('home.about.stats.satisfaction')}</div>
+                  <div className="text-3xl font-bold text-blue-600 mb-2">{t('home.about.stats.satisfaction')}</div>
+                  <div className="text-gray-600">Rate</div>
                 </div>
               </div>
 

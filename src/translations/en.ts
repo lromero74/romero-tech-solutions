@@ -16,10 +16,10 @@ export const enTranslations = {
   'home.hero.quoteButton': 'E-mail Us',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Years Experience',
-  'home.hero.stat2': '100%',
-  'home.hero.stat2Label': 'Satisfaction Rate',
-  'home.hero.stat3': '24/7',
-  'home.hero.stat3Label': 'Emergency Support',
+  'home.hero.stat2': 'Client',
+  'home.hero.stat2Label': 'Satisfaction Paramount',
+  'home.hero.stat3': 'Emergency',
+  'home.hero.stat3Label': 'Support Available',
 
   'home.services.title': 'Our Services',
   'home.services.subtitle': 'Comprehensive IT solutions for all your technology needs',
@@ -57,8 +57,8 @@ export const enTranslations = {
   'home.about.title': 'Why Choose Romero Tech Solutions?',
   'home.about.description': 'With over 30 years of experience serving everyone from military installations to Fortune 500 companies, we bring enterprise-level expertise to your local technology needs.',
   'home.about.stats.experience': 'Years Experience',
-  'home.about.stats.clients': 'Happy Clients',
-  'home.about.stats.support': 'Support Available',
+  'home.about.stats.clients': 'Client Satisfaction',
+  'home.about.stats.support': 'Emergency Support',
   'home.about.stats.satisfaction': 'Satisfaction Rate',
   'home.about.cta': 'Learn More About Us',
   'home.about.badge.title': 'Trusted Experts',
@@ -96,7 +96,7 @@ export const enTranslations = {
   'home.finalCta.quoteButton': 'E-mail Us',
   'home.finalCta.sameDay': 'Same-Day Service Available',
   'home.finalCta.trusted': '30+ Years Trusted Experience',
-  'home.finalCta.satisfaction': '100% Satisfaction Guaranteed',
+  'home.finalCta.satisfaction': 'Client Satisfaction Guaranteed',
 
   // About Page
   'about.hero.badge': 'Your Digital Guardians Since 1994',
@@ -144,7 +144,7 @@ export const enTranslations = {
   'about.values.guaranteedDesc': 'Professional-grade solutions with warranties because we stand behind our work.',
 
   'about.finalCta.title': 'Ready to Join Our Family?',
-  'about.finalCta.subtitle': "Don't let tech problems be your kryptonite! Join hundreds of satisfied customers who sleep better knowing their technology is protected by real heroes.",
+  'about.finalCta.subtitle': "Don't let tech problems be your kryptonite! Join our growing family of satisfied customers who sleep better knowing their technology is protected by real heroes.",
   'about.finalCta.callButton': 'Call Your Heroes: (619) 940-5550',
   'about.finalCta.consultButton': 'E-mail Us',
   'about.finalCta.location': 'Proudly Serving Escondido & Beyond',
@@ -156,7 +156,7 @@ export const enTranslations = {
   'services.hero.subtitle': 'From simple fixes to complex solutions - we handle it all with 30+ years of experience',
 
   'services.main.title': 'Our Services',
-  'services.main.subtitle': 'Every service backed by decades of experience and a 100% satisfaction guarantee',
+  'services.main.subtitle': 'Every service backed by decades of experience and our commitment to client satisfaction',
   'services.computerRepair': 'Computer Repair & Maintenance',
   'services.computerRepairDesc': 'Complete computer diagnostics, hardware repairs, software troubleshooting, and system optimization.',
   'services.computerRepairFeatures': 'Hardware diagnostics,Software installation,System cleanup,Performance optimization',
@@ -188,7 +188,7 @@ export const enTranslations = {
   'services.process.resultsDesc': 'Testing & follow-up support',
 
   // Contact Page
-  'contact.hero.badge': 'Ready to Help 24/7',
+  'contact.hero.badge': 'Ready to Help',
   'contact.hero.title': 'Need Tech',
   'contact.hero.titleHighlight': 'Heroes?',
   'contact.hero.subtitle': "We're standing by! Whether it's an emergency repair or routine maintenance, your neighborhood tech heroes are just one call away.",
@@ -210,7 +210,7 @@ export const enTranslations = {
   'contact.hours.saturdayTime': '9:00 AM - 4:00 PM',
   'contact.hours.sunday': 'Sunday',
   'contact.hours.sundayTime': 'Emergency Calls Only',
-  'contact.hours.emergency': 'Emergency Support: Available 24/7 for critical business systems',
+  'contact.hours.emergency': 'Emergency Support: Available for critical business systems',
 
   'contact.serviceArea.title': 'Where We Serve',
   'contact.serviceArea.escondido': 'Escondido',
@@ -224,15 +224,15 @@ export const enTranslations = {
   'contact.emergencyCta.sosButton': 'Send SOS Email',
   'contact.emergencyCta.sameDay': 'Same-Day Response',
   'contact.emergencyCta.trusted': '30+ Years Trusted',
-  'contact.emergencyCta.customers': '100+ Happy Customers',
-  'contact.emergencyCta.satisfaction': '100% Satisfaction',
+  'contact.emergencyCta.customers': 'Satisfied Customers',
+  'contact.emergencyCta.satisfaction': 'Client Satisfaction Priority',
 
   'contact.faq.title': 'Got Questions?',
   'contact.faq.subtitle': 'We\'ve got answers! Here are the most common questions from our customers',
   'contact.faq.onsite.question': 'Do you offer on-site service?',
   'contact.faq.onsite.answer': 'Absolutely! We provide on-site service throughout the Escondido area and surrounding communities. We also offer remote support for many issues.',
   'contact.faq.response.question': 'What are your response times?',
-  'contact.faq.response.answer': 'We typically respond to calls within 2-4 hours during business hours. Emergency support is available 24/7 for critical business systems.',
+  'contact.faq.response.answer': 'We typically respond to calls within 2-4 hours during business hours. Emergency support is available for critical business systems.',
   'contact.faq.customers.question': 'Do you work with both home and business customers?',
   'contact.faq.customers.answer': 'Yes! We provide comprehensive IT support for both residential customers and businesses of all sizes throughout San Diego County.',
   'contact.faq.payment.question': 'What payment methods do you accept?',
@@ -245,7 +245,7 @@ export const enTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Professional IT Support',
-  'footer.description': 'Providing reliable PC, printer, and network support services to the Escondido, CA area with over 30 years of experience serving dozens of satisfied customers.',
+  'footer.description': 'Providing reliable PC, printer, and network support services to the Escondido, CA area with over 30 years of experience serving satisfied customers.',
   'footer.contactUs': 'Contact Us',
   'footer.services': 'Our Services',
   'footer.pcRepair': 'PC Repair & Maintenance',
@@ -328,5 +328,15 @@ export const enTranslations = {
   'common.yearsExperience': 'Years Experience',
   'common.satisfactionRate': 'Satisfaction Rate',
   'common.emergencySupport': 'Emergency Support',
-  'common.happyCustomers': 'Happy Customers'
+  'common.happyCustomers': 'Happy Customers',
+
+  // About page stats (updated to remove exaggerated claims)
+  'about.stats.experience': '30+',
+  'about.stats.experienceLabel': 'Years Experience',
+  'about.stats.customers': 'Satisfied',
+  'about.stats.customersLabel': 'Customers',
+  'about.stats.support': 'Emergency',
+  'about.stats.supportLabel': 'Support Available',
+  'about.stats.satisfaction': 'Client',
+  'about.stats.satisfactionLabel': 'Satisfaction Priority'
 };
