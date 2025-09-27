@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
@@ -51,12 +51,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   prefillAddress,
   onOpenAddUserModal
 }) => {
-  console.log('🔍 AddServiceLocationModal: Component rendered with props:', {
-    showModal,
-    prefillBusinessName,
-    prefillAddress,
-    onOpenAddUserModal: !!onOpenAddUserModal
-  });
+  // Component render logging removed for performance
 
   const [formData, setFormData] = useState({
     business_id: '',
@@ -78,10 +73,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
 
-  // Debug: Track businesses state changes
-  useEffect(() => {
-    console.log('🔍 AddServiceLocationModal: businesses state changed:', businesses.length, businesses.map(b => b.businessName));
-  }, [businesses]);
+  // Businesses state effect removed for performance
   const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
@@ -106,18 +98,17 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
 
   // Fetch businesses on component mount
   useEffect(() => {
-    console.log('🔍 AddServiceLocationModal: showModal changed to:', showModal);
     if (showModal) {
-      console.log('🔍 AddServiceLocationModal: Modal is open, fetching businesses...');
       fetchBusinesses();
-    } else {
-      console.log('🔍 AddServiceLocationModal: Modal is closed, skipping fetch');
     }
   }, [showModal]);
 
-  // Handle prefill business name
+  // Handle prefill data (business name and address)
   useEffect(() => {
-    if (showModal && prefillBusinessName && businesses.length > 0) {
+    if (!showModal) return;
+
+    // Handle prefill business name
+    if (prefillBusinessName && businesses.length > 0) {
       const matchedBusiness = businesses.find(b =>
         b.businessName.toLowerCase() === prefillBusinessName.toLowerCase()
       );
@@ -128,11 +119,9 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         }));
       }
     }
-  }, [showModal, prefillBusinessName, businesses]);
 
-  // Handle prefill address data
-  useEffect(() => {
-    if (showModal && prefillAddress) {
+    // Handle prefill address data
+    if (prefillAddress) {
       setAddress({
         street: prefillAddress.street,
         city: prefillAddress.city,
@@ -145,7 +134,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         address_label: 'Main Office' // Default label
       }));
     }
-  }, [showModal, prefillAddress]);
+  }, [showModal, prefillBusinessName, prefillAddress, businesses]);
 
   // Reset form when modal closes
   useEffect(() => {
@@ -181,18 +170,14 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
       return;
     }
     setHasUnsavedChanges(true);
-  }, [formData]);
+  }, [formData, isInitialLoad]);
 
   const fetchBusinesses = async () => {
     try {
       setLoadingBusinesses(true);
-      console.log('🔍 AddServiceLocationModal: Fetching businesses...');
       const data = await adminService.getBusinesses();
-      console.log('🔍 AddServiceLocationModal: Raw data from API:', data);
       // Filter out soft deleted businesses
       const activeBusinesses = (data.businesses || []).filter(business => !business.soft_delete);
-      console.log('🔍 AddServiceLocationModal: Active businesses after filtering:', activeBusinesses);
-      console.log('🔍 AddServiceLocationModal: Business count:', activeBusinesses.length);
       setBusinesses(activeBusinesses);
     } catch (error) {
       console.error('Error fetching businesses:', error);
@@ -215,22 +200,21 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     };
   }, [showModal, hasUnsavedChanges]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (hasUnsavedChanges) {
       setShowConfirmClose(true);
     } else {
       onClose();
     }
-  };
+  }, [hasUnsavedChanges, onClose]);
 
-  const handleConfirmClose = () => {
+  const handleConfirmClose = useCallback(() => {
     setShowConfirmClose(false);
     onClose();
-  };
+  }, [onClose]);
 
   // Handle field-level blur validation
   const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
-    console.log('🔄 AddServiceLocationModal handleFieldBlur called:', { field, value });
     try {
       const result = await validateServiceAreaField(field, value, {
         city: address.city,
@@ -264,9 +248,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     }
 
     // Check service area validation
-    console.log('🔍 Form submission: serviceAreaValid =', serviceAreaValid);
     if (!serviceAreaValid) {
-      console.log('❌ Form submission blocked: Service area validation failed');
       setShowServiceAreaError(true);
       return;
     }
@@ -454,9 +436,8 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                       zipCode: address.zipCode,
                       country: address.country
                     }}
-                    onValidationChange={(isValid, errors) => {
+                    onValidationChange={(isValid) => {
                       setServiceAreaValid(isValid);
-                      console.log('🔍 ServiceAreaValidator callback:', { isValid, errors });
                     }}
                     showSuggestions={true}
                   />
