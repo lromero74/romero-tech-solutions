@@ -21,8 +21,7 @@ router.post('/service-locations', async (req, res) => {
       country,
       contact_person,
       contact_phone,
-      notes,
-      is_headquarters
+      notes
     } = req.body;
 
     // Validate required fields
@@ -48,10 +47,9 @@ router.post('/service-locations', async (req, res) => {
         contact_person,
         contact_phone,
         notes,
-        is_headquarters,
         is_active,
         soft_delete
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, true, false)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, false)
       RETURNING *
     `, [
       business_id,
@@ -65,8 +63,7 @@ router.post('/service-locations', async (req, res) => {
       country || 'USA',
       contact_person || null,
       contact_phone || null,
-      notes || null,
-      is_headquarters || false
+      notes || null
     ]);
 
     console.log('Service location created:', result.rows[0]);
@@ -105,13 +102,13 @@ router.get('/service-locations', async (req, res) => {
         sl.contact_phone,
         sl.notes,
         sl.is_active,
-        sl.is_headquarters,
         sl.soft_delete,
         sl.created_at,
         sl.updated_at,
         b.business_name
       FROM service_locations sl
       JOIN businesses b ON sl.business_id = b.id
+      WHERE sl.soft_delete = false
       ORDER BY b.business_name, sl.location_name, sl.address_label
     `);
 
@@ -147,7 +144,7 @@ router.put('/service-locations/:id', async (req, res) => {
       'business_id', 'address_label', 'location_name', 'location_type',
       'street', 'city', 'state', 'zip_code', 'country',
       'contact_person', 'contact_phone', 'notes',
-      'is_active', 'is_headquarters'
+      'is_active'
     ];
 
     const updateFields = [];

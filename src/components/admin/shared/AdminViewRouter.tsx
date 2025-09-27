@@ -18,7 +18,6 @@ import EditClientModal from '../AdminClients_Modals/EditClientModal';
 import AddClientModal from '../AdminClients_Modals/AddClientModal';
 import EditEmployeeModal from '../AdminEmployees_Modals/EditEmployeeModal';
 import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServiceLocationModal';
-import AddServiceLocationModal from '../AdminServiceLocations_Modals/AddServiceLocationModal';
 import { useAdminData } from '../../../contexts/AdminDataContext';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
 import { useEmployeeFilters } from '../../../hooks/admin/useEmployeeFilters';
@@ -147,17 +146,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Service Location modal state
   const [showEditServiceLocationModal, setShowEditServiceLocationModal] = useState(false);
   const [selectedServiceLocation, setSelectedServiceLocation] = useState(null);
-  const [showAddServiceLocationModal, setShowAddServiceLocationModal] = useState(false);
-  const [serviceLocationPrefillData, setServiceLocationPrefillData] = useState<{
-    businessName: string;
-    address: {
-      street: string;
-      city: string;
-      state: string;
-      zipCode: string;
-      country?: string;
-    };
-  } | null>(null);
 
   // State to track service location context for user creation
   const [userCreationContext, setUserCreationContext] = useState<{
@@ -1540,15 +1528,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onSubmit={handleUpdateServiceLocation}
       />
 
-      {/* Add Service Location Modal */}
-      <AddServiceLocationModal
-        showModal={showAddServiceLocationModal}
-        onClose={handleCloseAddServiceLocationModal}
-        onSubmit={handleCreateServiceLocation}
-        prefillBusinessName={serviceLocationPrefillData?.businessName || serviceLocationPrefillBusinessName}
-        prefillAddress={serviceLocationPrefillData?.address}
-        onOpenAddUserModal={handleOpenAddUserModalFromServiceLocation}
-      />
 
       {/* Confirmation Dialog */}
       <ConfirmationDialog

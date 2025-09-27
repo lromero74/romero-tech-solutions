@@ -31,7 +31,6 @@ interface AddServiceLocationModalProps {
     contact_person?: string;
     contact_phone?: string;
     notes?: string;
-    is_headquarters: boolean;
   }) => Promise<{ id: string }> | void;
   prefillBusinessName?: string;
   prefillAddress?: {
@@ -52,6 +51,12 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   prefillAddress,
   onOpenAddUserModal
 }) => {
+  console.log('🔍 AddServiceLocationModal: Component rendered with props:', {
+    showModal,
+    prefillBusinessName,
+    prefillAddress,
+    onOpenAddUserModal: !!onOpenAddUserModal
+  });
   const { theme } = useTheme();
 
   const [formData, setFormData] = useState({
@@ -61,8 +66,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     location_type: 'office',
     contact_person: '',
     contact_phone: '',
-    notes: '',
-    is_headquarters: false
+    notes: ''
   });
 
   const [address, setAddress] = useState({
@@ -74,6 +78,11 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   });
 
   const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  // Debug: Track businesses state changes
+  useEffect(() => {
+    console.log('🔍 AddServiceLocationModal: businesses state changed:', businesses.length, businesses.map(b => b.businessName));
+  }, [businesses]);
   const [loadingBusinesses, setLoadingBusinesses] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [showConfirmClose, setShowConfirmClose] = useState(false);
@@ -98,8 +107,12 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
 
   // Fetch businesses on component mount
   useEffect(() => {
+    console.log('🔍 AddServiceLocationModal: showModal changed to:', showModal);
     if (showModal) {
+      console.log('🔍 AddServiceLocationModal: Modal is open, fetching businesses...');
       fetchBusinesses();
+    } else {
+      console.log('🔍 AddServiceLocationModal: Modal is closed, skipping fetch');
     }
   }, [showModal]);
 
@@ -145,8 +158,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         location_type: 'office',
         contact_person: '',
         contact_phone: '',
-        notes: '',
-        is_headquarters: false
+        notes: ''
       });
       setAddress({
         street: '',
@@ -175,9 +187,13 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
   const fetchBusinesses = async () => {
     try {
       setLoadingBusinesses(true);
+      console.log('🔍 AddServiceLocationModal: Fetching businesses...');
       const data = await adminService.getBusinesses();
+      console.log('🔍 AddServiceLocationModal: Raw data from API:', data);
       // Filter out soft deleted businesses
       const activeBusinesses = (data.businesses || []).filter(business => !business.soft_delete);
+      console.log('🔍 AddServiceLocationModal: Active businesses after filtering:', activeBusinesses);
+      console.log('🔍 AddServiceLocationModal: Business count:', activeBusinesses.length);
       setBusinesses(activeBusinesses);
     } catch (error) {
       console.error('Error fetching businesses:', error);
@@ -249,7 +265,9 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     }
 
     // Check service area validation
+    console.log('🔍 Form submission: serviceAreaValid =', serviceAreaValid);
     if (!serviceAreaValid) {
+      console.log('❌ Form submission blocked: Service area validation failed');
       setShowServiceAreaError(true);
       return;
     }
@@ -267,8 +285,7 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
         country: address.country,
         contact_person: formData.contact_person || undefined,
         contact_phone: formData.contact_phone || undefined,
-        notes: formData.notes || undefined,
-        is_headquarters: formData.is_headquarters
+        notes: formData.notes || undefined
       });
 
       // If toggle is enabled and callback is provided, open add user modal
@@ -371,23 +388,6 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                   />
                 </div>
 
-                {/* Is Headquarters */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Headquarters
-                  </label>
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      checked={formData.is_headquarters}
-                      onChange={(e) => setFormData(prev => ({ ...prev, is_headquarters: e.target.checked }))}
-                      className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                    />
-                    <span className={`ml-2 text-sm ${themeClasses.text.secondary}`}>
-                      This is the headquarters location
-                    </span>
-                  </div>
-                </div>
 
                 {/* Address with Auto-Completion */}
                 <div className="md:col-span-2">
@@ -455,8 +455,9 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                       zipCode: address.zipCode,
                       country: address.country
                     }}
-                    onValidationChange={(isValid) => {
+                    onValidationChange={(isValid, errors) => {
                       setServiceAreaValid(isValid);
+                      console.log('🔍 ServiceAreaValidator callback:', { isValid, errors });
                     }}
                     showSuggestions={true}
                   />

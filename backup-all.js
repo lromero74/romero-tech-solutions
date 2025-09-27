@@ -7,6 +7,7 @@ import path from 'path';
 import os from 'os';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
+import secretsManager from './backend/utils/secrets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,29 +72,47 @@ async function createBackup(options = {}) {
     const dbBackupFileName = `database_${timestamp}.sql`;
     const dbBackupPath = path.join(timestampedBackupDir, dbBackupFileName);
 
-    // Build pg_dump command with connection parameters
-    const pgDumpCmd = [
-      '/opt/homebrew/opt/postgresql@16/bin/pg_dump',
-      `--host=${process.env.DB_HOST}`,
-      `--port=${process.env.DB_PORT}`,
-      `--username=${process.env.DB_USER}`,
-      `--dbname=${process.env.DB_NAME}`,
-      '--verbose',
-      '--clean',
-      '--if-exists',
-      '--create',
-      '--format=plain',
-      '--no-password',
-      `--file=${dbBackupPath}`
-    ].join(' ');
-
-    console.log('🏃 Running database backup...');
-    console.log(`Command: ${pgDumpCmd}`);
-
-    // Set PGPASSWORD environment variable for authentication
-    const env = { ...process.env, PGPASSWORD: process.env.DB_PASSWORD };
-
     try {
+      // Get database credentials using AWS Secrets Manager (same as application)
+      let dbCredentials;
+      const useSecretsManager = process.env.USE_SECRETS_MANAGER === 'true';
+
+      if (useSecretsManager && process.env.DB_SECRET_NAME) {
+        console.log('🔐 Using AWS Secrets Manager for database credentials');
+        dbCredentials = await secretsManager.getDatabaseCredentials(process.env.DB_SECRET_NAME);
+      } else {
+        console.log('📝 Using environment variables for database credentials');
+        dbCredentials = {
+          host: process.env.DB_HOST,
+          port: process.env.DB_PORT,
+          database: process.env.DB_NAME,
+          user: process.env.DB_USER,
+          password: process.env.DB_PASSWORD
+        };
+      }
+
+      // Build pg_dump command with connection parameters
+      const pgDumpCmd = [
+        '/opt/homebrew/opt/postgresql@16/bin/pg_dump',
+        `--host=${dbCredentials.host}`,
+        `--port=${dbCredentials.port}`,
+        `--username=${dbCredentials.user}`,
+        `--dbname=${dbCredentials.database}`,
+        '--verbose',
+        '--clean',
+        '--if-exists',
+        '--create',
+        '--format=plain',
+        '--no-password',
+        `--file=${dbBackupPath}`
+      ].join(' ');
+
+      console.log('🏃 Running database backup...');
+      console.log(`Command: ${pgDumpCmd.replace(dbCredentials.password, '***')}`);
+
+      // Set PGPASSWORD environment variable for authentication
+      const env = { ...process.env, PGPASSWORD: dbCredentials.password };
+
       const { stdout, stderr } = await execAsync(pgDumpCmd, { env });
 
       if (stderr && !stderr.includes('NOTICE:')) {
@@ -194,10 +213,11 @@ async function createBackup(options = {}) {
         nodeVersion: process.version
       },
       database: {
-        host: process.env.DB_HOST,
-        port: process.env.DB_PORT,
-        name: process.env.DB_NAME,
-        user: process.env.DB_USER
+        host: process.env.DB_HOST || 'from-secrets-manager',
+        port: process.env.DB_PORT || '5432',
+        name: process.env.DB_NAME || 'from-secrets-manager',
+        user: process.env.DB_USER || 'from-secrets-manager',
+        secretsManager: process.env.USE_SECRETS_MANAGER === 'true'
       }
     };
 

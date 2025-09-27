@@ -32,7 +32,6 @@ interface ServiceLocation {
   contact_phone?: string;
   notes?: string;
   is_active: boolean;
-  is_headquarters: boolean;
   soft_delete: boolean;
   created_at: string;
   updated_at: string;

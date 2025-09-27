@@ -3,6 +3,7 @@ import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import secretsManager from '../utils/secrets.js';
 
 dotenv.config();
 
@@ -25,13 +26,31 @@ async function backupDatabase() {
     console.log(`📂 Backup directory: ${backupDir}`);
     console.log(`📄 Backup file: ${backupFileName}`);
 
+    // Get database credentials using AWS Secrets Manager (same as application)
+    let dbCredentials;
+    const useSecretsManager = process.env.USE_SECRETS_MANAGER === 'true';
+
+    if (useSecretsManager && process.env.DB_SECRET_NAME) {
+      console.log('🔐 Using AWS Secrets Manager for database credentials');
+      dbCredentials = await secretsManager.getDatabaseCredentials(process.env.DB_SECRET_NAME);
+    } else {
+      console.log('📝 Using environment variables for database credentials');
+      dbCredentials = {
+        host: process.env.DB_HOST,
+        port: process.env.DB_PORT,
+        database: process.env.DB_NAME,
+        user: process.env.DB_USER,
+        password: process.env.DB_PASSWORD
+      };
+    }
+
     // Build pg_dump command with connection parameters
     const pgDumpCmd = [
       '/opt/homebrew/opt/postgresql@16/bin/pg_dump',
-      `--host=${process.env.DB_HOST}`,
-      `--port=${process.env.DB_PORT}`,
-      `--username=${process.env.DB_USER}`,
-      `--dbname=${process.env.DB_NAME}`,
+      `--host=${dbCredentials.host}`,
+      `--port=${dbCredentials.port}`,
+      `--username=${dbCredentials.user}`,
+      `--dbname=${dbCredentials.database}`,
       '--verbose',
       '--clean',
       '--if-exists',
@@ -42,10 +61,10 @@ async function backupDatabase() {
     ].join(' ');
 
     console.log('🏃 Running pg_dump command...');
-    console.log(`Command: ${pgDumpCmd}`);
+    console.log(`Command: ${pgDumpCmd.replace(dbCredentials.password, '***')}`);
 
     // Set PGPASSWORD environment variable for authentication
-    const env = { ...process.env, PGPASSWORD: process.env.DB_PASSWORD };
+    const env = { ...process.env, PGPASSWORD: dbCredentials.password };
 
     // Execute the backup command
     const { stdout, stderr } = await execAsync(pgDumpCmd, { env });

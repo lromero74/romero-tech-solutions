@@ -1,13 +1,10 @@
 import rateLimit from 'express-rate-limit';
 import slowDown from 'express-slow-down';
 
-// Environment-aware rate limiting: more lenient in development, strict in production
-const isDevelopment = process.env.NODE_ENV === 'development';
-
 // General API rate limiting
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 5000 : 100, // dev: 5000 requests, production: 100 requests
+  max: 100, // limit each IP to 100 requests per windowMs
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.',
@@ -17,10 +14,10 @@ export const generalLimiter = rateLimit({
   legacyHeaders: false,
 });
 
-// Admin API rate limiting
+// Strict admin API rate limiting
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 2000 : 50, // dev: 2000 requests, production: 50 requests
+  max: 50, // limit each IP to 50 admin requests per windowMs
   message: {
     success: false,
     message: 'Too many admin requests from this IP, please try again later.',
@@ -33,7 +30,7 @@ export const adminLimiter = rateLimit({
 // Auth endpoint protection (login attempts)
 export const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 500 : 10, // dev: 500 attempts, production: 10 attempts
+  max: 10, // limit each IP to 10 login attempts per windowMs
   message: {
     success: false,
     message: 'Too many login attempts from this IP, please try again later.',
@@ -47,7 +44,7 @@ export const authLimiter = rateLimit({
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
   delayAfter: 50, // allow 50 requests per windowMs without delay
-  delayMs: () => 500, // add 500ms delay per request after delayAfter (v2 syntax)
+  delayMs: 500, // add 500ms delay per request after delayAfter
   maxDelayMs: 20000, // maximum delay of 20 seconds
 });
 
