@@ -1,5 +1,5 @@
 import React from 'react';
-import { Clock, Star, Mail, Phone, CheckCircle, Zap, Shield } from 'lucide-react';
+import { Clock, Mail, Phone, CheckCircle, Zap, Shield } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ImageBasedSection from '../components/common/ImageBasedSection';
 

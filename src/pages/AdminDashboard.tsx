@@ -132,7 +132,7 @@ const AdminDashboardContent: React.FC = () => {
   };
 
   // Handle modal close with cleanup
-  const handleCloseModal = (modalName: any) => {
+  const handleCloseModal = (modalName: string) => {
     modalManager.closeModal(modalName);
 
     // Clear selected entities when closing modals

@@ -8,13 +8,11 @@ import {
   Undo2,
   MapPin,
   Building2,
-  Phone,
-  User,
   Loader2,
   ChevronUp,
   ChevronDown
 } from 'lucide-react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 import LocationContacts from './LocationContacts';
 
 interface ServiceLocation {
@@ -117,7 +115,6 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
   onBusinessNameClick,
   loadingServiceLocationOperations = {}
 }) => {
-  const { theme } = useTheme();
   const filteredServiceLocations = getFilteredAndSortedServiceLocations();
 
   // Helper function to check if a service location can be restored

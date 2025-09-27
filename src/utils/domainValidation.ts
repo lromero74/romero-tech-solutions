@@ -14,6 +14,13 @@ interface DNSRecord {
   value: string;
 }
 
+interface CloudflareDNSAnswer {
+  type: number;
+  data: string;
+}
+
+// Removed unused interface CloudflareDNSResponse
+
 // Common domain typos and their corrections
 const COMMON_DOMAIN_CORRECTIONS: Record<string, string> = {
   'gmial.com': 'gmail.com',
@@ -157,7 +164,7 @@ async function performRealDNSLookup(domain: string): Promise<{
 
     // Parse A records
     if (hasValidDNS && aData.Answer) {
-      aData.Answer.forEach((record: any) => {
+      aData.Answer.forEach((record: CloudflareDNSAnswer) => {
         if (record.type === 1) { // A record
           records.push({ type: 'A', value: record.data });
         }
@@ -166,7 +173,7 @@ async function performRealDNSLookup(domain: string): Promise<{
 
     // Parse MX records
     if (hasMXRecord && mxData.Answer) {
-      mxData.Answer.forEach((record: any) => {
+      mxData.Answer.forEach((record: CloudflareDNSAnswer) => {
         if (record.type === 15) { // MX record
           records.push({ type: 'MX', value: record.data });
         }

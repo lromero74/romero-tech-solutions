@@ -23,7 +23,7 @@ export interface UseBusinessFiltersReturn {
   setClientCountFilter: (value: string) => void;
   setBusinessNameFilter: (value: string) => void;
   clearFilters: () => void;
-  getFilteredAndSortedBusinesses: (businesses: Business[], clients: any[]) => Business[];
+  getFilteredAndSortedBusinesses: (businesses: Business[], clients: unknown[]) => Business[];
 }
 
 const initialFilters: BusinessFilters = {
@@ -58,7 +58,7 @@ export const useBusinessFilters = (): UseBusinessFiltersReturn => {
     setBusinessNameFilter(initialFilters.businessNameFilter);
   }, []);
 
-  const getFilteredAndSortedBusinesses = useCallback((businesses: Business[], clients: any[] = []): Business[] => {
+  const getFilteredAndSortedBusinesses = useCallback((businesses: Business[], clients: unknown[] = []): Business[] => {
     const filteredBusinesses = businesses.filter(business => {
       // Filter by status
       if (statusFilter === 'active' && !business.isActive) {

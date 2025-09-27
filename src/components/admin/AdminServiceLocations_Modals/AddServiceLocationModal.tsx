@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, AlertTriangle, AlertCircle } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { X, Save, AlertTriangle } from 'lucide-react';
+import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
@@ -57,7 +57,6 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     prefillAddress,
     onOpenAddUserModal: !!onOpenAddUserModal
   });
-  const { theme } = useTheme();
 
   const [formData, setFormData] = useState({
     business_id: '',

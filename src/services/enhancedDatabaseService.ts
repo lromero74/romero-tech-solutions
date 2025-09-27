@@ -378,7 +378,7 @@ class EnhancedDatabaseService {
   }
 
   // Dashboard Data
-  async getDashboardStats(userRole: UserRole, userId?: string): Promise<any> {
+  async getDashboardStats(userRole: UserRole, userId?: string): Promise<Record<string, unknown>> {
     try {
       const headers = await this.getAuthHeaders();
       const params = new URLSearchParams({ role: userRole });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 
 interface PhotoModalProps {
   showPhotoModal: boolean;
@@ -13,7 +13,6 @@ const PhotoModal: React.FC<PhotoModalProps> = ({
   selectedPhoto,
   onClose
 }) => {
-  const { theme } = useTheme();
   if (!showPhotoModal || !selectedPhoto) {
     return null;
   }

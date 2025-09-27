@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, AlertCircle, AlertTriangle } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 
@@ -166,6 +166,36 @@ const AddClientModal: React.FC<AddClientModalProps> = ({
     return () => clearTimeout(timeoutId);
   }, [formData.email]);
 
+  // Define resetAndClose and handleClose with useCallback before they're used in useEffect
+  const resetAndClose = useCallback(() => {
+    setFormData({
+      name: '',
+      email: '',
+      phone: '',
+      businessId: '',
+      businessName: '',
+      photo: '',
+      photoPositionX: 50,
+      photoPositionY: 50,
+      photoScale: 100,
+      photoBackgroundColor: ''
+    });
+    setAvailableBusinesses([]);
+    setBusinessError('');
+    setEnablePhoto(false);
+    setEnableBackgroundColor(false);
+    setShowConfirmModal(false);
+    onClose();
+  }, [onClose]);
+
+  const handleClose = useCallback(() => {
+    if (hasChanges()) {
+      setShowConfirmModal(true);
+    } else {
+      resetAndClose();
+    }
+  }, [resetAndClose]);
+
   // ESC key handler
   useEffect(() => {
     const handleEscKey = (event: KeyboardEvent) => {
@@ -181,7 +211,7 @@ const AddClientModal: React.FC<AddClientModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showModal, formData, enablePhoto]);
+  }, [showModal, handleClose]);
 
   // Check if form has any changes from initial state
   const hasChanges = () => {
@@ -220,34 +250,6 @@ const AddClientModal: React.FC<AddClientModalProps> = ({
     });
   };
 
-  const handleClose = () => {
-    if (hasChanges()) {
-      setShowConfirmModal(true);
-    } else {
-      resetAndClose();
-    }
-  };
-
-  const resetAndClose = () => {
-    setFormData({
-      name: '',
-      email: '',
-      phone: '',
-      businessId: '',
-      businessName: '',
-      photo: '',
-      photoPositionX: 50,
-      photoPositionY: 50,
-      photoScale: 100,
-      photoBackgroundColor: ''
-    });
-    setAvailableBusinesses([]);
-    setBusinessError('');
-    setEnablePhoto(false);
-    setEnableBackgroundColor(false);
-    setShowConfirmModal(false);
-    onClose();
-  };
 
   return (
     <div className={`fixed inset-0 ${themeClasses.bg.overlay} flex items-center justify-center z-50 p-4`}>

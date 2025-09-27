@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   Plus,
   Search,
-  Filter,
   Edit,
   Trash2,
   X,
@@ -42,7 +41,7 @@ import {
   Users,
   Building
 } from 'lucide-react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 
 // MSP Service Icons mapping
 const MSP_SERVICE_ICONS = {
@@ -111,8 +110,8 @@ interface AdminServicesProps {
   setServices: (services: Service[]) => void;
   showAddServiceForm: boolean;
   setShowAddServiceForm: (show: boolean) => void;
-  newServiceData: any;
-  setNewServiceData: (data: any) => void;
+  newServiceData: Partial<Service>;
+  setNewServiceData: (data: Partial<Service>) => void;
   handleAddService: (e: React.FormEvent) => void;
 }
 
@@ -125,7 +124,6 @@ const AdminServices: React.FC<AdminServicesProps> = ({
   setNewServiceData,
   handleAddService
 }) => {
-  const { theme } = useTheme();
   const [searchTerm, setSearchTerm] = useState('');
   const [sortBy, setSortBy] = useState('name');
   const [sortOrder, setSortOrder] = useState('asc');

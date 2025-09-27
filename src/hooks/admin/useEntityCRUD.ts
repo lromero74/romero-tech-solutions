@@ -8,11 +8,11 @@ export interface UseEntityCRUDReturn<T> {
   isLoading: boolean;
   error: string | null;
   setSelectedEntity: (entity: T | null) => void;
-  createEntity: (data: any) => Promise<any>;
-  updateEntity: (id: string, updates: any) => Promise<any>;
-  deleteEntity: (id: string) => Promise<any>;
-  softDeleteEntity: (id: string, isDeleted: boolean) => Promise<any>;
-  toggleEntityStatus: (id: string) => Promise<any>;
+  createEntity: (data: Partial<T>) => Promise<T>;
+  updateEntity: (id: string, updates: Partial<T>) => Promise<T>;
+  deleteEntity: (id: string) => Promise<void>;
+  softDeleteEntity: (id: string, isDeleted: boolean) => Promise<T>;
+  toggleEntityStatus: (id: string) => Promise<T>;
   clearError: () => void;
 }
 
@@ -27,7 +27,7 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
     setError(null);
   }, []);
 
-  const createEntity = useCallback(async (data: any) => {
+  const createEntity = useCallback(async (data: Partial<T>): Promise<T> => {
     setIsLoading(true);
     setError(null);
 
@@ -56,8 +56,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           throw new Error(`Unsupported entity type: ${entityType}`);
       }
       return result;
-    } catch (err: any) {
-      const errorMessage = err.message || `Failed to create ${entityType}`;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : `Failed to create ${entityType}`;
       setError(errorMessage);
       throw err;
     } finally {
@@ -65,7 +65,7 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
     }
   }, [entityType]);
 
-  const updateEntity = useCallback(async (id: string, updates: any) => {
+  const updateEntity = useCallback(async (id: string, updates: Partial<T>): Promise<T> => {
     setIsLoading(true);
     setError(null);
 
@@ -94,8 +94,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           throw new Error(`Unsupported entity type: ${entityType}`);
       }
       return result;
-    } catch (err: any) {
-      const errorMessage = err.message || `Failed to update ${entityType}`;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : `Failed to update ${entityType}`;
       setError(errorMessage);
       throw err;
     } finally {
@@ -132,8 +132,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           throw new Error(`Unsupported entity type: ${entityType}`);
       }
       return result;
-    } catch (err: any) {
-      const errorMessage = err.message || `Failed to delete ${entityType}`;
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : `Failed to delete ${entityType}`;
       setError(errorMessage);
       throw err;
     } finally {

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, RefreshCw, Shield, AlertTriangle, Check, Info } from 'lucide-react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 import { systemSettingsService } from '../../services/systemSettingsService';
 import {
   PasswordComplexityRequirements,
@@ -20,7 +20,6 @@ export const AdminPasswordComplexity: React.FC<AdminPasswordComplexityProps> = (
   error: externalError = null,
   onRefresh
 }) => {
-  const { theme } = useTheme();
   const {
     requirements: currentRequirements,
     loading: requirementsLoading,
@@ -110,7 +109,7 @@ export const AdminPasswordComplexity: React.FC<AdminPasswordComplexityProps> = (
     }
   };
 
-  const updateRequirement = (key: keyof PasswordComplexityRequirements, value: any) => {
+  const updateRequirement = (key: keyof PasswordComplexityRequirements, value: boolean | number | string) => {
     setRequirements(prev => ({
       ...prev,
       [key]: value

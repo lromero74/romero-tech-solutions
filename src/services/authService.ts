@@ -1,12 +1,28 @@
 import {
   signUp,
-  signIn as amplifySignIn,
-  signOut,
-  getCurrentUser,
-  fetchAuthSession
+  signOut
 } from 'aws-amplify/auth';
 import { CognitoIdentityProviderClient, SignUpCommand, ConfirmSignUpCommand, ResendConfirmationCodeCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { AuthUser, UserRole, SignupRequest, LoginRequest } from '../types/database';
+
+// Service-specific types
+interface SignUpResult {
+  user: AuthUser;
+  isFirstAdmin: boolean;
+}
+
+// Removed unused interface UserCreationData
+
+interface SessionData {
+  success: boolean;
+  session?: Record<string, unknown>;
+  message?: string;
+}
+
+interface CognitoResponse {
+  UserSub?: string;
+  [key: string]: unknown;
+}
 import { databaseService } from './databaseService';
 import CryptoJS from 'crypto-js';
 
@@ -63,7 +79,7 @@ export class AuthService {
   }
 
   // Sign up new user (admin path only)
-  async signUpAdmin(userData: SignupRequest): Promise<{ user: any; isFirstAdmin: boolean }> {
+  async signUpAdmin(userData: SignupRequest): Promise<SignUpResult> {
     try {
       // Check if this will be the first admin
       const hasAdmins = await this.hasAdminUsers();
@@ -136,8 +152,8 @@ export class AuthService {
       if (data.requiresMfa) {
         // Throw a special error that indicates MFA is required
         const mfaError = new Error('MFA_REQUIRED');
-        (mfaError as any).requiresMfa = true;
-        (mfaError as any).email = data.email;
+        (mfaError as Error & { requiresMfa: boolean; email: string }).requiresMfa = true;
+        (mfaError as Error & { requiresMfa: boolean; email: string }).email = data.email;
         throw mfaError;
       }
 
@@ -313,8 +329,8 @@ export class AuthService {
     name: string;
     role: UserRole;
     temporaryPassword: string;
-    additionalData?: any;
-  }): Promise<any> {
+    additionalData?: Record<string, unknown>;
+  }): Promise<CognitoResponse> {
     try {
       // Create Cognito user with temporary password
       const secretHash = this.calculateSecretHash(userData.email);
@@ -373,7 +389,7 @@ export class AuthService {
     try {
       const user = await this.getCurrentAuthUser();
       return user?.role === 'admin';
-    } catch (error) {
+    } catch {
       return false;
     }
   }
@@ -383,13 +399,13 @@ export class AuthService {
     try {
       const user = await this.getCurrentAuthUser();
       return user?.role === 'admin' || user?.role === 'technician';
-    } catch (error) {
+    } catch {
       return false;
     }
   }
 
   // Confirm sign up
-  async confirmSignUp(username: string, confirmationCode: string): Promise<any> {
+  async confirmSignUp(username: string, confirmationCode: string): Promise<CognitoResponse> {
     try {
       const secretHash = this.calculateSecretHash(username);
       const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
@@ -409,7 +425,7 @@ export class AuthService {
   }
 
   // Resend confirmation code
-  async resendConfirmationCode(username: string): Promise<any> {
+  async resendConfirmationCode(username: string): Promise<CognitoResponse> {
     try {
       const secretHash = this.calculateSecretHash(username);
       const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
@@ -428,7 +444,7 @@ export class AuthService {
   }
 
   // Forgot password - request reset code (using database API)
-  async forgotPassword(email: string): Promise<any> {
+  async forgotPassword(email: string): Promise<Response> {
     try {
       console.log('🔐 Requesting password reset for:', email);
 
@@ -456,7 +472,7 @@ export class AuthService {
   }
 
   // Confirm forgot password - submit new password with reset code (using database API)
-  async confirmForgotPassword(email: string, confirmationCode: string, newPassword: string): Promise<any> {
+  async confirmForgotPassword(email: string, confirmationCode: string, newPassword: string): Promise<Response> {
     try {
       console.log('🔐 Confirming password reset for:', email);
 
@@ -488,7 +504,7 @@ export class AuthService {
   }
 
   // Change password for authenticated user
-  async changePassword(currentPassword: string, newPassword: string): Promise<any> {
+  async changePassword(currentPassword: string, newPassword: string): Promise<{ success: boolean; message?: string }> {
     try {
       console.log('🔐 Changing password for authenticated user');
 
@@ -547,7 +563,7 @@ export class AuthService {
   }
 
   // Session management methods
-  async extendSession(): Promise<{ success: boolean; session?: any; message?: string }> {
+  async extendSession(): Promise<SessionData> {
     // Import apiService dynamically to avoid circular dependencies
     const { apiService } = await import('./apiService');
     return apiService.extendSession();
@@ -559,7 +575,7 @@ export class AuthService {
   }
 
   // Session heartbeat (for periodic activity sync)
-  async sessionHeartbeat(): Promise<{ success: boolean; session?: any; message?: string }> {
+  async sessionHeartbeat(): Promise<SessionData> {
     // Import apiService dynamically to avoid circular dependencies
     const { apiService } = await import('./apiService');
     return apiService.sessionHeartbeat();

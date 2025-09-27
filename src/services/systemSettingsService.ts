@@ -2,7 +2,7 @@ import { authService } from './authService';
 
 interface SystemSetting {
   key: string;
-  value: any;
+  value: unknown;
   type: string;
   description: string;
   updatedAt: string;
@@ -61,7 +61,7 @@ class SystemSettingsService {
     }
   }
 
-  async updateSystemSetting(key: string, value: any): Promise<SystemSetting> {
+  async updateSystemSetting(key: string, value: unknown): Promise<SystemSetting> {
     try {
       const token = authService.getToken();
 

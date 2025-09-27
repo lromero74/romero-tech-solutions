@@ -33,6 +33,7 @@ interface Employee {
   // Address fields (broken into components)
   address?: {
     street: string;
+    street2?: string;
     city: string;
     state: string;
     zipCode: string;
@@ -67,7 +68,8 @@ interface EditEmployeeModalProps {
   onEmployeeChange: (employee: Employee) => void;
 }
 
-// Helper function to format employee display name
+// Helper function to format employee display name (commented out as unused)
+/*
 const formatEmployeeDisplayName = (employee: Employee): string => {
   const { firstName, lastName, middleInitial, preferredName } = employee;
   let fullName = firstName;
@@ -84,6 +86,7 @@ const formatEmployeeDisplayName = (employee: Employee): string => {
 
   return fullName;
 };
+*/
 
 // Helper function to format phone number input (real-time)
 const formatPhoneNumberInput = (value: string): string => {
@@ -723,7 +726,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                         type="text"
                         value={editingEmployee.address?.street || ''}
                         onChange={(e) => updateEmployee({
-                          address: { ...editingEmployee.address, street: e.target.value } as any
+                          address: { ...editingEmployee.address, street: e.target.value }
                         })}
                         className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                         placeholder="123 Main Street"
@@ -735,7 +738,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                         type="text"
                         value={editingEmployee.address?.street2 || ''}
                         onChange={(e) => updateEmployee({
-                          address: { ...editingEmployee.address, street2: e.target.value } as any
+                          address: { ...editingEmployee.address, street2: e.target.value }
                         })}
                         className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                         placeholder="Apt 4B, Suite 100, etc. (optional)"
@@ -748,7 +751,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.address?.city || ''}
                           onChange={(e) => updateEmployee({
-                            address: { ...editingEmployee.address, city: e.target.value } as any
+                            address: { ...editingEmployee.address, city: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="City"
@@ -760,7 +763,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.address?.state || ''}
                           onChange={(e) => updateEmployee({
-                            address: { ...editingEmployee.address, state: e.target.value } as any
+                            address: { ...editingEmployee.address, state: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="State"
@@ -774,7 +777,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.address?.zipCode || ''}
                           onChange={(e) => updateEmployee({
-                            address: { ...editingEmployee.address, zipCode: e.target.value } as any
+                            address: { ...editingEmployee.address, zipCode: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="12345"
@@ -786,7 +789,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.address?.country || ''}
                           onChange={(e) => updateEmployee({
-                            address: { ...editingEmployee.address, country: e.target.value } as any
+                            address: { ...editingEmployee.address, country: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="Country"
@@ -814,7 +817,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.emergencyContact?.firstName || ''}
                           onChange={(e) => updateEmployee({
-                            emergencyContact: { ...editingEmployee.emergencyContact, firstName: e.target.value } as any
+                            emergencyContact: { ...editingEmployee.emergencyContact, firstName: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="First name"
@@ -826,7 +829,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           type="text"
                           value={editingEmployee.emergencyContact?.lastName || ''}
                           onChange={(e) => updateEmployee({
-                            emergencyContact: { ...editingEmployee.emergencyContact, lastName: e.target.value } as any
+                            emergencyContact: { ...editingEmployee.emergencyContact, lastName: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                           placeholder="Last name"
@@ -839,7 +842,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                         <select
                           value={editingEmployee.emergencyContact?.relationship || ''}
                           onChange={(e) => updateEmployee({
-                            emergencyContact: { ...editingEmployee.emergencyContact, relationship: e.target.value } as any
+                            emergencyContact: { ...editingEmployee.emergencyContact, relationship: e.target.value }
                           })}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                         >
@@ -863,7 +866,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                           onChange={(e) => {
                             const raw = extractRawPhoneNumber(e.target.value);
                             updateEmployee({
-                              emergencyContact: { ...editingEmployee.emergencyContact, phone: raw } as any
+                              emergencyContact: { ...editingEmployee.emergencyContact, phone: raw }
                             });
                           }}
                           className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
@@ -877,7 +880,7 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                         type="email"
                         value={editingEmployee.emergencyContact?.email || ''}
                         onChange={(e) => updateEmployee({
-                          emergencyContact: { ...editingEmployee.emergencyContact, email: e.target.value } as any
+                          emergencyContact: { ...editingEmployee.emergencyContact, email: e.target.value }
                         })}
                         className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                         placeholder="emergency.contact@example.com"

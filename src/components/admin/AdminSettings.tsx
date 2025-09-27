@@ -32,7 +32,7 @@ const AdminSettings: React.FC = () => {
   const [serviceLocationSelections, setServiceLocationSelections] = useState<ServiceLocationSelection[]>([]);
   const [serviceLocationHasChanges, setServiceLocationHasChanges] = useState(false);
   const [serviceLocationSaveStatus, setServiceLocationSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [servedLocationDetails, setServedLocationDetails] = useState<any[]>([]);
+  const [servedLocationDetails, setServedLocationDetails] = useState<unknown[]>([]);
   const [highlightCityId, setHighlightCityId] = useState<number | null>(null);
   const [targetScrollY, setTargetScrollY] = useState<number | null>(null);
   const [expandedCount, setExpandedCount] = useState(0);

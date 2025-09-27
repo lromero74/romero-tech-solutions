@@ -4,7 +4,7 @@ import { themeClasses } from '../../../contexts/ThemeContext';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
-import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
+// Removed unused import: validateServiceAreaField
 import { validateDomain } from '../../../utils/domainValidation';
 import AlertModal from '../../shared/AlertModal';
 
@@ -86,10 +86,11 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
 
   // Field-level validation modal state
   const [showFieldValidationModal, setShowFieldValidationModal] = useState(false);
-  const [fieldValidationData, setFieldValidationData] = useState<{
-    reason?: string;
-    suggestedAreas?: string[];
-  }>({});
+  // Removed unused state: fieldValidationData
+  // const [fieldValidationData, setFieldValidationData] = useState<{
+  //   reason?: string;
+  //   suggestedAreas?: string[];
+  // }>({});
 
 
   // Check for duplicate business name in real-time

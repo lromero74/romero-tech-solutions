@@ -37,8 +37,8 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     try {
       await signIn(email, password);
       onSuccess();
-    } catch (error: any) {
-      if (error.message === 'MFA_REQUIRED') {
+    } catch (error: unknown) {
+      if (error instanceof Error && error.message === 'MFA_REQUIRED') {
         // Admin user needs MFA verification
         setMfaEmail(email);
         setMfaPassword(password);
@@ -49,12 +49,12 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
         try {
           await sendAdminMfaCode(email, password);
           setError('');
-        } catch (mfaError: any) {
-          setError(mfaError.message || 'Failed to send verification code');
+        } catch (mfaError: unknown) {
+          setError(mfaError instanceof Error ? mfaError.message : 'Failed to send verification code');
           setIsLoading(false);
         }
       } else {
-        setError(error.message || t('login.loginFailed'));
+        setError(error instanceof Error ? error.message : t('login.loginFailed'));
         setIsLoading(false);
       }
     }
@@ -73,8 +73,8 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     try {
       await verifyAdminMfaCode(mfaEmail, mfaCode);
       onSuccess();
-    } catch (error: any) {
-      setError(error.message || t('login.mfa.verificationFailed'));
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : t('login.mfa.verificationFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -100,8 +100,8 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       // Show success message briefly
       setError(t('login.mfa.codeSentSuccess'));
       setTimeout(() => setError(''), 3000);
-    } catch (error: any) {
-      setError(error.message || t('login.mfa.codeResendFailed'));
+    } catch (error: unknown) {
+      setError(error instanceof Error ? error.message : t('login.mfa.codeResendFailed'));
     } finally {
       setIsLoading(false);
     }

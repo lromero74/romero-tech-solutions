@@ -310,7 +310,7 @@ class SessionManager {
     }
   }
 
-  private updateFromServerSession(serverSession: any) {
+  private updateFromServerSession(serverSession: { expiresAt: string; [key: string]: unknown }) {
     if (!this.sessionData) return;
 
     // Update expiry based on server response

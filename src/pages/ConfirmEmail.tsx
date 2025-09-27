@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
-import { CheckCircle, AlertCircle, Mail, ArrowRight, RefreshCw } from 'lucide-react';
+import { CheckCircle, AlertCircle, ArrowRight, RefreshCw } from 'lucide-react';
 
 interface ConfirmEmailProps {
   onSuccess: () => void;
@@ -10,7 +10,6 @@ const ConfirmEmail: React.FC<ConfirmEmailProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error' | 'expired'>('loading');
   const [message, setMessage] = useState('');
   const [email, setEmail] = useState('');
-  const [token, setToken] = useState('');
   const [isResending, setIsResending] = useState(false);
   const { confirmClientEmail, resendConfirmationEmail } = useEnhancedAuth();
 
@@ -28,7 +27,6 @@ const ConfirmEmail: React.FC<ConfirmEmailProps> = ({ onSuccess }) => {
           return;
         }
 
-        setToken(urlToken);
         setEmail(urlEmail);
 
         // Confirm email with backend
@@ -45,10 +43,10 @@ const ConfirmEmail: React.FC<ConfirmEmailProps> = ({ onSuccess }) => {
           setStatus('error');
           setMessage(result.message || 'Email confirmation failed');
         }
-      } catch (error: any) {
+      } catch (error: unknown) {
         console.error('Error confirming email:', error);
         setStatus('error');
-        setMessage(error.message || 'An unexpected error occurred');
+        setMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
       }
     };
 
@@ -66,8 +64,8 @@ const ConfirmEmail: React.FC<ConfirmEmailProps> = ({ onSuccess }) => {
       } else {
         setMessage(result.message || 'Failed to resend email');
       }
-    } catch (error: any) {
-      setMessage(error.message || 'Failed to resend confirmation email');
+    } catch (error: unknown) {
+      setMessage(error instanceof Error ? error.message : 'Failed to resend confirmation email');
     } finally {
       setIsResending(false);
     }

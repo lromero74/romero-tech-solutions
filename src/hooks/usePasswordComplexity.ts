@@ -27,9 +27,9 @@ export const usePasswordComplexity = (): UsePasswordComplexityReturn => {
     try {
       const currentRequirements = await passwordComplexityService.getPasswordComplexityRequirements();
       setRequirements(currentRequirements);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch password complexity requirements:', err);
-      setError(err.message || 'Failed to fetch password requirements');
+      setError(err instanceof Error ? err.message : 'Failed to fetch password requirements');
       // Keep using current requirements or defaults
     } finally {
       setLoading(false);
@@ -42,9 +42,9 @@ export const usePasswordComplexity = (): UsePasswordComplexityReturn => {
     try {
       const updatedRequirements = await passwordComplexityService.updatePasswordComplexityRequirements(newRequirements);
       setRequirements(updatedRequirements);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to update password complexity requirements:', err);
-      setError(err.message || 'Failed to update password requirements');
+      setError(err instanceof Error ? err.message : 'Failed to update password requirements');
       throw err; // Re-throw so components can handle the error
     }
   }, []);
@@ -86,7 +86,7 @@ export const usePasswordValidation = (): UsePasswordValidationReturn => {
     try {
       const result = await passwordComplexityService.validatePassword(password, userInfo);
       return result;
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to validate password:', err);
       setError(err.message || 'Failed to validate password');
       throw err;
@@ -128,7 +128,7 @@ export const usePasswordExpiration = (): UsePasswordExpirationReturn => {
     try {
       const info = await passwordComplexityService.getPasswordExpirationInfo(userId);
       setExpirationInfo(info);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to check password expiration:', err);
       setError(err.message || 'Failed to check password expiration');
     } finally {

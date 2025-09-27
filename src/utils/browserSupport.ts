@@ -62,7 +62,7 @@ export const createFallbackIcon = (iconName: string) => {
 };
 
 // Enhanced console logging for Firefox debugging
-export const firefoxDebugLog = (message: string, data?: any) => {
+export const firefoxDebugLog = (message: string, data?: unknown) => {
   const browser = detectBrowser();
   if (browser.isFirefox) {
     console.log(`🦊 Firefox Debug: ${message}`, data || '');

@@ -35,9 +35,10 @@ class ClientRegistrationService {
         userId: result.data?.userId,
         emailConfirmationSent: result.data?.emailConfirmationSent || false
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error registering client:', error);
-      throw new Error(error.message || 'Registration failed');
+      const errorMessage = error instanceof Error ? error.message : 'Registration failed';
+      throw new Error(errorMessage);
     }
   }
 
@@ -65,11 +66,12 @@ class ClientRegistrationService {
         message: result.message,
         user: result.data?.user
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error confirming email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Email confirmation failed';
       return {
         success: false,
-        message: error.message || 'Email confirmation failed'
+        message: errorMessage
       };
     }
   }
@@ -100,9 +102,10 @@ class ClientRegistrationService {
         success: result.success,
         message: result.message
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error resending confirmation email:', error);
-      throw new Error(error.message || 'Failed to resend confirmation email');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resend confirmation email';
+      throw new Error(errorMessage);
     }
   }
 
@@ -115,7 +118,7 @@ class ClientRegistrationService {
       const result = await response.json();
 
       return result.success ? result.data?.exists || false : false;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error checking email:', error);
       return false;
     }
@@ -143,7 +146,7 @@ class ClientRegistrationService {
         valid: result.success ? result.data?.valid || false : false,
         message: result.data?.message
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error validating domain:', error);
       return {
         valid: false,

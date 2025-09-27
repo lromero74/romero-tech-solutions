@@ -86,7 +86,7 @@ const ClientRegistration: React.FC<ClientRegistrationProps> = ({ onSuccess, onCa
     }));
   };
 
-  const updateServiceAddress = (index: number, field: keyof Omit<ServiceAddress, 'id'>, value: any) => {
+  const updateServiceAddress = (index: number, field: keyof Omit<ServiceAddress, 'id'>, value: string | boolean) => {
     setFormData(prev => ({
       ...prev,
       serviceAddresses: prev.serviceAddresses.map((addr, i) =>
@@ -235,10 +235,10 @@ const ClientRegistration: React.FC<ClientRegistrationProps> = ({ onSuccess, onCa
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      setEmailSent(true);
       setCurrentStep('confirmation');
-    } catch (error: any) {
-      setError(error.message || 'Registration failed. Please try again.');
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Registration failed. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

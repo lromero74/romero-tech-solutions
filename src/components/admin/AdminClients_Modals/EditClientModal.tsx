@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, AlertTriangle, AlertCircle } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 
@@ -164,7 +164,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({
 
     const timeoutId = setTimeout(fetchBusinesses, 1000);
     return () => clearTimeout(timeoutId);
-  }, [formData.email]);
+  }, [formData.businessId]);
 
   // ESC key handler
   useEffect(() => {
@@ -224,7 +224,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showModal, formData, originalClient, enablePhoto, originalEnablePhoto, setShowConfirmModal, onClose]);
+  }, [showModal, formData, originalClient, enableBackgroundColor, originalEnableBackgroundColor, setShowConfirmModal, onClose]);
 
 
   const hasChanges = (): boolean => {

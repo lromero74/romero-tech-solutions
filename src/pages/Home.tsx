@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, Monitor, Printer, Wifi, Shield, Clock, Award, CheckCircle, Star, Users, MapPin, ArrowRight } from 'lucide-react';
+import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ImageBasedSection from '../components/common/ImageBasedSection';
 

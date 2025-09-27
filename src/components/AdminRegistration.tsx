@@ -91,8 +91,8 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
           } else {
             setErrors({ email: 'This account is not an administrator account.' });
           }
-        } catch (signInError: any) {
-          if (signInError.message === 'MFA_REQUIRED') {
+        } catch (signInError: unknown) {
+          if (signInError && typeof signInError === 'object' && 'message' in signInError && signInError.message === 'MFA_REQUIRED') {
             // Admin user needs MFA verification
             setMfaEmail(formData.email);
             setMfaPassword(formData.password);
@@ -104,8 +104,11 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
               await sendAdminMfaCode(formData.email, formData.password);
               setSuccess('Verification code sent to your email. Please check your email and enter the code below.');
               setErrors({});
-            } catch (mfaError: any) {
-              setErrors({ general: mfaError.message || 'Failed to send verification code' });
+            } catch (mfaError: unknown) {
+              const errorMessage = mfaError && typeof mfaError === 'object' && 'message' in mfaError && typeof mfaError.message === 'string'
+                ? mfaError.message
+                : 'Failed to send verification code';
+              setErrors({ general: errorMessage });
               setIsLoading(false);
             }
             return; // Exit early to prevent setting isLoading to false again
@@ -114,20 +117,21 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
           }
         }
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Authentication error:', error);
 
-      if (error.name === 'UserNotConfirmedException') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'UserNotConfirmedException') {
         setSuccess('Please check your email for a verification code to confirm your account.');
         setPendingEmail(formData.email);
         setShowVerification(true);
         setErrors({});
-      } else if (error.name === 'NotAuthorizedException') {
+      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'NotAuthorizedException') {
         setErrors({ password: 'Invalid email or password.' });
-      } else if (error.name === 'UsernameExistsException') {
+      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'UsernameExistsException') {
         setErrors({ email: 'An account with this email already exists.' });
       } else {
-        setErrors({ general: error.message || 'An error occurred. Please try again.' });
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'An error occurred. Please try again.';
+        setErrors({ general: errorMessage });
       }
     } finally {
       setIsLoading(false);
@@ -153,14 +157,15 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
       setFormData({ name: '', email: pendingEmail, password: '', confirmPassword: '' });
       setVerificationCode('');
       setPendingEmail('');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Verification error:', error);
-      if (error.name === 'CodeMismatchException') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'CodeMismatchException') {
         setErrors({ verificationCode: 'Invalid verification code. Please try again.' });
-      } else if (error.name === 'ExpiredCodeException') {
+      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'ExpiredCodeException') {
         setErrors({ verificationCode: 'Verification code has expired. Please request a new one.' });
       } else {
-        setErrors({ verificationCode: error.message || 'Verification failed. Please try again.' });
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Verification failed. Please try again.';
+        setErrors({ verificationCode: errorMessage });
       }
     } finally {
       setIsLoading(false);
@@ -174,9 +179,10 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     try {
       await authService.resendConfirmationCode(pendingEmail);
       setSuccess('New verification code sent to your email.');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Resend code error:', error);
-      setErrors({ verificationCode: error.message || 'Failed to resend code. Please try again.' });
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to resend code. Please try again.';
+      setErrors({ verificationCode: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -198,12 +204,13 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
       setSuccess('Password reset code sent to your email. Please check your inbox.');
       setShowForgotPassword(false);
       setShowResetPassword(true);
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Forgot password error:', error);
-      if (error.name === 'UserNotFoundException') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'UserNotFoundException') {
         setErrors({ resetEmail: 'No account found with this email address.' });
       } else {
-        setErrors({ resetEmail: error.message || 'Failed to send reset code. Please try again.' });
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to send reset code. Please try again.';
+        setErrors({ resetEmail: errorMessage });
       }
     } finally {
       setIsLoading(false);
@@ -241,16 +248,17 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
       setNewPassword('');
       setConfirmNewPassword('');
       setResetEmail('');
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Reset password error:', error);
-      if (error.name === 'CodeMismatchException') {
+      if (error && typeof error === 'object' && 'name' in error && error.name === 'CodeMismatchException') {
         setErrors({ resetCode: 'Invalid reset code. Please try again.' });
-      } else if (error.name === 'ExpiredCodeException') {
+      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'ExpiredCodeException') {
         setErrors({ resetCode: 'Reset code has expired. Please request a new one.' });
-      } else if (error.name === 'InvalidPasswordException') {
+      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'InvalidPasswordException') {
         setErrors({ newPassword: 'Password does not meet requirements. Please choose a stronger password.' });
       } else {
-        setErrors({ resetCode: error.message || 'Failed to reset password. Please try again.' });
+        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to reset password. Please try again.';
+        setErrors({ resetCode: errorMessage });
       }
     } finally {
       setIsLoading(false);
@@ -273,8 +281,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
       setTimeout(() => {
         onSuccess();
       }, 1500);
-    } catch (error: any) {
-      setErrors({ mfaCode: error.message || 'Verification failed' });
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Verification failed';
+      setErrors({ mfaCode: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -298,8 +307,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
       await sendAdminMfaCode(mfaEmail, mfaPassword);
       setSuccess('Verification code sent successfully');
       setTimeout(() => setSuccess(''), 3000);
-    } catch (error: any) {
-      setErrors({ mfaCode: error.message || 'Failed to resend verification code' });
+    } catch (error: unknown) {
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to resend verification code';
+      setErrors({ mfaCode: errorMessage });
     } finally {
       setIsLoading(false);
     }

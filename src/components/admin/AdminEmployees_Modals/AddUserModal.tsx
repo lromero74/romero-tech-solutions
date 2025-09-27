@@ -4,7 +4,7 @@ import {
   Save
 } from 'lucide-react';
 import { Department, EmployeeStatus } from '../../../types/database';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 
 // Helper function to format phone number input (real-time)
 const formatPhoneNumberInput = (value: string): string => {
@@ -338,7 +338,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                     value={newUserData.address?.street || ''}
                     onChange={(e) => onUserDataChange({
                       ...newUserData,
-                      address: { ...newUserData.address, street: e.target.value } as any
+                      address: { ...newUserData.address, street: e.target.value }
                     })}
                     className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="123 Main Street"
@@ -351,7 +351,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                     value={newUserData.address?.street2 || ''}
                     onChange={(e) => onUserDataChange({
                       ...newUserData,
-                      address: { ...newUserData.address, street2: e.target.value } as any
+                      address: { ...newUserData.address, street2: e.target.value }
                     })}
                     className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="Apt 4B, Suite 100, etc. (optional)"
@@ -365,7 +365,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.address?.city || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        address: { ...newUserData.address, city: e.target.value } as any
+                        address: { ...newUserData.address, city: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="City"
@@ -378,7 +378,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.address?.state || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        address: { ...newUserData.address, state: e.target.value } as any
+                        address: { ...newUserData.address, state: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="State"
@@ -393,7 +393,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.address?.zipCode || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        address: { ...newUserData.address, zipCode: e.target.value } as any
+                        address: { ...newUserData.address, zipCode: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="12345"
@@ -406,7 +406,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.address?.country || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        address: { ...newUserData.address, country: e.target.value } as any
+                        address: { ...newUserData.address, country: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="Country"
@@ -426,7 +426,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.emergencyContact?.firstName || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        emergencyContact: { ...newUserData.emergencyContact, firstName: e.target.value } as any
+                        emergencyContact: { ...newUserData.emergencyContact, firstName: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="First name"
@@ -439,7 +439,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.emergencyContact?.lastName || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        emergencyContact: { ...newUserData.emergencyContact, lastName: e.target.value } as any
+                        emergencyContact: { ...newUserData.emergencyContact, lastName: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                       placeholder="Last name"
@@ -453,7 +453,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                       value={newUserData.emergencyContact?.relationship || ''}
                       onChange={(e) => onUserDataChange({
                         ...newUserData,
-                        emergencyContact: { ...newUserData.emergencyContact, relationship: e.target.value } as any
+                        emergencyContact: { ...newUserData.emergencyContact, relationship: e.target.value }
                       })}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                     >
@@ -478,7 +478,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                         const raw = extractRawPhoneNumber(e.target.value);
                         onUserDataChange({
                           ...newUserData,
-                          emergencyContact: { ...newUserData.emergencyContact, phone: raw } as any
+                          emergencyContact: { ...newUserData.emergencyContact, phone: raw }
                         });
                       }}
                       className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
@@ -493,7 +493,7 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
                     value={newUserData.emergencyContact?.email || ''}
                     onChange={(e) => onUserDataChange({
                       ...newUserData,
-                      emergencyContact: { ...newUserData.emergencyContact, email: e.target.value } as any
+                      emergencyContact: { ...newUserData.emergencyContact, email: e.target.value }
                     })}
                     className={`mt-1 block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="emergency.contact@example.com"

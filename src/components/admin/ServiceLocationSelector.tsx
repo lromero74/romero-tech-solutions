@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation, Minimize2 } from 'lucide-react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation } from 'lucide-react';
+import { themeClasses } from '../../contexts/ThemeContext';
 import adminService from '../../services/adminService';
 
 interface LocationItem {
@@ -42,7 +42,6 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   targetScrollY = null,
   onExpandedCountChange
 }) => {
-  const { theme } = useTheme();
   const [locations, setLocations] = useState<LocationItem[]>([]);
   const [locationTree, setLocationTree] = useState<LocationNode[]>([]);
   const [selections, setSelections] = useState<Set<string>>(new Set());
@@ -139,7 +138,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
       const nodeKey = `${node.location_type}:${node.id}`;
       const hasChildren = node.children && node.children.length > 0;
 
-      let updatedNode = { ...node };
+      const updatedNode = { ...node };
 
       if (hasChildren) {
         // Recursively update children
@@ -184,7 +183,6 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   const handleNodeToggle = (node: LocationNode) => {
     if (disabled) return;
 
-    const nodeKey = `${node.location_type}:${node.id}`;
     const newSelections = new Set(selections);
 
     if (node.selected || node.indeterminate) {

@@ -17,7 +17,7 @@ interface EnhancedAuthContextType {
   isClient: boolean;
   isFirstAdmin: boolean;
   signIn: (email: string, password: string) => Promise<AuthUser>;
-  signUpAdmin: (userData: { email: string; password: string; name: string }) => Promise<{ user: any; isFirstAdmin: boolean }>;
+  signUpAdmin: (userData: { email: string; password: string; name: string }) => Promise<{ user: AuthUser; isFirstAdmin: boolean }>;
   signUpClient: (registrationData: ClientRegistrationRequest) => Promise<{ success: boolean; message: string; emailConfirmationSent: boolean }>;
   confirmClientEmail: (token: string, email: string) => Promise<{ success: boolean; message: string; user?: AuthUser }>;
   resendConfirmationEmail: (email: string) => Promise<{ success: boolean; message: string }>;
@@ -54,7 +54,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const [sessionToken, setSessionToken] = useState<string | null>(null);
 
   // Helper function to determine if a user requires MFA
-  const requiresMfa = async (user: AuthUser | any): Promise<boolean> => {
+  const requiresMfa = async (user: AuthUser | unknown): Promise<boolean> => {
     if (!user) return false;
 
     try {
@@ -149,7 +149,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
                 // Users without MFA can fall back to Cognito validation
                 currentUser = await authService.getCurrentAuthUser();
               }
-            } catch (parseError) {
+            } catch {
               // If we can't parse the stored user, clear everything and force re-login
               localStorage.removeItem('sessionToken');
               setSessionToken(null);
@@ -178,7 +178,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
               // Users without MFA can try Cognito restoration
               currentUser = await authService.getCurrentAuthUser();
             }
-          } catch (parseError) {
+          } catch {
             // If we can't parse the stored user, clear everything
             localStorage.removeItem('user');
             localStorage.removeItem('authUser');
@@ -397,9 +397,9 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         message: result.message,
         emailConfirmationSent: result.emailConfirmationSent
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error registering client:', error);
-      throw new Error(error.message || 'Client registration failed');
+      throw new Error(error instanceof Error ? error.message : 'Client registration failed');
     }
   };
 
@@ -410,11 +410,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         setUser(result.user);
       }
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error confirming client email:', error);
       return {
         success: false,
-        message: error.message || 'Email confirmation failed'
+        message: error instanceof Error ? error.message : 'Email confirmation failed'
       };
     }
   };
@@ -423,9 +423,9 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     try {
       const result = await clientRegistrationService.resendConfirmationEmail(email);
       return result;
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error resending confirmation email:', error);
-      throw new Error(error.message || 'Failed to resend confirmation email');
+      throw new Error(error instanceof Error ? error.message : 'Failed to resend confirmation email');
     }
   };
 

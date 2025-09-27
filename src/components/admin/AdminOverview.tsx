@@ -8,7 +8,7 @@ import {
   BarChart3,
   Plus
 } from 'lucide-react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 
 type AdminView = 'overview' | 'employees' | 'clients' | 'services' | 'service-requests' | 'reports';
 
@@ -19,8 +19,8 @@ interface DashboardData {
     totalAdmins: number;
     totalBusinesses: number;
   };
-  recentUsers: any[];
-  userTrends: any[];
+  recentUsers: unknown[];
+  userTrends: unknown[];
 }
 
 interface AdminOverviewProps {
@@ -32,7 +32,6 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({
   dashboardData,
   setCurrentView
 }) => {
-  const { theme } = useTheme();
   const stats = [
     {
       label: 'Total Users',

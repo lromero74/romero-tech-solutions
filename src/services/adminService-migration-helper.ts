@@ -5,6 +5,8 @@
  * Copy the patterns below and replace the corresponding methods in adminService.ts
  */
 
+// Templates for updating adminService methods (commented to avoid unused variable errors)
+/*
 // Template for GET requests
 const getTemplate = `
 async methodName(): Promise<ReturnType> {
@@ -55,6 +57,7 @@ async methodName(id: string): Promise<void> {
     throw error;
   }
 }`;
+*/
 
 /**
  * Remaining methods to update (when time permits):

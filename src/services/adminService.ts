@@ -1,4 +1,4 @@
-import { Role } from '../types/database';
+import { Role, Service, ServiceRequest } from '../types/database';
 
 interface DashboardStatistics {
   totalUsers: number;
@@ -101,6 +101,59 @@ interface UsersResponse {
   };
 }
 
+interface AuthorizedDomain {
+  domain: string;
+  description?: string;
+}
+
+interface ServiceLocation {
+  id: string;
+  business_id: string;
+  address_label: string;
+  location_name?: string;
+  location_type: string;
+  street: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  country: string;
+  contact_person?: string;
+  contact_phone?: string;
+  notes?: string;
+  is_headquarters: boolean;
+  soft_delete?: boolean;
+  is_active?: boolean;
+}
+
+interface LocationContact {
+  id: string;
+  service_location_id: string;
+  user_id: string;
+  contact_role?: string;
+  is_primary_contact?: boolean;
+  notes?: string;
+}
+
+interface LocationHierarchy {
+  location_type: string;
+  location_id: number;
+  notes?: string;
+}
+
+interface LocationChildren {
+  children: unknown[];
+}
+
+interface LocationTypeCategory {
+  categories: unknown[];
+}
+
+interface LocationType {
+  id: string;
+  name: string;
+  category?: string;
+}
+
 interface Business {
   id: string;
   businessName: string;
@@ -127,7 +180,7 @@ interface BusinessesResponse {
 }
 
 export class AdminService {
-  private apiService: any = null;
+  private apiService: typeof import('./apiService').apiService | null = null;
 
   // Initialize apiService dynamically to avoid circular dependencies
   private async getApiService() {
@@ -345,7 +398,7 @@ export class AdminService {
     description: string;
     basePrice: number;
     estimatedHours: number;
-  }): Promise<any> {
+  }): Promise<Service> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.post('/admin/services', serviceData);
@@ -357,7 +410,7 @@ export class AdminService {
   }
 
   // Get services
-  async getServices(): Promise<{ services: any[] }> {
+  async getServices(): Promise<{ services: Service[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/admin/services');
@@ -369,7 +422,7 @@ export class AdminService {
   }
 
   // Get service requests
-  async getServiceRequests(): Promise<{ serviceRequests: any[] }> {
+  async getServiceRequests(): Promise<{ serviceRequests: ServiceRequest[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/admin/service-requests');
@@ -457,7 +510,7 @@ export class AdminService {
   }
 
   // Get authorized domains for a business
-  async getAuthorizedDomains(businessId: string): Promise<{ authorizedDomains: any[] }> {
+  async getAuthorizedDomains(businessId: string): Promise<{ authorizedDomains: AuthorizedDomain[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get(`/admin/businesses/${businessId}/authorized-domains`);
@@ -469,7 +522,7 @@ export class AdminService {
   }
 
   // Update authorized domains for a business
-  async updateAuthorizedDomains(businessId: string, domains: any[]): Promise<void> {
+  async updateAuthorizedDomains(businessId: string, domains: AuthorizedDomain[]): Promise<void> {
     try {
       const apiService = await this.getApiService();
       await apiService.put(`/admin/businesses/${businessId}/authorized-domains`, { domains });
@@ -480,7 +533,7 @@ export class AdminService {
   }
 
   // Get businesses by email domain
-  async getBusinessesByEmailDomain(email: string): Promise<{ businesses: any[] }> {
+  async getBusinessesByEmailDomain(email: string): Promise<{ businesses: Business[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get(`/admin/businesses/by-email-domain/${encodeURIComponent(email)}`);
@@ -528,7 +581,7 @@ export class AdminService {
   }
 
   // Service Locations methods
-  async getServiceLocations(): Promise<{ serviceLocations: any[] }> {
+  async getServiceLocations(): Promise<{ serviceLocations: ServiceLocation[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/admin/service-locations');
@@ -559,7 +612,7 @@ export class AdminService {
     }
   }
 
-  async updateServiceLocation(serviceLocationId: string, updates: any): Promise<any> {
+  async updateServiceLocation(serviceLocationId: string, updates: Partial<ServiceLocation>): Promise<ServiceLocation> {
     try {
       console.log('=== ADMIN SERVICE UPDATE SERVICE LOCATION ===');
       console.log('Service Location ID:', serviceLocationId);
@@ -599,7 +652,7 @@ export class AdminService {
     contact_phone?: string;
     notes?: string;
     is_headquarters: boolean;
-  }): Promise<any> {
+  }): Promise<ServiceLocation> {
     try {
       console.log('=== ADMIN SERVICE CREATE SERVICE LOCATION ===');
       console.log('Service Location Data:', serviceLocationData);
@@ -614,7 +667,7 @@ export class AdminService {
     }
   }
 
-  async getLocationContacts(serviceLocationId: string): Promise<{ locationContacts: any[] }> {
+  async getLocationContacts(serviceLocationId: string): Promise<{ locationContacts: LocationContact[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get(`/admin/location-contacts/${serviceLocationId}`);
@@ -642,7 +695,7 @@ export class AdminService {
     contact_role?: string;
     is_primary_contact?: boolean;
     notes?: string;
-  }): Promise<any> {
+  }): Promise<LocationContact> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.post('/admin/location-contacts', contactData);
@@ -654,7 +707,7 @@ export class AdminService {
   }
 
   // Service Area Management Methods
-  async getServedLocations(): Promise<{ servedLocations: any[] }> {
+  async getServedLocations(): Promise<{ servedLocations: LocationHierarchy[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/locations/served');
@@ -665,7 +718,7 @@ export class AdminService {
     }
   }
 
-  async getAllLocations(): Promise<{ locations: any[] }> {
+  async getAllLocations(): Promise<{ locations: LocationHierarchy[] }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/locations/all');
@@ -680,7 +733,7 @@ export class AdminService {
     location_type: string;
     location_id: number;
     notes?: string;
-  }>): Promise<{ success: boolean; servedLocations: any[]; message: string }> {
+  }>): Promise<{ success: boolean; servedLocations: LocationHierarchy[]; message: string }> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.post('/locations/served', { selections });
@@ -691,7 +744,7 @@ export class AdminService {
     }
   }
 
-  async getLocationChildren(locationType: string, parentId: number): Promise<{ children: any[] }> {
+  async getLocationChildren(locationType: string, parentId: number): Promise<LocationChildren> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get(`/locations/children/${locationType}/${parentId}`);
@@ -703,7 +756,7 @@ export class AdminService {
   }
 
   // Service Area Validation Methods
-  async getServiceAreas(): Promise<any[]> {
+  async getServiceAreas(): Promise<LocationHierarchy[]> {
     try {
       const apiService = await this.getApiService();
       const result = await apiService.get('/admin/service-areas');
@@ -763,7 +816,7 @@ export class AdminService {
   }
 
   async getLocationTypes(): Promise<{
-    locationTypes: any[];
+    locationTypes: LocationType[];
     totalCount: number;
   }> {
     try {
@@ -778,9 +831,7 @@ export class AdminService {
     }
   }
 
-  async getLocationTypesByCategory(): Promise<{
-    categories: any[];
-  }> {
+  async getLocationTypesByCategory(): Promise<LocationTypeCategory> {
     try {
       console.log('📋 AdminService: Fetching location types by category...');
       const apiService = await this.getApiService();

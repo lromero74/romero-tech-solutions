@@ -253,7 +253,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
   const handleConfirmUpdate = () => {
     if (!serviceLocation) return;
 
-    const updates: any = {};
+    const updates: Record<string, unknown> = {};
 
     if (formData.business_id !== originalServiceLocation?.business_id) {
       updates.business_id = formData.business_id;

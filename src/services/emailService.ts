@@ -19,9 +19,10 @@ class EmailService {
         success: true,
         message: 'Confirmation email sent successfully'
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error sending confirmation email:', error);
-      throw new Error(error.message || 'Failed to send confirmation email');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to send confirmation email';
+      throw new Error(errorMessage);
     }
   }
 
@@ -47,11 +48,12 @@ class EmailService {
           name: 'Test User'
         }
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error confirming email:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to confirm email';
       return {
         success: false,
-        message: error.message || 'Failed to confirm email'
+        message: errorMessage
       };
     }
   }
@@ -71,9 +73,10 @@ class EmailService {
         success: true,
         message: 'Confirmation email resent successfully'
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Error resending confirmation email:', error);
-      throw new Error(error.message || 'Failed to resend confirmation email');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to resend confirmation email';
+      throw new Error(errorMessage);
     }
   }
 

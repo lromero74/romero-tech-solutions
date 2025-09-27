@@ -6,7 +6,7 @@ export interface DashboardData {
   userId: string;
   title: string;
   description: string;
-  data: any;
+  data: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -17,7 +17,7 @@ export interface UserProfile {
   email: string;
   firstName: string;
   lastName: string;
-  preferences: any;
+  preferences: Record<string, unknown>;
   createdAt?: string;
   updatedAt?: string;
 }

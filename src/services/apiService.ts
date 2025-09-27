@@ -1,3 +1,5 @@
+// ApiResponse interface (commented out as unused)
+/*
 interface ApiResponse<T = any> {
   success: boolean;
   data?: T;
@@ -5,6 +7,7 @@ interface ApiResponse<T = any> {
   code?: string;
   error?: string;
 }
+*/
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean; // Skip automatic session handling for some requests
@@ -70,9 +73,12 @@ class ApiService {
       }
 
       // Throw an error with the server response
-      const error = new Error(data.message || `HTTP ${response.status} ${response.statusText}`);
-      (error as any).code = data.code;
-      (error as any).status = response.status;
+      const error = new Error(data.message || `HTTP ${response.status} ${response.statusText}`) as Error & {
+        code?: string;
+        status?: number;
+      };
+      error.code = data.code;
+      error.status = response.status;
       throw error;
     }
 
@@ -84,7 +90,7 @@ class ApiService {
   /**
    * Make authenticated API request
    */
-  async request<T = any>(
+  async request<T = unknown>(
     endpoint: string,
     options: RequestOptions = {}
   ): Promise<T> {
@@ -120,14 +126,14 @@ class ApiService {
   /**
    * GET request
    */
-  async get<T = any>(endpoint: string, options?: RequestOptions): Promise<T> {
+  async get<T = unknown>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'GET' });
   }
 
   /**
    * POST request
    */
-  async post<T = any>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> {
+  async post<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'POST',
@@ -138,7 +144,7 @@ class ApiService {
   /**
    * PUT request
    */
-  async put<T = any>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> {
+  async put<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PUT',
@@ -149,7 +155,7 @@ class ApiService {
   /**
    * PATCH request
    */
-  async patch<T = any>(endpoint: string, data?: any, options?: RequestOptions): Promise<T> {
+  async patch<T = unknown>(endpoint: string, data?: unknown, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, {
       ...options,
       method: 'PATCH',
@@ -160,14 +166,14 @@ class ApiService {
   /**
    * DELETE request
    */
-  async delete<T = any>(endpoint: string, options?: RequestOptions): Promise<T> {
+  async delete<T = unknown>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' });
   }
 
   /**
    * Session-specific API calls
    */
-  async sessionHeartbeat(): Promise<{ success: boolean; session?: any; message?: string }> {
+  async sessionHeartbeat(): Promise<{ success: boolean; session?: unknown; message?: string }> {
     try {
       const result = await this.post('/auth/heartbeat');
       return {
@@ -183,7 +189,7 @@ class ApiService {
     }
   }
 
-  async extendSession(): Promise<{ success: boolean; session?: any; message?: string }> {
+  async extendSession(): Promise<{ success: boolean; session?: unknown; message?: string }> {
     try {
       const result = await this.post('/auth/extend-session');
       return {
@@ -202,7 +208,7 @@ class ApiService {
   /**
    * Check if session is valid
    */
-  async validateSession(): Promise<{ success: boolean; session?: any; message?: string }> {
+  async validateSession(): Promise<{ success: boolean; session?: unknown; message?: string }> {
     try {
       const result = await this.get('/auth/validate-session');
       return {

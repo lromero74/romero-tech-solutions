@@ -13,7 +13,7 @@ export interface Address {
  * Finds the headquarters location for each client's business and adds the address
  */
 export const enhanceClientsWithAddresses = (
-  rawClients: any[],
+  rawClients: Client[],
   businesses: Business[],
   serviceLocations: ServiceLocation[]
 ): Client[] => {

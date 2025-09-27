@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { User, Users, Crown, Phone, Mail } from 'lucide-react';
+import { User, Crown, Phone, Mail } from 'lucide-react';
 import { adminService } from '../../services/adminService';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 
 interface LocationContact {
   id: string;
@@ -31,7 +31,6 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
   serviceLocationId,
   showAll = false
 }) => {
-  const { theme } = useTheme();
   const [contacts, setContacts] = useState<LocationContact[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,8 +45,8 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
       setError(null);
       const response = await adminService.getLocationContacts(serviceLocationId);
       setContacts(response.locationContacts || []);
-    } catch (err: any) {
-      setError(err.message || 'Failed to load contacts');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load contacts');
       console.error('Error fetching location contacts:', err);
     } finally {
       setLoading(false);

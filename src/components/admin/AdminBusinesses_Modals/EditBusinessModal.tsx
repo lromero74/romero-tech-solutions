@@ -1,12 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, Building, Plus, Trash2, AlertTriangle, AlertCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
-import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
-import AlertModal from '../../shared/AlertModal';
+// Removed unused imports: validateServiceAreaField, AlertModal
 
 interface AuthorizedDomain {
   id?: string;
@@ -120,7 +119,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   };
 
   // Fetch authorized domains function
-  const fetchAuthorizedDomains = async () => {
+  const fetchAuthorizedDomains = useCallback(async () => {
     if (!business?.id) return;
 
     setLoadingDomains(true);
@@ -130,7 +129,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       const data = await adminService.getAuthorizedDomains(business.id);
 
       console.log(`✅ Fetched ${data.authorizedDomains.length} authorized domains`);
-      const domains = data.authorizedDomains.map((domain: any) => ({
+      const domains = data.authorizedDomains.map((domain: AuthorizedDomain) => ({
         id: domain.id,
         domain: domain.domain,
         description: domain.description,
@@ -144,21 +143,21 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     } finally {
       setLoadingDomains(false);
     }
-  };
+  }, [business?.id]);
 
   // Fetch authorized domains when business changes
   useEffect(() => {
     if (business?.id && showModal) {
       fetchAuthorizedDomains();
     }
-  }, [business?.id]);
+  }, [business?.id, showModal, fetchAuthorizedDomains]);
 
   // Re-fetch when modal opens (in case data changed)
   useEffect(() => {
     if (showModal && business?.id) {
       fetchAuthorizedDomains();
     }
-  }, [showModal]);
+  }, [showModal, business?.id, fetchAuthorizedDomains]);
 
   // Clear state when modal closes
   useEffect(() => {
@@ -259,7 +258,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showModal, formData, originalBusiness, authorizedDomains, originalDomains, enableLogo, originalEnableLogo, setShowConfirmModal, onClose]);
+  }, [showModal, formData, originalBusiness, authorizedDomains, originalDomains, enableBackgroundColor, originalEnableBackgroundColor, setShowConfirmModal, onClose]);
 
   if (!showModal || !business) return null;
 

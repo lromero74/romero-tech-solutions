@@ -26,7 +26,7 @@ type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services
 interface AdminSidebarProps {
   currentView: AdminView;
   setCurrentView: (view: AdminView) => void;
-  user: any;
+  user: unknown;
   signOut: () => void;
   onOpenChangePasswordModal?: () => void;
 }
@@ -55,7 +55,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
     };
   }, []);
 
-  const { theme, toggleTheme, isDark } = useTheme();
+  const { toggleTheme, isDark } = useTheme();
 
   const handleAccountAction = (action: string) => {
     if (action === 'theme') {

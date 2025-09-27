@@ -1,8 +1,7 @@
 import React from 'react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 
 const AdminServiceRequests: React.FC = () => {
-  const { theme } = useTheme();
 
   return (
     <div className="space-y-6">
