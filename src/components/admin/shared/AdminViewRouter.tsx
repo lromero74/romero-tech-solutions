@@ -1519,7 +1519,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onClose={handleCloseAddBusinessModal}
         onSubmit={handleCreateBusiness}
         businesses={businesses}
-        onOpenServiceLocationModal={handleOpenServiceLocationModalFromBusiness}
       />
 
       {/* Client Edit Modal */}
