@@ -999,6 +999,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
                 // Use the dedicated soft delete method (now handles both soft_delete and is_active fields)
                 await adminService.softDeleteUser(client.id, shouldRestore);
+
+                // If we just soft deleted (not restoring), automatically show soft deleted items so user can see the result
+                if (!shouldRestore) {
+                  setShowSoftDeletedClientsFunc(true);
+                }
+
                 await refreshClients();
               } catch (error) {
                 console.error('Failed to soft delete client:', error);
@@ -1144,6 +1150,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
                 // Wait for all related entity updates to complete
                 await Promise.all([...clientUpdates, ...serviceLocationUpdates]);
+
+                // If we just soft deleted (not restoring), automatically show soft deleted items so user can see the result
+                if (!shouldRestore) {
+                  setShowSoftDeletedBusinesses(true);
+                }
 
                 await refreshAllData();
               } catch (error) {
@@ -1306,6 +1317,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 // Also update the active status: inactive when soft deleting, active when restoring
                 const newActiveStatus = shouldRestore; // If restoring, set to active; if deleting, set to inactive
                 await serviceLocationCRUD.updateEntity(location.id, { is_active: newActiveStatus });
+
+                // If we just soft deleted (not restoring), automatically show soft deleted items so user can see the result
+                if (!shouldRestore) {
+                  setShowSoftDeletedServiceLocationsFunc(true);
+                }
 
                 await refreshAllData();
               } catch (error) {

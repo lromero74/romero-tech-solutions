@@ -108,7 +108,6 @@ router.get('/service-locations', async (req, res) => {
         b.business_name
       FROM service_locations sl
       JOIN businesses b ON sl.business_id = b.id
-      WHERE sl.soft_delete = false
       ORDER BY b.business_name, sl.location_name, sl.address_label
     `);
 

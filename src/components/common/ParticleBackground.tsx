@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback } from 'react';
 
 interface ParticleBackgroundProps {
   containerRef?: React.RefObject<HTMLElement>;
@@ -91,8 +91,202 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
     };
   }, [boundaries, containerRef]);
 
+  // Generate circuit lightning segments with timing
+  const generateCircuitSegments = useCallback((startX: number, startY: number): Array<{
+    path: string;
+    startTime: number;
+    duration: number;
+    visible: boolean;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+    parentIndex: number;
+  }> => {
+    const bounds = getEffectiveBoundaries();
+    const screenHeight = bounds.bottom;
+    const topThird = screenHeight / 3;
+    const bottomThird = screenHeight * 2 / 3;
+
+    // Determine weighting based on vertical position
+    const getDirectionWeights = (y: number) => {
+      const directions = [
+        { angle: 0, name: 'E', index: 0 },    // East
+        { angle: 45, name: 'NE', index: 1 },  // Northeast
+        { angle: 90, name: 'N', index: 2 },   // North
+        { angle: 135, name: 'NW', index: 3 }, // Northwest
+        { angle: 180, name: 'W', index: 4 },  // West
+        { angle: 225, name: 'SW', index: 5 }, // Southwest
+        { angle: 270, name: 'S', index: 6 },  // South
+        { angle: 315, name: 'SE', index: 7 }  // Southeast
+      ];
+
+      // Default equal weights
+      const weights = [1, 1, 1, 1, 1, 1, 1, 1];
+
+      if (y <= topThird) {
+        // Top third: favor SW, S, SE (downward directions)
+        weights[5] = 3; // SW
+        weights[6] = 3; // S
+        weights[7] = 3; // SE
+      } else if (y >= bottomThird) {
+        // Bottom third: favor NW, N, NE (upward directions)
+        weights[1] = 3; // NE
+        weights[2] = 3; // N
+        weights[3] = 3; // NW
+      }
+
+      return { directions, weights };
+    };
+
+    // Weighted random selection
+    const selectWeightedDirection = (weights: number[], availableIndices: number[]) => {
+      const availableWeights = availableIndices.map(i => weights[i]);
+      const totalWeight = availableWeights.reduce((sum, weight) => sum + weight, 0);
+
+      if (totalWeight === 0) return availableIndices[0]; // Fallback
+
+      let random = Math.random() * totalWeight;
+      for (let i = 0; i < availableIndices.length; i++) {
+        random -= availableWeights[i];
+        if (random <= 0) {
+          return availableIndices[i];
+        }
+      }
+      return availableIndices[availableIndices.length - 1]; // Fallback
+    };
+
+    const segments: Array<{
+      path: string;
+      startTime: number;
+      duration: number;
+      visible: boolean;
+      startX: number;
+      startY: number;
+      endX: number;
+      endY: number;
+      parentIndex: number;
+    }> = [];
+
+    const { directions, weights } = getDirectionWeights(startY);
+
+    // Generate main trunk first
+    const trunkLength = Math.floor(Math.random() * 8) + 5; // 5-12 segments for main trunk
+    let currentX = startX;
+    let currentY = startY;
+    let lastDirectionIndex = Math.floor(Math.random() * 8);
+
+    for (let i = 0; i < trunkLength; i++) {
+      // For trunk, allow slight direction changes (adjacent directions)
+      const availableDirections = [
+        lastDirectionIndex,
+        (lastDirectionIndex + 1) % 8,
+        (lastDirectionIndex - 1 + 8) % 8
+      ];
+
+      const chosenDirectionIndex = selectWeightedDirection(weights, availableDirections);
+      const direction = directions[chosenDirectionIndex];
+      const length = Math.random() * 60 + 30; // 30-90px segments
+
+      const radians = (direction.angle * Math.PI) / 180;
+      const deltaX = Math.cos(radians) * length;
+      const deltaY = Math.sin(radians) * length;
+
+      const newX = currentX + deltaX;
+      const newY = currentY + deltaY;
+
+      // Keep within screen bounds
+      const boundedX = Math.max(bounds.left + 50, Math.min(bounds.right - 50, newX));
+      const boundedY = Math.max(bounds.top + 50, Math.min(bounds.bottom - 50, newY));
+
+      segments.push({
+        path: `M ${currentX} ${currentY} L ${boundedX} ${boundedY}`,
+        startTime: i * 100 + Math.random() * 50, // Sequential timing with small random offset
+        duration: Math.random() * 200 + 150, // 150-350ms to draw each segment
+        visible: false,
+        startX: currentX,
+        startY: currentY,
+        endX: boundedX,
+        endY: boundedY,
+        parentIndex: i === 0 ? -1 : i - 1 // First segment has no parent, others connect to previous
+      });
+
+      currentX = boundedX;
+      currentY = boundedY;
+      lastDirectionIndex = chosenDirectionIndex;
+    }
+
+    // Generate branches from random points along the trunk
+    const numBranches = Math.floor(Math.random() * 2) + 1; // 1-2 branches
+
+    for (let b = 0; b < numBranches; b++) {
+      // Pick a random trunk segment to branch from (not the first or last)
+      const branchFromIndex = Math.floor(Math.random() * (trunkLength - 2)) + 1;
+      const branchPoint = segments[branchFromIndex];
+
+      // Choose a random point along the branch segment to start from
+      const t = Math.random() * 0.6 + 0.2; // 20%-80% along the segment
+      const branchStartX = branchPoint.startX + (branchPoint.endX - branchPoint.startX) * t;
+      const branchStartY = branchPoint.startY + (branchPoint.endY - branchPoint.startY) * t;
+
+      // Generate branch segments
+      const branchLength = Math.floor(Math.random() * 3) + 2; // 2-4 segments per branch
+      let branchX = branchStartX;
+      let branchY = branchStartY;
+      let branchDirectionIndex = Math.floor(Math.random() * 8);
+
+      for (let i = 0; i < branchLength; i++) {
+        // Branches also limited to 45-degree turns
+        const availableDirections = [
+          branchDirectionIndex,
+          (branchDirectionIndex + 1) % 8,
+          (branchDirectionIndex - 1 + 8) % 8
+        ];
+
+        const chosenDirectionIndex = selectWeightedDirection(weights, availableDirections);
+        const direction = directions[chosenDirectionIndex];
+        const length = Math.random() * 40 + 20; // 20-60px segments for branches
+
+        const radians = (direction.angle * Math.PI) / 180;
+        const deltaX = Math.cos(radians) * length;
+        const deltaY = Math.sin(radians) * length;
+
+        const newX = branchX + deltaX;
+        const newY = branchY + deltaY;
+
+        // Keep within screen bounds
+        const boundedX = Math.max(bounds.left, Math.min(bounds.right, newX));
+        const boundedY = Math.max(bounds.top, Math.min(bounds.bottom, newY));
+
+        const segmentIndex = segments.length;
+        const parentIndex = i === 0 ? branchFromIndex : segmentIndex - 1;
+
+        // Branch timing starts after its parent trunk segment is visible
+        const parentStartTime = segments[parentIndex].startTime + segments[parentIndex].duration;
+
+        segments.push({
+          path: `M ${branchX} ${branchY} L ${boundedX} ${boundedY}`,
+          startTime: parentStartTime + (i * 80) + Math.random() * 40, // Sequential after parent
+          duration: Math.random() * 150 + 100, // 100-250ms for branch segments
+          visible: false,
+          startX: branchX,
+          startY: branchY,
+          endX: boundedX,
+          endY: boundedY,
+          parentIndex: parentIndex
+        });
+
+        branchX = boundedX;
+        branchY = boundedY;
+        branchDirectionIndex = chosenDirectionIndex;
+      }
+    }
+
+    return segments;
+  }, [getEffectiveBoundaries]);
+
   // Handle particle generation from external clicks
-  const handleParticleGeneration = (clickX: number, clickY: number) => {
+  const handleParticleGeneration = useCallback((clickX: number, clickY: number) => {
     
     // 1/5 chance (20%) to spawn lightning
     if (Math.random() < 0.2) {
@@ -167,7 +361,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
       
       setFloatingShapes(prev => [...prev, ...newParticles]);
     }
-  };
+  }, [generateCircuitSegments]);
 
   // Initialize background blobs
   React.useEffect(() => {
@@ -193,200 +387,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
     return () => {
       window.removeEventListener('generateParticles', handleCustomParticleEvent as EventListener);
     };
-  }, []);
-  // Generate circuit lightning segments with timing
-  const generateCircuitSegments = (startX: number, startY: number): Array<{
-    path: string;
-    startTime: number;
-    duration: number;
-    visible: boolean;
-    startX: number;
-    startY: number;
-    endX: number;
-    endY: number;
-    parentIndex: number;
-  }> => {
-    const bounds = getEffectiveBoundaries();
-    const screenHeight = bounds.bottom;
-    const topThird = screenHeight / 3;
-    const bottomThird = screenHeight * 2 / 3;
-    
-    // Determine weighting based on vertical position
-    const getDirectionWeights = (y: number) => {
-      const directions = [
-        { angle: 0, name: 'E', index: 0 },    // East
-        { angle: 45, name: 'NE', index: 1 },  // Northeast  
-        { angle: 90, name: 'N', index: 2 },   // North
-        { angle: 135, name: 'NW', index: 3 }, // Northwest
-        { angle: 180, name: 'W', index: 4 },  // West
-        { angle: 225, name: 'SW', index: 5 }, // Southwest
-        { angle: 270, name: 'S', index: 6 },  // South
-        { angle: 315, name: 'SE', index: 7 }  // Southeast
-      ];
-      
-      // Default equal weights
-      const weights = [1, 1, 1, 1, 1, 1, 1, 1];
-      
-      if (y <= topThird) {
-        // Top third: favor SW, S, SE (downward directions)
-        weights[5] = 3; // SW
-        weights[6] = 3; // S
-        weights[7] = 3; // SE
-      } else if (y >= bottomThird) {
-        // Bottom third: favor NW, N, NE (upward directions)
-        weights[1] = 3; // NE
-        weights[2] = 3; // N
-        weights[3] = 3; // NW
-      }
-      
-      return { directions, weights };
-    };
-    
-    // Weighted random selection
-    const selectWeightedDirection = (weights: number[], availableIndices: number[]) => {
-      const availableWeights = availableIndices.map(i => weights[i]);
-      const totalWeight = availableWeights.reduce((sum, weight) => sum + weight, 0);
-      
-      if (totalWeight === 0) return availableIndices[0]; // Fallback
-      
-      let random = Math.random() * totalWeight;
-      for (let i = 0; i < availableIndices.length; i++) {
-        random -= availableWeights[i];
-        if (random <= 0) {
-          return availableIndices[i];
-        }
-      }
-      return availableIndices[availableIndices.length - 1]; // Fallback
-    };
-    
-    const segments: Array<{
-      path: string;
-      startTime: number;
-      duration: number;
-      visible: boolean;
-      startX: number;
-      startY: number;
-      endX: number;
-      endY: number;
-      parentIndex: number;
-    }> = [];
-    
-    const { directions, weights } = getDirectionWeights(startY);
-    
-    // Generate main trunk first
-    const trunkLength = Math.floor(Math.random() * 8) + 5; // 5-12 segments for main trunk
-    let currentX = startX;
-    let currentY = startY;
-    let lastDirectionIndex = Math.floor(Math.random() * 8);
-    
-    for (let i = 0; i < trunkLength; i++) {
-      // For trunk, allow slight direction changes (adjacent directions)
-      const availableDirections = [
-        lastDirectionIndex,
-        (lastDirectionIndex + 1) % 8,
-        (lastDirectionIndex - 1 + 8) % 8
-      ];
-      
-      const chosenDirectionIndex = selectWeightedDirection(weights, availableDirections);
-      const direction = directions[chosenDirectionIndex];
-      const length = Math.random() * 60 + 30; // 30-90px segments
-      
-      const radians = (direction.angle * Math.PI) / 180;
-      const deltaX = Math.cos(radians) * length;
-      const deltaY = Math.sin(radians) * length;
-      
-      const newX = currentX + deltaX;
-      const newY = currentY + deltaY;
-      
-      // Keep within screen bounds
-      const boundedX = Math.max(bounds.left + 50, Math.min(bounds.right - 50, newX));
-      const boundedY = Math.max(bounds.top + 50, Math.min(bounds.bottom - 50, newY));
-      
-      segments.push({
-        path: `M ${currentX} ${currentY} L ${boundedX} ${boundedY}`,
-        startTime: i * 100 + Math.random() * 50, // Sequential timing with small random offset
-        duration: Math.random() * 200 + 150, // 150-350ms to draw each segment
-        visible: false,
-        startX: currentX,
-        startY: currentY,
-        endX: boundedX,
-        endY: boundedY,
-        parentIndex: i === 0 ? -1 : i - 1 // First segment has no parent, others connect to previous
-      });
-      
-      currentX = boundedX;
-      currentY = boundedY;
-      lastDirectionIndex = chosenDirectionIndex;
-    }
-    
-    // Generate branches from random points along the trunk
-    const numBranches = Math.floor(Math.random() * 2) + 1; // 1-2 branches
-    
-    for (let b = 0; b < numBranches; b++) {
-      // Pick a random trunk segment to branch from (not the first or last)
-      const branchFromIndex = Math.floor(Math.random() * (trunkLength - 2)) + 1;
-      const branchPoint = segments[branchFromIndex];
-      
-      // Choose a random point along the branch segment to start from
-      const t = Math.random() * 0.6 + 0.2; // 20%-80% along the segment
-      const branchStartX = branchPoint.startX + (branchPoint.endX - branchPoint.startX) * t;
-      const branchStartY = branchPoint.startY + (branchPoint.endY - branchPoint.startY) * t;
-      
-      // Generate branch segments
-      const branchLength = Math.floor(Math.random() * 3) + 2; // 2-4 segments per branch
-      let branchX = branchStartX;
-      let branchY = branchStartY;
-      let branchDirectionIndex = Math.floor(Math.random() * 8);
-      
-      for (let i = 0; i < branchLength; i++) {
-        // Branches also limited to 45-degree turns
-        const availableDirections = [
-          branchDirectionIndex,
-          (branchDirectionIndex + 1) % 8,
-          (branchDirectionIndex - 1 + 8) % 8
-        ];
-        
-        const chosenDirectionIndex = selectWeightedDirection(weights, availableDirections);
-        const direction = directions[chosenDirectionIndex];
-        const length = Math.random() * 40 + 20; // 20-60px segments for branches
-        
-        const radians = (direction.angle * Math.PI) / 180;
-        const deltaX = Math.cos(radians) * length;
-        const deltaY = Math.sin(radians) * length;
-        
-        const newX = branchX + deltaX;
-        const newY = branchY + deltaY;
-        
-        // Keep within screen bounds
-        const boundedX = Math.max(bounds.left, Math.min(bounds.right, newX));
-        const boundedY = Math.max(bounds.top, Math.min(bounds.bottom, newY));
-        
-        const segmentIndex = segments.length;
-        const parentIndex = i === 0 ? branchFromIndex : segmentIndex - 1;
-        
-        // Branch timing starts after its parent trunk segment is visible
-        const parentStartTime = segments[parentIndex].startTime + segments[parentIndex].duration;
-        
-        segments.push({
-          path: `M ${branchX} ${branchY} L ${boundedX} ${boundedY}`,
-          startTime: parentStartTime + (i * 80) + Math.random() * 40, // Sequential after parent
-          duration: Math.random() * 150 + 100, // 100-250ms for branch segments
-          visible: false,
-          startX: branchX,
-          startY: branchY,
-          endX: boundedX,
-          endY: boundedY,
-          parentIndex: parentIndex
-        });
-        
-        branchX = boundedX;
-        branchY = boundedY;
-        branchDirectionIndex = chosenDirectionIndex;
-      }
-    }
-    
-    return segments;
-  };
+  }, [handleParticleGeneration]);
 
   // Check if two line segments intersect - COMMENTED OUT (UNUSED)
   // const doLinesIntersect = (
@@ -730,7 +731,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
 
     const interval = setInterval(generateLightning, 100); // Check every 100ms
     return () => clearInterval(interval);
-  }, [isTabVisible]);
+  }, [isTabVisible, generateCircuitSegments, getEffectiveBoundaries]);
   // Generate new floating shapes periodically
   React.useEffect(() => {
     const generateShape = () => {
@@ -800,7 +801,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
     }, Math.random() * 3000 + 1000); // Random interval between 1-4 seconds
 
     return () => clearInterval(interval);
-  }, [isTabVisible]);
+  }, [isTabVisible, getEffectiveBoundaries]);
 
   React.useEffect(() => {
     // Don't start animation if tab is not visible
@@ -1059,7 +1060,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
         cancelAnimationFrame(rafRef.current);
       }
     };
-  }, [mousePos, isTabVisible]);
+  }, [mousePos, isTabVisible, getEffectiveBoundaries]);
 
   return (
     <div
