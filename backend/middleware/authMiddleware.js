@@ -6,7 +6,8 @@ import { sessionService } from '../services/sessionService.js';
  */
 export const authMiddleware = async (req, res, next) => {
   try {
-    const sessionToken = req.headers.authorization?.replace('Bearer ', '');
+    // Check for session token in HttpOnly cookie first, then fallback to Authorization header
+    const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
     if (!sessionToken) {
       return res.status(401).json({

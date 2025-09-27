@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { testConnection } from './config/database.js';
@@ -98,6 +99,9 @@ app.use(speedLimiter);
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Cookie parsing middleware for HttpOnly sessions
+app.use(cookieParser());
 
 // Logging middleware
 if (process.env.NODE_ENV !== 'test') {
