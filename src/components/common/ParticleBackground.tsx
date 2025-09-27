@@ -195,7 +195,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
     };
   }, []);
   // Generate circuit lightning segments with timing
-  const generateCircuitSegments = (startX: number, startY: number, buildSpeed?: number): Array<{
+  const generateCircuitSegments = (startX: number, startY: number): Array<{
     path: string;
     startTime: number;
     duration: number;
@@ -388,262 +388,262 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
     return segments;
   };
 
-  // Check if two line segments intersect
-  const doLinesIntersect = (
-    x1: number, y1: number, x2: number, y2: number,
-    x3: number, y3: number, x4: number, y4: number
-  ): boolean => {
-    const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
-    if (Math.abs(denom) < 0.0001) return false; // Lines are parallel
-    
-    const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
-    const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
-    
-    // Only consider it an intersection if lines actually cross (not just touch at endpoints)
-    return t > 0.1 && t < 0.9 && u > 0.1 && u < 0.9;
-  };
+  // Check if two line segments intersect - COMMENTED OUT (UNUSED)
+  // const doLinesIntersect = (
+  //   x1: number, y1: number, x2: number, y2: number,
+  //   x3: number, y3: number, x4: number, y4: number
+  // ): boolean => {
+  //   const denom = (x1 - x2) * (y3 - y4) - (y1 - y2) * (x3 - x4);
+  //   if (Math.abs(denom) < 0.0001) return false; // Lines are parallel
+  //
+  //   const t = ((x1 - x3) * (y3 - y4) - (y1 - y3) * (x3 - x4)) / denom;
+  //   const u = -((x1 - x2) * (y1 - y3) - (y1 - y2) * (x1 - x3)) / denom;
+  //
+  //   // Only consider it an intersection if lines actually cross (not just touch at endpoints)
+  //   return t > 0.1 && t < 0.9 && u > 0.1 && u < 0.9;
+  // };
 
-  // Check if a new segment would intersect with existing segments
-  const wouldIntersect = (
-    newX1: number, newY1: number, newX2: number, newY2: number,
-    occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}>
-  ): boolean => {
-    // Only check against segments that aren't connected to this one
-    return occupiedSegments.some(segment => {
-      // Skip if this segment connects to the existing segment (shares an endpoint)
-      const sharesEndpoint = 
-        (Math.abs(newX1 - segment.x1) < 1 && Math.abs(newY1 - segment.y1) < 1) ||
-        (Math.abs(newX1 - segment.x2) < 1 && Math.abs(newY1 - segment.y2) < 1) ||
-        (Math.abs(newX2 - segment.x1) < 1 && Math.abs(newY2 - segment.y1) < 1) ||
-        (Math.abs(newX2 - segment.x2) < 1 && Math.abs(newY2 - segment.y2) < 1);
-      
-      if (sharesEndpoint) return false;
-      
-      return doLinesIntersect(newX1, newY1, newX2, newY2, segment.x1, segment.y1, segment.x2, segment.y2);
-    });
-  };
+  // Check if a new segment would intersect with existing segments - COMMENTED OUT (UNUSED)
+  // const wouldIntersect = (
+  //   newX1: number, newY1: number, newX2: number, newY2: number,
+  //   occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}>
+  // ): boolean => {
+  //   // Only check against segments that aren't connected to this one
+  //   return occupiedSegments.some(segment => {
+  //     // Skip if this segment connects to the existing segment (shares an endpoint)
+  //     const sharesEndpoint =
+  //       (Math.abs(newX1 - segment.x1) < 1 && Math.abs(newY1 - segment.y1) < 1) ||
+  //       (Math.abs(newX1 - segment.x2) < 1 && Math.abs(newY1 - segment.y2) < 1) ||
+  //       (Math.abs(newX2 - segment.x1) < 1 && Math.abs(newY2 - segment.y1) < 1) ||
+  //       (Math.abs(newX2 - segment.x2) < 1 && Math.abs(newY2 - segment.y2) < 1);
+  //
+  //     if (sharesEndpoint) return false;
+  //
+  //     return doLinesIntersect(newX1, newY1, newX2, newY2, segment.x1, segment.y1, segment.x2, segment.y2);
+  //   });
+  // };
 
-  // Generate all paths and return as separate strings
-  const generateAllPaths = (
-    startX: number, 
-    startY: number, 
-    maxSegments: number = 15, 
-    currentDepth: number = 0, 
-    maxDepth: number = 3, 
-    branchCounter: { count: number } = { count: 0 },
-    occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}> = []
-  ): string[] => {
-    const singlePath = generateSinglePath(startX, startY, maxSegments, currentDepth, maxDepth, branchCounter, occupiedSegments, true);
-    return singlePath.allPaths || [singlePath.mainPath || singlePath as string];
-  };
+  // Generate all paths and return as separate strings - COMMENTED OUT (UNUSED)
+  // const generateAllPaths = (
+  //   startX: number,
+  //   startY: number,
+  //   maxSegments: number = 15,
+  //   currentDepth: number = 0,
+  //   maxDepth: number = 3,
+  //   branchCounter: { count: number } = { count: 0 },
+  //   occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}> = []
+  // ): string[] => {
+  //   const singlePath = generateSinglePath(startX, startY, maxSegments, currentDepth, maxDepth, branchCounter, occupiedSegments, true);
+  //   return singlePath.allPaths || [singlePath.mainPath || singlePath as string];
+  // };
 
-  const generateSinglePath = (
-    startX: number, 
-    startY: number, 
-    maxSegments: number = 15, 
-    currentDepth: number = 0, 
-    maxDepth: number = 3, 
-    branchCounter: { count: number } = { count: 0 },
-    occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}> = [],
-    returnAllPaths: boolean = false
-  ): string | { mainPath: string; allPaths: string[] } => {
-    // Prevent infinite recursion by limiting branch depth
-    if (currentDepth >= maxDepth) {
-      // Return a simple path with no branches when max depth is reached
-      const segments = Math.floor(Math.random() * 5) + 3; // 3-7 segments for deep branches
-      let path = `M ${startX} ${startY}`;
-      let currentX = startX;
-      let currentY = startY;
-      
-      const directions = [
-        { angle: 0, name: 'E' },    // East
-        { angle: 45, name: 'NE' },  // Northeast  
-        { angle: 90, name: 'N' },   // North
-        { angle: 135, name: 'NW' }, // Northwest
-        { angle: 180, name: 'W' },  // West
-        { angle: 225, name: 'SW' }, // Southwest
-        { angle: 270, name: 'S' },  // South
-        { angle: 315, name: 'SE' }  // Southeast
-      ];
-      
-      for (let i = 0; i < segments; i++) {
-        const direction = directions[Math.floor(Math.random() * directions.length)];
-        const length = Math.random() * 60 + 15; // 15-75px segments
-        
-        const radians = (direction.angle * Math.PI) / 180;
-        const deltaX = Math.cos(radians) * length;
-        const deltaY = Math.sin(radians) * length;
-        
-        currentX += deltaX;
-        currentY += deltaY;
-        
-        // Keep within screen bounds
-        const bounds = getEffectiveBoundaries();
-        currentX = Math.max(bounds.left, Math.min(bounds.right, currentX));
-        currentY = Math.max(bounds.top, Math.min(bounds.bottom, currentY));
-        
-        // Add this segment to occupied segments (for deep branches, we don't track intersections)
-        const prevX = i === 0 ? startX : currentX - deltaX;
-        const prevY = i === 0 ? startY : currentY - deltaY;
-        occupiedSegments.push({ x1: prevX, y1: prevY, x2: currentX, y2: currentY });
-        
-        path += ` L ${currentX} ${currentY}`;
-      }
-      
-      return returnAllPaths ? { mainPath: path, allPaths: [path] } : path;
-    }
-    
-    const segments = Math.floor(Math.random() * (maxSegments || 15)) + 3; // 3-15 segments (or custom max)
-    let path = `M ${startX} ${startY}`;
-    let currentX = startX;
-    let currentY = startY;
-    const allPaths: string[] = [];
-    
-    // Cardinal directions: N, NE, E, SE, S, SW, W, NW
-    const directions = [
-      { angle: 0, name: 'E' },    // East
-      { angle: 45, name: 'NE' },  // Northeast  
-      { angle: 90, name: 'N' },   // North
-      { angle: 135, name: 'NW' }, // Northwest
-      { angle: 180, name: 'W' },  // West
-      { angle: 225, name: 'SW' }, // Southwest
-      { angle: 270, name: 'S' },  // South
-      { angle: 315, name: 'SE' }  // Southeast
-    ];
-    
-    let lastDirectionIndex = -1;
-    let consecutiveTurns = 0;
-    let lastTurnDirection = 0; // -1 for counter-clockwise, 1 for clockwise, 0 for none
-    
-    for (let i = 0; i < segments; i++) {
-      let availableDirections;
-      
-      if (lastDirectionIndex === -1) {
-        // First segment - any direction is valid
-        availableDirections = directions.map((_, index) => index);
-      } else {
-        // Get adjacent directions (exactly 45 degrees clockwise and counter-clockwise)
-        const clockwiseIndex = (lastDirectionIndex + 1) % 8;
-        const counterClockwiseIndex = (lastDirectionIndex - 1 + 8) % 8;
-        
-        // Only allow exactly 45-degree turns (adjacent directions only)
-        availableDirections = [lastDirectionIndex, clockwiseIndex, counterClockwiseIndex];
-        
-        // Filter out directions that would exceed consecutive turn limit
-        if (consecutiveTurns >= 4) {
-          availableDirections = availableDirections.filter(dirIndex => {
-            const turnDirection = getTurnDirection(lastDirectionIndex, dirIndex);
-            return turnDirection !== lastTurnDirection;
-          });
-        }
-      }
-      
-      // Filter out directions that would cause intersections
-      availableDirections = availableDirections.filter(dirIndex => {
-        const direction = directions[dirIndex];
-        const length = Math.random() * 80 + 20; // Same length calculation as below
-        
-        const radians = (direction.angle * Math.PI) / 180;
-        const deltaX = Math.cos(radians) * length;
-        const deltaY = Math.sin(radians) * length;
-        
-        let testX = currentX + deltaX;
-        let testY = currentY + deltaY;
-        
-        // Keep within screen bounds for test
-        const bounds = getEffectiveBoundaries();
-        testX = Math.max(bounds.left, Math.min(bounds.right, testX));
-        testY = Math.max(bounds.top, Math.min(bounds.bottom, testY));
-        
-        // Check if this segment would intersect with existing segments
-        return !wouldIntersect(currentX, currentY, testX, testY, occupiedSegments);
-      });
-      
-      // If no valid directions available, break the path
-      if (availableDirections.length === 0) {
-        break;
-      }
-      
-      const chosenDirectionIndex = availableDirections[Math.floor(Math.random() * availableDirections.length)];
-      const direction = directions[chosenDirectionIndex];
-      const length = Math.random() * 80 + 20; // 20-100px segments
-      
-      const radians = (direction.angle * Math.PI) / 180;
-      const deltaX = Math.cos(radians) * length;
-      const deltaY = Math.sin(radians) * length;
-      
-      const prevX = currentX;
-      const prevY = currentY;
-      
-      currentX += deltaX;
-      currentY += deltaY;
-      
-      // Keep within screen bounds
-      const bounds = getEffectiveBoundaries();
-      currentX = Math.max(bounds.left, Math.min(bounds.right, currentX));
-      currentY = Math.max(bounds.top, Math.min(bounds.bottom, currentY));
-      
-      // Add this segment to occupied segments
-      occupiedSegments.push({ x1: prevX, y1: prevY, x2: currentX, y2: currentY });
-      
-      path += ` L ${currentX} ${currentY}`;
-      
-      // Random chance to create a branch (30% chance, but not on first or last segment)
-      if (i > 0 && i < segments - 1 && Math.random() < 0.3 && currentDepth < maxDepth && branchCounter.count < 4) {
-        // Create up to 4 branches from this point
-        const rand = Math.random();
-        let numBranches;
-        if (rand < 0.4) numBranches = 1;      // 40% chance for 1 branch
-        else if (rand < 0.7) numBranches = 2; // 30% chance for 2 branches
-        else if (rand < 0.9) numBranches = 3; // 20% chance for 3 branches
-        else numBranches = 4;                 // 10% chance for 4 branches
-        
-        // Limit branches to not exceed terminal point limit
-        const remainingTerminals = 4 - branchCounter.count;
-        numBranches = Math.min(numBranches, remainingTerminals);
-        
-        for (let b = 0; b < numBranches; b++) {
-          branchCounter.count++;
-          // Generate branch with fewer segments (3-8)
-          const branchSegments = Math.floor(Math.random() * 6) + 3;
-          const branchResult = generateSinglePath(currentX, currentY, branchSegments, currentDepth + 1, maxDepth, branchCounter, occupiedSegments, true);
-          if (typeof branchResult === 'object' && branchResult.allPaths) {
-            allPaths.push(...branchResult.allPaths);
-          } else if (typeof branchResult === 'string') {
-            allPaths.push(branchResult);
-          }
-        }
-      }
-      
-      // Update turn tracking
-      if (lastDirectionIndex !== -1) {
-        const turnDirection = getTurnDirection(lastDirectionIndex, chosenDirectionIndex);
-        if (turnDirection === lastTurnDirection && turnDirection !== 0) {
-          consecutiveTurns++;
-        } else {
-          consecutiveTurns = turnDirection !== 0 ? 1 : 0;
-          lastTurnDirection = turnDirection;
-        }
-      }
-      
-      lastDirectionIndex = chosenDirectionIndex;
-    }
-    
-    if (returnAllPaths) {
-      return { mainPath: path, allPaths: [path, ...allPaths] };
-    }
-    
-    // For backward compatibility, combine all paths
-    return [path, ...allPaths].join(' ');
-  };
+  // const generateSinglePath = (
+  //   startX: number,
+  //   startY: number,
+  //   maxSegments: number = 15,
+  //   currentDepth: number = 0,
+  //   maxDepth: number = 3,
+  //   branchCounter: { count: number } = { count: 0 },
+  //   occupiedSegments: Array<{x1: number, y1: number, x2: number, y2: number}> = [],
+  //   returnAllPaths: boolean = false
+  // ): string | { mainPath: string; allPaths: string[] } => {
+    // // Prevent infinite recursion by limiting branch depth
+  //     if (currentDepth >= maxDepth) {
+  //       // Return a simple path with no branches when max depth is reached
+  //       const segments = Math.floor(Math.random() * 5) + 3; // 3-7 segments for deep branches
+  //       let path = `M ${startX} ${startY}`;
+  //       let currentX = startX;
+  //       let currentY = startY;
+  //       
+  //       const directions = [
+  //         { angle: 0, name: 'E' },    // East
+  //         { angle: 45, name: 'NE' },  // Northeast  
+  //         { angle: 90, name: 'N' },   // North
+  //         { angle: 135, name: 'NW' }, // Northwest
+  //         { angle: 180, name: 'W' },  // West
+  //         { angle: 225, name: 'SW' }, // Southwest
+  //         { angle: 270, name: 'S' },  // South
+  //         { angle: 315, name: 'SE' }  // Southeast
+  //       ];
+  //       
+  //       for (let i = 0; i < segments; i++) {
+  //         const direction = directions[Math.floor(Math.random() * directions.length)];
+  //         const length = Math.random() * 60 + 15; // 15-75px segments
+  //         
+  //         const radians = (direction.angle * Math.PI) / 180;
+  //         const deltaX = Math.cos(radians) * length;
+  //         const deltaY = Math.sin(radians) * length;
+  //         
+  //         currentX += deltaX;
+  //         currentY += deltaY;
+  //         
+  //         // Keep within screen bounds
+  //         const bounds = getEffectiveBoundaries();
+  //         currentX = Math.max(bounds.left, Math.min(bounds.right, currentX));
+  //         currentY = Math.max(bounds.top, Math.min(bounds.bottom, currentY));
+  //         
+  //         // Add this segment to occupied segments (for deep branches, we don't track intersections)
+  //         const prevX = i === 0 ? startX : currentX - deltaX;
+  //         const prevY = i === 0 ? startY : currentY - deltaY;
+  //         occupiedSegments.push({ x1: prevX, y1: prevY, x2: currentX, y2: currentY });
+  //         
+  //         path += ` L ${currentX} ${currentY}`;
+  //       }
+  //       
+  //       return returnAllPaths ? { mainPath: path, allPaths: [path] } : path;
+  //     }
+  //     
+  //     const segments = Math.floor(Math.random() * (maxSegments || 15)) + 3; // 3-15 segments (or custom max)
+  //     let path = `M ${startX} ${startY}`;
+  //     let currentX = startX;
+  //     let currentY = startY;
+  //     const allPaths: string[] = [];
+  //     
+  //     // Cardinal directions: N, NE, E, SE, S, SW, W, NW
+  //     const directions = [
+  //       { angle: 0, name: 'E' },    // East
+  //       { angle: 45, name: 'NE' },  // Northeast  
+  //       { angle: 90, name: 'N' },   // North
+  //       { angle: 135, name: 'NW' }, // Northwest
+  //       { angle: 180, name: 'W' },  // West
+  //       { angle: 225, name: 'SW' }, // Southwest
+  //       { angle: 270, name: 'S' },  // South
+  //       { angle: 315, name: 'SE' }  // Southeast
+  //     ];
+  //     
+  //     let lastDirectionIndex = -1;
+  //     let consecutiveTurns = 0;
+  //     let lastTurnDirection = 0; // -1 for counter-clockwise, 1 for clockwise, 0 for none
+  //     
+  //     for (let i = 0; i < segments; i++) {
+  //       let availableDirections;
+  //       
+  //       if (lastDirectionIndex === -1) {
+  //         // First segment - any direction is valid
+  //         availableDirections = directions.map((_, index) => index);
+  //       } else {
+  //         // Get adjacent directions (exactly 45 degrees clockwise and counter-clockwise)
+  //         const clockwiseIndex = (lastDirectionIndex + 1) % 8;
+  //         const counterClockwiseIndex = (lastDirectionIndex - 1 + 8) % 8;
+  //         
+  //         // Only allow exactly 45-degree turns (adjacent directions only)
+  //         availableDirections = [lastDirectionIndex, clockwiseIndex, counterClockwiseIndex];
+  //         
+  //         // Filter out directions that would exceed consecutive turn limit
+  //         if (consecutiveTurns >= 4) {
+  //           availableDirections = availableDirections.filter(dirIndex => {
+  //             const turnDirection = getTurnDirection(lastDirectionIndex, dirIndex);
+  //             return turnDirection !== lastTurnDirection;
+  //           });
+  //         }
+  //       }
+  //       
+  //       // Filter out directions that would cause intersections
+  //       availableDirections = availableDirections.filter(dirIndex => {
+  //         const direction = directions[dirIndex];
+  //         const length = Math.random() * 80 + 20; // Same length calculation as below
+  //         
+  //         const radians = (direction.angle * Math.PI) / 180;
+  //         const deltaX = Math.cos(radians) * length;
+  //         const deltaY = Math.sin(radians) * length;
+  //         
+  //         let testX = currentX + deltaX;
+  //         let testY = currentY + deltaY;
+  //         
+  //         // Keep within screen bounds for test
+  //         const bounds = getEffectiveBoundaries();
+  //         testX = Math.max(bounds.left, Math.min(bounds.right, testX));
+  //         testY = Math.max(bounds.top, Math.min(bounds.bottom, testY));
+  //         
+  //         // Check if this segment would intersect with existing segments
+  //         return !wouldIntersect(currentX, currentY, testX, testY, occupiedSegments);
+  //       });
+  //       
+  //       // If no valid directions available, break the path
+  //       if (availableDirections.length === 0) {
+  //         break;
+  //       }
+  //       
+  //       const chosenDirectionIndex = availableDirections[Math.floor(Math.random() * availableDirections.length)];
+  //       const direction = directions[chosenDirectionIndex];
+  //       const length = Math.random() * 80 + 20; // 20-100px segments
+  //       
+  //       const radians = (direction.angle * Math.PI) / 180;
+  //       const deltaX = Math.cos(radians) * length;
+  //       const deltaY = Math.sin(radians) * length;
+  //       
+  //       const prevX = currentX;
+  //       const prevY = currentY;
+  //       
+  //       currentX += deltaX;
+  //       currentY += deltaY;
+  //       
+  //       // Keep within screen bounds
+  //       const bounds = getEffectiveBoundaries();
+  //       currentX = Math.max(bounds.left, Math.min(bounds.right, currentX));
+  //       currentY = Math.max(bounds.top, Math.min(bounds.bottom, currentY));
+  //       
+  //       // Add this segment to occupied segments
+  //       occupiedSegments.push({ x1: prevX, y1: prevY, x2: currentX, y2: currentY });
+  //       
+  //       path += ` L ${currentX} ${currentY}`;
+  //       
+  //       // Random chance to create a branch (30% chance, but not on first or last segment)
+  //       if (i > 0 && i < segments - 1 && Math.random() < 0.3 && currentDepth < maxDepth && branchCounter.count < 4) {
+  //         // Create up to 4 branches from this point
+  //         const rand = Math.random();
+  //         let numBranches;
+  //         if (rand < 0.4) numBranches = 1;      // 40% chance for 1 branch
+  //         else if (rand < 0.7) numBranches = 2; // 30% chance for 2 branches
+  //         else if (rand < 0.9) numBranches = 3; // 20% chance for 3 branches
+  //         else numBranches = 4;                 // 10% chance for 4 branches
+  //         
+  //         // Limit branches to not exceed terminal point limit
+  //         const remainingTerminals = 4 - branchCounter.count;
+  //         numBranches = Math.min(numBranches, remainingTerminals);
+  //         
+  //         for (let b = 0; b < numBranches; b++) {
+  //           branchCounter.count++;
+  //           // Generate branch with fewer segments (3-8)
+  //           const branchSegments = Math.floor(Math.random() * 6) + 3;
+  //           const branchResult = generateSinglePath(currentX, currentY, branchSegments, currentDepth + 1, maxDepth, branchCounter, occupiedSegments, true);
+  //           if (typeof branchResult === 'object' && branchResult.allPaths) {
+  //             allPaths.push(...branchResult.allPaths);
+  //           } else if (typeof branchResult === 'string') {
+  //             allPaths.push(branchResult);
+  //           }
+  //         }
+  //       }
+  //       
+  //       // Update turn tracking
+  //       if (lastDirectionIndex !== -1) {
+  //         const turnDirection = getTurnDirection(lastDirectionIndex, chosenDirectionIndex);
+  //         if (turnDirection === lastTurnDirection && turnDirection !== 0) {
+  //           consecutiveTurns++;
+  //         } else {
+  //           consecutiveTurns = turnDirection !== 0 ? 1 : 0;
+  //           lastTurnDirection = turnDirection;
+  //         }
+  //       }
+  //       
+  //       lastDirectionIndex = chosenDirectionIndex;
+  //     }
+  //     
+  //     if (returnAllPaths) {
+  //       return { mainPath: path, allPaths: [path, ...allPaths] };
+  //     }
+  //     
+  //     // For backward compatibility, combine all paths
+  //     return [path, ...allPaths].join(' ');
+  //   };
   
-  // Helper function to determine turn direction
-  const getTurnDirection = (fromIndex: number, toIndex: number) => {
-    const diff = (toIndex - fromIndex + 8) % 8;
-    if (diff === 1) return 1;  // Clockwise
-    if (diff === 7) return -1; // Counter-clockwise  
-    return 0; // No turn (shouldn't happen with adjacent directions)
-  };
+  // Helper function to determine turn direction - COMMENTED OUT (UNUSED)
+  // const getTurnDirection = (fromIndex: number, toIndex: number) => {
+  //   const diff = (toIndex - fromIndex + 8) % 8;
+  //   if (diff === 1) return 1;  // Clockwise
+  //   if (diff === 7) return -1; // Counter-clockwise
+  //   return 0; // No turn (shouldn't happen with adjacent directions)
+  // };
 
   React.useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
@@ -825,7 +825,7 @@ const ParticleBackground: React.FC<ParticleBackgroundProps> = ({ containerRef, b
       
       // Animate background blobs
       setBackgroundBlobs(prevBlobs => {
-        return prevBlobs.map((blob, index) => {
+        return prevBlobs.map((blob) => {
           // Add small random forces for natural movement
           const randomForceX = (Math.random() - 0.5) * 0.02;
           const randomForceY = (Math.random() - 0.5) * 0.02;

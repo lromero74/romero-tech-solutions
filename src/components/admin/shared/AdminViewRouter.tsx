@@ -16,7 +16,7 @@ import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
 import AddClientModal from '../AdminClients_Modals/AddClientModal';
-import EditEmployeeModal from '../AdminEmployees_Modals/EditEmployeeModal';
+// import EditEmployeeModal from '../AdminEmployees_Modals/EditEmployeeModal';
 import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServiceLocationModal';
 import { useAdminData } from '../../../contexts/AdminDataContext';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
@@ -25,11 +25,11 @@ import { useClientFilters } from '../../../hooks/admin/useClientFilters';
 import { useBusinessFilters } from '../../../hooks/admin/useBusinessFilters';
 import { useServiceLocationFilters } from '../../../hooks/admin/useServiceLocationFilters';
 import { useEntityCRUD } from '../../../hooks/admin/useEntityCRUD';
-import { openInMaps } from '../../../utils/admin/addressUtils';
+// import { openInMaps } from '../../../utils/admin/addressUtils';
 import { adminService } from '../../../services/adminService';
 import ConfirmationDialog from '../../common/ConfirmationDialog';
-import { AdminModalManager } from './AdminModalManager';
-import { useModalManager } from '../../../hooks/admin/useModalManager';
+// import { AdminModalManager } from './AdminModalManager';
+// import { useModalManager } from '../../../hooks/admin/useModalManager';
 
 export type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity';
 
@@ -39,10 +39,10 @@ interface AdminViewRouterProps {
   onClientCountClick?: (businessName: string) => void;
   onBusinessNameClick?: (businessName: string) => void;
   onShowAddServiceLocation?: () => void;
-  serviceLocationPrefillBusinessName?: string;
-  serviceLocationFilters?: any;
-  clientFilters?: any;
-  businessFilters?: any;
+  // serviceLocationPrefillBusinessName?: string;
+  serviceLocationFilters?: unknown;
+  clientFilters?: unknown;
+  businessFilters?: unknown;
   // External toggle state values
   externalShowInactiveClients?: boolean;
   externalShowSoftDeletedClients?: boolean;
@@ -58,7 +58,7 @@ interface AdminViewRouterProps {
   setShowInactiveServiceLocations?: (show: boolean) => void;
   setShowSoftDeletedServiceLocations?: (show: boolean) => void;
   // Modal handlers
-  onOpenModal?: (modalName: string, entity?: any) => void;
+  onOpenModal?: (modalName: string, entity?: unknown) => void;
 }
 
 export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
@@ -67,20 +67,20 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   onClientCountClick,
   onBusinessNameClick,
   onShowAddServiceLocation,
-  serviceLocationPrefillBusinessName,
+  // serviceLocationPrefillBusinessName,
   serviceLocationFilters: serviceLocationFiltersProp,
   clientFilters: clientFiltersProp,
   businessFilters: businessFiltersProp,
   externalShowInactiveClients,
   externalShowSoftDeletedClients,
-  externalShowInactiveBusinesses,
-  externalShowSoftDeletedBusinesses,
+  // externalShowInactiveBusinesses,
+  // externalShowSoftDeletedBusinesses,
   externalShowInactiveServiceLocations,
   externalShowSoftDeletedServiceLocations,
   setShowInactiveClients: externalSetShowInactiveClients,
   setShowSoftDeletedClients: externalSetShowSoftDeletedClients,
-  setShowInactiveBusinesses: externalSetShowInactiveBusinesses,
-  setShowSoftDeletedBusinesses: externalSetShowSoftDeletedBusinesses,
+  // setShowInactiveBusinesses: externalSetShowInactiveBusinesses,
+  // setShowSoftDeletedBusinesses: externalSetShowSoftDeletedBusinesses,
   setShowInactiveServiceLocations: externalSetShowInactiveServiceLocations,
   setShowSoftDeletedServiceLocations: externalSetShowSoftDeletedServiceLocations
 }) => {
@@ -99,7 +99,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     refreshClients,
     refreshBusinesses,
     refreshOnlineStatus,
-    availableRoles
+    // availableRoles
   } = useAdminData();
 
   // Get current user for authorization checks
@@ -112,12 +112,16 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   }, [currentView, refreshOnlineStatus, isAuthenticated, user]);
 
-  // Initialize filter hooks
+  // Initialize filter hooks - always call hooks to maintain hook order
   const employeeFilters = useEmployeeFilters();
-  const clientFilters = clientFiltersProp || useClientFilters();
-  const businessFilters = businessFiltersProp || useBusinessFilters();
-  // Use the service location filters passed from AdminDashboard instead of creating a new instance
-  const serviceLocationFilters = serviceLocationFiltersProp || useServiceLocationFilters();
+  const defaultClientFilters = useClientFilters();
+  const defaultBusinessFilters = useBusinessFilters();
+  const defaultServiceLocationFilters = useServiceLocationFilters();
+
+  // Use provided filters or fall back to defaults
+  const clientFilters = clientFiltersProp || defaultClientFilters;
+  const businessFilters = businessFiltersProp || defaultBusinessFilters;
+  const serviceLocationFilters = serviceLocationFiltersProp || defaultServiceLocationFilters;
 
   // Initialize CRUD hooks
   const employeeCRUD = useEntityCRUD('employees');
@@ -128,10 +132,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   const serviceLocationCRUD = useEntityCRUD('serviceLocations');
 
   // Get filtered data
-  const filteredEmployees = employeeFilters.getFilteredAndSortedEmployees(employees);
-  const filteredClients = clientFilters.getFilteredAndSortedClients(clients);
-  const filteredBusinesses = businessFilters.getFilteredAndSortedBusinesses(businesses, clients);
-  const filteredServiceLocations = serviceLocationFilters.getFilteredAndSortedServiceLocations(serviceLocations);
+  // const filteredEmployees = employeeFilters.getFilteredAndSortedEmployees(employees);
+  // const filteredClients = clientFilters.getFilteredAndSortedClients(clients);
+  // const filteredBusinesses = businessFilters.getFilteredAndSortedBusinesses(businesses, clients);
+  // const filteredServiceLocations = serviceLocationFilters.getFilteredAndSortedServiceLocations(serviceLocations);
 
   // Business modal state
   const [showEditBusinessModal, setShowEditBusinessModal] = useState(false);
@@ -146,6 +150,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Service Location modal state
   const [showEditServiceLocationModal, setShowEditServiceLocationModal] = useState(false);
   const [selectedServiceLocation, setSelectedServiceLocation] = useState(null);
+  // const [showAddServiceLocationModal, setShowAddServiceLocationModal] = useState(false);
+  // const [serviceLocationPrefillData, setServiceLocationPrefillData] = useState(null);
+
+  // Employee modal state
+  // const [showEditEmployeeModal, setShowEditEmployeeModal] = useState(false);
+  // const [selectedEmployee, setSelectedEmployee] = useState(null);
 
   // State to track service location context for user creation
   const [userCreationContext, setUserCreationContext] = useState<{
@@ -236,7 +246,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   const setShowSoftDeletedServiceLocationsFunc = externalSetShowSoftDeletedServiceLocations || setShowSoftDeletedServiceLocations;
 
   // Business modal handlers
-  const handleEditBusiness = (business: any) => {
+  const handleEditBusiness = (business: unknown) => {
     setSelectedBusiness(business);
     setShowEditBusinessModal(true);
   };
@@ -254,7 +264,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     setShowAddBusinessModal(false);
   };
 
-  const handleCreateBusiness = async (businessData: any) => {
+  const handleCreateBusiness = async (businessData: unknown) => {
     try {
       await businessCRUD.createEntity(businessData);
       await refreshBusinesses();
@@ -265,16 +275,17 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  const handleDeleteBusiness = (business: any) => {
+  const handleDeleteBusiness = (business: unknown) => {
     // Count related records that will be deleted
-    const relatedServiceLocations = serviceLocations.filter(sl => sl.business_name === business.businessName);
-    const relatedClients = clients.filter(client => client.businessName === business.businessName);
+    const businessData = business as any; // Type assertion for legacy business object
+    const relatedServiceLocations = serviceLocations.filter(sl => sl.business_name === businessData.businessName);
+    const relatedClients = clients.filter(client => client.businessName === businessData.businessName);
 
     const serviceLocationCount = relatedServiceLocations.length;
     const clientCount = relatedClients.length;
 
     // Create a detailed warning message
-    let message = `⚠️ WARNING: This action cannot be undone!\n\nDeleting "${business.businessName}" will permanently remove:\n\n• The business record`;
+    let message = `⚠️ WARNING: This action cannot be undone!\n\nDeleting "${businessData.businessName}" will permanently remove:\n\n• The business record`;
 
     if (serviceLocationCount > 0) {
       message += `\n• ${serviceLocationCount} service location${serviceLocationCount !== 1 ? 's' : ''}`;
@@ -296,9 +307,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
         try {
           // Set loading state for this specific business to show spinner
-          setLoadingBusinessOperations(prev => ({ ...prev, [business.id]: true }));
+          setLoadingBusinessOperations(prev => ({ ...prev, [businessData.id]: true }));
 
-          console.log('🔴 Starting cascade delete for business:', business.businessName);
+          console.log('🔴 Starting cascade delete for business:', businessData.businessName);
 
           // Delete related service locations first
           for (const serviceLocation of relatedServiceLocations) {
@@ -321,8 +332,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           }
 
           // Finally delete the business
-          await businessCRUD.deleteEntity(business.id);
-          console.log('🔴 Deleted business:', business.businessName);
+          await businessCRUD.deleteEntity(businessData.id);
+          console.log('🔴 Deleted business:', businessData.businessName);
 
           // Refresh all data
           await refreshAllData();
@@ -340,7 +351,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           // Clear loading state for this specific business
           setLoadingBusinessOperations(prev => {
             const newState = { ...prev };
-            delete newState[business.id];
+            delete newState[businessData.id];
             return newState;
           });
         }
@@ -348,7 +359,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     });
   };
 
-  const handleUpdateBusiness = async (businessId: string, updates: any) => {
+  const handleUpdateBusiness = async (businessId: string, updates: unknown) => {
     try {
       await businessCRUD.updateEntity(businessId, updates);
       setShowEditBusinessModal(false);
@@ -361,8 +372,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   };
 
   // Client modal handlers
-  const handleEditClient = (client: any) => {
-    setSelectedClient(client);
+  const handleEditClient = (client: unknown) => {
+    setSelectedClient(client as any);
     setShowEditClientModal(true);
   };
 
@@ -379,7 +390,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     setShowAddClientModal(false);
   };
 
-  const handleCreateClient = async (clientData: any) => {
+  const handleCreateClient = async (clientData: unknown) => {
     try {
       const result = await clientCRUD.createEntity(clientData);
 
@@ -409,7 +420,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  const handleUpdateClient = async (clientId: string, updates: any) => {
+  const handleUpdateClient = async (clientId: string, updates: unknown) => {
     try {
       await clientCRUD.updateEntity(clientId, updates);
       setShowEditClientModal(false);
@@ -422,8 +433,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   };
 
   // Service Location modal handlers
-  const handleEditServiceLocation = (location: any) => {
-    setSelectedServiceLocation(location);
+  const handleEditServiceLocation = (location: unknown) => {
+    setSelectedServiceLocation(location as any);
     setShowEditServiceLocationModal(true);
   };
 
@@ -432,41 +443,41 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     setSelectedServiceLocation(null);
   };
 
-  const handleAddServiceLocation = () => {
-    setShowAddServiceLocationModal(true);
-  };
+  // const handleAddServiceLocation = () => {
+  //   setShowAddServiceLocationModal(true);
+  // };
 
-  const handleCloseAddServiceLocationModal = () => {
-    setShowAddServiceLocationModal(false);
-    setServiceLocationPrefillData(null);
-  };
+  // const handleCloseAddServiceLocationModal = () => {
+  //   setShowAddServiceLocationModal(false);
+  //   setServiceLocationPrefillData(null);
+  // };
 
-  const handleOpenServiceLocationModalFromBusiness = (businessName: string, address: { street: string; city: string; state: string; zipCode: string; country?: string; }) => {
-    setServiceLocationPrefillData({ businessName, address });
-    setShowAddServiceLocationModal(true);
-  };
+  // const handleOpenServiceLocationModalFromBusiness = (businessName: string, address: { street: string; city: string; state: string; zipCode: string; country?: string; }) => {
+  //   setServiceLocationPrefillData({ businessName, address });
+  //   setShowAddServiceLocationModal(true);
+  // };
 
-  const handleOpenAddUserModalFromServiceLocation = (businessId: string, serviceLocationId?: string) => {
-    if (serviceLocationId) {
-      setUserCreationContext({ businessId, serviceLocationId });
-    }
-    setShowAddClientModal(true);
-  };
+  // const handleOpenAddUserModalFromServiceLocation = (businessId: string, serviceLocationId?: string) => {
+  //   if (serviceLocationId) {
+  //     setUserCreationContext({ businessId, serviceLocationId });
+  //   }
+  //   setShowAddClientModal(true);
+  // };
 
-  const handleCreateServiceLocation = async (locationData: any) => {
-    try {
-      const result = await serviceLocationCRUD.createEntity(locationData);
-      setShowAddServiceLocationModal(false);
-      // Refresh service location data
-      await refreshAllData();
-      return result;
-    } catch (error) {
-      console.error('Failed to create service location:', error);
-      throw error;
-    }
-  };
+  // const handleCreateServiceLocation = async (locationData: unknown) => {
+  //   try {
+  //     const result = await serviceLocationCRUD.createEntity(locationData);
+  //     setShowAddServiceLocationModal(false);
+  //     // Refresh service location data
+  //     await refreshAllData();
+  //     return result;
+  //   } catch (error) {
+  //     console.error('Failed to create service location:', error);
+  //     throw error;
+  //   }
+  // };
 
-  const handleUpdateServiceLocation = async (locationId: string, updates: any) => {
+  const handleUpdateServiceLocation = async (locationId: string, updates: unknown) => {
     try {
       await serviceLocationCRUD.updateEntity(locationId, updates);
       setShowEditServiceLocationModal(false);
@@ -479,34 +490,35 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  // Employee modal handlers
-  const handleEditEmployee = (employee: any) => {
-    setSelectedEmployee(employee);
-    setShowEditEmployeeModal(true);
-  };
+  // Employee modal handlers - commented out as they are not currently used
+  // const handleEditEmployee = (employee: unknown) => {
+  //   setSelectedEmployee(employee as any);
+  //   setShowEditEmployeeModal(true);
+  // };
 
-  const handleCloseEditEmployeeModal = () => {
-    setShowEditEmployeeModal(false);
-    setSelectedEmployee(null);
-  };
+  // const handleCloseEditEmployeeModal = () => {
+  //   setShowEditEmployeeModal(false);
+  //   setSelectedEmployee(null);
+  // };
 
-  const handleSubmitEditEmployee = async (employeeData: any) => {
-    try {
-      await handleUpdateEmployee(employeeData.id, employeeData);
-      setShowEditEmployeeModal(false);
-      setSelectedEmployee(null);
-    } catch (error) {
-      console.error('Failed to update employee:', error);
-      throw error;
-    }
-  };
+  // const handleSubmitEditEmployee = async (employeeData: unknown) => {
+  //   try {
+  //     const empData = employeeData as any;
+  //     await handleUpdateEmployee(empData.id, employeeData);
+  //     setShowEditEmployeeModal(false);
+  //     setSelectedEmployee(null);
+  //   } catch (error) {
+  //     console.error('Failed to update employee:', error);
+  //     throw error;
+  //   }
+  // };
 
-  const handleEmployeeChange = (employee: any) => {
-    setSelectedEmployee(employee);
-  };
+  // const handleEmployeeChange = (employee: unknown) => {
+  //   setSelectedEmployee(employee as any);
+  // };
 
   // Wrapper function to update employee and refresh data
-  const handleUpdateEmployee = async (employeeId: string, updates: any) => {
+  const handleUpdateEmployee = async (employeeId: string, updates: unknown) => {
     try {
       await employeeCRUD.updateEntity(employeeId, updates);
       // Refresh employee data to update the UI
@@ -518,11 +530,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   };
 
   // Employee delete handlers
-  const handleSoftDeleteEmployee = async (employee: any) => {
+  const handleSoftDeleteEmployee = async (employee: unknown) => {
     try {
-      const shouldRestore = employee.softDelete; // If currently deleted, restore it
-      const actionType = shouldRestore ? 'restore' : 'soft delete';
-      const entityName = `${employee.firstName} ${employee.lastName}`;
+      const empData = employee as any; // Type assertion for legacy employee object
+      const shouldRestore = empData.softDelete; // If currently deleted, restore it
+      // const actionType = shouldRestore ? 'restore' : 'soft delete'; // Unused variable
+      const entityName = `${empData.firstName} ${empData.lastName}`;
 
       setConfirmationDialog({
         isOpen: true,
@@ -533,11 +546,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onConfirm: async () => {
           try {
             // Set loading state for this specific employee
-            setLoadingEmployeeOperations(prev => ({ ...prev, [employee.id]: true }));
-            console.log(`🔄 Soft ${shouldRestore ? 'restoring' : 'deleting'} employee:`, employee.employeeNumber, employee.firstName, employee.lastName);
-            console.log('Current softDelete status:', employee.softDelete);
+            setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
+            console.log(`🔄 Soft ${shouldRestore ? 'restoring' : 'deleting'} employee:`, empData.employeeNumber, empData.firstName, empData.lastName);
+            console.log('Current softDelete status:', empData.softDelete);
 
-            await adminService.softDeleteUser(employee.id, shouldRestore);
+            await adminService.softDeleteUser(empData.id, shouldRestore);
             console.log('✅ Soft delete API call completed');
 
             await refreshEmployees();
@@ -550,7 +563,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Clear loading state for this specific employee
             setLoadingEmployeeOperations(prev => {
               const newState = { ...prev };
-              delete newState[employee.id];
+              delete newState[empData.id];
               return newState;
             });
           }
@@ -561,9 +574,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  const handleHardDeleteEmployee = async (employee: any) => {
+  const handleHardDeleteEmployee = async (employee: unknown) => {
     try {
-      const entityName = `${employee.firstName} ${employee.lastName}`;
+      const empData = employee as any;
+      const entityName = `${empData.firstName} ${empData.lastName}`;
 
       setConfirmationDialog({
         isOpen: true,
@@ -572,8 +586,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onConfirm: async () => {
           try {
             // Set loading state for this specific employee
-            setLoadingEmployeeOperations(prev => ({ ...prev, [employee.id]: true }));
-            await adminService.deleteUser(employee.id);
+            setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
+            await adminService.deleteUser(empData.id);
             await refreshEmployees();
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {
@@ -582,7 +596,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Clear loading state for this specific employee
             setLoadingEmployeeOperations(prev => {
               const newState = { ...prev };
-              delete newState[employee.id];
+              delete newState[empData.id];
               return newState;
             });
           }
@@ -593,9 +607,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  const handleTerminateEmployee = async (employee: any) => {
+  const handleTerminateEmployee = async (employee: unknown) => {
     try {
-      const entityName = `${employee.firstName} ${employee.lastName}`;
+      const empData = employee as any;
+      const entityName = `${empData.firstName} ${empData.lastName}`;
 
       setConfirmationDialog({
         isOpen: true,
@@ -604,18 +619,18 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onConfirm: async () => {
           try {
             // Prevent self-termination
-            if (user && employee.id === user.id) {
+            if (user && empData.id === user.id) {
               console.warn('Cannot terminate your own account');
               return;
             }
 
             // Set loading state for this specific employee
-            setLoadingEmployeeOperations(prev => ({ ...prev, [employee.id]: true }));
+            setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
 
             const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
             // Update employment status to terminated, set inactive, and record termination date
-            await employeeCRUD.updateEntity(employee.id, {
+            await employeeCRUD.updateEntity(empData.id, {
               employeeStatus: 'terminated',
               isActive: false,
               terminationDate: today
@@ -628,7 +643,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Clear loading state for this specific employee
             setLoadingEmployeeOperations(prev => {
               const newState = { ...prev };
-              delete newState[employee.id];
+              delete newState[empData.id];
               return newState;
             });
           }
@@ -639,9 +654,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     }
   };
 
-  const handleRehireEmployee = async (employee: any) => {
+  const handleRehireEmployee = async (employee: unknown) => {
     try {
-      const entityName = `${employee.firstName} ${employee.lastName}`;
+      const empData = employee as any;
+      const entityName = `${empData.firstName} ${empData.lastName}`;
       setConfirmationDialog({
         isOpen: true,
         title: 'Confirm Employee Rehire',
@@ -652,12 +668,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onConfirm: async () => {
           try {
             // Set loading state for this specific employee
-            setLoadingEmployeeOperations(prev => ({ ...prev, [employee.id]: true }));
+            setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
 
             const today = new Date().toISOString().split('T')[0]; // Format: YYYY-MM-DD
 
             // Update employment status to active, set new hire date, clear termination date
-            await employeeCRUD.updateEntity(employee.id, {
+            await employeeCRUD.updateEntity(empData.id, {
               employeeStatus: 'active',
               hireDate: today,
               terminationDate: null,
@@ -671,7 +687,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Clear loading state for this specific employee
             setLoadingEmployeeOperations(prev => {
               const newState = { ...prev };
-              delete newState[employee.id];
+              delete newState[empData.id];
               return newState;
             });
           }
@@ -1000,11 +1016,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           />
         );
 
-      case 'businesses':
+      case 'businesses': {
         // Remove duplicates first, then enhance businesses with correct location counts
-        const uniqueBusinesses = businesses.filter((business, index, array) =>
-          array.findIndex(b => b.id === business.id) === index
-        );
+        const uniqueBusinesses = businesses.filter((business, index, array) => {
+          return array.findIndex(b => b.id === business.id) === index;
+        });
 
         const enhancedBusinesses = uniqueBusinesses.map(business => {
           const locationCount = serviceLocations.filter(location =>
@@ -1178,7 +1194,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
               }
             }}
             // Click handlers
-            onClientCountClick={onClientCountClick ? (businessId, businessName, clientCount, authorizedDomains) => {
+            onClientCountClick={onClientCountClick ? (businessId, businessName) => {
               onClientCountClick(businessName);
             } : undefined}
             onLocationCountClick={onLocationCountClick}
@@ -1189,6 +1205,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             toggleShowSoftDeletedBusinesses={() => setShowSoftDeletedBusinesses(!showSoftDeletedBusinesses)}
           />
         );
+      }
 
       case 'services':
         return (

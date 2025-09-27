@@ -186,6 +186,19 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
     }
   };
 
+  const handleClose = useCallback(() => {
+    if (hasUnsavedChanges) {
+      setShowConfirmClose(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedChanges, onClose]);
+
+  const handleConfirmClose = useCallback(() => {
+    setShowConfirmClose(false);
+    onClose();
+  }, [onClose]);
+
   // Handle ESC key
   useEffect(() => {
     const handleEscapeKey = (event: KeyboardEvent) => {
@@ -199,19 +212,6 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
       document.removeEventListener('keydown', handleEscapeKey);
     };
   }, [showModal, handleClose]);
-
-  const handleClose = useCallback(() => {
-    if (hasUnsavedChanges) {
-      setShowConfirmClose(true);
-    } else {
-      onClose();
-    }
-  }, [hasUnsavedChanges, onClose]);
-
-  const handleConfirmClose = useCallback(() => {
-    setShowConfirmClose(false);
-    onClose();
-  }, [onClose]);
 
   // Handle field-level blur validation
   const handleFieldBlur = async (field: 'city' | 'state', value: string) => {

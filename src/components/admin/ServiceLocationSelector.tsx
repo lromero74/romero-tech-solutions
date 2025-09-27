@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckSquare, Square, ChevronRight, ChevronDown, MapPin, Building2, Globe, Navigation } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import adminService from '../../services/adminService';
@@ -71,9 +71,9 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     if (locations.length > 0) {
       buildLocationTree(locations);
     }
-  }, [locations, initialSelections]);
+  }, [locations, initialSelections, buildLocationTree]);
 
-  const buildLocationTree = (locationData: LocationItem[]) => {
+  const buildLocationTree = useCallback((locationData: LocationItem[]) => {
     // Group by type and build hierarchy
     const states = locationData.filter(l => l.location_type === 'state');
     const counties = locationData.filter(l => l.location_type === 'county');
@@ -130,10 +130,10 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
 
     setLocationTree(finalTree);
-  };
+  }, [initialSelections, updateTreeWithSelections]);
 
   // Update tree with selections and propagate changes
-  const updateTreeWithSelections = (tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
+  const updateTreeWithSelections = useCallback((tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
     return tree.map(node => {
       const nodeKey = `${node.location_type}:${node.id}`;
       const hasChildren = node.children && node.children.length > 0;
@@ -166,7 +166,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
       return updatedNode;
     });
-  };
+  }, []);
 
   // Get all descendant node keys
   const getAllDescendantKeys = (node: LocationNode): string[] => {
@@ -231,7 +231,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     if (locationTree.length > 0) { // Only update if tree is built
       setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
     }
-  }, [selections]);
+  }, [selections, locationTree.length, updateTreeWithSelections]);
 
 
   // Calculate expanded nodes count
@@ -247,7 +247,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
   const expandedCount = getExpandedCount(locationTree);
 
   // Collapse all expanded nodes
-  const handleCollapseAll = () => {
+  const handleCollapseAll = useCallback(() => {
     const collapseNodes = (nodes: LocationNode[]): LocationNode[] => {
       return nodes.map(node => ({
         ...node,
@@ -256,14 +256,14 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
       }));
     };
     setLocationTree(collapseNodes(locationTree));
-  };
+  }, [locationTree]);
 
   // Notify parent of expanded count changes
   useEffect(() => {
     if (onExpandedCountChange) {
       onExpandedCountChange(expandedCount, handleCollapseAll);
     }
-  }, [expandedCount, onExpandedCountChange]);
+  }, [expandedCount, onExpandedCountChange, handleCollapseAll]);
 
   // Handle city highlighting by expanding tree to show the highlighted city
   useEffect(() => {

@@ -188,13 +188,30 @@ const AddClientModal: React.FC<AddClientModalProps> = ({
     onClose();
   }, [onClose]);
 
+  // Check if form has any changes from initial state
+  const hasChanges = useCallback(() => {
+    return (
+      formData.name !== '' ||
+      formData.email !== (prefillDomain || '') ||
+      formData.phone !== '' ||
+      formData.businessId !== (prefillBusinessId || '') ||
+      formData.photo !== '' ||
+      formData.photoPositionX !== 50 ||
+      formData.photoPositionY !== 50 ||
+      formData.photoScale !== 100 ||
+      formData.photoBackgroundColor !== '' ||
+      enablePhoto !== false ||
+      enableBackgroundColor !== false
+    );
+  }, [formData, prefillDomain, prefillBusinessId, enablePhoto, enableBackgroundColor]);
+
   const handleClose = useCallback(() => {
     if (hasChanges()) {
       setShowConfirmModal(true);
     } else {
       resetAndClose();
     }
-  }, [resetAndClose]);
+  }, [hasChanges, resetAndClose]);
 
   // ESC key handler
   useEffect(() => {
@@ -212,23 +229,6 @@ const AddClientModal: React.FC<AddClientModalProps> = ({
       document.removeEventListener('keydown', handleEscKey);
     };
   }, [showModal, handleClose]);
-
-  // Check if form has any changes from initial state
-  const hasChanges = () => {
-    return (
-      formData.name !== '' ||
-      formData.email !== (prefillDomain || '') ||
-      formData.phone !== '' ||
-      formData.businessId !== (prefillBusinessId || '') ||
-      formData.photo !== '' ||
-      formData.photoPositionX !== 50 ||
-      formData.photoPositionY !== 50 ||
-      formData.photoScale !== 100 ||
-      formData.photoBackgroundColor !== '' ||
-      enablePhoto !== false ||
-      enableBackgroundColor !== false
-    );
-  };
 
   if (!showModal) return null;
 

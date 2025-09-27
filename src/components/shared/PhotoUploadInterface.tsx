@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 
 interface PhotoUploadInterfaceProps {
   photo: string;
@@ -30,7 +30,6 @@ export const PhotoUploadInterface: React.FC<PhotoUploadInterfaceProps> = ({
   onBackgroundColorToggle,
   className = ""
 }) => {
-  const { theme } = useTheme();
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

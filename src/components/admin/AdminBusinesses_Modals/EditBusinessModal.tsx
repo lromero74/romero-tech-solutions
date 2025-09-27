@@ -258,7 +258,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showModal, formData, originalBusiness, authorizedDomains, originalDomains, enableBackgroundColor, originalEnableBackgroundColor, setShowConfirmModal, onClose]);
+  }, [showModal, formData, originalBusiness, authorizedDomains, originalDomains, enableBackgroundColor, originalEnableBackgroundColor, enableLogo, originalEnableLogo, setShowConfirmModal, onClose]);
 
   if (!showModal || !business) return null;
 

@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Eye, EyeOff, AlertTriangle, Check, Info } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 import {
   PasswordComplexityRequirements,
-  PasswordStrengthResult,
+  // PasswordStrengthResult, // Unused import
   DEFAULT_PASSWORD_REQUIREMENTS,
   evaluatePasswordStrength
 } from '../../../types/passwordComplexity';
@@ -27,7 +27,7 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
   userName,
   passwordRequirements: propPasswordRequirements
 }) => {
-  const { theme } = useTheme();
+  // const { theme } = useTheme(); // Theme not currently used
   const { requirements: dynamicRequirements } = usePasswordComplexity();
 
   // Use dynamic requirements if available, fallback to prop requirements or defaults
@@ -104,8 +104,8 @@ const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({
       setTimeout(() => {
         handleClose();
       }, 2000);
-    } catch (err: any) {
-      setError(err.message || 'Failed to change password');
+    } catch (err: unknown) { // Error handling
+      setError((err as Error).message || 'Failed to change password');
     } finally {
       setIsSubmitting(false);
     }

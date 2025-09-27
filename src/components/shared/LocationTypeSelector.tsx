@@ -31,7 +31,6 @@ const LocationTypeSelector: React.FC<LocationTypeSelectorProps> = ({
   value,
   onChange,
   disabled = false,
-  required = false,
   placeholder = "Select location type...",
   showSearch = true
 }) => {

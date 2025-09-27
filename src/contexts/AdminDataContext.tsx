@@ -180,7 +180,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
   // Helper function to enhance clients with service location addresses
   const enhanceClientsWithAddresses = (
-    rawClients: any[],
+    rawClients: unknown[], // Raw client data from API
     businesses: Business[],
     serviceLocations: ServiceLocation[]
   ): Client[] => {

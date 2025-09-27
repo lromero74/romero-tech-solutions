@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle, Trash2 } from 'lucide-react';
-import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
+import { themeClasses } from '../../../contexts/ThemeContext';
 
 interface DeleteConfirmModalProps {
   showModal: boolean;
@@ -23,7 +23,7 @@ const DeleteConfirmModal: React.FC<DeleteConfirmModalProps> = ({
   deleteType = 'soft',
   customMessage
 }) => {
-  const { theme } = useTheme();
+  // const { theme } = useTheme(); // Theme not currently used
 
   const handleConfirm = async () => {
     try {

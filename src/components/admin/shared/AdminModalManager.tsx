@@ -51,14 +51,14 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
   deleteConfirmation,
   onDeleteConfirm
 }) => {
-  const { businesses, refreshBusinesses, refreshServiceLocations, refreshClients, refreshEmployees } = useAdminData();
+  const { businesses, refreshBusinesses, refreshServiceLocations, refreshClients } = useAdminData();
   const { user } = useEnhancedAuth();
 
   // Initialize CRUD hooks
   const clientCRUD = useEntityCRUD<Client>('clients');
   const businessCRUD = useEntityCRUD<Business>('businesses');
   const serviceLocationCRUD = useEntityCRUD<ServiceLocation>('serviceLocations');
-  const employeeCRUD = useEntityCRUD<Employee>('employees');
+  // const employeeCRUD = useEntityCRUD<Employee>('employees');
   // const serviceCRUD = useEntityCRUD<Service>('services');
   // const serviceRequestCRUD = useEntityCRUD<ServiceRequest>('serviceRequests');
 

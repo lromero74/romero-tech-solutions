@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { X, Save, AlertTriangle, AlertCircle } from 'lucide-react';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { adminService } from '../../../services/adminService';
@@ -154,7 +154,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     if (serviceLocation && availableBusinesses.length === 0) {
       fetchBusinesses();
     }
-  }, [serviceLocation]);
+  }, [serviceLocation, availableBusinesses.length]);
 
   const fetchBusinesses = async () => {
     try {
@@ -184,7 +184,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     }));
   };
 
-  const hasChanges = () => {
+  const hasChanges = useCallback(() => {
     if (!originalServiceLocation) return false;
 
     return (
@@ -203,7 +203,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
       formData.is_active !== originalServiceLocation.is_active ||
       formData.is_headquarters !== originalServiceLocation.is_headquarters
     );
-  };
+  }, [formData, address, originalServiceLocation]);
 
   // Handle field-level blur validation
   const handleFieldBlur = async (field: 'city' | 'state', value: string) => {
@@ -306,32 +306,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     setShowConfirmModal(false);
   };
 
-  const handleClose = () => {
-    if (hasChanges()) {
-      setShowConfirmModal(true);
-    } else {
-      resetAndClose();
-    }
-  };
-
-  // ESC key handler
-  useEffect(() => {
-    const handleEscKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && showModal) {
-        handleClose();
-      }
-    };
-
-    if (showModal) {
-      document.addEventListener('keydown', handleEscKey);
-    }
-
-    return () => {
-      document.removeEventListener('keydown', handleEscKey);
-    };
-  }, [showModal, handleClose]);
-
-  const resetAndClose = () => {
+  const resetAndClose = useCallback(() => {
     setFormData({
       business_id: '',
       address_label: '',
@@ -353,7 +328,32 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     setOriginalServiceLocation(null);
     setShowConfirmModal(false);
     onClose();
-  };
+  }, [onClose]);
+
+  const handleClose = useCallback(() => {
+    if (hasChanges()) {
+      setShowConfirmModal(true);
+    } else {
+      resetAndClose();
+    }
+  }, [hasChanges, resetAndClose]);
+
+  // ESC key handler
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showModal) {
+        handleClose();
+      }
+    };
+
+    if (showModal) {
+      document.addEventListener('keydown', handleEscKey);
+    }
+
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [showModal, handleClose]);
 
 
   if (!showModal) return null;

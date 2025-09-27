@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { X, Save, AlertTriangle } from 'lucide-react';
 import { Role, Department, EmployeeStatus } from '../../../types/database';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
@@ -132,18 +132,18 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
     }
   }, [showEditForm, editingEmployee, originalEmployee]);
 
-  const hasChanges = (): boolean => {
+  const hasChanges = useCallback((): boolean => {
     if (!originalEmployee || !editingEmployee) return false;
     return JSON.stringify(originalEmployee) !== JSON.stringify(editingEmployee);
-  };
+  }, [originalEmployee, editingEmployee]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     if (hasChanges()) {
       setShowConfirmModal(true);
       return;
     }
     onClose();
-  };
+  }, [hasChanges, onClose]);
 
   const handleConfirmClose = () => {
     setShowConfirmModal(false);

@@ -164,7 +164,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({
 
     const timeoutId = setTimeout(fetchBusinesses, 1000);
     return () => clearTimeout(timeoutId);
-  }, [formData.businessId]);
+  }, [formData.email, formData.businessId]);
 
   // ESC key handler
   useEffect(() => {
@@ -224,7 +224,7 @@ const EditClientModal: React.FC<EditClientModalProps> = ({
     return () => {
       document.removeEventListener('keydown', handleEscKey);
     };
-  }, [showModal, formData, originalClient, enableBackgroundColor, originalEnableBackgroundColor, setShowConfirmModal, onClose]);
+  }, [showModal, formData, originalClient, enableBackgroundColor, originalEnableBackgroundColor, enablePhoto, originalEnablePhoto, setShowConfirmModal, onClose]);
 
 
   const hasChanges = (): boolean => {

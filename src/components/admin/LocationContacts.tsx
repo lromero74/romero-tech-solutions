@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, Crown, Phone, Mail } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -37,9 +37,9 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
 
   useEffect(() => {
     fetchContacts();
-  }, [serviceLocationId]);
+  }, [fetchContacts, serviceLocationId]);
 
-  const fetchContacts = async () => {
+  const fetchContacts = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -51,7 +51,7 @@ const LocationContacts: React.FC<LocationContactsProps> = ({
     } finally {
       setLoading(false);
     }
-  };
+  }, [serviceLocationId]);
 
   const displayContacts = showAll ? contacts : contacts.filter(contact => contact.is_primary_contact).slice(0, 1);
 
