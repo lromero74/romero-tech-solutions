@@ -213,7 +213,7 @@ app.use('/api/uploads', generalLimiter, uploadRoutes); // General rate limiting
 app.use('/api/client/files', generalLimiter, clientFilesRoutes); // Client file management with virus scanning
 app.use('/api/client/service-requests', generalLimiter, clientServiceRequestRoutes); // Client service request management
 app.use('/api/client', generalLimiter, clientSchedulerRoutes); // Client scheduler management
-app.use('/api/client', generalLimiter, clientProfileRoutes); // Client profile management
+app.use('/api/client/profile', generalLimiter, clientProfileRoutes); // Client profile management
 app.use('/api/client/mfa', generalLimiter, clientMfaRoutes); // Client MFA management
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system
 

@@ -3,54 +3,24 @@ import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import FileUpload from './FileUpload';
 import ResourceTimeSlotScheduler from './ResourceTimeSlotScheduler';
+import { useUrgencyLevels } from './ServiceScheduler/useUrgencyLevels';
+import { generateCalendar, navigateMonth, isToday, isSameMonth, getMonthTranslationKey, getMonthShortTranslationKey, getDayTranslationKey } from './ServiceScheduler/calendarUtils';
 import {
-  Clock,
-  AlertTriangle,
-  Zap,
+  generateTimeSlots,
+  isPremiumTime,
+  calculateEndTime,
+  getAvailableDurations,
+  getAvailableTimeSlots,
+  isDateValid
+} from './ServiceScheduler/timeUtils';
+import { ServiceLocation, ServiceType, ServiceRequest } from './ServiceScheduler/types';
+import {
   ChevronLeft,
   ChevronRight,
   Check,
   Calendar
 } from 'lucide-react';
 
-interface ServiceLocation {
-  id: string;
-  address_label: string;
-  street: string;
-  city: string;
-  state: string;
-}
-
-interface UrgencyLevel {
-  id: string;
-  level_name: string;
-  lead_time_hours: number;
-  priority_multiplier: number;
-  description: string;
-  icon: React.ReactNode;
-  color: string;
-}
-
-interface ServiceType {
-  id: string;
-  type_name: string;
-  category: string;
-  description: string;
-}
-
-interface ServiceRequest {
-  service_type_id: string;
-  service_location_id: string;
-  urgency_level_id: string;
-  priority_level_id: string;
-  scheduled_date: string;
-  scheduled_time: string;
-  description: string;
-  contact_name: string;
-  contact_phone: string;
-  contact_email: string;
-  attachment_file_ids?: string[];
-}
 
 const ServiceScheduler: React.FC = () => {
   const { isDarkMode } = useClientTheme();
@@ -71,45 +41,17 @@ const ServiceScheduler: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<any[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
 
   // Data state
   const [locations, setLocations] = useState<ServiceLocation[]>([]);
   const [serviceTypes, setServiceTypes] = useState<ServiceType[]>([]);
-  const [urgencyLevels] = useState<UrgencyLevel[]>([
-    {
-      id: 'normal',
-      level_name: t('schedule.urgency.normal'),  // 'Normal'
-      lead_time_hours: 24,
-      priority_multiplier: 1.0,
-      description: t('schedule.urgency.normalDesc'),  // 'Standard service request - 24 hour advance notice required'
-      icon: <Clock className="h-5 w-5" />,
-      color: 'blue'
-    },
-    {
-      id: 'prime',
-      level_name: t('schedule.urgency.prime'),  // 'Prime'
-      lead_time_hours: 4,
-      priority_multiplier: 1.5,
-      description: t('schedule.urgency.primeDesc'),  // 'Priority service - 4 hour advance notice required'
-      icon: <Zap className="h-5 w-5" />,
-      color: 'yellow'
-    },
-    {
-      id: 'emergency',
-      level_name: t('schedule.urgency.emergency'),  // 'Emergency'
-      lead_time_hours: 1,
-      priority_multiplier: 2.0,
-      description: t('schedule.urgency.emergencyDesc'),  // 'Emergency service - 1 hour advance notice required'
-      icon: <AlertTriangle className="h-5 w-5" />,
-      color: 'red'
-    }
-  ]);
+  const { urgencyLevels } = useUrgencyLevels();
 
   // Handle file upload completion
-  const handleFileUploadComplete = (files: any[]) => {
+  const handleFileUploadComplete = (files: File[]) => {
     setUploadedFiles(prev => [...prev, ...files]);
   };
 
@@ -388,7 +330,7 @@ const ServiceScheduler: React.FC = () => {
       });
 
       if (!response.ok) {
-        throw new Error(t('schedule.messages.error') || 'Failed to submit service request');
+        throw new Error(t('schedule.messages.error'));
       }
 
       const result = await response.json();
@@ -441,7 +383,7 @@ const ServiceScheduler: React.FC = () => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.message || t('schedule.messages.error') || 'Failed to schedule appointment');
+        throw new Error(errorData.message || t('schedule.messages.error'));
       }
 
       const result = await response.json();
@@ -541,7 +483,7 @@ const ServiceScheduler: React.FC = () => {
                     </div>
                     <div className="ml-3 flex-1">
                       <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {urgency.level_name} {t('schedule.urgency.service')}
+                        {urgency.level_name}
                       </p>
                       <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                         {urgency.description}
@@ -587,10 +529,19 @@ const ServiceScheduler: React.FC = () => {
                 <div className="flex flex-col items-center">
                   <h3 className={`text-lg font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                     {calendarView === 'month'
-                      ? `${t(`calendar.months.${currentDate.getMonth()}`)} ${currentDate.getFullYear()}`
+                      ? (() => {
+                          const monthKey = getMonthShortTranslationKey(currentDate.getMonth());
+                          const translation = t(monthKey);
+                          // If translation returns the month index (like "8"), use fallback month names
+                          if (translation === currentDate.getMonth().toString()) {
+                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
+                          }
+                          return `${translation} ${currentDate.getFullYear()}`;
+                        })()
                       : calendarView === 'week'
-                      ? `${t('calendar.weekOf')} ${t(`calendar.months.${currentDate.getMonth()}`)} ${currentDate.getDate()}, ${currentDate.getFullYear()}`
-                      : `${t(`calendar.days.${currentDate.getDay()}`)} ${t(`calendar.months.${currentDate.getMonth()}`)} ${currentDate.getDate()}, ${currentDate.getFullYear()}`
+                      ? `${t('calendar.weekOf')} ${t(getMonthTranslationKey(currentDate.getMonth()))} ${currentDate.getDate()}, ${currentDate.getFullYear()}`
+                      : `${t(getDayTranslationKey(currentDate.getDay()))} ${t(getMonthTranslationKey(currentDate.getMonth()))} ${currentDate.getDate()}, ${currentDate.getFullYear()}`
                     }
                   </h3>
 
@@ -726,7 +677,7 @@ const ServiceScheduler: React.FC = () => {
                   <div className={`h-12 rounded-lg border-2 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-gray-50'} relative overflow-hidden`}>
                     {/* Hour markers */}
                     <div className="absolute inset-0 flex">
-                      {timeSlots.map((time, index) => {
+                      {timeSlots.map((time) => {
                         const [hour] = time.split(':').map(Number);
                         const isPremium = isPremiumTime(time);
                         const isAvailable = getAvailableTimeSlots().includes(time);

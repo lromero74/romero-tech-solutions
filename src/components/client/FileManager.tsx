@@ -131,7 +131,7 @@ const FileManager: React.FC = () => {
       if (response.ok) {
         loadData(); // Refresh data
       } else {
-        alert(t('files.actions.deleteFailed') || 'Failed to delete file');
+        alert(t('files.actions.deleteFailed'));
       }
     } catch (error) {
       console.error('Delete error:', error);
@@ -352,7 +352,7 @@ const FileManager: React.FC = () => {
           {totalPages > 1 && (
             <div className="flex items-center justify-between mt-6">
               <p className={`text-sm ${themeClasses.textSecondary}`}>
-                {t('general.pageOf', { current: currentPage, total: totalPages }) || `Page ${currentPage} of ${totalPages}`}
+                {t('general.pageOf', { current: currentPage, total: totalPages })}
               </p>
               <div className="flex space-x-2">
                 <button

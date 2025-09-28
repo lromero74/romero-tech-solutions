@@ -35,7 +35,7 @@ interface QuotaInfo {
 }
 
 interface FileUploadProps {
-  onUploadComplete?: (files: any[]) => void;
+  onUploadComplete?: (files: File[]) => void;
   onQuotaUpdate?: (quota: QuotaInfo) => void;
   serviceLocationId?: string;
   categoryId?: string;
@@ -390,7 +390,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
             </button>
           </p>
           <p className={`text-sm ${themeClasses.textSecondary}`}>
-            {t('files.upload.maxSize')}: {formatFileSize(maxFileSize)}, {t('files.upload.maxFiles', {count: maxFiles}) || `Maximum ${maxFiles} files`}
+            {t('files.upload.maxSize')}: {formatFileSize(maxFileSize)}, {t('files.upload.maxFiles', {count: maxFiles})}
           </p>
           <p className={`text-xs mt-1 ${themeClasses.textSecondary}`}>
             {t('files.upload.allowedTypes')}
@@ -411,13 +411,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
       {uploads.length > 0 && (
         <div className="space-y-3">
           <div className="flex items-center justify-between">
-            <h4 className="font-medium">{t('files.upload.uploadProgress') || 'Upload Progress'}</h4>
+            <h4 className="font-medium">{t('files.upload.uploadProgress')}</h4>
             {uploads.some(u => u.status === 'success') && (
               <button
                 onClick={clearCompleted}
                 className="text-sm text-blue-600 hover:text-blue-700"
               >
-                {t('files.upload.clearCompleted') || 'Clear Completed'}
+                {t('files.upload.clearCompleted')}
               </button>
             )}
           </div>

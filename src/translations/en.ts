@@ -338,5 +338,14 @@ export const enTranslations = {
   'about.stats.support': 'Emergency',
   'about.stats.supportLabel': 'Support Available',
   'about.stats.satisfaction': 'Client',
-  'about.stats.satisfactionLabel': 'Satisfaction Priority'
+  'about.stats.satisfactionLabel': 'Satisfaction Priority',
+
+  // Calendar translations
+  'calendar.daysShort.0': 'Sun',
+  'calendar.daysShort.1': 'Mon',
+  'calendar.daysShort.2': 'Tue',
+  'calendar.daysShort.3': 'Wed',
+  'calendar.daysShort.4': 'Thu',
+  'calendar.daysShort.5': 'Fri',
+  'calendar.daysShort.6': 'Sat'
 };

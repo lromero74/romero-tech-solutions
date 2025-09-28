@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef, ReactNode } from 'react';
 import { AuthUser, UserRole, ClientRegistrationRequest } from '../types/database';
 import { authService } from '../services/authService';
 import { clientRegistrationService } from '../services/clientRegistrationService';
@@ -27,6 +27,7 @@ interface EnhancedAuthContextType {
   // MFA methods
   sendAdminMfaCode: (email: string, password: string) => Promise<void>;
   verifyAdminMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
+  verifyClientMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
   // Session management
   sessionConfig: SessionConfig | null;
   updateSessionConfig: (config: Partial<SessionConfig>) => void;
@@ -48,6 +49,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const [hasError, setHasError] = useState(false);
   const [sessionManager] = useState(() => SessionManager.getInstance());
   const [sessionConfig, setSessionConfig] = useState<SessionConfig | null>(null);
+  const sessionConfigRef = useRef<SessionConfig | null>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [sessionWarning, setSessionWarning] = useState({ isVisible: false, timeLeft: 0 });
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
@@ -100,11 +102,13 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
             // Session is valid, get current user
             currentUser = await authService.getCurrentAuthUser();
 
-            // SECURITY: If this is a user with MFA enabled being restored from localStorage/session,
-            // check if they should be forced through MFA again
-            if (currentUser && await requiresMfa(currentUser)) {
-              // Check if this is a session restore after timeout (no recent login activity)
-              const storedTimestamp = localStorage.getItem('authTimestamp');
+            // PERFORMANCE OPTIMIZATION: Skip MFA check for existing sessions
+            // MFA verification should only be required during initial login, not page refreshes
+            const mfaVerified = localStorage.getItem('mfaVerified');
+            const storedTimestamp = localStorage.getItem('authTimestamp');
+
+            if (currentUser && !mfaVerified && await requiresMfa(currentUser)) {
+              // Only check MFA for sessions that haven't been verified yet
               if (storedTimestamp) {
                 const timeSinceAuth = Date.now() - parseInt(storedTimestamp);
                 const maxAge = 24 * 60 * 60 * 1000; // 24 hours
@@ -117,9 +121,12 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
                   localStorage.removeItem('user');
                   localStorage.removeItem('authUser');
                   localStorage.removeItem('authTimestamp');
+                  localStorage.removeItem('mfaVerified');
                   currentUser = null;
                 }
               }
+            } else if (currentUser && mfaVerified) {
+              console.log('⚡ Skipping MFA check - already verified in this session');
             }
           } else {
             // Session is invalid, clear it
@@ -199,39 +206,45 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
           warningTime: 2 // 2 minutes warning
         };
 
-        // Try to load config from database first, then local storage, then default
+        // PERFORMANCE OPTIMIZATION: Cache session config to avoid database calls on refresh
         let sessionConfig: SessionConfig;
-        try {
-          console.log('🔍 Attempting to load session config from database...');
-          const dbConfig = await systemSettingsService.getSessionConfig();
-          console.log('🔍 Database response:', dbConfig);
-          if (dbConfig) {
-            sessionConfig = dbConfig;
-            console.log('📥 Using database session config:', sessionConfig);
-          } else {
-            console.log('⚠️ No database config found, checking local storage...');
-            const existingConfig = sessionManager.getConfig();
-            if (existingConfig) {
-              sessionConfig = existingConfig;
-              console.log('📥 Using local session config:', sessionConfig);
-            } else {
+
+        // First check if we already have the config in context (fastest)
+        if (sessionConfigRef.current) {
+          sessionConfig = sessionConfigRef.current;
+          console.log('⚡ Using cached session config for faster loading');
+        } else {
+          // Check localStorage cache first (faster than database)
+          const cachedConfig = localStorage.getItem('sessionConfig');
+          if (cachedConfig) {
+            try {
+              sessionConfig = JSON.parse(cachedConfig);
+              console.log('📦 Using localStorage cached session config');
+            } catch {
               sessionConfig = defaultConfig;
-              console.log('📥 Using default session config:', sessionConfig);
             }
-          }
-        } catch (error) {
-          console.warn('⚠️ Failed to load database config during login, using fallback:', error);
-          const existingConfig = sessionManager.getConfig();
-          if (existingConfig) {
-            sessionConfig = existingConfig;
-            console.log('📥 Using local session config (fallback):', sessionConfig);
           } else {
-            sessionConfig = defaultConfig;
-            console.log('📥 Using default session config (fallback):', sessionConfig);
+            // Only load from database if no cache exists
+            try {
+              console.log('🔍 Loading session config from database...');
+              const dbConfig = await systemSettingsService.getSessionConfig();
+              if (dbConfig) {
+                sessionConfig = dbConfig;
+                // Cache in localStorage for next time
+                localStorage.setItem('sessionConfig', JSON.stringify(dbConfig));
+                console.log('📥 Loaded and cached session config from database');
+              } else {
+                sessionConfig = defaultConfig;
+              }
+            } catch (error) {
+              console.warn('⚠️ Failed to load database config, using default:', error);
+              sessionConfig = defaultConfig;
+            }
           }
         }
 
         setSessionConfig(sessionConfig);
+        sessionConfigRef.current = sessionConfig;
 
         // Reset session warning state for new session
         setSessionWarning({ isVisible: false, timeLeft: 0 });
@@ -277,6 +290,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       localStorage.removeItem('authUser');
       localStorage.removeItem('authTimestamp');
       localStorage.removeItem('sessionToken');
+      localStorage.removeItem('mfaVerified');
+      localStorage.removeItem('sessionConfig');
     }
 
     setShowTimeoutDialog(true);
@@ -586,6 +601,80 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     }
   };
 
+  // Verify client MFA code and complete client login
+  const handleVerifyClientMfaCode = async (email: string, mfaCode: string): Promise<AuthUser> => {
+    try {
+      const user = await authService.verifyClientMfaCode(email, mfaCode);
+      setUser(user);
+
+      // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session
+      localStorage.setItem('mfaVerified', 'true');
+      console.log('⚡ MFA verification flag set for faster future page loads');
+
+      // Update sessionToken from localStorage after successful MFA
+      const storedToken = localStorage.getItem('sessionToken');
+      if (storedToken) {
+        setSessionToken(storedToken);
+      }
+
+      // Initialize session management for the client
+      const defaultConfig: SessionConfig = {
+        timeout: 15 * 60 * 1000, // 15 minutes
+        warningTime: 2 * 60 * 1000, // 2 minutes
+        checkInterval: 60 * 1000  // 1 minute
+      };
+
+      let sessionConfig = defaultConfig;
+
+      try {
+        console.log('🔍 [Client MFA] Attempting to load session config from database...');
+        const dbConfig = await systemSettingsService.getSessionConfig();
+        console.log('🔍 [Client MFA] Database response:', dbConfig);
+        if (dbConfig) {
+          sessionConfig = dbConfig;
+          console.log('📥 [Client MFA] Using database session config:', sessionConfig);
+        } else {
+          console.log('⚠️ [Client MFA] No database config found, checking local storage...');
+          const existingConfig = sessionManager.getConfig();
+          if (existingConfig) {
+            sessionConfig = existingConfig;
+            console.log('📥 [Client MFA] Using local session config:', sessionConfig);
+          } else {
+            sessionConfig = defaultConfig;
+            console.log('📥 [Client MFA] Using default session config:', sessionConfig);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [Client MFA] Failed to load database config, using fallback:', error);
+        const existingConfig = sessionManager.getConfig();
+        if (existingConfig) {
+          sessionConfig = existingConfig;
+          console.log('📥 [Client MFA] Using local session config (fallback):', sessionConfig);
+        } else {
+          sessionConfig = defaultConfig;
+          console.log('📥 [Client MFA] Using default session config (fallback):', sessionConfig);
+        }
+      }
+
+      setSessionConfig(sessionConfig);
+
+      // Reset session warning state for new session
+      setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+      // Initialize session if not already active
+      if (!sessionManager.isSessionActive()) {
+        sessionManager.initSession(sessionConfig);
+      }
+
+      setIsSessionActive(true);
+
+      return user;
+    } catch (error) {
+      console.error('Error verifying client MFA code:', error);
+      throw error;
+    }
+  };
+
   // Computed properties
   const isAuthenticated = !!user;
   const role = user?.role || null;
@@ -614,6 +703,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     // MFA methods
     sendAdminMfaCode: handleSendAdminMfaCode,
     verifyAdminMfaCode: handleVerifyAdminMfaCode,
+    verifyClientMfaCode: handleVerifyClientMfaCode,
     // Session management
     sessionConfig,
     updateSessionConfig,

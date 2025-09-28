@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import AlertModal from '../shared/AlertModal';
 import {
   User,
   Lock,
@@ -86,6 +87,7 @@ const ClientSettings: React.FC = () => {
   const [mfaVerificationCode, setMfaVerificationCode] = useState('');
   const [showMfaSetup, setShowMfaSetup] = useState(false);
   const [showBackupCodes, setShowBackupCodes] = useState(false);
+  const [showSpamFolderAlert, setShowSpamFolderAlert] = useState(false);
 
   const themeClasses = {
     container: isDarkMode
@@ -126,10 +128,15 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
+      const sessionToken = localStorage.getItem('sessionToken');
 
       // Load contact info
       const contactResponse = await fetch('/api/client/profile', {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
 
@@ -148,6 +155,10 @@ const ClientSettings: React.FC = () => {
       // Load MFA settings
       const mfaResponse = await fetch('/api/client/mfa/settings', {
         method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        },
         credentials: 'include'
       });
 
@@ -173,7 +184,7 @@ const ClientSettings: React.FC = () => {
       hasUppercase: /[A-Z]/.test(password),
       hasLowercase: /[a-z]/.test(password),
       hasNumber: /\d/.test(password),
-      hasSpecialChar: /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)
+      hasSpecialChar: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)
     });
   };
 
@@ -184,9 +195,11 @@ const ClientSettings: React.FC = () => {
   const handleContactInfoSave = async () => {
     setLoading(true);
     try {
+      const sessionToken = localStorage.getItem('sessionToken');
       const response = await fetch('/api/client/profile', {
         method: 'PUT',
         headers: {
+          'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json'
         },
         credentials: 'include',
@@ -221,9 +234,11 @@ const ClientSettings: React.FC = () => {
 
     setLoading(true);
     try {
+      const sessionToken = localStorage.getItem('sessionToken');
       const response = await fetch('/api/client/change-password', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json'
         },
         credentials: 'include',
@@ -253,8 +268,13 @@ const ClientSettings: React.FC = () => {
       // Disable MFA
       setLoading(true);
       try {
+        const sessionToken = localStorage.getItem('sessionToken');
         const response = await fetch('/api/client/mfa/disable', {
           method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${sessionToken}`,
+            'Content-Type': 'application/json'
+          },
           credentials: 'include'
         });
 
@@ -281,9 +301,11 @@ const ClientSettings: React.FC = () => {
   const sendMfaCode = async () => {
     setLoading(true);
     try {
+      const sessionToken = localStorage.getItem('sessionToken');
       const response = await fetch('/api/client/mfa/send-code', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json'
         },
         credentials: 'include',
@@ -293,7 +315,8 @@ const ClientSettings: React.FC = () => {
       });
 
       if (response.ok) {
-        setMessage({ type: 'info', text: t('settings.security.codeSent', { email: contactInfo.email }) });
+        setMessage({ type: 'info', text: t('settings.mfaSection.codeSent', { email: contactInfo.email }) });
+        setShowSpamFolderAlert(true);
       } else {
         const errorData = await response.json();
         setMessage({ type: 'error', text: errorData.message || t('settings.security.sendCodeFailed') });
@@ -309,9 +332,11 @@ const ClientSettings: React.FC = () => {
   const verifyMfaCode = async () => {
     setLoading(true);
     try {
+      const sessionToken = localStorage.getItem('sessionToken');
       const response = await fetch('/api/client/mfa/verify-setup', {
         method: 'POST',
         headers: {
+          'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json'
         },
         credentials: 'include',
@@ -735,6 +760,15 @@ const ClientSettings: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Spam Folder Alert Modal */}
+      <AlertModal
+        isOpen={showSpamFolderAlert}
+        onClose={() => setShowSpamFolderAlert(false)}
+        type="info"
+        title={t('settings.mfaSection.spamFolderAlert.title')}
+        message={t('settings.mfaSection.spamFolderAlert.message', { email: contactInfo.email })}
+      />
     </div>
   );
 };

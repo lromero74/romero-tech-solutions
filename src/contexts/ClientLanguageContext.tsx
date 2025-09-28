@@ -3,7 +3,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback } fr
 interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
-  t: (key: string, fallback?: string) => string;
+  t: (key: string, variables?: { [key: string]: string }, fallback?: string) => string;
   loading: boolean;
   availableLanguages: Array<{ code: string; name: string; nativeName: string }>;
 }
@@ -16,6 +16,26 @@ interface ClientLanguageProviderProps {
 
 // In-memory cache for translations
 const translationCache: { [languageCode: string]: { [key: string]: string } } = {};
+
+// Helper function to flatten nested translation objects to dot notation keys
+const flattenTranslations = (obj: any, prefix = ''): { [key: string]: string } => {
+  const result: { [key: string]: string } = {};
+
+  for (const key in obj) {
+    if (obj.hasOwnProperty(key)) {
+      const newKey = prefix ? `${prefix}.${key}` : key;
+
+      if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+        Object.assign(result, flattenTranslations(obj[key], newKey));
+      } else {
+        result[newKey] = obj[key];
+      }
+    }
+  }
+
+  return result;
+};
+
 
 // Load cached translations from localStorage
 const loadCachedTranslations = (languageCode: string): { [key: string]: string } => {
@@ -61,7 +81,7 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
   };
 
   const initialLanguage = getInitialLanguage();
-  const initialTranslations = loadCachedTranslations(initialLanguage);
+  const initialTranslations = loadCachedTranslations(initialLanguage) || {};
   const [language, setLanguageState] = useState<string>(initialLanguage);
   const [loading, setLoading] = useState<boolean>(Object.keys(initialTranslations).length === 0);
   const [translations, setTranslations] = useState<{ [key: string]: string }>(initialTranslations);
@@ -86,6 +106,8 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
     }
 
     try {
+      // Load translations from database API
+      console.log('Loading translations from database API for language:', languageCode);
       const response = await fetch(`/api/translations/client/${languageCode}`, {
         method: 'GET',
         credentials: 'include'
@@ -113,22 +135,30 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
       }
     } catch (error) {
       console.error('Error loading translations:', error);
+      // Fallback to empty translations - component will use fallback text
       setTranslations({});
     } finally {
       setLoading(false);
     }
-  }, [translations]);
+  }, []);
 
   // Load translations for the initial language
   useEffect(() => {
     loadTranslations(language);
   }, [loadTranslations, language]);
 
-  // Translation function
-  const t = useCallback((key: string, fallback?: string): string => {
-    const translation = translations[key];
+  // Translation function with variable interpolation
+  const t = useCallback((key: string, variables?: { [key: string]: string }, fallback?: string): string => {
+    let translation = translations[key];
 
     if (translation) {
+      // Handle variable interpolation
+      if (variables) {
+        Object.keys(variables).forEach(varKey => {
+          const placeholder = `{{${varKey}}}`;
+          translation = translation.replace(new RegExp(placeholder, 'g'), variables[varKey]);
+        });
+      }
       return translation;
     }
 
@@ -159,7 +189,7 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
       const authUser = localStorage.getItem('authUser');
       const sessionToken = localStorage.getItem('sessionToken');
       if (authUser && sessionToken) {
-        const response = await fetch('/api/client/language-preference', {
+        const response = await fetch('/api/client/profile/language-preference', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

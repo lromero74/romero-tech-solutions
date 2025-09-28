@@ -13,7 +13,7 @@ const router = express.Router();
 router.get('/', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
-    const clientId = req.clientUser.clientId;
+    const clientId = req.user.clientId;
 
     const result = await pool.query(`
       SELECT
@@ -21,8 +21,8 @@ router.get('/', authenticateClient, async (req, res) => {
         last_name as "lastName",
         email,
         phone
-      FROM clients
-      WHERE client_id = $1 AND soft_delete = false
+      FROM users
+      WHERE id = $1 AND role = 'client' AND soft_delete = false
     `, [clientId]);
 
     if (result.rows.length === 0) {
@@ -50,7 +50,7 @@ router.get('/', authenticateClient, async (req, res) => {
 router.put('/', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
-    const clientId = req.clientUser.clientId;
+    const clientId = req.user.clientId;
     const { firstName, lastName, email, phone } = req.body;
 
     // Validate required fields
@@ -72,9 +72,9 @@ router.put('/', authenticateClient, async (req, res) => {
 
     // Check if email is already in use by another client
     const emailCheck = await pool.query(`
-      SELECT client_id
-      FROM clients
-      WHERE email = $1 AND client_id != $2 AND soft_delete = false
+      SELECT id
+      FROM users
+      WHERE email = $1 AND id != $2 AND soft_delete = false
     `, [email, clientId]);
 
     if (emailCheck.rows.length > 0) {
@@ -86,14 +86,14 @@ router.put('/', authenticateClient, async (req, res) => {
 
     // Update client profile
     const result = await pool.query(`
-      UPDATE clients
+      UPDATE users
       SET
         first_name = $1,
         last_name = $2,
         email = $3,
         phone = $4,
         updated_at = CURRENT_TIMESTAMP
-      WHERE client_id = $5 AND soft_delete = false
+      WHERE id = $5 AND role = 'client' AND soft_delete = false
       RETURNING first_name as "firstName", last_name as "lastName", email, phone
     `, [firstName, lastName, email, phone, clientId]);
 
@@ -123,7 +123,7 @@ router.put('/', authenticateClient, async (req, res) => {
 router.post('/change-password', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
-    const clientId = req.clientUser.clientId;
+    const clientId = req.user.clientId;
     const { currentPassword, newPassword } = req.body;
 
     // Validate input
@@ -146,8 +146,8 @@ router.post('/change-password', authenticateClient, async (req, res) => {
     // Get current password hash
     const userResult = await pool.query(`
       SELECT password_hash
-      FROM clients
-      WHERE client_id = $1 AND soft_delete = false
+      FROM users
+      WHERE id = $1 AND role = 'client' AND soft_delete = false
     `, [clientId]);
 
     if (userResult.rows.length === 0) {
@@ -172,11 +172,11 @@ router.post('/change-password', authenticateClient, async (req, res) => {
 
     // Update password
     await pool.query(`
-      UPDATE clients
+      UPDATE users
       SET
         password_hash = $1,
         updated_at = CURRENT_TIMESTAMP
-      WHERE client_id = $2
+      WHERE id = $2 AND role = 'client'
     `, [newPasswordHash, clientId]);
 
     res.json({
@@ -197,7 +197,7 @@ router.post('/change-password', authenticateClient, async (req, res) => {
 router.post('/language-preference', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
-    const clientId = req.clientUser.clientId;
+    const clientId = req.user.clientId;
     const { language, context = 'client' } = req.body;
 
     if (!language) {
@@ -246,7 +246,7 @@ router.post('/language-preference', authenticateClient, async (req, res) => {
 router.get('/language-preference', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
-    const clientId = req.clientUser.clientId;
+    const clientId = req.user.clientId;
     const { context = 'client' } = req.query;
 
     // Use the database function to get preference
@@ -268,6 +268,115 @@ router.get('/language-preference', authenticateClient, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch language preference'
+    });
+  }
+});
+
+// Get client business information
+router.get('/business', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    if (!req.user || !req.user.clientId) {
+      console.error('❌ Client business error: req.user is', req.user);
+      return res.status(400).json({
+        success: false,
+        message: 'Client context not properly loaded'
+      });
+    }
+
+    const clientId = req.user.clientId;
+
+    const result = await pool.query(`
+      SELECT
+        b.id as id,
+        b.business_name as name,
+        b.primary_street as street,
+        b.primary_city as city,
+        b.primary_state as state,
+        b.primary_zip_code as "zipCode",
+        b.primary_country as country,
+        b.primary_contact_person as "contactPerson",
+        b.primary_contact_phone as "contactPhone",
+        b.primary_contact_email as "contactEmail"
+      FROM users u
+      JOIN businesses b ON u.business_id = b.id
+      WHERE u.id = $1 AND u.role = 'client' AND u.soft_delete = false AND b.soft_delete = false
+    `, [clientId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client business information not found'
+      });
+    }
+
+    const business = result.rows[0];
+
+    // Get accessible service locations for this client
+    // Note: This may need adjustment based on how client-location relationships are structured
+    const locationsResult = await pool.query(`
+      SELECT
+        sl.id as id,
+        sl.location_name as name,
+        sl.street,
+        sl.city,
+        sl.state,
+        sl.zip_code as "zipCode",
+        sl.country,
+        sl.contact_person as "contactPerson",
+        sl.contact_phone as "contactPhone",
+        NULL as "contactEmail"
+      FROM service_locations sl
+      JOIN businesses b ON sl.business_id = b.id
+      JOIN users u ON u.business_id = b.id
+      WHERE u.id = $1 AND u.role = 'client' AND sl.soft_delete = false AND u.soft_delete = false
+      ORDER BY sl.location_name
+    `, [clientId]);
+
+    res.json({
+      success: true,
+      data: {
+        business: {
+          id: business.id,
+          name: business.name,
+          address: {
+            street: business.street,
+            city: business.city,
+            state: business.state,
+            zipCode: business.zipCode,
+            country: business.country
+          },
+          contact: {
+            person: business.contactPerson,
+            phone: business.contactPhone,
+            email: business.contactEmail
+          }
+        },
+        accessibleLocations: locationsResult.rows.map(loc => ({
+          id: loc.id,
+          name: loc.name,
+          address: {
+            street: loc.street,
+            city: loc.city,
+            state: loc.state,
+            zipCode: loc.zipCode,
+            country: loc.country
+          },
+          contact: {
+            person: loc.contactPerson,
+            phone: loc.contactPhone,
+            email: loc.contactEmail
+          }
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching client business information:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch business information'
     });
   }
 });

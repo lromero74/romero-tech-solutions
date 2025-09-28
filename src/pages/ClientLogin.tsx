@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Lock, Mail, Eye, EyeOff, User, ArrowRight, Shield, KeyRound } from 'lucide-react';
 import ClientRegistration from '../components/ClientRegistration';
 import ImageBasedSection from '../components/common/ImageBasedSection';
+import { authService } from '../services/authService';
 
 interface ClientLoginProps {
   onSuccess: () => void;
@@ -13,6 +14,8 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const passwordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const formClearTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showRegistration, setShowRegistration] = useState(false);
@@ -20,15 +23,56 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaEmail, setMfaEmail] = useState('');
   const [mfaPassword, setMfaPassword] = useState('');
-  const { signIn, sendAdminMfaCode, verifyAdminMfaCode } = useEnhancedAuth();
+  const { signIn, sendAdminMfaCode, verifyAdminMfaCode, verifyClientMfaCode } = useEnhancedAuth();
   const { t } = useLanguage();
   const backgroundImageUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&ixid=M3wxMJA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2344&q=80';
+
+  // Cleanup timers on component unmount
+  useEffect(() => {
+    return () => {
+      if (passwordTimerRef.current) {
+        clearTimeout(passwordTimerRef.current);
+      }
+      if (formClearTimerRef.current) {
+        clearTimeout(formClearTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Start/restart form clear timer when user types
+  const startFormClearTimer = () => {
+    // Clear existing timer
+    if (formClearTimerRef.current) {
+      clearTimeout(formClearTimerRef.current);
+    }
+
+    // Set new 1-minute timer
+    formClearTimerRef.current = setTimeout(() => {
+      console.log('🧹 Auto-clearing form after 1 minute of inactivity');
+      setEmail('');
+      setPassword('');
+      setShowPassword(false);
+      setError('');
+      // Clear password visibility timer if active
+      if (passwordTimerRef.current) {
+        clearTimeout(passwordTimerRef.current);
+        passwordTimerRef.current = null;
+      }
+      formClearTimerRef.current = null;
+    }, 60000); // 1 minute
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email || !password) {
       setError(t('login.fillAllFields'));
       return;
+    }
+
+    // Clear form timer when user attempts to sign in
+    if (formClearTimerRef.current) {
+      clearTimeout(formClearTimerRef.current);
+      formClearTimerRef.current = null;
     }
 
     setIsLoading(true);
@@ -39,20 +83,12 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       onSuccess();
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'MFA_REQUIRED') {
-        // Admin user needs MFA verification
+        // Client user needs MFA verification (code already sent by backend)
         setMfaEmail(email);
         setMfaPassword(password);
         setShowMfaVerification(true);
         setIsLoading(false);
-
-        // Automatically send MFA code
-        try {
-          await sendAdminMfaCode(email, password);
-          setError('');
-        } catch (mfaError: unknown) {
-          setError(mfaError instanceof Error ? mfaError.message : 'Failed to send verification code');
-          setIsLoading(false);
-        }
+        setError(''); // Clear any previous errors
       } else {
         setError(error instanceof Error ? error.message : t('login.loginFailed'));
         setIsLoading(false);
@@ -71,7 +107,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     setError('');
 
     try {
-      await verifyAdminMfaCode(mfaEmail, mfaCode);
+      await verifyClientMfaCode(mfaEmail, mfaCode);
       onSuccess();
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : t('login.mfa.verificationFailed'));
@@ -89,15 +125,14 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   };
 
   const handleResendMfaCode = async () => {
-    if (!mfaEmail || !mfaPassword) return;
+    if (!mfaEmail) return;
 
     setIsLoading(true);
     setError('');
 
     try {
-      await sendAdminMfaCode(mfaEmail, mfaPassword);
-      setError('');
-      // Show success message briefly
+      // Use the dedicated client MFA resend endpoint
+      await authService.resendClientMfaCode(mfaEmail);
       setError(t('login.mfa.codeSentSuccess'));
       setTimeout(() => setError(''), 3000);
     } catch (error: unknown) {
@@ -250,7 +285,10 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       autoComplete="email"
                       required
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => {
+                        setEmail(e.target.value);
+                        startFormClearTimer();
+                      }}
                       className="appearance-none relative block w-full px-3 py-2 pl-10 border border-white/20 placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                       placeholder={t('login.emailPlaceholder')}
                     />
@@ -270,15 +308,41 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       autoComplete="current-password"
                       required
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => {
+                        setPassword(e.target.value);
+                        startFormClearTimer();
+                      }}
                       className="appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border border-white/20 placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
                       placeholder={t('login.passwordPlaceholder')}
                     />
                     <Lock className="h-5 w-5 text-gray-300 absolute left-3 top-2.5" />
                     <button
                       type="button"
-                      className="absolute right-3 top-2.5 text-gray-300 hover:text-white"
-                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-gray-300 hover:text-white z-10 cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('👁️ Password visibility toggle clicked, current state:', showPassword);
+
+                        // Clear any existing timer
+                        if (passwordTimerRef.current) {
+                          clearTimeout(passwordTimerRef.current);
+                          passwordTimerRef.current = null;
+                        }
+
+                        const newShowPassword = !showPassword;
+                        setShowPassword(newShowPassword);
+
+                        // If turning password visibility ON, set 10-second auto-hide timer
+                        if (newShowPassword) {
+                          console.log('🔒 Password visibility enabled - will auto-hide in 10 seconds');
+                          passwordTimerRef.current = setTimeout(() => {
+                            console.log('⏰ Auto-hiding password after 10 seconds');
+                            setShowPassword(false);
+                            passwordTimerRef.current = null;
+                          }, 10000);
+                        }
+                      }}
                     >
                       {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
                     </button>

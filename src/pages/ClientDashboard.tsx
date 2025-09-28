@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../contexts/ClientThemeContext';
 import { useClientLanguage } from '../contexts/ClientLanguageContext';
+import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import ServiceScheduler from '../components/client/ServiceScheduler';
 import ClientSettings from '../components/client/ClientSettings';
 import LanguageSelector from '../components/client/LanguageSelector';
@@ -71,7 +72,8 @@ interface ClientDashboardProps {
 
 const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const { isDarkMode, toggleTheme } = useClientTheme();
-  const { t, loading: languageLoading } = useClientLanguage();
+  const { t } = useClientLanguage();
+  const { signOut } = useEnhancedAuth();
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   // Initialize activeTab from localStorage or default to 'dashboard'
@@ -88,87 +90,171 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
   // Load client data from existing auth system or sessionStorage
   useEffect(() => {
-    const loadClientData = () => {
-      // First try to get from existing auth system
-      const authUserData = localStorage.getItem('authUser');
-      if (authUserData) {
-        try {
+    const loadClientData = async () => {
+      try {
+        // First try to get from existing auth system
+        const authUserData = localStorage.getItem('authUser');
+        const sessionToken = localStorage.getItem('sessionToken');
+
+        if (authUserData && sessionToken) {
           const authUser = JSON.parse(authUserData);
           if (authUser.role === 'client') {
-            // Create mock client data structure from auth user
-            const mockClientData = {
-              user: {
-                id: authUser.id,
-                email: authUser.email,
-                firstName: authUser.name?.split(' ')[0] || 'Client',
-                lastName: authUser.name?.split(' ')[1] || 'User',
-                phone: '',
-                role: authUser.role,
-                business: {
-                  id: 'business-1',
-                  name: 'The Salvation Army - San Diego',
-                  address: {
-                    street: '1350 Hotel Circle N',
-                    city: 'San Diego',
-                    state: 'CA',
-                    zipCode: '92108'
+            try {
+              // Fetch real business data from API with timeout and retry
+              const businessResponse = await Promise.race([
+                fetch('/api/client/profile/business', {
+                  method: 'GET',
+                  headers: {
+                    'Authorization': `Bearer ${sessionToken}`,
+                    'Content-Type': 'application/json'
+                  },
+                  credentials: 'include'
+                }),
+                new Promise((_, reject) =>
+                  setTimeout(() => reject(new Error('Request timeout')), 10000)
+                )
+              ]) as Response;
+
+              if (businessResponse.ok) {
+                const businessData = await businessResponse.json();
+
+                // Get profile data with timeout
+                const profileResponse = await Promise.race([
+                  fetch('/api/client/profile', {
+                    method: 'GET',
+                    headers: {
+                      'Authorization': `Bearer ${sessionToken}`,
+                      'Content-Type': 'application/json'
+                    },
+                    credentials: 'include'
+                  }),
+                  new Promise((_, reject) =>
+                    setTimeout(() => reject(new Error('Profile request timeout')), 5000)
+                  )
+                ]) as Response;
+
+                let profileData = {
+                  firstName: authUser.name?.split(' ')[0] || 'Client',
+                  lastName: authUser.name?.split(' ')[1] || 'User',
+                  email: authUser.email,
+                  phone: ''
+                };
+
+                if (profileResponse.ok) {
+                  const profile = await profileResponse.json();
+                  if (profile.success) {
+                    profileData = profile.data;
                   }
-                },
-                accessibleLocations: [
-                  {
-                    id: 'loc-1',
-                    address_label: 'Main Office',
-                    street: '1350 Hotel Circle N',
-                    city: 'San Diego',
-                    state: 'CA',
-                    contact_role: 'Primary Contact',
-                    is_primary_contact: true
+                }
+
+                const clientData = {
+                  user: {
+                    id: authUser.id,
+                    email: profileData.email,
+                    firstName: profileData.firstName,
+                    lastName: profileData.lastName,
+                    phone: profileData.phone,
+                    role: authUser.role,
+                    business: businessData.data.business,
+                    accessibleLocations: businessData.data.accessibleLocations
+                  },
+                  session: {
+                    token: sessionToken,
+                    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
                   }
-                ]
-              },
-              session: {
-                token: 'mock-token',
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                };
+
+                setClientData(clientData);
+                setLoading(false);
+                return;
+              } else if (businessResponse.status === 401) {
+                // Authentication expired, clear tokens and redirect
+                console.log('Session expired, clearing auth data');
+                localStorage.removeItem('authUser');
+                localStorage.removeItem('sessionToken');
+                sessionStorage.removeItem('clientData');
+                if (onNavigate) onNavigate('clogin');
+                return;
+              } else {
+                console.error('Failed to fetch business data:', businessResponse.statusText);
               }
-            };
-            setClientData(mockClientData);
+            } catch (apiError) {
+              console.error('API request failed:', apiError);
+              // Continue to fallback instead of immediate redirect
+            }
+          }
+        }
+
+        // Fallback to sessionStorage clientData
+        const savedClientData = sessionStorage.getItem('clientData');
+        if (savedClientData) {
+          try {
+            const data = JSON.parse(savedClientData);
+            setClientData(data);
             setLoading(false);
             return;
+          } catch (error) {
+            console.error('Failed to parse client data:', error);
           }
-        } catch (error) {
-          console.error('Failed to parse auth user data:', error);
         }
-      }
 
-      // Fallback to sessionStorage clientData
-      const savedClientData = sessionStorage.getItem('clientData');
-      if (savedClientData) {
-        try {
-          const data = JSON.parse(savedClientData);
-          setClientData(data);
-          setLoading(false);
-          return;
-        } catch (error) {
-          console.error('Failed to parse client data:', error);
-        }
-      }
+        // Give additional time for auth context to load before redirecting
+        setTimeout(() => {
+          // Re-check storage one more time before redirecting
+          const authUserCheck = localStorage.getItem('authUser');
+          const sessionTokenCheck = localStorage.getItem('sessionToken');
+          const savedClientCheck = sessionStorage.getItem('clientData');
 
-      // No valid client data found
-      console.log('No client data found, redirecting to login');
-      if (onNavigate) onNavigate('clogin');
+          if (!authUserCheck || !sessionTokenCheck || (!savedClientCheck && !clientData)) {
+            console.log('No client data found after extended wait, redirecting to login');
+            setLoading(false);
+            if (onNavigate) onNavigate('clogin');
+          }
+        }, 2000);
+
+      } catch (error) {
+        console.error('Error loading client data:', error);
+        // Don't immediately redirect on general errors, let auth context handle it
+        setTimeout(() => {
+          const authUserCheck = localStorage.getItem('authUser');
+          const sessionTokenCheck = localStorage.getItem('sessionToken');
+
+          if (!authUserCheck || !sessionTokenCheck) {
+            console.log('Error in client data loading, redirecting to login');
+            setLoading(false);
+            if (onNavigate) onNavigate('clogin');
+          }
+        }, 2000);
+      }
     };
 
     loadClientData();
   }, [onNavigate]);
 
-  const handleLogout = () => {
-    // Clear all client authentication data
-    sessionStorage.removeItem('clientData');
-    localStorage.removeItem('authUser');
-    localStorage.removeItem('clientData');
+  const handleLogout = async () => {
+    console.log('🚪 Logout button clicked');
+    try {
+      // Use the EnhancedAuthContext signOut function to properly clear authentication state
+      await signOut();
 
-    // Navigate back to client login
-    if (onNavigate) onNavigate('clogin');
+      console.log('Logout completed, redirecting to login');
+
+      // Navigate back to client login
+      if (onNavigate) {
+        onNavigate('clogin');
+      } else {
+        // Fallback: force page reload to login
+        window.location.href = '/clogin';
+      }
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Even if signOut fails, still navigate to login as fallback
+      if (onNavigate) {
+        onNavigate('clogin');
+      } else {
+        window.location.href = '/clogin';
+      }
+    }
   };
 
   if (loading) {
@@ -238,13 +324,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             {/* Header Actions */}
             <div className="flex items-center space-x-4">
               {/* Language Selector */}
-              <LanguageSelector compact={true} />
+              <LanguageSelector toggle={true} />
 
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
                 className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                title={isDarkMode ? t('client.toggleTheme.light', 'Switch to light mode') : t('client.toggleTheme.dark', 'Switch to dark mode')}
+                title={isDarkMode ? t('client.toggleTheme.light') : t('client.toggleTheme.dark')}
               >
                 {isDarkMode ? (
                   <Sun className="h-5 w-5 text-yellow-500" />
@@ -256,7 +342,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               {/* Notifications */}
               <button
                 className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                title={t('client.notifications', 'Notifications')}
+                title={t('client.notifications')}
               >
                 <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
               </button>
@@ -332,7 +418,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     {t('dashboard.welcome')}, {user.firstName}!
                   </h2>
                   <p className="text-gray-600 dark:text-gray-400">
-                    {t('dashboard.description') || 'Manage your service requests and view your account information.'}
+                    {t('dashboard.description')}
                   </p>
                 </div>
 
@@ -345,9 +431,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                         <Users className="h-8 w-8 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div className="ml-4">
-                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.stats.accessLevel') || 'Access Level'}</p>
+                        <p className="text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.stats.accessLevel')}</p>
                         <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                          {isBusinessLevelClient ? t('dashboard.stats.business') || 'Business' : t('dashboard.stats.site') || 'Site'}
+                          {isBusinessLevelClient ? t('dashboard.stats.business') : t('dashboard.stats.site')}
                         </p>
                       </div>
                     </div>
@@ -424,7 +510,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       className="flex items-center p-4 bg-purple-50 dark:bg-purple-900/20 rounded-lg hover:bg-purple-100 dark:hover:bg-purple-900/30 transition-colors"
                     >
                       <Clock className="h-6 w-6 text-purple-600 dark:text-purple-400 mr-3" />
-                      <span className="text-purple-700 dark:text-purple-300 font-medium">{t('dashboard.quickActions.viewRequests') || 'View Requests'}</span>
+                      <span className="text-purple-700 dark:text-purple-300 font-medium">{t('dashboard.quickActions.viewRequests')}</span>
                     </button>
                   </div>
                 </div>
@@ -500,7 +586,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                 <div className="text-center py-12">
                   <AlertCircle className="h-12 w-12 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
                   <p className="text-gray-500 dark:text-gray-400">
-                    {t('general.comingSoon') || 'This section is coming soon. We\'re working on implementing this feature.'}
+                    {t('general.comingSoon')}
                   </p>
                 </div>
               </div>

@@ -148,12 +148,34 @@ export class AuthService {
 
       const data = await response.json();
 
-      // Check if MFA is required for admin users
+      // Check if MFA is required for admin users or client users
       if (data.requiresMfa) {
         // Throw a special error that indicates MFA is required
         const mfaError = new Error('MFA_REQUIRED');
-        (mfaError as Error & { requiresMfa: boolean; email: string }).requiresMfa = true;
-        (mfaError as Error & { requiresMfa: boolean; email: string }).email = data.email;
+        (mfaError as Error & {
+          requiresMfa: boolean;
+          email: string;
+          userType?: string;
+          mfaEmail?: string;
+        }).requiresMfa = true;
+        (mfaError as Error & {
+          requiresMfa: boolean;
+          email: string;
+          userType?: string;
+          mfaEmail?: string;
+        }).email = data.email;
+        (mfaError as Error & {
+          requiresMfa: boolean;
+          email: string;
+          userType?: string;
+          mfaEmail?: string;
+        }).userType = data.userType;
+        (mfaError as Error & {
+          requiresMfa: boolean;
+          email: string;
+          userType?: string;
+          mfaEmail?: string;
+        }).mfaEmail = data.mfaEmail;
         throw mfaError;
       }
 
@@ -245,6 +267,73 @@ export class AuthService {
       return authUser;
     } catch (error) {
       console.error('Error verifying MFA code:', error);
+      throw error;
+    }
+  }
+
+  // Resend MFA code for client login
+  async resendClientMfaCode(email: string): Promise<void> {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/resend-client-mfa`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ email })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'Failed to resend MFA code');
+      }
+    } catch (error) {
+      console.error('Error resending client MFA code:', error);
+      throw error;
+    }
+  }
+
+  // Verify MFA code and complete client login
+  async verifyClientMfaCode(email: string, mfaCode: string): Promise<AuthUser> {
+    try {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/verify-client-mfa`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          email,
+          mfaCode
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || 'MFA verification failed');
+      }
+
+      const data = await response.json();
+
+      const authUser = {
+        id: data.user.id,
+        email: data.user.email,
+        role: data.user.role || 'client',
+        name: data.user.name || data.user.email,
+        businessName: data.user.businessName,
+        isFirstAdmin: data.user.isFirstAdmin || false
+      };
+
+      // Store authentication state and session token in localStorage for persistence
+      localStorage.setItem('authUser', JSON.stringify(authUser));
+      localStorage.setItem('authTimestamp', Date.now().toString());
+      if (data.session && data.session.sessionToken) {
+        localStorage.setItem('sessionToken', data.session.sessionToken);
+      }
+
+      return authUser;
+    } catch (error) {
+      console.error('Error verifying client MFA code:', error);
       throw error;
     }
   }

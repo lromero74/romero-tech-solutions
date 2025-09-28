@@ -105,6 +105,18 @@ function AppContent() {
 
     // Handle hidden client login page
     if (currentPage === 'clogin') {
+      if (isLoading) {
+        const themeClasses = getThemeClasses();
+        return (
+          <div className={`min-h-screen ${themeClasses.background} flex items-center justify-center`}>
+            <div className="text-center">
+              <div className={`animate-spin rounded-full h-32 w-32 border-b-2 ${themeClasses.spinner} mx-auto`}></div>
+              <p className={`mt-4 ${themeClasses.text}`}>Loading...</p>
+            </div>
+          </div>
+        );
+      }
+
       if (isAuthenticated && isClient) {
         return (
           <ClientLanguageProvider>

@@ -5,10 +5,11 @@ import { Globe, ChevronDown } from 'lucide-react';
 
 interface LanguageSelectorProps {
   compact?: boolean;
+  toggle?: boolean;
   className?: string;
 }
 
-const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = false, className = '' }) => {
+const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = false, toggle = false, className = '' }) => {
   const { language, setLanguage, availableLanguages, loading } = useClientLanguage();
   const { isDarkMode } = useClientTheme();
   const [isOpen, setIsOpen] = useState(false);
@@ -43,6 +44,38 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = false, cl
     }
   };
 
+  // Toggle version (like homepage)
+  if (toggle) {
+    return (
+      <div className={`flex items-center space-x-1 ${className}`}>
+        <Globe className="h-4 w-4 text-gray-600 dark:text-gray-400" />
+        <button
+          onClick={() => setLanguage('en')}
+          disabled={loading}
+          className={`px-2 py-1 text-xs font-medium rounded transition-colors duration-200 ${
+            language === 'en'
+              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+          } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          EN
+        </button>
+        <span className="text-gray-400 dark:text-gray-500">|</span>
+        <button
+          onClick={() => setLanguage('es')}
+          disabled={loading}
+          className={`px-2 py-1 text-xs font-medium rounded transition-colors duration-200 ${
+            language === 'es'
+              ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300'
+              : 'text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+          } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          ES
+        </button>
+      </div>
+    );
+  }
+
   // Compact version for header
   if (compact) {
     return (
@@ -51,7 +84,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = false, cl
           onClick={() => setIsOpen(!isOpen)}
           disabled={loading}
           className={`flex items-center px-3 py-2 rounded-lg border transition-colors ${themeClasses.button} ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-          title={currentLanguage?.nativeName || 'Select Language'}
+          title={currentLanguage?.nativeName || t('languageSelector.selectLanguage')}
         >
           <Globe className="h-4 w-4 mr-1" />
           <span className="text-sm font-medium">{language.toUpperCase()}</span>
@@ -103,7 +136,7 @@ const LanguageSelector: React.FC<LanguageSelectorProps> = ({ compact = false, cl
             <Globe className="h-5 w-5 mr-3" />
             <div className="text-left">
               <div className="font-medium">
-                {currentLanguage?.nativeName || 'Select Language'}
+                {currentLanguage?.nativeName || t('languageSelector.selectLanguage')}
               </div>
               {currentLanguage && (
                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>

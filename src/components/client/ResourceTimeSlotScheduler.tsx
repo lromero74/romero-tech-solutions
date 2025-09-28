@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calendar, Clock, MapPin, User, AlertCircle, Check, X } from 'lucide-react';
+import { AlertCircle, X } from 'lucide-react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 
 interface TimeSlot {
@@ -65,7 +65,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [selectedResource, setSelectedResource] = useState<string>('');
   const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
   const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
-  const [hoveredSlot, setHoveredSlot] = useState<string | null>(null);
+  const [, setHoveredSlot] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Generate time slots for the day (30-minute intervals)
@@ -262,7 +262,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const hours = now.getHours();
     const minutes = now.getMinutes();
     const totalMinutes = hours * 60 + minutes;
-    const totalSlotsInDay = 24 * 2; // 48 half-hour slots
+    // 48 half-hour slots in a day
     const position = (totalMinutes / (24 * 60)) * 100;
 
     return position;

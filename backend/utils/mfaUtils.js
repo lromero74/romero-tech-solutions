@@ -109,18 +109,27 @@ export async function markMfaCodeAsUsed(email, mfaCode) {
 }
 
 /**
- * Send admin login MFA email
- * @param {string} email - The user's email
- * @param {string} firstName - The user's first name
+ * Send MFA verification email to user (client or admin)
+ * @param {string} email - User email address
+ * @param {string} firstName - User first name
  * @param {string} mfaCode - The MFA code to send
+ * @param {string} language - User's preferred language ('en' or 'es')
+ * @param {string} userType - Type of user ('client' or 'admin')
  * @returns {Promise<void>}
  */
-export async function sendMfaEmail(email, firstName, mfaCode) {
+export async function sendMfaEmail(email, firstName, mfaCode, language = 'en', userType = 'admin') {
   try {
-    await emailService.sendAdminLoginMfaEmail(email, firstName || 'Admin', mfaCode);
-    console.log(`🔐 Admin login MFA code sent to ${email}: ${mfaCode}`);
+    if (userType === 'client') {
+      // Use client-specific email template with language support
+      await emailService.sendClientMfaEmail(email, firstName, mfaCode, 'login', language);
+      console.log(`🔐 Client login MFA code sent to ${email}: ${mfaCode} (language: ${language})`);
+    } else {
+      // Use admin email template (admin users always use English for now)
+      await emailService.sendAdminLoginMfaEmail(email, firstName || 'Admin', mfaCode);
+      console.log(`🔐 Admin login MFA code sent to ${email}: ${mfaCode}`);
+    }
   } catch (error) {
-    console.error('Failed to send admin login MFA email:', error);
+    console.error('Failed to send MFA email:', error);
     throw new Error('Failed to send verification code. Please try again.');
   }
 }
@@ -254,5 +263,141 @@ export async function sendPasswordResetEmail(email, firstName, resetCode) {
   } catch (error) {
     console.error('Failed to send password reset email:', error);
     // Don't throw here - we continue anyway as we've created the token
+  }
+}
+
+/**
+ * CLIENT MFA FUNCTIONS
+ * Functions for client Multi-Factor Authentication
+ */
+
+/**
+ * Store MFA code for client login/setup
+ * @param {string} userId - The client user ID
+ * @param {string} code - The generated MFA code
+ * @param {Date} expiresAt - The expiration timestamp
+ * @param {string} codeType - Type of MFA code (client_mfa_setup, client_mfa_login)
+ * @returns {Promise<void>}
+ */
+export async function storeClientMfaCode(userId, code, expiresAt, codeType = 'client_mfa_setup') {
+  try {
+    // First, clean up any existing codes for this user and type
+    await query(`
+      DELETE FROM mfa_verification_codes
+      WHERE user_id = $1 AND code_type = $2
+    `, [userId, codeType]);
+
+    // Store the new code
+    await query(`
+      INSERT INTO mfa_verification_codes (user_id, code, expires_at, code_type, created_at)
+      VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+    `, [userId, code, expiresAt, codeType]);
+  } catch (error) {
+    console.error('Error storing client MFA code:', error);
+    throw new Error('Failed to store MFA code');
+  }
+}
+
+/**
+ * Validate MFA code for client authentication
+ * @param {string} userId - The client user ID
+ * @param {string} code - The MFA code to validate
+ * @param {string} codeType - Type of MFA code
+ * @returns {Promise<boolean>} True if code is valid and not expired
+ */
+export async function validateClientMfaCode(userId, code, codeType = 'client_mfa_setup') {
+  try {
+    const result = await query(`
+      SELECT id, code, expires_at, used_at
+      FROM mfa_verification_codes
+      WHERE user_id = $1 AND code_type = $2 AND code = $3
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [userId, codeType, code]);
+
+    if (result.rows.length === 0) {
+      return false; // Code not found
+    }
+
+    const storedCode = result.rows[0];
+
+    // Check if code has already been used
+    if (storedCode.used_at) {
+      return false; // Code already used
+    }
+
+    // Check if code has expired
+    if (new Date() > new Date(storedCode.expires_at)) {
+      return false; // Code expired
+    }
+
+    return true; // Code is valid
+  } catch (error) {
+    console.error('Error validating client MFA code:', error);
+    throw new Error('Failed to validate MFA code');
+  }
+}
+
+/**
+ * Mark client MFA code as used
+ * @param {string} userId - The client user ID
+ * @param {string} codeType - Type of MFA code
+ * @returns {Promise<void>}
+ */
+export async function markClientMfaCodeAsUsed(userId, codeType = 'client_mfa_setup') {
+  try {
+    await query(`
+      UPDATE mfa_verification_codes
+      SET used_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND code_type = $2 AND used_at IS NULL
+    `, [userId, codeType]);
+  } catch (error) {
+    console.error('Error marking client MFA code as used:', error);
+    throw new Error('Failed to mark MFA code as used');
+  }
+}
+
+/**
+ * Send client MFA email with professional styling
+ * @param {string} email - The client's email
+ * @param {string} firstName - The client's first name
+ * @param {string} mfaCode - The MFA code to send
+ * @param {string} codeType - Type of MFA code (setup or login)
+ * @returns {Promise<void>}
+ */
+export async function sendClientMfaEmail(email, firstName, mfaCode, codeType = 'setup', language = 'en') {
+  try {
+    await emailService.sendClientMfaEmail(email, firstName || 'Valued Client', mfaCode, codeType, language);
+    console.log(`🔐 Client MFA ${codeType} code sent to ${email}: ${mfaCode} (language: ${language})`);
+  } catch (error) {
+    console.error('Failed to send client MFA email:', error);
+    throw new Error('Failed to send verification code. Please try again.');
+  }
+}
+
+/**
+ * Generate backup codes for client MFA
+ * @returns {string[]} Array of 10 backup codes
+ */
+export function generateClientBackupCodes() {
+  return Array.from({ length: 10 }, () =>
+    Math.random().toString(36).substring(2, 10).toUpperCase()
+  );
+}
+
+/**
+ * Clean up expired MFA codes (maintenance function)
+ * @returns {Promise<number>} Number of expired codes cleaned up
+ */
+export async function cleanupExpiredMfaCodes() {
+  try {
+    const result = await query(`
+      DELETE FROM mfa_verification_codes
+      WHERE expires_at < CURRENT_TIMESTAMP
+    `);
+    return result.rowCount;
+  } catch (error) {
+    console.error('Error cleaning up expired MFA codes:', error);
+    return 0;
   }
 }

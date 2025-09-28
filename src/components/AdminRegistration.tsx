@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { authService } from '../services/authService';
-import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, KeyRound } from 'lucide-react';
+import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, KeyRound, Eye, EyeOff } from 'lucide-react';
 
 interface AdminRegistrationProps {
   onSuccess: () => void;
@@ -34,10 +34,58 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const passwordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const confirmPasswordTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const formClearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     checkAdminExists();
   }, []);
+
+  // Cleanup timers on component unmount
+  useEffect(() => {
+    return () => {
+      if (passwordTimerRef.current) {
+        clearTimeout(passwordTimerRef.current);
+      }
+      if (confirmPasswordTimerRef.current) {
+        clearTimeout(confirmPasswordTimerRef.current);
+      }
+      if (formClearTimerRef.current) {
+        clearTimeout(formClearTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Start/restart form clear timer when user types
+  const startFormClearTimer = () => {
+    // Clear existing timer
+    if (formClearTimerRef.current) {
+      clearTimeout(formClearTimerRef.current);
+    }
+
+    // Set new 1-minute timer
+    formClearTimerRef.current = setTimeout(() => {
+      console.log('🧹 Auto-clearing admin form after 1 minute of inactivity');
+      setFormData({ name: '', email: '', password: '', confirmPassword: '' });
+      setShowPassword(false);
+      setShowConfirmPassword(false);
+      setErrors({});
+      setSuccess('');
+      // Clear password visibility timers if active
+      if (passwordTimerRef.current) {
+        clearTimeout(passwordTimerRef.current);
+        passwordTimerRef.current = null;
+      }
+      if (confirmPasswordTimerRef.current) {
+        clearTimeout(confirmPasswordTimerRef.current);
+        confirmPasswordTimerRef.current = null;
+      }
+      formClearTimerRef.current = null;
+    }, 60000); // 1 minute
+  };
 
   const checkAdminExists = async () => {
     try {
@@ -56,6 +104,12 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Clear form timer when user attempts to submit
+    if (formClearTimerRef.current) {
+      clearTimeout(formClearTimerRef.current);
+      formClearTimerRef.current = null;
+    }
 
     setIsLoading(true);
     setErrors({});
@@ -418,6 +472,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     const sanitizedValue = sanitizeForContext(value, name);
 
     setFormData(prev => ({ ...prev, [name]: sanitizedValue }));
+
+    // Start/restart form clear timer on any input
+    startFormClearTimer();
 
     // Real-time validation
     const validationError = validateInput(name, value); // Validate against original value
@@ -895,19 +952,49 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                   <input
                     id="password"
                     name="password"
-                    type="password"
+                    type={showPassword ? 'text' : 'password'}
                     required
                     value={formData.password}
                     onChange={handleInputChange}
                     minLength={8}
                     maxLength={128}
                     title="Password must be at least 8 characters with uppercase, lowercase, and number"
-                    className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
+                    className={`appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border ${
                       errors.password ? 'border-red-300' : 'border-gray-300'
                     } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                     placeholder="Enter your password"
                   />
                   <Lock className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
+                  <button
+                    type="button"
+                    className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 z-10 cursor-pointer"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      console.log('👁️ Admin password visibility toggle clicked, current state:', showPassword);
+
+                      // Clear any existing timer
+                      if (passwordTimerRef.current) {
+                        clearTimeout(passwordTimerRef.current);
+                        passwordTimerRef.current = null;
+                      }
+
+                      const newShowPassword = !showPassword;
+                      setShowPassword(newShowPassword);
+
+                      // If turning password visibility ON, set 10-second auto-hide timer
+                      if (newShowPassword) {
+                        console.log('🔒 Admin password visibility enabled - will auto-hide in 10 seconds');
+                        passwordTimerRef.current = setTimeout(() => {
+                          console.log('⏰ Auto-hiding admin password after 10 seconds');
+                          setShowPassword(false);
+                          passwordTimerRef.current = null;
+                        }, 10000);
+                      }
+                    }}
+                  >
+                    {showPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                  </button>
                 </div>
                 {errors.password && <p className="mt-1 text-sm text-red-600">{errors.password}</p>}
               </div>
@@ -921,19 +1008,49 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                     <input
                       id="confirmPassword"
                       name="confirmPassword"
-                      type="password"
+                      type={showConfirmPassword ? 'text' : 'password'}
                       required={isSignUp}
                       value={formData.confirmPassword}
                       onChange={handleInputChange}
                       minLength={8}
                       maxLength={128}
                       title="Must match your password"
-                      className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
+                      className={`appearance-none relative block w-full px-3 py-2 pl-10 pr-10 border ${
                         errors.confirmPassword ? 'border-red-300' : 'border-gray-300'
                       } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                       placeholder="Confirm your password"
                     />
                     <Lock className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
+                    <button
+                      type="button"
+                      className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600 z-10 cursor-pointer"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        console.log('👁️ Admin confirm password visibility toggle clicked, current state:', showConfirmPassword);
+
+                        // Clear any existing timer
+                        if (confirmPasswordTimerRef.current) {
+                          clearTimeout(confirmPasswordTimerRef.current);
+                          confirmPasswordTimerRef.current = null;
+                        }
+
+                        const newShowConfirmPassword = !showConfirmPassword;
+                        setShowConfirmPassword(newShowConfirmPassword);
+
+                        // If turning password visibility ON, set 10-second auto-hide timer
+                        if (newShowConfirmPassword) {
+                          console.log('🔒 Admin confirm password visibility enabled - will auto-hide in 10 seconds');
+                          confirmPasswordTimerRef.current = setTimeout(() => {
+                            console.log('⏰ Auto-hiding admin confirm password after 10 seconds');
+                            setShowConfirmPassword(false);
+                            confirmPasswordTimerRef.current = null;
+                          }, 10000);
+                        }
+                      }}
+                    >
+                      {showConfirmPassword ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
+                    </button>
                   </div>
                   {errors.confirmPassword && <p className="mt-1 text-sm text-red-600">{errors.confirmPassword}</p>}
                 </div>
