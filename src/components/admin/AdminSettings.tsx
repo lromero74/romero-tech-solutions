@@ -64,6 +64,11 @@ const AdminSettings: React.FC = () => {
   const [schedulerHasChanges, setSchedulerHasChanges] = useState(false);
   const [schedulerSaveStatus, setSchedulerSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
 
+  // MFA Configuration state
+  const [mfaRequired, setMfaRequired] = useState(false);
+  const [mfaHasChanges, setMfaHasChanges] = useState(false);
+  const [mfaSaveStatus, setMfaSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   // Header measurement for scroll indicators
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(80); // fallback value
@@ -86,13 +91,18 @@ const AdminSettings: React.FC = () => {
     loadSchedulerConfiguration();
   }, []);
 
+  // Load MFA configuration
+  useEffect(() => {
+    loadMfaConfiguration();
+  }, []);
+
   // Measure header height for scroll indicators
   useEffect(() => {
     if (headerRef.current) {
       const height = headerRef.current.offsetHeight;
       setHeaderHeight(height);
     }
-  }, [sessionConfig, serviceLocationSelections, schedulerConfig]); // Recalculate when data changes
+  }, [sessionConfig, serviceLocationSelections, schedulerConfig, mfaRequired]); // Recalculate when data changes
 
   const loadServiceLocationSelections = async () => {
     try {
@@ -164,6 +174,24 @@ const AdminSettings: React.FC = () => {
       setSchedulerHasChanges(false);
     } catch (error) {
       console.error('Failed to load scheduler configuration:', error);
+    }
+  };
+
+  const loadMfaConfiguration = async () => {
+    try {
+      const setting = await systemSettingsService.getSystemSetting('mfa_required');
+      if (setting) {
+        const value = setting.value === 'true' || setting.value === true;
+        setMfaRequired(value);
+      } else {
+        // Default to true if setting doesn't exist (secure default)
+        setMfaRequired(true);
+      }
+      setMfaHasChanges(false);
+    } catch (error) {
+      console.error('Failed to load MFA configuration:', error);
+      // Default to true on error (secure default)
+      setMfaRequired(true);
     }
   };
 
@@ -376,6 +404,28 @@ const AdminSettings: React.FC = () => {
     setSchedulerHasChanges(true);
   };
 
+  const handleMfaToggle = () => {
+    setMfaRequired(!mfaRequired);
+    setMfaHasChanges(true);
+  };
+
+  const handleSaveMfaConfig = async () => {
+    setMfaSaveStatus('saving');
+    try {
+      await systemSettingsService.updateSystemSetting('mfa_required', mfaRequired);
+      setMfaHasChanges(false);
+      setMfaSaveStatus('saved');
+      console.log('✅ MFA configuration saved successfully:', mfaRequired);
+
+      // Clear saved status after 3 seconds
+      setTimeout(() => setMfaSaveStatus('idle'), 3000);
+    } catch (error) {
+      console.error('Error saving MFA configuration:', error);
+      setMfaSaveStatus('error');
+      setTimeout(() => setMfaSaveStatus('idle'), 3000);
+    }
+  };
+
   return (
     <div className="h-full relative" style={{ height: 'calc(100vh - 80px)' }}>
       <div className="h-full overflow-y-auto" onScroll={handleScroll}>
@@ -533,6 +583,105 @@ const AdminSettings: React.FC = () => {
               </p>
             </div>
           )}
+        </div>
+      </div>
+
+      {/* MFA Security Configuration */}
+      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg`}>
+        <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
+          <div className="flex items-center">
+            <Shield className="w-5 h-5 text-red-500 mr-2" />
+            <h2 className={`text-lg font-medium ${themeClasses.text.primary}`}>Multi-Factor Authentication</h2>
+          </div>
+          <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+            Configure multi-factor authentication requirements for employee logins
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          {/* MFA Toggle */}
+          <div className="flex items-center justify-between">
+            <div className="flex-1 mr-4">
+              <label htmlFor="mfa-toggle" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>
+                Require MFA for Employee Logins
+              </label>
+              <p className={`text-xs ${themeClasses.text.muted}`}>
+                When enabled, all employees must complete email and SMS verification when logging in
+              </p>
+            </div>
+            <div className="flex items-center">
+              <button
+                id="mfa-toggle"
+                onClick={handleMfaToggle}
+                className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  mfaRequired ? 'bg-red-600' : 'bg-gray-200 dark:bg-gray-700'
+                }`}
+                role="switch"
+                aria-checked={mfaRequired}
+              >
+                <span
+                  aria-hidden="true"
+                  className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    mfaRequired ? 'translate-x-5' : 'translate-x-0'
+                  }`}
+                />
+              </button>
+              <span className={`ml-3 text-sm font-medium ${themeClasses.text.primary}`}>
+                {mfaRequired ? 'Enabled' : 'Disabled'}
+              </span>
+            </div>
+          </div>
+
+          {/* Current Status Display */}
+          <div className={`${themeClasses.bg.secondary} rounded-lg p-4`}>
+            <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>Current Security Settings</h3>
+            <div className="flex items-center space-x-2">
+              <div className={`w-3 h-3 rounded-full ${mfaRequired ? 'bg-red-500' : 'bg-gray-400'}`}></div>
+              <span className={`text-sm ${themeClasses.text.primary}`}>
+                MFA is currently <strong>{mfaRequired ? 'REQUIRED' : 'DISABLED'}</strong> for all employee accounts
+              </span>
+            </div>
+            {mfaRequired && (
+              <p className={`text-xs ${themeClasses.text.muted} mt-2`}>
+                Employees will receive verification codes via email and SMS during login
+              </p>
+            )}
+          </div>
+
+          {/* Action Button */}
+          <div className="flex justify-end">
+            <button
+              onClick={handleSaveMfaConfig}
+              disabled={!mfaHasChanges || mfaSaveStatus === 'saving'}
+              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 ${
+                mfaHasChanges && mfaSaveStatus !== 'saving'
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {mfaSaveStatus === 'saving' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : mfaSaveStatus === 'saved' ? (
+                <>
+                  <span className="text-green-200 mr-2">✓</span>
+                  Saved
+                </>
+              ) : mfaSaveStatus === 'error' ? (
+                <>
+                  <span className="text-red-200 mr-2">✗</span>
+                  Error
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save MFA Settings
+                </>
+              )}
+            </button>
+          </div>
         </div>
       </div>
 
@@ -840,6 +989,17 @@ const AdminSettings: React.FC = () => {
               <li>• Users can extend their session or will be logged out automatically</li>
               <li>• Changes take effect immediately for the current session</li>
               <li>• Settings are preserved across browser sessions</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className={`text-xs font-semibold ${themeClasses.text.primary} mb-1 uppercase tracking-wide`}>Multi-Factor Authentication</h4>
+            <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
+              <li>• MFA applies to all employee accounts (Admin, Technician, Sales roles)</li>
+              <li>• When enabled, employees receive verification codes via email and SMS</li>
+              <li>• Changes take effect immediately for new login attempts</li>
+              <li>• Current logged-in sessions remain active until logout</li>
+              <li>• Clients are not affected by MFA settings (separate authentication flow)</li>
             </ul>
           </div>
 

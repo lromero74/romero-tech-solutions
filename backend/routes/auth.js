@@ -562,19 +562,48 @@ router.post('/admin-login-mfa', async (req, res) => {
     const mfaCode = generateMfaCode();
     await storeMfaCode(user.id, user.email, mfaCode);
 
-    // Send MFA email
+    // Send MFA via both email and SMS
     try {
-      await sendMfaEmail(user.email, user.first_name, mfaCode);
-    } catch (emailError) {
+      const deliveryResult = await sendMfaCode({
+        email: user.email,
+        phoneNumber: user.phone, // Use phone from employees table
+        firstName: user.first_name,
+        mfaCode,
+        language: 'en',
+        userType: 'admin',
+        deliveryMethod: 'both', // Send via both email and SMS
+        codeType: 'login'
+      });
+
+      // Check if at least one delivery method succeeded
+      if (!deliveryResult.success) {
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send verification code. Please try again.'
+        });
+      }
+
+      // Build success message based on which methods succeeded
+      let message = 'Verification code sent';
+      const methods = [];
+      if (deliveryResult.email.sent) methods.push('email');
+      if (deliveryResult.sms.sent) methods.push('text message');
+
+      if (methods.length > 0) {
+        message += ` to your ${methods.join(' and ')}`;
+      }
+      message += '. Please check and enter the code to complete login.';
+
+    } catch (deliveryError) {
       return res.status(500).json({
         success: false,
-        message: emailError.message
+        message: deliveryError.message
       });
     }
 
     res.status(200).json({
       success: true,
-      message: 'Verification code sent to your email. Please check your email and enter the code to complete login.',
+      message,
       requiresMfa: true,
       email: user.email,
       // Include mfaCode in development for testing
