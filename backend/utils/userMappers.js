@@ -207,14 +207,14 @@ export function mapUsersArray(users) {
   return users.map(user => {
     const mapped = mapDatabaseToResponseUser(user);
 
-    // Debug logging for specific user (Louis)
-    if (user.email === 'louis@romerotechsolutions.com') {
-      console.log('🔍 BACKEND DEBUG - Louis record from DB query:');
+    // Debug logging for specific user (example: john@example.com)
+    if (user.email === 'john@example.com') {
+      console.log('🔍 BACKEND DEBUG - Example user record from DB query:');
       console.log('  department_detailed:', user.department_detailed);
       console.log('  user_type:', user.user_type);
       console.log('  id:', user.id);
 
-      console.log('🔍 BACKEND DEBUG - Louis after mapping:');
+      console.log('🔍 BACKEND DEBUG - Example user after mapping:');
       console.log('  department:', mapped.department);
       console.log('  department type:', typeof mapped.department);
       console.log('  mapped object:', JSON.stringify(mapped, null, 2));

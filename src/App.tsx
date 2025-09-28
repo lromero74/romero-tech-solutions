@@ -51,8 +51,8 @@ function AppContent() {
   }, [currentPage]);
 
   const renderPage = () => {
-    // Handle admin page
-    if (currentPage === 'admin') {
+    // Handle employee page (includes redirected /admin users)
+    if (currentPage === 'employee') {
       if (isLoading) {
         const themeClasses = getThemeClasses();
         return (
@@ -65,10 +65,20 @@ function AppContent() {
         );
       }
 
-      if (!isAuthenticated || !isAdmin) {
-        return <AdminRegistration onSuccess={() => setCurrentPage('dashboard')} />;
+      if (!isAuthenticated || (!isAdmin && !isTechnician)) {
+        return <AdminRegistration onSuccess={() => setCurrentPage('dashboard')} currentPage={currentPage} />;
       }
 
+      // Route to appropriate dashboard based on role
+      if (isAdmin) {
+        return <AdminDashboard />;
+      }
+
+      if (isTechnician) {
+        return <UnauthenticatedDashboard />;
+      }
+
+      // Fallback to admin dashboard for other employee roles
       return <AdminDashboard />;
     }
 
@@ -200,7 +210,7 @@ function AppContent() {
   };
 
   // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated or loading
-  if (currentPage === 'admin' || currentPage === 'technician' || currentPage === 'confirm-email' ||
+  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
       (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isClient))))) {
     return renderPage();

@@ -25,7 +25,7 @@ interface EnhancedAuthContextType {
   hasPermission: (requiredRole: UserRole | UserRole[]) => boolean;
   refreshUser: () => Promise<void>;
   // MFA methods
-  sendAdminMfaCode: (email: string, password: string) => Promise<void>;
+  sendAdminMfaCode: (email: string, password: string) => Promise<{ email: string; phoneNumber?: string; message: string }>;
   verifyAdminMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
   verifyClientMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
   // Session management
@@ -528,7 +528,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   // MFA handlers
   const handleSendAdminMfaCode = async (email: string, password: string) => {
     try {
-      await authService.sendAdminMfaCode(email, password);
+      return await authService.sendAdminMfaCode(email, password);
     } catch (error) {
       console.error('Error sending admin MFA code:', error);
       throw error;

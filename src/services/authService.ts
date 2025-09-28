@@ -202,7 +202,7 @@ export class AuthService {
   }
 
   // Send MFA code for admin login
-  async sendAdminMfaCode(email: string, password: string): Promise<void> {
+  async sendAdminMfaCode(email: string, password: string): Promise<{ email: string; phoneNumber?: string; message: string }> {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/admin-login-mfa`, {
         method: 'POST',
@@ -222,6 +222,11 @@ export class AuthService {
 
       const data = await response.json();
       console.log('MFA code sent successfully:', data.message);
+      return {
+        email: data.email,
+        phoneNumber: data.phoneNumber,
+        message: data.message
+      };
     } catch (error) {
       console.error('Error sending MFA code:', error);
       throw error;

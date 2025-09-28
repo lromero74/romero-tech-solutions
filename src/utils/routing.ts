@@ -1,8 +1,12 @@
 import { AppPage } from '../constants/config';
 
 export const getPageFromPath = (path: string): AppPage => {
+  // Redirect /admin to /employee path
   if (path === '/admin' || path === '/admin/' || path.startsWith('/admin/')) {
-    return 'admin';
+    return 'employee';
+  }
+  if (path === '/employee' || path === '/employee/' || path.startsWith('/employee/')) {
+    return 'employee';
   }
   if (path === '/technician' || path.startsWith('/technician')) {
     return 'technician';
@@ -46,6 +50,9 @@ export const getPathFromPage = (page: AppPage): string => {
   }
   if (page === 'confirm-email') {
     return '/confirm-email';
+  }
+  if (page === 'employee') {
+    return '/employee';
   }
   return `/${page}`;
 };

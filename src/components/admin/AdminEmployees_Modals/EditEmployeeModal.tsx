@@ -10,7 +10,7 @@ interface Employee {
   firstName: string;
   lastName: string;
   middleInitial?: string;
-  preferredName?: string; // Nickname/preferred name (e.g., "Lou" for "Louis")
+  preferredName?: string; // Nickname/preferred name (e.g., "John" for "Jonathan")
   pronouns?: string;
   // Basic info
   email: string;

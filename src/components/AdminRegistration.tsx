@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { authService } from '../services/authService';
 import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { AppPage } from '../constants/config';
 
 interface AdminRegistrationProps {
   onSuccess: () => void;
+  currentPage?: AppPage;
 }
 
-const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
+const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, currentPage = 'employee' }) => {
   const { signUpAdmin, signIn, sendAdminMfaCode, verifyAdminMfaCode, isLoading: authLoading } = useEnhancedAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [hasAdminUsers, setHasAdminUsers] = useState<boolean | null>(null);
@@ -22,6 +24,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaEmail, setMfaEmail] = useState('');
   const [mfaPassword, setMfaPassword] = useState('');
+  const [mfaPhoneNumber, setMfaPhoneNumber] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
   const [pendingEmail, setPendingEmail] = useState('');
@@ -155,8 +158,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
 
             // Automatically send MFA code
             try {
-              await sendAdminMfaCode(formData.email, formData.password);
-              setSuccess('Verification code sent to your email. Please check your email and enter the code below.');
+              const mfaResponse = await sendAdminMfaCode(formData.email, formData.password);
+              setMfaPhoneNumber(mfaResponse.phoneNumber || '');
+              setSuccess('Verification code sent to your email and phone. Please check your email and text messages and enter the code below.');
               setErrors({});
             } catch (mfaError: unknown) {
               const errorMessage = mfaError && typeof mfaError === 'object' && 'message' in mfaError && typeof mfaError.message === 'string'
@@ -348,6 +352,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     setMfaCode('');
     setMfaEmail('');
     setMfaPassword('');
+    setMfaPhoneNumber('');
     setErrors({});
   };
 
@@ -358,7 +363,8 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     setErrors({});
 
     try {
-      await sendAdminMfaCode(mfaEmail, mfaPassword);
+      const mfaResponse = await sendAdminMfaCode(mfaEmail, mfaPassword);
+      setMfaPhoneNumber(mfaResponse.phoneNumber || '');
       setSuccess('Verification code sent successfully');
       setTimeout(() => setSuccess(''), 3000);
     } catch (error: unknown) {
@@ -379,6 +385,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
     setMfaCode('');
     setMfaEmail('');
     setMfaPassword('');
+    setMfaPhoneNumber('');
     setNewPassword('');
     setConfirmNewPassword('');
     setPendingEmail('');
@@ -549,7 +556,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
           </div>
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             {showMfaVerification
-              ? 'Email Verification'
+              ? 'Multi-Factor Verification'
               : showVerification
               ? 'Verify Your Email'
               : showForgotPassword
@@ -557,13 +564,13 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
               : showResetPassword
               ? 'Set New Password'
               : isSignUp
-              ? 'Create Admin Account'
-              : 'Admin Sign In'
+              ? 'Create Employee Account'
+              : 'Employee Sign In'
             }
           </h2>
           <p className="mt-2 text-sm text-gray-600">
             {showMfaVerification
-              ? `Enter the verification code sent to ${mfaEmail}`
+              ? `Enter the verification code sent to your email (${mfaEmail})${mfaPhoneNumber ? ` and phone number (${mfaPhoneNumber})` : ' and phone number'}`
               : showVerification
               ? `Enter the verification code sent to ${pendingEmail}`
               : showForgotPassword
@@ -572,9 +579,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
               ? `Enter the reset code sent to ${resetEmail} and your new password`
               : isSignUp
               ? hasAdminUsers
-                ? 'Create a new administrator account'
-                : 'Create the first administrator account'
-              : 'Sign in to the admin dashboard'
+                ? 'Create a new employee account'
+                : 'Create the first employee account'
+              : 'Sign in to the employee dashboard'
             }
           </p>
         </div>
@@ -784,7 +791,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
               </div>
               {errors.mfaCode && <p className="mt-1 text-sm text-red-600">{errors.mfaCode}</p>}
               <p className="mt-1 text-xs text-gray-500">
-                Enter the 6-digit code sent to your email
+                Enter the 6-digit code sent to your email and phone${mfaPhoneNumber ? ` (${mfaPhoneNumber})` : ''}
               </p>
             </div>
 
@@ -1068,7 +1075,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess }) => {
                 ) : (
                   <>
                     <Shield className="h-5 w-5 mr-2" />
-                    {isSignUp ? 'Create Admin Account' : 'Sign In to Admin'}
+                    {isSignUp ? 'Create Employee Account' : 'Sign In to Employee Dashboard'}
                   </>
                 )}
               </button>

@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { query } from '../config/database.js';
 import { emailService } from '../services/emailService.js';
 import { smsService } from '../services/smsService.js';
+import twilioSmsService from '../services/twilioSmsService.js';
 
 /**
  * MFA (Multi-Factor Authentication) Utilities
@@ -388,11 +389,11 @@ export function generateClientBackupCodes() {
 
 /**
  * SMS MFA FUNCTIONS
- * Enhanced MFA functions with SMS support via AWS SNS
+ * Enhanced MFA functions with SMS support via Twilio
  */
 
 /**
- * Send MFA code via SMS using AWS SNS
+ * Send MFA code via SMS using Twilio
  * @param {string} phoneNumber - User phone number
  * @param {string} firstName - User first name
  * @param {string} mfaCode - The MFA code to send
@@ -402,17 +403,23 @@ export function generateClientBackupCodes() {
  */
 export async function sendMfaSMS(phoneNumber, firstName, mfaCode, language = 'en', userType = 'admin') {
   try {
+    console.log(`🚀 sendMfaSMS called via Twilio:`);
+    console.log(`  📱 Phone: ${phoneNumber}`);
+    console.log(`  👤 Name: ${firstName}`);
+    console.log(`  🔑 Code: ${mfaCode}`);
+    console.log(`  🌐 Language: ${language}`);
+    console.log(`  👔 User Type: ${userType}`);
+
+    // Use Twilio for both client and admin SMS (supports all languages)
+    await twilioSmsService.sendMfaCode(phoneNumber, firstName || 'User', mfaCode, language);
+
     if (userType === 'client') {
-      // Use client-specific SMS template with language support
-      await smsService.sendMfaCode(phoneNumber, firstName, mfaCode, language);
-      console.log(`📱 Client login MFA code sent to ${phoneNumber}: ${mfaCode} (language: ${language})`);
+      console.log(`📱 Client login MFA code sent via Twilio to ${phoneNumber}: ${mfaCode} (language: ${language})`);
     } else {
-      // Use admin SMS template (admin users always use English for now)
-      await smsService.sendMfaCode(phoneNumber, firstName || 'Admin', mfaCode, 'en');
-      console.log(`📱 Admin login MFA code sent to ${phoneNumber}: ${mfaCode}`);
+      console.log(`📱 Admin login MFA code sent via Twilio to ${phoneNumber}: ${mfaCode}`);
     }
   } catch (error) {
-    console.error('Failed to send MFA SMS:', error);
+    console.error('Failed to send MFA SMS via Twilio:', error);
     throw new Error('Failed to send SMS verification code. Please try again.');
   }
 }

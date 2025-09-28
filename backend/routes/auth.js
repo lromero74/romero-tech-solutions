@@ -512,15 +512,15 @@ router.post('/admin-login-mfa', async (req, res) => {
       });
     }
 
-    // Check employees table for admin users only using normalized roles
+    // Check employees table for any active employee with any role (unified employee login)
     const userResult = await query(`
-      SELECT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
-             es.status_name as employee_status, e.termination_date
+      SELECT DISTINCT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
+             e.phone, es.status_name as employee_status, e.termination_date
       FROM employees e
       JOIN employee_roles er ON e.id = er.employee_id
       JOIN roles r ON er.role_id = r.id
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
-      WHERE e.email = $1 AND r.name = 'admin' AND r.is_active = true
+      WHERE e.email = $1 AND r.is_active = true
     `, [email]);
 
     if (userResult.rows.length === 0) {
@@ -562,8 +562,12 @@ router.post('/admin-login-mfa', async (req, res) => {
     const mfaCode = generateMfaCode();
     await storeMfaCode(user.id, user.email, mfaCode);
 
+    // Initialize message variable
+    let message = 'Verification code sent. Please check and enter the code to complete login.';
+
     // Send MFA via both email and SMS
     try {
+      console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: both`);
       const deliveryResult = await sendMfaCode({
         email: user.email,
         phoneNumber: user.phone, // Use phone from employees table
@@ -574,6 +578,7 @@ router.post('/admin-login-mfa', async (req, res) => {
         deliveryMethod: 'both', // Send via both email and SMS
         codeType: 'login'
       });
+      console.log(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
 
       // Check if at least one delivery method succeeded
       if (!deliveryResult.success) {
@@ -584,7 +589,7 @@ router.post('/admin-login-mfa', async (req, res) => {
       }
 
       // Build success message based on which methods succeeded
-      let message = 'Verification code sent';
+      message = 'Verification code sent';
       const methods = [];
       if (deliveryResult.email.sent) methods.push('email');
       if (deliveryResult.sms.sent) methods.push('text message');
@@ -606,6 +611,7 @@ router.post('/admin-login-mfa', async (req, res) => {
       message,
       requiresMfa: true,
       email: user.email,
+      phoneNumber: user.phone,
       // Include mfaCode in development for testing
       ...(process.env.NODE_ENV === 'development' && { mfaCode })
     });

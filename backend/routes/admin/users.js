@@ -33,10 +33,10 @@ router.get('/users', async (req, res) => {
     const mappedUsers = mapUsersArray(result.users);
 
     // Debug logging for the final mapped users array
-    const louisMapped = mappedUsers.find(user => user.email === 'louis@romerotechsolutions.com');
-    if (louisMapped) {
-      console.log('🔍 BACKEND DEBUG - Final Louis in response:');
-      console.log('  department:', louisMapped.department);
+    const exampleMapped = mappedUsers.find(user => user.email === 'john@example.com');
+    if (exampleMapped) {
+      console.log('🔍 BACKEND DEBUG - Final example user in response:');
+      console.log('  department:', exampleMapped.department);
     }
 
     res.status(200).json({

@@ -130,14 +130,14 @@ class EmailService {
       // Check if this is an AWS SES verification error
       if (error.code === 'MessageRejected' && error.message.includes('Email address is not verified')) {
         console.error('🚨 AWS SES EMAIL VERIFICATION ISSUE DETECTED:');
-        console.error('   The sender email address louis@romerotechsolutions.com is not verified in AWS SES.');
+        console.error(`   The sender email address ${process.env.SES_FROM_EMAIL} is not verified in AWS SES.`);
         console.error('   To fix this:');
         console.error('   1. Log in to AWS Console → SES → Verified identities');
-        console.error('   2. Add and verify louis@romerotechsolutions.com');
+        console.error(`   2. Add and verify ${process.env.SES_FROM_EMAIL}`);
         console.error('   3. Check email for verification link');
         console.error('   4. Or request production access to send to any email');
 
-        throw new Error('EMAIL_VERIFICATION_REQUIRED: AWS SES sender email not verified. Please verify louis@romerotechsolutions.com in AWS SES console.');
+        throw new Error(`EMAIL_VERIFICATION_REQUIRED: AWS SES sender email not verified. Please verify ${process.env.SES_FROM_EMAIL} in AWS SES console.`);
       }
 
       throw new Error(`Failed to send confirmation email: ${error.message}`);

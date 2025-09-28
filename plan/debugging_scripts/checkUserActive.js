@@ -27,7 +27,7 @@ async function checkUserActiveStatus() {
         confirmation_expires_at > NOW() as token_not_expired
       FROM users
       WHERE email = $1
-    `, ['louis@romerotechsolutions.com']);
+    `, ['john@example.com']);
 
     if (result.rows.length > 0) {
       const user = result.rows[0];

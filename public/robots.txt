@@ -2,7 +2,7 @@ User-agent: *
 Allow: /
 
 # Allow all search engines to crawl the site
-Disallow: /admin
+Disallow: /employee
 Disallow: /technician
 Disallow: /sales
 Disallow: /clogin
