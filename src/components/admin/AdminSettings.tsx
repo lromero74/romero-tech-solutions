@@ -5,6 +5,7 @@ import { SessionConfig } from '../../utils/sessionManager';
 import { themeClasses } from '../../contexts/ThemeContext';
 import ServiceLocationSelector from './ServiceLocationSelector';
 import adminService from '../../services/adminService';
+import { systemSettingsService } from '../../services/systemSettingsService';
 
 interface ServiceLocationSelection {
   location_type: string;
@@ -110,7 +111,7 @@ const AdminSettings: React.FC = () => {
 
   const loadSchedulerConfiguration = async () => {
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      // Use authenticated system settings service instead of raw fetch
 
       // Load all scheduler settings
       const settingKeys = [
@@ -124,17 +125,10 @@ const AdminSettings: React.FC = () => {
 
       for (const key of settingKeys) {
         try {
-          const response = await fetch(`${API_BASE_URL}/admin/system-settings/${key}`, {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-          });
+          const setting = await systemSettingsService.getSystemSetting(key);
 
-          if (response.ok) {
-            const result = await response.json();
-            const value = parseInt(result.data.value) || 0;
+          if (setting) {
+            const value = parseInt(setting.value as string) || 0;
 
             switch (key) {
               case 'scheduler_buffer_before_hours':
@@ -150,9 +144,11 @@ const AdminSettings: React.FC = () => {
                 configData.minimumAdvanceHours = value;
                 break;
             }
+          } else {
+            console.warn(`Failed to load setting ${key}: no data returned`);
           }
         } catch (error) {
-          console.warn(`Failed to load setting ${key}:`, error);
+          console.warn(`Error loading setting ${key}:`, error);
         }
       }
 
@@ -341,8 +337,6 @@ const AdminSettings: React.FC = () => {
   const handleSaveSchedulerConfig = async () => {
     setSchedulerSaveStatus('saving');
     try {
-      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-
       // Map config fields to database setting keys
       const settingMappings = {
         bufferBeforeHours: 'scheduler_buffer_before_hours',
@@ -351,18 +345,10 @@ const AdminSettings: React.FC = () => {
         minimumAdvanceHours: 'scheduler_minimum_advance_hours'
       };
 
-      // Save each setting
+      // Save each setting using authenticated service
       for (const [configKey, settingKey] of Object.entries(settingMappings)) {
         const value = schedulerConfig[configKey as keyof SchedulerConfig];
-
-        await fetch(`${API_BASE_URL}/admin/system-settings/${settingKey}`, {
-          method: 'PUT',
-          credentials: 'include',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ value }),
-        });
+        await systemSettingsService.updateSystemSetting(settingKey, value);
       }
 
       setSchedulerHasChanges(false);
