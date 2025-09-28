@@ -428,10 +428,11 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         } else if (apiBaseUrl.includes('44.211.124.33:3001')) {
           // Production backend server (IP-based fallback)
           websocketUrl = 'http://44.211.124.33:3001';
-        } else if (apiBaseUrl.includes('localhost')) {
+        } else if (apiBaseUrl.includes('localhost') || apiBaseUrl.includes('127.0.0.1')) {
+          // Development environment
           websocketUrl = 'http://localhost:3001';
         } else {
-          // Fallback: try to construct from API URL
+          // Fallback: try to construct from API URL by removing /api suffix
           websocketUrl = apiBaseUrl.replace('/api', '').replace(/\/$/, '');
         }
 
