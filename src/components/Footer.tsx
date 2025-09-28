@@ -45,7 +45,7 @@ const Footer: React.FC = () => {
               </a>
               <div className="flex items-center space-x-3 text-gray-300">
                 <MapPin className="h-5 w-5" />
-                <span>Escondido, CA Area</span>
+                <span>San Diego County, CA Area</span>
               </div>
             </div>
           </div>

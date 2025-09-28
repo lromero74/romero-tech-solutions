@@ -81,9 +81,20 @@ export const adminIPWhitelist = (req, res, next) => {
   next();
 };
 
-// Security headers middleware
+// Enhanced security headers middleware
 export const securityHeaders = (req, res, next) => {
+  // API identification
   res.setHeader('X-API-Version', '1.0.0');
   res.setHeader('X-Powered-By', 'Romero Tech Solutions');
+
+  // Phase 1 Security Enhancements
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
+  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+
   next();
 };

@@ -11,7 +11,7 @@ export const enTranslations = {
   'home.hero.badge': '30 Years Experience at Your Service',
   'home.hero.title': 'Professional',
   'home.hero.titleHighlight': 'Tech Solutions',
-  'home.hero.subtitle': 'Expert computer repair, network setup, and IT support for homes and businesses in Escondido, CA',
+  'home.hero.subtitle': 'Expert computer repair, network setup, and IT support for homes and businesses throughout San Diego County, CA',
   'home.hero.callButton': 'Call (619) 940-5550',
   'home.hero.quoteButton': 'E-mail Us',
   'home.hero.stat1': '30+',
@@ -72,7 +72,7 @@ export const enTranslations = {
   'home.contact.email.title': 'Email Us',
   'home.contact.email.description': 'Send us your tech questions',
   'home.contact.location.title': 'Service Area',
-  'home.contact.location.description': 'Serving the greater Escondido area',
+  'home.contact.location.description': 'Serving San Diego County including Escondido, Carlsbad, Oceanside, Vista, and surrounding cities',
   'home.contact.cta': 'Get Started Today',
 
   'home.whyChoose.title': 'Why Choose Us?',
@@ -85,7 +85,7 @@ export const enTranslations = {
   'home.whyChoose.securityFirstDesc': 'Military-grade security practices protect your data and privacy',
   'home.whyChoose.ctaTitle': 'Ready to Get Started?',
   'home.whyChoose.ctaSubtitle': 'Contact us today for expert tech support',
-  'home.whyChoose.location': 'Serving Escondido, CA & Surrounding Areas',
+  'home.whyChoose.location': 'Serving San Diego County, CA - 10 Cities & 20+ Communities',
 
   'home.testimonial.quote': '"Romero Tech Solutions saved my business! When our network went down, they had us back online in 2 hours. Professional, fast, and reasonably priced."',
   'home.testimonial.author': 'Maria S., Local Business Owner',
@@ -115,7 +115,7 @@ export const enTranslations = {
   'about.journey.fortune500': 'Fortune 500 Mastery',
   'about.journey.fortune500Role': 'Admin, Network Engineer, DevOps, Software Build Engineer',
   'about.journey.fortune500Desc': "Brought expertise to the world's biggest tech companies: Apple, Meta/Facebook, ADP, TD Ameritrade, Schwab, Uber, and TikTok.",
-  'about.journey.now': 'Serving Escondido',
+  'about.journey.now': 'Serving San Diego County',
   'about.journey.nowRole': 'Your Neighborhood Tech Hero',
   'about.journey.nowDesc': 'Now bringing world-class expertise home to serve our local community with the same standards used by billion-dollar companies.',
 
@@ -147,7 +147,7 @@ export const enTranslations = {
   'about.finalCta.subtitle': "Don't let tech problems be your kryptonite! Join our growing family of satisfied customers who sleep better knowing their technology is protected by real heroes.",
   'about.finalCta.callButton': 'Call Your Heroes: (619) 940-5550',
   'about.finalCta.consultButton': 'E-mail Us',
-  'about.finalCta.location': 'Proudly Serving Escondido & Beyond',
+  'about.finalCta.location': 'Proudly Serving San Diego County & Beyond',
 
   // Services Page
   'services.hero.badge': 'Professional IT Services',
@@ -230,7 +230,7 @@ export const enTranslations = {
   'contact.faq.title': 'Got Questions?',
   'contact.faq.subtitle': 'We\'ve got answers! Here are the most common questions from our customers',
   'contact.faq.onsite.question': 'Do you offer on-site service?',
-  'contact.faq.onsite.answer': 'Absolutely! We provide on-site service throughout the Escondido area and surrounding communities. We also offer remote support for many issues.',
+  'contact.faq.onsite.answer': 'Absolutely! We provide on-site service throughout San Diego County including Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, Poway, and surrounding communities. We also offer remote support for many issues.',
   'contact.faq.response.question': 'What are your response times?',
   'contact.faq.response.answer': 'We typically respond to calls within 2-4 hours during business hours. Emergency support is available for critical business systems.',
   'contact.faq.customers.question': 'Do you work with both home and business customers?',
@@ -245,7 +245,7 @@ export const enTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Professional IT Support',
-  'footer.description': 'Providing reliable PC, printer, and network support services to the Escondido, CA area with over 30 years of experience serving satisfied customers.',
+  'footer.description': 'Providing reliable PC, printer, and network support services throughout San Diego County, CA with over 30 years of experience serving satisfied customers in Escondido, Carlsbad, Oceanside, Vista, and surrounding areas.',
   'footer.contactUs': 'Contact Us',
   'footer.services': 'Our Services',
   'footer.pcRepair': 'PC Repair & Maintenance',
@@ -254,7 +254,7 @@ export const enTranslations = {
   'footer.virusRemoval': 'Virus Removal',
   'footer.dataRecovery': 'Data Recovery',
   'footer.followUs': 'Follow Us',
-  'footer.copyright': '© 2025 Romero Tech Solutions. All rights reserved. | Serving Escondido, CA and surrounding areas.',
+  'footer.copyright': '© 2025 Romero Tech Solutions. All rights reserved. | Serving San Diego County, CA including Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, Poway and surrounding areas.',
 
   // Login Page
   'login.title': 'Client Portal',
@@ -277,11 +277,14 @@ export const enTranslations = {
   'login.loginFailed': 'Login failed. Please check your credentials.',
 
   // MFA/Verification
-  'login.mfa.title': 'Email Verification',
+  'login.mfa.title': 'Multi-Factor Authentication',
+  'login.mfa.emailTitle': 'Email Verification',
+  'login.mfa.smsTitle': 'SMS Verification',
   'login.mfa.subtitle': 'Enter the verification code sent to',
   'login.mfa.codeLabel': 'Verification Code',
   'login.mfa.codePlaceholder': '000000',
   'login.mfa.codeHelper': 'Enter the 6-digit code sent to your email',
+  'login.mfa.codeHelperSms': 'Enter the 6-digit code sent to your phone',
   'login.mfa.verifyButton': 'Verify & Sign In',
   'login.mfa.resendCode': 'Resend Code',
   'login.mfa.backToLogin': '← Back to Login',
@@ -289,6 +292,13 @@ export const enTranslations = {
   'login.mfa.verificationFailed': 'Verification failed',
   'login.mfa.codeSentSuccess': 'Verification code sent successfully',
   'login.mfa.codeResendFailed': 'Failed to resend verification code',
+
+  // SMS MFA specific
+  'login.mfa.sms.codeSentToPhone': 'Verification code sent to your phone',
+  'login.mfa.sms.deliveryMethod': 'Delivery Method',
+  'login.mfa.sms.email': 'Email',
+  'login.mfa.sms.phone': 'Text Message (SMS)',
+  'login.mfa.sms.phoneRequired': 'Phone number required for SMS verification',
 
   // Coming Soon Page
   'comingSoon.badge': 'Coming Soon',

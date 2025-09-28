@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { checkFirefoxCompatibility, firefoxDebugLog, detectBrowser } from './utils/browserSupport';
+import { registerSW } from './utils/serviceWorker';
 
 const compatibility = checkFirefoxCompatibility();
 if (!compatibility.compatible) {
@@ -78,3 +79,18 @@ createRoot(rootElement).render(
     </ErrorBoundary>
   </StrictMode>
 );
+
+// Register service worker for caching and offline support
+if (import.meta.env.PROD) {
+  registerSW({
+    onSuccess: () => {
+      console.log('SW: App is ready for offline use.');
+    },
+    onUpdate: () => {
+      console.log('SW: New content is available; refresh to update.');
+    },
+    onError: (error) => {
+      console.error('SW: Service worker registration failed:', error);
+    },
+  });
+}

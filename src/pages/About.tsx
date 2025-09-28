@@ -2,6 +2,7 @@ import React from 'react';
 import { Award, Clock, Users, MapPin, Phone, Mail, Star, CheckCircle, Shield, Zap, Target, Heart, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
+import StructuredData from '../components/seo/StructuredData';
 
 const About: React.FC = () => {
   const { t } = useLanguage();
@@ -52,6 +53,7 @@ const About: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <StructuredData pageType="about" />
       {/* Hero Section */}
       <section 
         className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white py-20 lg:py-32 overflow-hidden cursor-crosshair"

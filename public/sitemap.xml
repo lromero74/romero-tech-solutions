@@ -1,0 +1,137 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+
+  <!-- Home Page -->
+  <url>
+    <loc>https://romerotechsolutions.com/</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://romerotechsolutions.com/" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://romerotechsolutions.com/" />
+  </url>
+
+  <!-- Services Page -->
+  <url>
+    <loc>https://romerotechsolutions.com/services</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.9</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://romerotechsolutions.com/services" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://romerotechsolutions.com/services" />
+  </url>
+
+  <!-- About Page -->
+  <url>
+    <loc>https://romerotechsolutions.com/about</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://romerotechsolutions.com/about" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://romerotechsolutions.com/about" />
+  </url>
+
+  <!-- Contact Page -->
+  <url>
+    <loc>https://romerotechsolutions.com/contact</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.8</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://romerotechsolutions.com/contact" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://romerotechsolutions.com/contact" />
+  </url>
+
+  <!-- Coming Soon / Client Portal Preview -->
+  <url>
+    <loc>https://romerotechsolutions.com/coming-soon</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.6</priority>
+    <xhtml:link rel="alternate" hreflang="en" href="https://romerotechsolutions.com/coming-soon" />
+    <xhtml:link rel="alternate" hreflang="es" href="https://romerotechsolutions.com/coming-soon" />
+  </url>
+
+  <!-- Service-specific Landing Pages (Future) -->
+  <!-- Computer Repair Services -->
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-san-diego-county</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- IT Support Services -->
+  <url>
+    <loc>https://romerotechsolutions.com/it-support-san-diego-county</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Network Setup Services -->
+  <url>
+    <loc>https://romerotechsolutions.com/network-setup-san-diego-county</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.7</priority>
+  </url>
+
+  <!-- Major Service Areas -->
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-escondido</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-carlsbad</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-oceanside</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-vista</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-san-marcos</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-encinitas</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-el-cajon</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+  <url>
+    <loc>https://romerotechsolutions.com/computer-repair-poway</loc>
+    <lastmod>2025-01-28</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+
+</urlset>

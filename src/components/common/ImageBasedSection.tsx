@@ -1,5 +1,6 @@
 import React from 'react';
 import ParticleBackground from './ParticleBackground';
+import LoadingSpinner from './LoadingSpinner';
 
 interface ImageBasedSectionProps {
   imageUrl: string;
@@ -43,7 +44,7 @@ const ImageBasedSection: React.FC<ImageBasedSectionProps> = ({
   if (!imageDimensions) {
     return (
       <div className="w-full h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800">
-        <div className="text-white">Loading...</div>
+        <LoadingSpinner size="lg" color="white" text="Loading..." />
       </div>
     );
   }

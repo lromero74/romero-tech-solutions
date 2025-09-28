@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Menu, X, Phone, Mail, Globe } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
+import LazyImage from './common/LazyImage';
 
 interface HeaderProps {
   currentPage: string;
@@ -150,13 +151,17 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
             className="flex items-center space-x-3 cursor-pointer"
             onClick={() => setCurrentPage('home')}
           >
-            <img 
-              src="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" 
-              alt="Romero Tech Solutions Logo" 
-              className="h-10 w-10 object-contain"
+            <LazyImage
+              src="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png"
+              alt="Romero Tech Solutions - Professional IT Support & Computer Repair serving San Diego County, CA"
+              className="h-10 w-10"
+              priority={true}
+              loading="eager"
+              width={40}
+              height={40}
             />
             <div>
-              <h1 className="text-xl font-bold text-gray-900">{t('footer.company')}</h1>
+              <span className="text-xl font-bold text-gray-900">{t('footer.company')}</span>
               <p className="text-sm text-gray-600">{t('footer.tagline')}</p>
             </div>
           </div>

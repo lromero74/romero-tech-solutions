@@ -13,6 +13,7 @@
     "@aws-sdk/client-cognito-identity-provider": "^3.890.0",
     "@aws-sdk/client-secrets-manager": "^3.894.0",
     "@aws-sdk/client-ses": "^3.896.0",
+    "@aws-sdk/client-sns": "^3.896.0",
     "bcryptjs": "^2.4.3",
     "clamscan": "^2.4.0",
     "cookie-parser": "^1.4.7",

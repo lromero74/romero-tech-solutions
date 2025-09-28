@@ -2,6 +2,7 @@ import React from 'react';
 import { Monitor, Printer, Wifi, Shield, HardDrive, Settings, Phone, Mail, Star, CheckCircle, Clock, Award, ArrowRight, Zap } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
+import StructuredData from '../components/seo/StructuredData';
 
 const Services: React.FC = () => {
   const { t } = useLanguage();
@@ -65,6 +66,7 @@ const Services: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <StructuredData pageType="services" />
       {/* Hero Section */}
       <section 
         className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white py-20 lg:py-32 overflow-hidden cursor-crosshair"

@@ -144,7 +144,7 @@ class EmailService {
               </p>
               <p style="color: #64748b; font-size: 12px; margin-top: 20px;">
                 © 2025 Romero Tech Solutions. All rights reserved.<br>
-                Serving Escondido, CA and surrounding areas.
+                Serving San Diego County, CA including Escondido, Carlsbad, Oceanside, Vista and surrounding areas.
               </p>
             </div>
           </div>
@@ -175,7 +175,7 @@ Phone: (619) 940-5550
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
-Serving Escondido, CA and surrounding areas.
+Serving San Diego County, CA including Escondido, Carlsbad, Oceanside, Vista and surrounding areas.
     `;
 
     return { subject, html, text };

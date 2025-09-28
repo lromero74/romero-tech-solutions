@@ -31,12 +31,45 @@ export default defineConfig({
   build: {
     // Generate source maps for better debugging
     sourcemap: true,
-    // Ensure proper chunking for Firefox
+    // Optimize bundle size with strategic code splitting
     rollupOptions: {
       output: {
-        manualChunks: undefined,
+        manualChunks: {
+          // Vendor chunk for external libraries
+          vendor: ['react', 'react-dom'],
+          // UI components chunk
+          ui: ['lucide-react'],
+          // AWS services chunk (if using AWS SDK)
+          aws: ['@aws-sdk/client-cognito-identity-provider', '@aws-sdk/client-sns'],
+          // Admin components chunk
+          admin: [
+            './src/pages/AdminDashboard.tsx',
+            './src/pages/AdminLogin.tsx',
+            './src/components/admin',
+          ],
+        },
+        // Optimize chunk file names
+        chunkFileNames: (chunkInfo) => {
+          const facadeModuleId = chunkInfo.facadeModuleId
+            ? chunkInfo.facadeModuleId.split('/').pop()?.replace('.tsx', '').replace('.ts', '')
+            : 'chunk';
+          return `js/${facadeModuleId}-[hash].js`;
+        },
+        entryFileNames: 'js/[name]-[hash].js',
+        assetFileNames: (assetInfo) => {
+          const extType = assetInfo.name?.split('.').pop();
+          if (/png|jpe?g|svg|gif|tiff|bmp|ico/i.test(extType || '')) {
+            return 'images/[name]-[hash].[ext]';
+          }
+          if (/css/i.test(extType || '')) {
+            return 'css/[name]-[hash].[ext]';
+          }
+          return 'assets/[name]-[hash].[ext]';
+        },
       },
     },
+    // Chunk size warning threshold
+    chunkSizeWarningLimit: 1000,
   },
   // Resolve configuration to help with module resolution
   resolve: {

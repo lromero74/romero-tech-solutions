@@ -19,6 +19,11 @@ import {
   validateMfaCode,
   markMfaCodeAsUsed,
   sendMfaEmail,
+  sendMfaCode,
+  sendMfaSMS,
+  validatePhoneNumberForMFA,
+  getSMSStats,
+  sendPhoneVerificationSMS,
   storePasswordResetToken,
   validatePasswordResetToken,
   markResetTokenAsUsed,
@@ -1256,6 +1261,396 @@ router.post('/resend-client-mfa', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to resend MFA code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// SMS MFA Endpoints - Enhanced MFA with SMS support via AWS SNS
+
+// POST /api/auth/verify-phone - Verify phone number for SMS MFA
+router.post('/verify-phone', async (req, res) => {
+  try {
+    const { userId, phoneNumber } = req.body;
+
+    if (!userId || !phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and phone number are required'
+      });
+    }
+
+    // Validate phone number format
+    if (!validatePhoneNumberForMFA(phoneNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format. Please use international format (e.g., +1234567890)'
+      });
+    }
+
+    // Check SMS rate limits for this phone number
+    const smsStats = getSMSStats(phoneNumber);
+    if (smsStats.hourly.remaining <= 0) {
+      return res.status(429).json({
+        success: false,
+        message: 'SMS hourly limit exceeded. Please try again later.'
+      });
+    }
+
+    // Find user to get their name and language preference
+    const userResult = await query(`
+      SELECT first_name, language_preference FROM users WHERE id = $1
+    `, [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+    const userLanguage = user.language_preference || 'en';
+
+    // Generate verification code
+    const verificationCode = generateMfaCode();
+
+    // Store verification code in session/temporary storage (10 minute expiry)
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+    await query(`
+      INSERT INTO mfa_verification_codes (user_id, code, expires_at, code_type, phone_number)
+      VALUES ($1, $2, $3, 'phone_verification', $4)
+      ON CONFLICT (user_id, code_type)
+      DO UPDATE SET code = $2, expires_at = $3, phone_number = $4, used_at = NULL
+    `, [userId, verificationCode, expiresAt, phoneNumber]);
+
+    // Send SMS verification code
+    await sendPhoneVerificationSMS(phoneNumber, user.first_name, verificationCode, userLanguage);
+
+    console.log(`📱 Phone verification code sent to ${phoneNumber} for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Verification code sent to your phone',
+      smsStats: smsStats
+    });
+
+  } catch (error) {
+    console.error('Error in phone verification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send verification code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/confirm-phone - Confirm phone verification
+router.post('/confirm-phone', async (req, res) => {
+  try {
+    const { userId, phoneNumber, verificationCode } = req.body;
+
+    if (!userId || !phoneNumber || !verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID, phone number, and verification code are required'
+      });
+    }
+
+    // Find and validate verification code
+    const codeResult = await query(`
+      SELECT id, code, expires_at, used_at, phone_number
+      FROM mfa_verification_codes
+      WHERE user_id = $1 AND code_type = 'phone_verification' AND code = $2
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [userId, verificationCode]);
+
+    if (codeResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid verification code'
+      });
+    }
+
+    const storedCode = codeResult.rows[0];
+
+    // Check if code has been used
+    if (storedCode.used_at) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code has already been used'
+      });
+    }
+
+    // Check if code has expired
+    if (new Date() > new Date(storedCode.expires_at)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Verification code has expired'
+      });
+    }
+
+    // Check if phone number matches
+    if (storedCode.phone_number !== phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number mismatch'
+      });
+    }
+
+    // Mark code as used
+    await query(`
+      UPDATE mfa_verification_codes
+      SET used_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [storedCode.id]);
+
+    // Update user's phone number and mark as verified
+    await query(`
+      UPDATE users
+      SET phone_number = $1, phone_verified = true
+      WHERE id = $2
+    `, [phoneNumber, userId]);
+
+    console.log(`✅ Phone number ${phoneNumber} verified for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Phone number verified successfully'
+    });
+
+  } catch (error) {
+    console.error('Error confirming phone verification:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify phone number',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/update-mfa-method - Update user's MFA delivery method
+router.post('/update-mfa-method', async (req, res) => {
+  try {
+    const { userId, mfaMethod } = req.body;
+
+    if (!userId || !mfaMethod) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and MFA method are required'
+      });
+    }
+
+    // Validate MFA method
+    const validMethods = ['email', 'sms', 'both'];
+    if (!validMethods.includes(mfaMethod)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid MFA method. Must be email, sms, or both'
+      });
+    }
+
+    // If SMS is requested, check if phone is verified
+    if (mfaMethod === 'sms' || mfaMethod === 'both') {
+      const userResult = await query(`
+        SELECT phone_number, phone_verified FROM users WHERE id = $1
+      `, [userId]);
+
+      if (userResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const user = userResult.rows[0];
+      if (!user.phone_number || !user.phone_verified) {
+        return res.status(400).json({
+          success: false,
+          message: 'Phone number must be verified before enabling SMS MFA'
+        });
+      }
+    }
+
+    // Update user's MFA method
+    await query(`
+      UPDATE users
+      SET mfa_method = $1
+      WHERE id = $2
+    `, [mfaMethod, userId]);
+
+    console.log(`🔧 MFA method updated to '${mfaMethod}' for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'MFA method updated successfully',
+      mfaMethod: mfaMethod
+    });
+
+  } catch (error) {
+    console.error('Error updating MFA method:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update MFA method',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/send-mfa-code - Send MFA code via selected method(s)
+router.post('/send-mfa-code', async (req, res) => {
+  try {
+    const { userId, deliveryMethod } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
+    // Get user details
+    const userResult = await query(`
+      SELECT email, phone_number, phone_verified, first_name, language_preference, mfa_method
+      FROM users
+      WHERE id = $1
+    `, [userId]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const user = userResult.rows[0];
+    const userLanguage = user.language_preference || 'en';
+    const requestedMethod = deliveryMethod || user.mfa_method || 'email';
+
+    // Validate delivery method based on user's verified contact methods
+    if (requestedMethod === 'sms' || requestedMethod === 'both') {
+      if (!user.phone_number || !user.phone_verified) {
+        return res.status(400).json({
+          success: false,
+          message: 'SMS delivery not available - phone number not verified'
+        });
+      }
+
+      // Check SMS rate limits
+      const smsStats = getSMSStats(user.phone_number);
+      if (smsStats.hourly.remaining <= 0) {
+        return res.status(429).json({
+          success: false,
+          message: 'SMS hourly limit exceeded. Try email delivery or wait before trying again.'
+        });
+      }
+    }
+
+    // Generate MFA code
+    const mfaCode = generateMfaCode();
+
+    // Store MFA code
+    await storeMfaCode(userId, user.email, mfaCode);
+
+    // Send MFA code via requested method(s)
+    const deliveryResult = await sendMfaCode({
+      email: user.email,
+      phoneNumber: user.phone_number,
+      firstName: user.first_name,
+      mfaCode: mfaCode,
+      language: userLanguage,
+      userType: 'client',
+      deliveryMethod: requestedMethod,
+      codeType: 'login'
+    });
+
+    // Prepare response based on delivery results
+    let message = 'MFA code sent successfully';
+    let deliveryDetails = {};
+
+    if (requestedMethod === 'email') {
+      message = deliveryResult.email.sent ? 'MFA code sent to your email' : 'Failed to send email';
+      deliveryDetails.email = deliveryResult.email.sent;
+    } else if (requestedMethod === 'sms') {
+      message = deliveryResult.sms.sent ? 'MFA code sent to your phone' : 'Failed to send SMS';
+      deliveryDetails.sms = deliveryResult.sms.sent;
+    } else if (requestedMethod === 'both') {
+      const emailSent = deliveryResult.email.sent;
+      const smsSent = deliveryResult.sms.sent;
+
+      if (emailSent && smsSent) {
+        message = 'MFA code sent to both email and phone';
+      } else if (emailSent) {
+        message = 'MFA code sent to email (SMS failed)';
+      } else if (smsSent) {
+        message = 'MFA code sent to phone (email failed)';
+      } else {
+        message = 'Failed to send MFA code via any method';
+      }
+
+      deliveryDetails = { email: emailSent, sms: smsSent };
+    }
+
+    if (!deliveryResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: message,
+        deliveryDetails: deliveryDetails
+      });
+    }
+
+    console.log(`🔐 MFA code sent via ${requestedMethod} for user ${userId}`);
+
+    res.status(200).json({
+      success: true,
+      message: message,
+      deliveryMethod: requestedMethod,
+      deliveryDetails: deliveryDetails
+    });
+
+  } catch (error) {
+    console.error('Error sending MFA code:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send MFA code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// GET /api/auth/sms-stats/:phoneNumber - Get SMS usage statistics
+router.get('/sms-stats/:phoneNumber', async (req, res) => {
+  try {
+    const { phoneNumber } = req.params;
+
+    if (!phoneNumber) {
+      return res.status(400).json({
+        success: false,
+        message: 'Phone number is required'
+      });
+    }
+
+    // Validate phone number format
+    if (!validatePhoneNumberForMFA(phoneNumber)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid phone number format'
+      });
+    }
+
+    const stats = getSMSStats(phoneNumber);
+
+    res.status(200).json({
+      success: true,
+      stats: stats
+    });
+
+  } catch (error) {
+    console.error('Error getting SMS stats:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get SMS statistics',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

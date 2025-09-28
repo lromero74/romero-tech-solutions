@@ -11,7 +11,7 @@ export const esTranslations = {
   'home.hero.badge': '30 Años de Experiencia a Su Servicio',
   'home.hero.title': 'Soluciones',
   'home.hero.titleHighlight': 'Tecnológicas Profesionales',
-  'home.hero.subtitle': 'Reparación experta de computadoras, configuración de redes y soporte de TI para hogares y empresas en Escondido, CA',
+  'home.hero.subtitle': 'Reparación experta de computadoras, configuración de redes y soporte de TI para hogares y empresas en todo el Condado de San Diego, CA',
   'home.hero.callButton': 'Llamar (619) 940-5550',
   'home.hero.quoteButton': 'Envíenos un Correo',
   'home.hero.stat1': '30+',
@@ -72,7 +72,7 @@ export const esTranslations = {
   'home.contact.email.title': 'Envíenos un Correo',
   'home.contact.email.description': 'Envíenos sus preguntas tecnológicas',
   'home.contact.location.title': 'Área de Servicio',
-  'home.contact.location.description': 'Sirviendo el área metropolitana de Escondido',
+  'home.contact.location.description': 'Sirviendo el Condado de San Diego incluyendo Escondido, Carlsbad, Oceanside, Vista y ciudades circundantes',
   'home.contact.cta': 'Comenzar Hoy',
 
   'home.whyChoose.title': '¿Por Qué Elegirnos?',
@@ -85,7 +85,7 @@ export const esTranslations = {
   'home.whyChoose.securityFirstDesc': 'Las prácticas de seguridad de grado militar protegen sus datos y privacidad',
   'home.whyChoose.ctaTitle': '¿Listo para Comenzar?',
   'home.whyChoose.ctaSubtitle': 'Contáctenos hoy para soporte técnico experto',
-  'home.whyChoose.location': 'Sirviendo Escondido, CA y Áreas Circundantes',
+  'home.whyChoose.location': 'Sirviendo el Condado de San Diego, CA - 10 Ciudades y Más de 20 Comunidades',
 
   'home.testimonial.quote': '"¡Romero Tech Solutions salvó mi negocio! Cuando nuestra red se cayó, nos pusieron en línea nuevamente en 2 horas. Profesional, rápido y a precio razonable."',
   'home.testimonial.author': 'María S., Propietaria de Negocio Local',
@@ -115,7 +115,7 @@ export const esTranslations = {
   'about.journey.fortune500': 'Dominio Fortune 500',
   'about.journey.fortune500Role': 'Administrador, Ingeniero de Redes, DevOps, Ingeniero de Construcción de Software',
   'about.journey.fortune500Desc': 'Aportó experiencia a las compañías tecnológicas más grandes del mundo: Apple, Meta/Facebook, ADP, TD Ameritrade, Schwab, Uber y TikTok.',
-  'about.journey.now': 'Sirviendo Escondido',
+  'about.journey.now': 'Sirviendo el Condado de San Diego',
   'about.journey.nowRole': 'Su Héroe Tecnológico del Vecindario',
   'about.journey.nowDesc': 'Ahora trayendo experiencia de clase mundial a casa para servir a nuestra comunidad local con los mismos estándares utilizados por compañías de miles de millones de dólares.',
 
@@ -147,7 +147,7 @@ export const esTranslations = {
   'about.finalCta.subtitle': '¡No deje que los problemas tecnológicos sean su kriptonita! Únase a nuestra creciente familia de clientes satisfechos que duermen mejor sabiendo que su tecnología está protegida por verdaderos héroes.',
   'about.finalCta.callButton': 'Llame a Sus Héroes: (619) 940-5550',
   'about.finalCta.consultButton': 'Envíenos un Correo',
-  'about.finalCta.location': 'Sirviendo con Orgullo Escondido y Más Allá',
+  'about.finalCta.location': 'Sirviendo con Orgullo el Condado de San Diego y Más Allá',
 
   // Services Page
   'services.hero.badge': 'Servicios Profesionales de TI',
@@ -230,7 +230,7 @@ export const esTranslations = {
   'contact.faq.title': '¿Tiene Preguntas?',
   'contact.faq.subtitle': '¡Tenemos respuestas! Estas son las preguntas más comunes de nuestros clientes',
   'contact.faq.onsite.question': '¿Ofrecen servicio en el sitio?',
-  'contact.faq.onsite.answer': '¡Absolutamente! Proporcionamos servicio en el sitio en toda el área de Escondido y comunidades circundantes. También ofrecemos soporte remoto para muchos problemas.',
+  'contact.faq.onsite.answer': '¡Absolutamente! Proporcionamos servicio en el sitio en todo el Condado de San Diego incluyendo Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, Poway y comunidades circundantes. También ofrecemos soporte remoto para muchos problemas.',
   'contact.faq.response.question': '¿Cuáles son sus tiempos de respuesta?',
   'contact.faq.response.answer': 'Típicamente respondemos a las llamadas dentro de 2-4 horas durante el horario comercial. El soporte de emergencia está disponible para sistemas comerciales críticos.',
   'contact.faq.customers.question': '¿Trabajan tanto con clientes residenciales como comerciales?',
@@ -245,7 +245,7 @@ export const esTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Soporte Profesional de TI',
-  'footer.description': 'Proporcionando servicios confiables de soporte para PC, impresoras y redes al área de Escondido, CA con más de 30 años de experiencia sirviendo a clientes satisfechos.',
+  'footer.description': 'Proporcionando servicios confiables de soporte para PC, impresoras y redes en todo el Condado de San Diego, CA con más de 30 años de experiencia sirviendo a clientes satisfechos en Escondido, Carlsbad, Oceanside, Vista y áreas circundantes.',
   'footer.contactUs': 'Contáctenos',
   'footer.services': 'Nuestros Servicios',
   'footer.pcRepair': 'Reparación y Mantenimiento de PC',
@@ -254,7 +254,7 @@ export const esTranslations = {
   'footer.virusRemoval': 'Eliminación de Virus',
   'footer.dataRecovery': 'Recuperación de Datos',
   'footer.followUs': 'Síguenos',
-  'footer.copyright': '© 2025 Romero Tech Solutions. Todos los derechos reservados. | Sirviendo Escondido, CA y áreas circundantes.',
+  'footer.copyright': '© 2025 Romero Tech Solutions. Todos los derechos reservados. | Sirviendo el Condado de San Diego, CA incluyendo Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, Poway y áreas circundantes.',
 
   // Login Page
   'login.title': 'Portal Cliente',
@@ -277,11 +277,14 @@ export const esTranslations = {
   'login.loginFailed': 'Inicio de sesión fallido. Por favor verifique sus credenciales.',
 
   // MFA/Verification
-  'login.mfa.title': 'Verificación por Correo Electrónico',
+  'login.mfa.title': 'Autenticación Multifactor',
+  'login.mfa.emailTitle': 'Verificación por Correo Electrónico',
+  'login.mfa.smsTitle': 'Verificación por SMS',
   'login.mfa.subtitle': 'Ingrese el código de verificación enviado a',
   'login.mfa.codeLabel': 'Código de Verificación',
   'login.mfa.codePlaceholder': '000000',
   'login.mfa.codeHelper': 'Ingrese el código de 6 dígitos enviado a su correo electrónico',
+  'login.mfa.codeHelperSms': 'Ingrese el código de 6 dígitos enviado a su teléfono',
   'login.mfa.verifyButton': 'Verificar e Iniciar Sesión',
   'login.mfa.resendCode': 'Reenviar Código',
   'login.mfa.backToLogin': '← Volver al Inicio de Sesión',
@@ -289,6 +292,13 @@ export const esTranslations = {
   'login.mfa.verificationFailed': 'Verificación fallida',
   'login.mfa.codeSentSuccess': 'Código de verificación enviado exitosamente',
   'login.mfa.codeResendFailed': 'Falló el reenvío del código de verificación',
+
+  // SMS MFA specific
+  'login.mfa.sms.codeSentToPhone': 'Código de verificación enviado a su teléfono',
+  'login.mfa.sms.deliveryMethod': 'Método de Entrega',
+  'login.mfa.sms.email': 'Correo Electrónico',
+  'login.mfa.sms.phone': 'Mensaje de Texto (SMS)',
+  'login.mfa.sms.phoneRequired': 'Número de teléfono requerido para verificación SMS',
 
   // Coming Soon Page
   'comingSoon.badge': 'Próximamente',

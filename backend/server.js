@@ -70,10 +70,10 @@ app.use(helmet({
     directives: {
       defaultSrc: ["'self'"],
       styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
       imgSrc: ["'self'", "data:", "https:"],
       fontSrc: ["'self'", "https:", "data:"],
-      connectSrc: ["'self'", "https:"],
+      connectSrc: ["'self'", "https:", "wss:", "ws:"],
       mediaSrc: ["'self'"],
       objectSrc: ["'none'"],
       childSrc: ["'self'"],
@@ -83,7 +83,7 @@ app.use(helmet({
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
       baseUri: ["'self'"],
-      upgradeInsecureRequests: [],
+      upgradeInsecureRequests: process.env.NODE_ENV === 'production' ? [] : null,
     },
   },
   // Enhanced security headers

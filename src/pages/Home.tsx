@@ -2,6 +2,7 @@ import React from 'react';
 import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ImageBasedSection from '../components/common/ImageBasedSection';
+import StructuredData from '../components/seo/StructuredData';
 
 const Home: React.FC = () => {
   const { t } = useLanguage();
@@ -9,6 +10,7 @@ const Home: React.FC = () => {
 
   return (
     <div className="min-h-screen">
+      <StructuredData pageType="home" />
       {/* Hero Section */}
       <ImageBasedSection imageUrl={backgroundImageUrl}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -243,7 +245,7 @@ const Home: React.FC = () => {
               <h3 className="text-xl font-bold text-gray-900 mb-4">{t('home.contact.location.title')}</h3>
               <p className="text-gray-600 mb-4">{t('home.contact.location.description')}</p>
               <div className="text-purple-600 font-semibold">
-                Escondido, CA
+                San Diego County, CA
               </div>
             </div>
           </div>

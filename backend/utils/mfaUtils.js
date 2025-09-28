@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query } from '../config/database.js';
 import { emailService } from '../services/emailService.js';
+import { smsService } from '../services/smsService.js';
 
 /**
  * MFA (Multi-Factor Authentication) Utilities
@@ -383,6 +384,147 @@ export function generateClientBackupCodes() {
   return Array.from({ length: 10 }, () =>
     Math.random().toString(36).substring(2, 10).toUpperCase()
   );
+}
+
+/**
+ * SMS MFA FUNCTIONS
+ * Enhanced MFA functions with SMS support via AWS SNS
+ */
+
+/**
+ * Send MFA code via SMS using AWS SNS
+ * @param {string} phoneNumber - User phone number
+ * @param {string} firstName - User first name
+ * @param {string} mfaCode - The MFA code to send
+ * @param {string} language - User's preferred language ('en' or 'es')
+ * @param {string} userType - Type of user ('client' or 'admin')
+ * @returns {Promise<void>}
+ */
+export async function sendMfaSMS(phoneNumber, firstName, mfaCode, language = 'en', userType = 'admin') {
+  try {
+    if (userType === 'client') {
+      // Use client-specific SMS template with language support
+      await smsService.sendMfaCode(phoneNumber, firstName, mfaCode, language);
+      console.log(`📱 Client login MFA code sent to ${phoneNumber}: ${mfaCode} (language: ${language})`);
+    } else {
+      // Use admin SMS template (admin users always use English for now)
+      await smsService.sendMfaCode(phoneNumber, firstName || 'Admin', mfaCode, 'en');
+      console.log(`📱 Admin login MFA code sent to ${phoneNumber}: ${mfaCode}`);
+    }
+  } catch (error) {
+    console.error('Failed to send MFA SMS:', error);
+    throw new Error('Failed to send SMS verification code. Please try again.');
+  }
+}
+
+/**
+ * Send verification code via both email and SMS (universal MFA function)
+ * @param {Object} options - MFA delivery options
+ * @param {string} options.email - User email address
+ * @param {string} options.phoneNumber - User phone number (optional)
+ * @param {string} options.firstName - User first name
+ * @param {string} options.mfaCode - The MFA code to send
+ * @param {string} options.language - User's preferred language ('en' or 'es')
+ * @param {string} options.userType - Type of user ('client' or 'admin')
+ * @param {string} options.deliveryMethod - Delivery method ('email', 'sms', or 'both')
+ * @param {string} options.codeType - Type of MFA code (setup or login)
+ * @returns {Promise<Object>} Delivery status result
+ */
+export async function sendMfaCode(options) {
+  const {
+    email,
+    phoneNumber,
+    firstName,
+    mfaCode,
+    language = 'en',
+    userType = 'admin',
+    deliveryMethod = 'email',
+    codeType = 'login'
+  } = options;
+
+  const result = {
+    email: { sent: false, error: null },
+    sms: { sent: false, error: null },
+    success: false
+  };
+
+  try {
+    // Send via email if requested
+    if (deliveryMethod === 'email' || deliveryMethod === 'both') {
+      try {
+        await sendMfaEmail(email, firstName, mfaCode, language, userType);
+        result.email.sent = true;
+        console.log(`✅ MFA email sent successfully to ${email}`);
+      } catch (error) {
+        result.email.error = error.message;
+        console.error(`❌ MFA email failed for ${email}:`, error.message);
+      }
+    }
+
+    // Send via SMS if requested and phone number provided
+    if ((deliveryMethod === 'sms' || deliveryMethod === 'both') && phoneNumber) {
+      try {
+        await sendMfaSMS(phoneNumber, firstName, mfaCode, language, userType);
+        result.sms.sent = true;
+        console.log(`✅ MFA SMS sent successfully to ${phoneNumber}`);
+      } catch (error) {
+        result.sms.error = error.message;
+        console.error(`❌ MFA SMS failed for ${phoneNumber}:`, error.message);
+      }
+    }
+
+    // Determine overall success
+    if (deliveryMethod === 'email') {
+      result.success = result.email.sent;
+    } else if (deliveryMethod === 'sms') {
+      result.success = result.sms.sent;
+    } else if (deliveryMethod === 'both') {
+      result.success = result.email.sent || result.sms.sent; // At least one must succeed
+    }
+
+    return result;
+
+  } catch (error) {
+    console.error('Error in sendMfaCode:', error);
+    throw new Error('Failed to send verification code via any method');
+  }
+}
+
+/**
+ * Validate phone number for SMS MFA
+ * @param {string} phoneNumber - Phone number to validate
+ * @returns {boolean} True if valid phone number format
+ */
+export function validatePhoneNumberForMFA(phoneNumber) {
+  if (!phoneNumber) return false;
+  return smsService.validatePhoneNumber(phoneNumber);
+}
+
+/**
+ * Get SMS statistics for rate limiting monitoring
+ * @param {string} phoneNumber - Phone number to check
+ * @returns {Object} SMS statistics (hourly/daily usage)
+ */
+export function getSMSStats(phoneNumber) {
+  return smsService.getSMSStats(phoneNumber);
+}
+
+/**
+ * Send phone verification code via SMS
+ * @param {string} phoneNumber - Phone number to verify
+ * @param {string} firstName - User first name
+ * @param {string} verificationCode - Verification code
+ * @param {string} language - User's preferred language
+ * @returns {Promise<void>}
+ */
+export async function sendPhoneVerificationSMS(phoneNumber, firstName, verificationCode, language = 'en') {
+  try {
+    await smsService.sendPhoneVerification(phoneNumber, firstName, verificationCode, language);
+    console.log(`📱 Phone verification code sent to ${phoneNumber}: ${verificationCode} (language: ${language})`);
+  } catch (error) {
+    console.error('Failed to send phone verification SMS:', error);
+    throw new Error('Failed to send phone verification code. Please try again.');
+  }
 }
 
 /**
