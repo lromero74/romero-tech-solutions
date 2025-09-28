@@ -26,7 +26,7 @@ export class PasswordComplexityService {
       }
       // In Vite browser builds, environment variables are injected at build time
       // so the process.env check above should work in browser too
-    } catch (error) {
+    } catch {
       // If anything fails, use the default
       console.warn('Failed to get API base URL from environment, using default');
     }

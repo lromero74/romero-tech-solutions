@@ -19,6 +19,13 @@ export default defineConfig({
     fs: {
       // Allow serving files from one level up
       allow: ['..']
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        secure: false
+      }
     }
   },
   build: {

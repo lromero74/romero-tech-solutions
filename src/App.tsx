@@ -7,7 +7,9 @@ import ParticleBackground from './components/common/ParticleBackground';
 import AdminRegistration from './components/AdminRegistration';
 import UnauthenticatedDashboard from './components/UnauthenticatedDashboard';
 import AdminDashboard from './pages/AdminDashboard';
-import SimpleDashboard from './pages/SimpleDashboard';
+import ClientDashboard from './pages/ClientDashboard';
+import { ClientThemeProvider } from './contexts/ClientThemeContext';
+import { ClientLanguageProvider } from './contexts/ClientLanguageContext';
 import ClientLogin from './pages/ClientLogin';
 import Home from './pages/Home';
 import Services from './pages/Services';
@@ -26,6 +28,18 @@ function AppContent() {
 
   const { isLoading, isAuthenticated, isAdmin, isTechnician, isClient } = useEnhancedAuth();
 
+  // Get theme preference for loading states (before context is available)
+  const getThemeClasses = () => {
+    const saved = localStorage.getItem('client-theme');
+    const isDark = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+
+    return {
+      background: isDark ? 'bg-gray-900' : 'bg-gray-50',
+      text: isDark ? 'text-white' : 'text-gray-600',
+      spinner: isDark ? 'border-blue-400' : 'border-blue-600'
+    };
+  };
+
   // Save current page to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem('currentPage', currentPage);
@@ -40,11 +54,12 @@ function AppContent() {
     // Handle admin page
     if (currentPage === 'admin') {
       if (isLoading) {
+        const themeClasses = getThemeClasses();
         return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className={`min-h-screen ${themeClasses.background} flex items-center justify-center`}>
             <div className="text-center">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading...</p>
+              <div className={`animate-spin rounded-full h-32 w-32 border-b-2 ${themeClasses.spinner} mx-auto`}></div>
+              <p className={`mt-4 ${themeClasses.text}`}>Loading...</p>
             </div>
           </div>
         );
@@ -60,11 +75,12 @@ function AppContent() {
     // Handle technician page
     if (currentPage === 'technician') {
       if (isLoading) {
+        const themeClasses = getThemeClasses();
         return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className={`min-h-screen ${themeClasses.background} flex items-center justify-center`}>
             <div className="text-center">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading...</p>
+              <div className={`animate-spin rounded-full h-32 w-32 border-b-2 ${themeClasses.spinner} mx-auto`}></div>
+              <p className={`mt-4 ${themeClasses.text}`}>Loading...</p>
             </div>
           </div>
         );
@@ -74,7 +90,7 @@ function AppContent() {
         return <AdminRegistration onSuccess={() => setCurrentPage('dashboard')} />;
       }
 
-      return <SimpleDashboard />;
+      return <UnauthenticatedDashboard />;
     }
 
     // Handle email confirmation page
@@ -90,19 +106,30 @@ function AppContent() {
     // Handle hidden client login page
     if (currentPage === 'clogin') {
       if (isAuthenticated && isClient) {
-        return <SimpleDashboard />;
+        return (
+          <ClientLanguageProvider>
+            <ClientThemeProvider>
+              <ClientDashboard onNavigate={setCurrentPage} />
+            </ClientThemeProvider>
+          </ClientLanguageProvider>
+        );
       }
-      return <ClientLogin onSuccess={() => setCurrentPage('dashboard')} />;
+      return (
+        <ClientThemeProvider>
+          <ClientLogin onSuccess={() => setCurrentPage('dashboard')} />
+        </ClientThemeProvider>
+      );
     }
 
     // Handle dashboard page (role-based)
     if (currentPage === 'dashboard') {
       if (isLoading) {
+        const themeClasses = getThemeClasses();
         return (
-          <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className={`min-h-screen ${themeClasses.background} flex items-center justify-center`}>
             <div className="text-center">
-              <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="mt-4 text-gray-600">Loading...</p>
+              <div className={`animate-spin rounded-full h-32 w-32 border-b-2 ${themeClasses.spinner} mx-auto`}></div>
+              <p className={`mt-4 ${themeClasses.text}`}>Loading...</p>
             </div>
           </div>
         );
@@ -118,15 +145,21 @@ function AppContent() {
       }
 
       if (isTechnician) {
-        return <SimpleDashboard />;
+        return <UnauthenticatedDashboard />;
       }
 
       if (isClient) {
-        return <SimpleDashboard />;
+        return (
+          <ClientLanguageProvider>
+            <ClientThemeProvider>
+              <ClientDashboard onNavigate={setCurrentPage} />
+            </ClientThemeProvider>
+          </ClientLanguageProvider>
+        );
       }
 
       // For other roles, show simple dashboard
-      return <SimpleDashboard />;
+      return <UnauthenticatedDashboard />;
     }
 
     // Handle public pages
@@ -142,14 +175,22 @@ function AppContent() {
       case 'coming-soon':
         return <ComingSoon />;
       case 'clogin':
-        return <ClientLogin onSuccess={() => setCurrentPage('dashboard')} />;
+        return (
+          <ClientLanguageProvider>
+            <ClientThemeProvider>
+              <ClientLogin onSuccess={() => setCurrentPage('dashboard')} />
+            </ClientThemeProvider>
+          </ClientLanguageProvider>
+        );
       default:
         return <Home />;
     }
   };
 
-  // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated
-  if (currentPage === 'admin' || currentPage === 'technician' || currentPage === 'confirm-email' || (currentPage === 'clogin' && isAuthenticated && isClient) || (currentPage === 'dashboard' && isAuthenticated && (isAdmin || isTechnician || isClient))) {
+  // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated or loading
+  if (currentPage === 'admin' || currentPage === 'technician' || currentPage === 'confirm-email' ||
+      (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
+      (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isClient))))) {
     return renderPage();
   }
 

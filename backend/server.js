@@ -15,6 +15,12 @@ import adminRoutes from './routes/admin.js';
 import locationRoutes from './routes/locations.js';
 import publicRoutes from './routes/public.js';
 import securityRoutes from './routes/security.js';
+import clientFilesRoutes from './routes/client/files.js';
+import clientProfileRoutes from './routes/client/profile.js';
+import clientMfaRoutes from './routes/client/mfa.js';
+import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
+import clientSchedulerRoutes from './routes/client/scheduler.js';
+import translationsRoutes from './routes/translations.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -204,6 +210,12 @@ app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting f
 app.use('/api/locations', generalLimiter, locationRoutes); // General rate limiting
 app.use('/api/clients', generalLimiter, clientRegistrationRoutes); // General rate limiting
 app.use('/api/uploads', generalLimiter, uploadRoutes); // General rate limiting
+app.use('/api/client/files', generalLimiter, clientFilesRoutes); // Client file management with virus scanning
+app.use('/api/client/service-requests', generalLimiter, clientServiceRequestRoutes); // Client service request management
+app.use('/api/client', generalLimiter, clientSchedulerRoutes); // Client scheduler management
+app.use('/api/client', generalLimiter, clientProfileRoutes); // Client profile management
+app.use('/api/client/mfa', generalLimiter, clientMfaRoutes); // Client MFA management
+app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -31,7 +31,7 @@ beforeAll(() => {
     mockEventListeners[event].push({ listener, options });
   });
 
-  document.removeEventListener = jest.fn((event: string, listener: EventListener, options?: boolean | AddEventListenerOptions) => {
+  document.removeEventListener = jest.fn((event: string, listener: EventListener) => {
     if (mockEventListeners[event]) {
       mockEventListeners[event] = mockEventListeners[event].filter(
         item => item.listener !== listener
@@ -70,7 +70,7 @@ describe('SessionManager', () => {
     });
 
     // Reset singleton instance
-    (SessionManager as any).instance = null;
+    (SessionManager as unknown as { instance: SessionManager | null }).instance = null;
     sessionManager = SessionManager.getInstance();
 
     // Setup mock callbacks
@@ -306,7 +306,7 @@ describe('SessionManager', () => {
       localStorageMock.getItem.mockReturnValue(JSON.stringify(mockSessionData));
 
       // Create new instance to trigger loadSession
-      (SessionManager as any).instance = null;
+      (SessionManager as unknown as { instance: SessionManager | null }).instance = null;
       const newSessionManager = SessionManager.getInstance();
 
       expect(newSessionManager.isSessionActive()).toBe(true);
@@ -317,7 +317,7 @@ describe('SessionManager', () => {
 
       // Should not throw error
       expect(() => {
-        (SessionManager as any).instance = null;
+        (SessionManager as unknown as { instance: SessionManager | null }).instance = null;
         SessionManager.getInstance();
       }).not.toThrow();
     });

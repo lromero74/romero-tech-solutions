@@ -262,11 +262,23 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     await checkAuthState();
   };
 
-  const handleTimeout = () => {
+  const handleTimeout = async () => {
     setUser(null);
     setIsSessionActive(false);
     setSessionWarning({ isVisible: false, timeLeft: 0 });
     sessionManager.endSession();
+
+    // SECURITY FIX: Clear all authentication data from localStorage
+    try {
+      await authService.signOut();
+    } catch (error) {
+      console.error('Error during logout:', error);
+      // Even if signOut fails, still clear localStorage manually for security
+      localStorage.removeItem('authUser');
+      localStorage.removeItem('authTimestamp');
+      localStorage.removeItem('sessionToken');
+    }
+
     setShowTimeoutDialog(true);
   };
 
@@ -303,7 +315,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
         if (currentUser && sessionToken) {
           console.log('🔐 User was logged in - showing timeout dialog');
-          handleTimeout();
+          handleTimeout().catch(error => console.error('Error in handleTimeout:', error));
         } else {
           console.log('🔐 User was not logged in - ignoring 401 response');
         }
@@ -314,7 +326,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
     // Set up session management event handlers
     sessionManager.onExpired(() => {
-      handleTimeout();
+      handleTimeout().catch(error => console.error('Error in session timeout:', error));
     });
 
     sessionManager.onWarning((timeLeft) => {

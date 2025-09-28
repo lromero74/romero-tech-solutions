@@ -3,6 +3,7 @@ import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { AdminDataProvider, useAdminData } from '../contexts/AdminDataContext';
 import SessionWarning from '../components/common/SessionWarning';
+import EmergencyAlerts from '../components/admin/EmergencyAlerts';
 import { AdminSidebar } from '../components/admin';
 import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
@@ -198,6 +199,9 @@ const AdminDashboardContent: React.FC = () => {
             onLogout={signOut}
           />
         )}
+
+        {/* Emergency Alerts - Only render when user is authenticated */}
+        {user && <EmergencyAlerts />}
 
         {/* Sidebar */}
         <AdminSidebar

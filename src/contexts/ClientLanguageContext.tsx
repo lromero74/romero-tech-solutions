@@ -1,0 +1,207 @@
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+
+interface LanguageContextType {
+  language: string;
+  setLanguage: (lang: string) => void;
+  t: (key: string, fallback?: string) => string;
+  loading: boolean;
+  availableLanguages: Array<{ code: string; name: string; nativeName: string }>;
+}
+
+const ClientLanguageContext = createContext<LanguageContextType | undefined>(undefined);
+
+interface ClientLanguageProviderProps {
+  children: React.ReactNode;
+}
+
+// In-memory cache for translations
+const translationCache: { [languageCode: string]: { [key: string]: string } } = {};
+
+// Load cached translations from localStorage
+const loadCachedTranslations = (languageCode: string): { [key: string]: string } => {
+  try {
+    const cached = localStorage.getItem(`translations_${languageCode}`);
+    if (cached) {
+      const translations = JSON.parse(cached);
+      translationCache[languageCode] = translations;
+      return translations;
+    }
+  } catch (error) {
+    console.warn('Failed to load cached translations:', error);
+  }
+  return {};
+};
+
+// Save translations to localStorage
+const saveCachedTranslations = (languageCode: string, translations: { [key: string]: string }) => {
+  try {
+    localStorage.setItem(`translations_${languageCode}`, JSON.stringify(translations));
+  } catch (error) {
+    console.warn('Failed to save translations to cache:', error);
+  }
+};
+
+export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ children }) => {
+  // Initialize language synchronously from localStorage to prevent flash of wrong language
+  const getInitialLanguage = () => {
+    const clientLanguage = localStorage.getItem('clientLanguage');
+    const homePageLanguage = localStorage.getItem('homePageLanguage');
+    let selectedLanguage = clientLanguage || homePageLanguage;
+
+    if (!selectedLanguage) {
+      const browserLang = navigator.language.split('-')[0];
+      const availableLanguages = [
+        { code: 'en', name: 'English', nativeName: 'English' },
+        { code: 'es', name: 'Spanish', nativeName: 'Español' }
+      ];
+      selectedLanguage = availableLanguages.find(lang => lang.code === browserLang)?.code || 'en';
+    }
+
+    return selectedLanguage;
+  };
+
+  const initialLanguage = getInitialLanguage();
+  const initialTranslations = loadCachedTranslations(initialLanguage);
+  const [language, setLanguageState] = useState<string>(initialLanguage);
+  const [loading, setLoading] = useState<boolean>(Object.keys(initialTranslations).length === 0);
+  const [translations, setTranslations] = useState<{ [key: string]: string }>(initialTranslations);
+
+  const availableLanguages = [
+    { code: 'en', name: 'English', nativeName: 'English' },
+    { code: 'es', name: 'Spanish', nativeName: 'Español' }
+  ];
+
+  // Load translations from API
+  const loadTranslations = useCallback(async (languageCode: string) => {
+    // Check cache first
+    if (translationCache[languageCode]) {
+      setTranslations(translationCache[languageCode]);
+      setLoading(false);
+      return;
+    }
+
+    // If we don't have initial translations, show we're loading
+    if (Object.keys(translations).length === 0) {
+      setLoading(true);
+    }
+
+    try {
+      const response = await fetch(`/api/translations/client/${languageCode}`, {
+        method: 'GET',
+        credentials: 'include'
+      });
+
+      if (response.ok) {
+        const apiResponse = await response.json();
+        const translationMap: { [key: string]: string } = {};
+
+        // Convert API response to flat key-value map
+        if (apiResponse.success && apiResponse.data && apiResponse.data.translations) {
+          apiResponse.data.translations.forEach((item: { key_path: string; value: string; default_value: string }) => {
+            translationMap[item.key_path] = item.value || item.default_value;
+          });
+        }
+
+        // Cache the translations
+        translationCache[languageCode] = translationMap;
+        saveCachedTranslations(languageCode, translationMap);
+        setTranslations(translationMap);
+      } else {
+        console.error('Failed to load translations:', response.statusText);
+        // Fallback to empty translations - component will use fallback text
+        setTranslations({});
+      }
+    } catch (error) {
+      console.error('Error loading translations:', error);
+      setTranslations({});
+    } finally {
+      setLoading(false);
+    }
+  }, [translations]);
+
+  // Load translations for the initial language
+  useEffect(() => {
+    loadTranslations(language);
+  }, [loadTranslations, language]);
+
+  // Translation function
+  const t = useCallback((key: string, fallback?: string): string => {
+    const translation = translations[key];
+
+    if (translation) {
+      return translation;
+    }
+
+    // If no translation found, return fallback or key
+    if (fallback) {
+      return fallback;
+    }
+
+    // Return a readable version of the key as last resort
+    return key.split('.').pop()?.replace(/([A-Z])/g, ' $1').trim() || key;
+  }, [translations]);
+
+  // Set language with persistence and API call
+  const setLanguage = useCallback(async (languageCode: string) => {
+    if (languageCode === language) return;
+
+    // Save to localStorage
+    localStorage.setItem('clientLanguage', languageCode);
+
+    // Update state
+    setLanguageState(languageCode);
+
+    // Load new translations
+    await loadTranslations(languageCode);
+
+    // Optionally save user preference to database if authenticated
+    try {
+      const authUser = localStorage.getItem('authUser');
+      const sessionToken = localStorage.getItem('sessionToken');
+      if (authUser && sessionToken) {
+        const response = await fetch('/api/client/language-preference', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionToken}`
+          },
+          credentials: 'include',
+          body: JSON.stringify({
+            language: languageCode,
+            context: 'client'
+          })
+        });
+
+        if (!response.ok) {
+          console.warn('Failed to save language preference to database');
+        }
+      }
+    } catch (error) {
+      console.warn('Error saving language preference:', error);
+    }
+  }, [language, loadTranslations]);
+
+  const contextValue: LanguageContextType = {
+    language,
+    setLanguage,
+    t,
+    loading,
+    availableLanguages
+  };
+
+  return (
+    <ClientLanguageContext.Provider value={contextValue}>
+      {children}
+    </ClientLanguageContext.Provider>
+  );
+};
+
+export const useClientLanguage = (): LanguageContextType => {
+  const context = useContext(ClientLanguageContext);
+  if (context === undefined) {
+    throw new Error('useClientLanguage must be used within a ClientLanguageProvider');
+  }
+  return context;
+};
+
+export default ClientLanguageProvider;

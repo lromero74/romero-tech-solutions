@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Settings, Clock, Shield, Save, RotateCcw, MapPin, ChevronUp, ChevronDown, Minimize2 } from 'lucide-react';
+import { Settings, Clock, Shield, Save, RotateCcw, MapPin, ChevronUp, ChevronDown, Minimize2, Calendar } from 'lucide-react';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { SessionConfig } from '../../utils/sessionManager';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -16,6 +16,13 @@ interface ServedLocationData {
   location_type: string;
   location_id: number;
   notes?: string;
+}
+
+interface SchedulerConfig {
+  bufferBeforeHours: number;
+  bufferAfterHours: number;
+  defaultSlotDurationHours: number;
+  minimumAdvanceHours: number;
 }
 
 const AdminSettings: React.FC = () => {
@@ -46,6 +53,16 @@ const AdminSettings: React.FC = () => {
     isNearBottom: false
   });
 
+  // Scheduler Configuration state
+  const [schedulerConfig, setSchedulerConfig] = useState<SchedulerConfig>({
+    bufferBeforeHours: 2,
+    bufferAfterHours: 1,
+    defaultSlotDurationHours: 2,
+    minimumAdvanceHours: 1
+  });
+  const [schedulerHasChanges, setSchedulerHasChanges] = useState(false);
+  const [schedulerSaveStatus, setSchedulerSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+
   // Header measurement for scroll indicators
   const headerRef = useRef<HTMLDivElement>(null);
   const [headerHeight, setHeaderHeight] = useState(80); // fallback value
@@ -63,13 +80,18 @@ const AdminSettings: React.FC = () => {
     loadServiceLocationSelections();
   }, []);
 
+  // Load scheduler configuration
+  useEffect(() => {
+    loadSchedulerConfiguration();
+  }, []);
+
   // Measure header height for scroll indicators
   useEffect(() => {
     if (headerRef.current) {
       const height = headerRef.current.offsetHeight;
       setHeaderHeight(height);
     }
-  }, [sessionConfig, serviceLocationSelections]); // Recalculate when data changes
+  }, [sessionConfig, serviceLocationSelections, schedulerConfig]); // Recalculate when data changes
 
   const loadServiceLocationSelections = async () => {
     try {
@@ -83,6 +105,69 @@ const AdminSettings: React.FC = () => {
       setServedLocationDetails(data.servedLocations);
     } catch (error) {
       console.error('Failed to load service location selections:', error);
+    }
+  };
+
+  const loadSchedulerConfiguration = async () => {
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+      // Load all scheduler settings
+      const settingKeys = [
+        'scheduler_buffer_before_hours',
+        'scheduler_buffer_after_hours',
+        'scheduler_default_slot_duration_hours',
+        'scheduler_minimum_advance_hours'
+      ];
+
+      const configData: Partial<SchedulerConfig> = {};
+
+      for (const key of settingKeys) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/admin/system-settings/${key}`, {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+
+          if (response.ok) {
+            const result = await response.json();
+            const value = parseInt(result.data.value) || 0;
+
+            switch (key) {
+              case 'scheduler_buffer_before_hours':
+                configData.bufferBeforeHours = value;
+                break;
+              case 'scheduler_buffer_after_hours':
+                configData.bufferAfterHours = value;
+                break;
+              case 'scheduler_default_slot_duration_hours':
+                configData.defaultSlotDurationHours = value;
+                break;
+              case 'scheduler_minimum_advance_hours':
+                configData.minimumAdvanceHours = value;
+                break;
+            }
+          }
+        } catch (error) {
+          console.warn(`Failed to load setting ${key}:`, error);
+        }
+      }
+
+      // Update state with loaded config, using defaults for missing values
+      const finalConfig: SchedulerConfig = {
+        bufferBeforeHours: configData.bufferBeforeHours ?? 2,
+        bufferAfterHours: configData.bufferAfterHours ?? 1,
+        defaultSlotDurationHours: configData.defaultSlotDurationHours ?? 2,
+        minimumAdvanceHours: configData.minimumAdvanceHours ?? 1
+      };
+
+      setSchedulerConfig(finalConfig);
+      setSchedulerHasChanges(false);
+    } catch (error) {
+      console.error('Failed to load scheduler configuration:', error);
     }
   };
 
@@ -246,6 +331,65 @@ const AdminSettings: React.FC = () => {
     }
   };
 
+  const handleSchedulerInputChange = (field: keyof SchedulerConfig, value: string) => {
+    const numericValue = parseInt(value) || 0;
+    const newConfig = { ...schedulerConfig, [field]: numericValue };
+    setSchedulerConfig(newConfig);
+    setSchedulerHasChanges(true);
+  };
+
+  const handleSaveSchedulerConfig = async () => {
+    setSchedulerSaveStatus('saving');
+    try {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+      // Map config fields to database setting keys
+      const settingMappings = {
+        bufferBeforeHours: 'scheduler_buffer_before_hours',
+        bufferAfterHours: 'scheduler_buffer_after_hours',
+        defaultSlotDurationHours: 'scheduler_default_slot_duration_hours',
+        minimumAdvanceHours: 'scheduler_minimum_advance_hours'
+      };
+
+      // Save each setting
+      for (const [configKey, settingKey] of Object.entries(settingMappings)) {
+        const value = schedulerConfig[configKey as keyof SchedulerConfig];
+
+        await fetch(`${API_BASE_URL}/admin/system-settings/${settingKey}`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ value }),
+        });
+      }
+
+      setSchedulerHasChanges(false);
+      setSchedulerSaveStatus('saved');
+      console.log('✅ Scheduler configuration saved successfully:', schedulerConfig);
+
+      // Clear saved status after 3 seconds
+      setTimeout(() => setSchedulerSaveStatus('idle'), 3000);
+    } catch (error) {
+      console.error('Error saving scheduler configuration:', error);
+      setSchedulerSaveStatus('error');
+      setTimeout(() => setSchedulerSaveStatus('idle'), 3000);
+    }
+  };
+
+  const handleResetSchedulerConfig = () => {
+    // Reset to default values
+    const defaults: SchedulerConfig = {
+      bufferBeforeHours: 2,
+      bufferAfterHours: 1,
+      defaultSlotDurationHours: 2,
+      minimumAdvanceHours: 1
+    };
+    setSchedulerConfig(defaults);
+    setSchedulerHasChanges(true);
+  };
+
   return (
     <div className="h-full relative" style={{ height: 'calc(100vh - 80px)' }}>
       <div className="h-full overflow-y-auto" onScroll={handleScroll}>
@@ -406,6 +550,188 @@ const AdminSettings: React.FC = () => {
         </div>
       </div>
 
+      {/* Scheduler Configuration */}
+      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg`}>
+        <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
+          <div className="flex items-center">
+            <Calendar className="w-5 h-5 text-indigo-500 mr-2" />
+            <h2 className={`text-lg font-medium ${themeClasses.text.primary}`}>Scheduler Configuration</h2>
+          </div>
+          <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+            Configure buffer times and scheduling constraints for appointment booking
+          </p>
+        </div>
+
+        <div className="p-6 space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Buffer Before Hours */}
+            <div>
+              <label htmlFor="bufferBefore" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Buffer Before Appointment (hours)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="bufferBefore"
+                  min="0"
+                  max="24"
+                  value={schedulerConfig.bufferBeforeHours || ''}
+                  onChange={(e) => handleSchedulerInputChange('bufferBeforeHours', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <Clock className={`h-4 w-4 ${themeClasses.text.muted}`} />
+                </div>
+              </div>
+              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                Minimum time required before another appointment can be scheduled
+              </p>
+            </div>
+
+            {/* Buffer After Hours */}
+            <div>
+              <label htmlFor="bufferAfter" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Buffer After Appointment (hours)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="bufferAfter"
+                  min="0"
+                  max="24"
+                  value={schedulerConfig.bufferAfterHours || ''}
+                  onChange={(e) => handleSchedulerInputChange('bufferAfterHours', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <Clock className={`h-4 w-4 ${themeClasses.text.muted}`} />
+                </div>
+              </div>
+              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                Minimum time required after an appointment ends
+              </p>
+            </div>
+
+            {/* Default Slot Duration */}
+            <div>
+              <label htmlFor="slotDuration" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Default Slot Duration (hours)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="slotDuration"
+                  min="0.5"
+                  max="12"
+                  step="0.5"
+                  value={schedulerConfig.defaultSlotDurationHours || ''}
+                  onChange={(e) => handleSchedulerInputChange('defaultSlotDurationHours', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <Calendar className={`h-4 w-4 ${themeClasses.text.muted}`} />
+                </div>
+              </div>
+              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                Default duration for new appointment time slots
+              </p>
+            </div>
+
+            {/* Minimum Advance Hours */}
+            <div>
+              <label htmlFor="minimumAdvance" className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Minimum Advance Notice (hours)
+              </label>
+              <div className="relative">
+                <input
+                  type="number"
+                  id="minimumAdvance"
+                  min="0"
+                  max="168"
+                  value={schedulerConfig.minimumAdvanceHours || ''}
+                  onChange={(e) => handleSchedulerInputChange('minimumAdvanceHours', e.target.value)}
+                  className={`block w-full rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
+                />
+                <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
+                  <Shield className={`h-4 w-4 ${themeClasses.text.muted}`} />
+                </div>
+              </div>
+              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                How far in advance appointments must be scheduled
+              </p>
+            </div>
+          </div>
+
+          {/* Current Values Display */}
+          <div className={`${themeClasses.bg.secondary} rounded-lg p-4`}>
+            <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>Current Scheduler Settings Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className={`${themeClasses.text.secondary}`}>Buffer before appointments:</span>
+                <span className={`ml-2 font-medium ${themeClasses.text.primary}`}>{schedulerConfig.bufferBeforeHours} hours</span>
+              </div>
+              <div>
+                <span className={`${themeClasses.text.secondary}`}>Buffer after appointments:</span>
+                <span className={`ml-2 font-medium ${themeClasses.text.primary}`}>{schedulerConfig.bufferAfterHours} hours</span>
+              </div>
+              <div>
+                <span className={`${themeClasses.text.secondary}`}>Default slot duration:</span>
+                <span className={`ml-2 font-medium ${themeClasses.text.primary}`}>{schedulerConfig.defaultSlotDurationHours} hours</span>
+              </div>
+              <div>
+                <span className={`${themeClasses.text.secondary}`}>Minimum advance notice:</span>
+                <span className={`ml-2 font-medium ${themeClasses.text.primary}`}>{schedulerConfig.minimumAdvanceHours} hours</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={handleResetSchedulerConfig}
+                className={`inline-flex items-center px-3 py-2 border ${themeClasses.border.primary} shadow-sm text-sm font-medium rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500`}
+              >
+                <RotateCcw className="w-4 h-4 mr-2" />
+                Reset to Defaults
+              </button>
+            </div>
+
+            <button
+              onClick={handleSaveSchedulerConfig}
+              disabled={!schedulerHasChanges || schedulerSaveStatus === 'saving'}
+              className={`inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 ${
+                schedulerHasChanges && schedulerSaveStatus !== 'saving'
+                  ? 'bg-indigo-600 hover:bg-indigo-700'
+                  : 'bg-gray-400 cursor-not-allowed'
+              }`}
+            >
+              {schedulerSaveStatus === 'saving' ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  Saving...
+                </>
+              ) : schedulerSaveStatus === 'saved' ? (
+                <>
+                  <span className="text-green-200 mr-2">✓</span>
+                  Saved
+                </>
+              ) : schedulerSaveStatus === 'error' ? (
+                <>
+                  <span className="text-red-200 mr-2">✗</span>
+                  Error
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save Scheduler Settings
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Service Location Management */}
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg`}>
         <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
@@ -517,14 +843,31 @@ const AdminSettings: React.FC = () => {
 
       {/* Information Panel */}
       <div className={`${themeClasses.bg.secondary} border ${themeClasses.border.primary} rounded-lg p-4`}>
-        <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>How Session Management Works</h3>
-        <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
-          <li>• Sessions automatically track user activity (mouse movement, clicks, keyboard input)</li>
-          <li>• A warning will appear {formData.warningTime} minutes before session expiry</li>
-          <li>• Users can extend their session or will be logged out automatically</li>
-          <li>• Changes take effect immediately for the current session</li>
-          <li>• Settings are preserved across browser sessions</li>
-        </ul>
+        <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>How These Settings Work</h3>
+
+        <div className="space-y-4">
+          <div>
+            <h4 className={`text-xs font-semibold ${themeClasses.text.primary} mb-1 uppercase tracking-wide`}>Session Management</h4>
+            <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
+              <li>• Sessions automatically track user activity (mouse movement, clicks, keyboard input)</li>
+              <li>• A warning will appear {formData.warningTime} minutes before session expiry</li>
+              <li>• Users can extend their session or will be logged out automatically</li>
+              <li>• Changes take effect immediately for the current session</li>
+              <li>• Settings are preserved across browser sessions</li>
+            </ul>
+          </div>
+
+          <div>
+            <h4 className={`text-xs font-semibold ${themeClasses.text.primary} mb-1 uppercase tracking-wide`}>Scheduler Configuration</h4>
+            <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
+              <li>• Buffer times prevent appointments from being scheduled too close together</li>
+              <li>• Minimum advance notice ensures adequate preparation time</li>
+              <li>• Default slot duration sets the initial time block for new appointments</li>
+              <li>• Settings apply system-wide to all client scheduling requests</li>
+              <li>• Changes take effect immediately for new appointment bookings</li>
+            </ul>
+          </div>
+        </div>
         </div>
         </div>
 

@@ -1,6 +1,9 @@
 import express from 'express';
 import Joi from 'joi';
+import bcrypt from 'bcryptjs';
 import { clientRegistrationService } from '../services/clientRegistrationService.js';
+import { query } from '../config/database.js';
+import { sessionService } from '../services/sessionService.js';
 
 const router = express.Router();
 
@@ -42,6 +45,12 @@ const registrationSchema = Joi.object({
 const confirmationSchema = Joi.object({
   token: Joi.string().length(64).hex().required(),
   email: Joi.string().email().required()
+});
+
+// Validation schema for client login
+const loginSchema = Joi.object({
+  email: Joi.string().email().required(),
+  password: Joi.string().min(1).required()
 });
 
 // POST /api/clients/register - Register new client business
@@ -267,6 +276,157 @@ router.post('/validate-domain', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Domain validation failed'
+    });
+  }
+});
+
+// POST /api/clients/login - Client authentication
+router.post('/login', async (req, res) => {
+  try {
+    console.log('🔐 Client login attempt:', req.body.email);
+
+    // Validate request body
+    const { error, value } = loginSchema.validate(req.body);
+    if (error) {
+      console.log('❌ Login validation error:', error.details);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email or password format'
+      });
+    }
+
+    const { email, password } = value;
+
+    // Get user from database
+    const userResult = await query(`
+      SELECT
+        u.id,
+        u.email,
+        u.password_hash,
+        u.first_name,
+        u.last_name,
+        u.phone,
+        u.role,
+        u.business_id,
+        u.is_active,
+        u.email_verified,
+        b.business_name,
+        b.primary_street,
+        b.primary_city,
+        b.primary_state,
+        b.primary_zip_code
+      FROM users u
+      LEFT JOIN businesses b ON u.business_id = b.id
+      WHERE u.email = $1 AND u.role = 'client'
+    `, [email]);
+
+    if (userResult.rows.length === 0) {
+      console.log('❌ No client user found with email:', email);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if user is active
+    if (!user.is_active) {
+      console.log('❌ User account is deactivated:', email);
+      return res.status(401).json({
+        success: false,
+        message: 'Account is deactivated'
+      });
+    }
+
+    // Check if email is verified
+    if (!user.email_verified) {
+      console.log('❌ Email not verified:', email);
+      return res.status(401).json({
+        success: false,
+        message: 'Please verify your email address before logging in'
+      });
+    }
+
+    // Verify password
+    const passwordMatch = await bcrypt.compare(password, user.password_hash);
+    if (!passwordMatch) {
+      console.log('❌ Password mismatch for user:', email);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Get user's accessible service locations
+    const locationsResult = await query(`
+      SELECT
+        sl.id,
+        sl.address_label,
+        sl.street,
+        sl.city,
+        sl.state,
+        sl.zip_code,
+        lc.contact_role,
+        lc.is_primary_contact
+      FROM service_locations sl
+      LEFT JOIN location_contacts lc ON sl.id = lc.service_location_id AND lc.user_id = $1
+      WHERE sl.business_id = $2 AND sl.is_active = true AND sl.soft_delete = false
+    `, [user.id, user.business_id]);
+
+    // Create session
+    const session = await sessionService.createSession(
+      user.id,
+      user.email,
+      req.get('User-Agent'),
+      req.ip
+    );
+
+    // Update last login
+    await query(`
+      UPDATE users
+      SET last_login = NOW(), updated_at = NOW()
+      WHERE id = $1
+    `, [user.id]);
+
+    console.log('✅ Client login successful:', email);
+
+    // Return successful login response
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      data: {
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.first_name,
+          lastName: user.last_name,
+          phone: user.phone,
+          role: user.role,
+          business: {
+            id: user.business_id,
+            name: user.business_name,
+            address: {
+              street: user.primary_street,
+              city: user.primary_city,
+              state: user.primary_state,
+              zipCode: user.primary_zip_code
+            }
+          },
+          accessibleLocations: locationsResult.rows
+        },
+        session: {
+          token: session.sessionToken,
+          expiresAt: session.expiresAt
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Client login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Login failed'
     });
   }
 });

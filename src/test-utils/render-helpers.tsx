@@ -3,6 +3,19 @@ import { render, RenderOptions } from '@testing-library/react';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { EnhancedAuthProvider } from '../contexts/EnhancedAuthContext';
 
+// Import User type
+type MockUser = {
+  id: string;
+  email: string;
+  role: string;
+  firstName: string;
+  lastName: string;
+  isActive: boolean;
+  emailVerified: boolean;
+  isOnVacation: boolean;
+  isOutSick: boolean;
+};
+
 // Mock providers for testing
 const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const mockThemeContext = {
@@ -28,7 +41,7 @@ const MockThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   );
 };
 
-const MockAuthProvider: React.FC<{ children: React.ReactNode; mockUser?: any }> = ({
+const MockAuthProvider: React.FC<{ children: React.ReactNode; mockUser?: MockUser | null }> = ({
   children,
   mockUser = null
 }) => {
@@ -56,7 +69,7 @@ const MockAuthProvider: React.FC<{ children: React.ReactNode; mockUser?: any }> 
 };
 
 // All providers wrapper
-const AllProvidersWrapper: React.FC<{ children: React.ReactNode; mockUser?: any }> = ({
+const AllProvidersWrapper: React.FC<{ children: React.ReactNode; mockUser?: MockUser | null }> = ({
   children,
   mockUser
 }) => {
@@ -71,8 +84,8 @@ const AllProvidersWrapper: React.FC<{ children: React.ReactNode; mockUser?: any 
 
 // Custom render function that includes providers
 interface CustomRenderOptions extends Omit<RenderOptions, 'wrapper'> {
-  mockUser?: any;
-  wrapper?: React.ComponentType<any>;
+  mockUser?: MockUser | null;
+  wrapper?: React.ComponentType<{ children: React.ReactNode }>;
 }
 
 const customRender = (
@@ -119,7 +132,7 @@ export const createMockTechnician = () => createMockUser({
 });
 
 // Mock API responses
-export const mockApiResponse = (data: any, success = true) => ({
+export const mockApiResponse = (data: unknown, success = true) => ({
   data: success ? data : null,
   error: success ? null : data,
   success

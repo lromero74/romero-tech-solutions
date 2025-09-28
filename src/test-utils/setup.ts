@@ -39,7 +39,7 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
   disconnect() {}
   takeRecords() { return []; }
-} as any;
+} as MutationObserver;
 
 // Mock scrollTo
 global.scrollTo = jest.fn();
@@ -49,7 +49,7 @@ const originalError = console.error;
 const originalWarn = console.warn;
 
 beforeAll(() => {
-  console.error = (...args: any[]) => {
+  console.error = (...args: unknown[]) => {
     // Only suppress specific React warnings we expect in tests
     if (
       typeof args[0] === 'string' &&
@@ -61,7 +61,7 @@ beforeAll(() => {
     originalError.call(console, ...args);
   };
 
-  console.warn = (...args: any[]) => {
+  console.warn = (...args: unknown[]) => {
     // Suppress specific warnings
     if (
       typeof args[0] === 'string' &&

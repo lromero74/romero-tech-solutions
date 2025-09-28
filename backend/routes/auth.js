@@ -185,7 +185,7 @@ router.post('/login', async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
       path: '/'
     };
@@ -242,7 +242,7 @@ router.post('/logout', async (req, res) => {
     res.clearCookie('sessionToken', {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       path: '/'
     });
 
@@ -629,7 +629,7 @@ router.post('/verify-admin-mfa', async (req, res) => {
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
-      sameSite: 'strict',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
       maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
       path: '/'
     };
