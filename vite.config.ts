@@ -40,11 +40,10 @@ export default defineConfig({
           // UI components chunk
           ui: ['lucide-react'],
           // AWS services chunk (if using AWS SDK)
-          aws: ['@aws-sdk/client-cognito-identity-provider', '@aws-sdk/client-sns'],
+          aws: ['@aws-sdk/client-cognito-identity-provider'],
           // Admin components chunk
           admin: [
             './src/pages/AdminDashboard.tsx',
-            './src/pages/AdminLogin.tsx',
             './src/components/admin',
           ],
         },
