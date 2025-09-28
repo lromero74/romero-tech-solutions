@@ -19,7 +19,7 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/login') {
     return 'coming-soon';
   }
-  if (path === '/clogin') {
+  if (path === '/clogin' || path === '/clogin/') {
     return 'clogin';
   }
   if (path === '/dashboard' || path === '/dashboard/') {
