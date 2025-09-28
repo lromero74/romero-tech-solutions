@@ -71,7 +71,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     if (locations.length > 0) {
       buildLocationTree(locations);
     }
-  }, [locations, initialSelections, buildLocationTree]);
+  }, [locations, initialSelections]);
 
   const buildLocationTree = useCallback((locationData: LocationItem[]) => {
     // Group by type and build hierarchy
@@ -130,7 +130,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
 
     setLocationTree(finalTree);
-  }, [initialSelections, updateTreeWithSelections]);
+  }, [initialSelections]);
 
   // Update tree with selections and propagate changes
   const updateTreeWithSelections = useCallback((tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
@@ -231,7 +231,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     if (locationTree.length > 0) { // Only update if tree is built
       setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
     }
-  }, [selections, locationTree.length, updateTreeWithSelections]);
+  }, [selections]);
 
 
   // Calculate expanded nodes count
