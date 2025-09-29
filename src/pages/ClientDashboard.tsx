@@ -47,12 +47,19 @@ interface User {
   };
   accessibleLocations: Array<{
     id: string;
-    address_label: string;
-    street: string;
-    city: string;
-    state: string;
-    contact_role?: string;
-    is_primary_contact?: boolean;
+    name: string;
+    address: {
+      street: string;
+      city: string;
+      state: string;
+      zipCode: string;
+      country: string;
+    };
+    contact: {
+      person: string;
+      phone: string;
+      email: string;
+    };
   }>;
 }
 
@@ -531,24 +538,24 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <h3 className="font-medium text-gray-900 dark:text-white">
-                            {location.address_label}
+                            {location.name}
                           </h3>
                           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            {location.street}
+                            {location.address.street}
                           </p>
                           <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {location.city}, {location.state}
+                            {location.address.city}, {location.address.state} {location.address.zipCode}
                           </p>
-                          {location.contact_role && (
+                          {location.contact.person && (
                             <div className="mt-2">
-                              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                location.is_primary_contact
-                                  ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200'
-                                  : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                              }`}>
-                                {location.contact_role}
-                                {location.is_primary_contact && ` (${t('locations.primary')})`}
-                              </span>
+                              <p className="text-sm text-gray-600 dark:text-gray-400">
+                                <strong>Contact:</strong> {location.contact.person}
+                              </p>
+                              {location.contact.phone && (
+                                <p className="text-sm text-gray-600 dark:text-gray-400">
+                                  <strong>Phone:</strong> {location.contact.phone}
+                                </p>
+                              )}
                             </div>
                           )}
                         </div>

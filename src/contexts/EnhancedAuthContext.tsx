@@ -16,6 +16,7 @@ interface EnhancedAuthContextType {
   isTechnician: boolean;
   isClient: boolean;
   isFirstAdmin: boolean;
+  isSigningOut: boolean;
   signIn: (email: string, password: string) => Promise<AuthUser>;
   signUpAdmin: (userData: { email: string; password: string; name: string }) => Promise<{ user: AuthUser; isFirstAdmin: boolean }>;
   signUpClient: (registrationData: ClientRegistrationRequest) => Promise<{ success: boolean; message: string; emailConfirmationSent: boolean }>;
@@ -28,6 +29,8 @@ interface EnhancedAuthContextType {
   sendAdminMfaCode: (email: string, password: string) => Promise<{ email: string; phoneNumber?: string; message: string }>;
   verifyAdminMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
   verifyClientMfaCode: (email: string, mfaCode: string) => Promise<AuthUser>;
+  // Trusted device methods
+  setUserFromTrustedDevice: (userData: AuthUser, sessionToken?: string) => Promise<void>;
   // Session management
   sessionConfig: SessionConfig | null;
   updateSessionConfig: (config: Partial<SessionConfig>) => void;
@@ -54,6 +57,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const [sessionWarning, setSessionWarning] = useState({ isVisible: false, timeLeft: 0 });
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
+  const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Helper function to determine if a user requires MFA
   const requiresMfa = async (user: AuthUser | unknown): Promise<boolean> => {
@@ -458,6 +462,12 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   const handleSignOut = async (): Promise<void> => {
     try {
+      // Set signing out state to prevent "Authentication Required" flash
+      setIsSigningOut(true);
+
+      // Store current user role before clearing user state
+      const currentUserRole = user?.role;
+
       // Disable unauthorized handling to prevent timeout dialogs during logout
       const { apiService } = await import('../services/apiService');
       apiService.disableUnauthorizedHandling();
@@ -475,6 +485,21 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setTimeout(() => {
         apiService.enableUnauthorizedHandling();
       }, 1000);
+
+      // Redirect to appropriate login page based on user role
+      // Use shorter delay to minimize "Authentication Required" flash
+      setTimeout(() => {
+        if (currentUserRole === 'client') {
+          window.location.href = '/clogin';
+        } else if (currentUserRole === 'technician') {
+          window.location.href = '/technician';
+        } else if (currentUserRole === 'sales') {
+          window.location.href = '/sales';
+        } else {
+          // Default for admin and any other employee roles
+          window.location.href = '/admin';
+        }
+      }, 100); // Minimal delay to ensure cleanup completes
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;
@@ -675,6 +700,92 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     }
   };
 
+  // Set user from trusted device authentication - bypasses MFA requirement
+  const setUserFromTrustedDevice = async (userData: AuthUser, sessionToken?: string) => {
+    try {
+      console.log('🔄 [Trusted Device] Setting user directly from trusted device authentication');
+      setUser(userData);
+
+      // Store authentication state in localStorage for persistence (same as normal MFA flow)
+      localStorage.setItem('authUser', JSON.stringify(userData));
+      localStorage.setItem('authTimestamp', Date.now().toString());
+      console.log('💾 [Trusted Device] Stored authUser and authTimestamp in localStorage');
+
+      // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session since trusted device bypassed it
+      localStorage.setItem('mfaVerified', 'true');
+      console.log('⚡ MFA verification flag set for trusted device authentication');
+
+      // Update sessionToken if provided
+      if (sessionToken) {
+        localStorage.setItem('sessionToken', sessionToken);
+        setSessionToken(sessionToken);
+        console.log('🔐 [Trusted Device] Session token updated');
+      } else {
+        // Check if there's already a token in localStorage
+        const existingToken = localStorage.getItem('sessionToken');
+        if (existingToken) {
+          setSessionToken(existingToken);
+          console.log('🔐 [Trusted Device] Using existing session token');
+        }
+      }
+
+      // Initialize session management after trusted device authentication
+      const defaultConfig: SessionConfig = {
+        timeout: 15, // 15 minutes default
+        warningTime: 2 // 2 minutes warning
+      };
+
+      // Try to load config from database first, then local storage, then default
+      let sessionConfig: SessionConfig;
+      try {
+        console.log('🔍 [Trusted Device] Attempting to load session config from database...');
+        const dbConfig = await systemSettingsService.getSessionConfig();
+        console.log('🔍 [Trusted Device] Database response:', dbConfig);
+        if (dbConfig) {
+          sessionConfig = dbConfig;
+          console.log('📥 [Trusted Device] Using database session config:', sessionConfig);
+        } else {
+          console.log('⚠️ [Trusted Device] No database config found, checking local storage...');
+          const existingConfig = sessionManager.getConfig();
+          if (existingConfig) {
+            sessionConfig = existingConfig;
+            console.log('📥 [Trusted Device] Using local session config:', sessionConfig);
+          } else {
+            sessionConfig = defaultConfig;
+            console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
+          }
+        }
+      } catch (error) {
+        console.warn('⚠️ [Trusted Device] Failed to load database config, using fallback:', error);
+        const existingConfig = sessionManager.getConfig();
+        if (existingConfig) {
+          sessionConfig = existingConfig;
+          console.log('📥 [Trusted Device] Using local session config (fallback):', sessionConfig);
+        } else {
+          sessionConfig = defaultConfig;
+          console.log('📥 [Trusted Device] Using default session config (fallback):', sessionConfig);
+        }
+      }
+
+      setSessionConfig(sessionConfig);
+
+      // Reset session warning state for new session
+      setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+      // Initialize session if not already active
+      if (!sessionManager.isSessionActive()) {
+        sessionManager.initSession(sessionConfig);
+      }
+
+      setIsSessionActive(true);
+
+      console.log('✅ [Trusted Device] User authentication state updated successfully');
+    } catch (error) {
+      console.error('❌ [Trusted Device] Error setting user from trusted device:', error);
+      throw error;
+    }
+  };
+
   // Computed properties
   const isAuthenticated = !!user;
   const role = user?.role || null;
@@ -692,6 +803,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     isTechnician,
     isClient,
     isFirstAdmin,
+    isSigningOut,
     signIn: handleSignIn,
     signUpAdmin: handleSignUpAdmin,
     signUpClient: handleSignUpClient,
@@ -704,6 +816,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     sendAdminMfaCode: handleSendAdminMfaCode,
     verifyAdminMfaCode: handleVerifyAdminMfaCode,
     verifyClientMfaCode: handleVerifyClientMfaCode,
+    // Trusted device methods
+    setUserFromTrustedDevice,
     // Session management
     sessionConfig,
     updateSessionConfig,

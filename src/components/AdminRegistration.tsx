@@ -3,6 +3,7 @@ import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { authService } from '../services/authService';
 import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { AppPage } from '../constants/config';
+import { trustedDeviceService } from '../services/trustedDeviceService';
 
 interface AdminRegistrationProps {
   onSuccess: () => void;
@@ -10,7 +11,7 @@ interface AdminRegistrationProps {
 }
 
 const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, currentPage = 'employee' }) => {
-  const { signUpAdmin, signIn, sendAdminMfaCode, verifyAdminMfaCode, isLoading: authLoading } = useEnhancedAuth();
+  const { signUpAdmin, signIn, sendAdminMfaCode, verifyAdminMfaCode, isLoading: authLoading, setUserFromTrustedDevice } = useEnhancedAuth();
   const [isLoading, setIsLoading] = useState(false);
   const [hasAdminUsers, setHasAdminUsers] = useState<boolean | null>(null);
   const [canConnectToBackend, setCanConnectToBackend] = useState<boolean>(true);
@@ -39,6 +40,8 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
   const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
+
   const passwordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const confirmPasswordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const formClearTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -150,7 +153,67 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
           }
         } catch (signInError: unknown) {
           if (signInError && typeof signInError === 'object' && 'message' in signInError && signInError.message === 'MFA_REQUIRED') {
-            // Admin user needs MFA verification
+            // Check if device is trusted before requiring MFA using pre-auth endpoint
+            try {
+              console.log('🔍 MFA required - checking if device is trusted before authentication...');
+              const trustResult = await trustedDeviceService.checkPreAuthDeviceTrust(formData.email);
+              console.log('🔍 Pre-auth device trust check result:', trustResult);
+
+              if (trustResult.success && trustResult.trusted) {
+                // Device is trusted - skip MFA and complete authentication through trusted device login
+                console.log('✅ Device is trusted - skipping MFA and completing authentication via trusted device login');
+                setSuccess('Trusted device detected! Signing in...');
+
+                try {
+                  // Use trusted device login to properly complete authentication
+                  const trustedLoginResult = await trustedDeviceService.loginWithTrustedDevice(
+                    formData.email,
+                    formData.password
+                  );
+
+                  if (trustedLoginResult.success && trustedLoginResult.user) {
+                    console.log('✅ Trusted device authentication completed successfully');
+                    console.log('🔄 Updating authentication context directly...');
+
+                    // Use the new setUserFromTrustedDevice method to directly update the user context
+                    console.log('🔄 Calling setUserFromTrustedDevice() to update authentication context...');
+                    await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
+                    console.log('✅ setUserFromTrustedDevice() completed');
+
+                    console.log('🔄 Calling onSuccess() to redirect to dashboard...');
+                    onSuccess();
+                    console.log('✅ onSuccess() called');
+                  } else {
+                    console.error('❌ Trusted device login failed:', trustedLoginResult.message);
+                    throw new Error(trustedLoginResult.message || 'Failed to complete trusted device login');
+                  }
+                } catch (trustedLoginError) {
+                  console.error('❌ Error during trusted device login:', trustedLoginError);
+                  // Fall back to MFA if trusted device login fails
+                  console.log('⚠️ Falling back to MFA due to trusted device login failure');
+                  setMfaEmail(formData.email);
+                  setMfaPassword(formData.password);
+                  setShowMfaVerification(true);
+                  setIsLoading(false);
+
+                  // Send MFA code as fallback
+                  try {
+                    const mfaResponse = await sendAdminMfaCode(formData.email, formData.password);
+                    setMfaPhoneNumber(mfaResponse.phoneNumber || '');
+                    setSuccess('Verification code sent to your email and phone. Please check your email and text messages and enter the code below.');
+                    setErrors({});
+                  } catch (mfaError) {
+                    console.error('Error sending MFA code:', mfaError);
+                    setErrors({ email: 'Failed to send verification code. Please try again.' });
+                  }
+                }
+                return;
+              }
+            } catch (trustCheckError) {
+              console.log('⚠️ Error checking device trust, proceeding with MFA:', trustCheckError);
+            }
+
+            // Device is not trusted or error occurred - proceed with MFA
             setMfaEmail(formData.email);
             setMfaPassword(formData.password);
             setShowMfaVerification(true);
@@ -334,8 +397,29 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
     setErrors({});
 
     try {
+      // Complete MFA verification first
       await verifyAdminMfaCode(mfaEmail, mfaCode);
-      setSuccess('Verification successful! Redirecting to admin dashboard...');
+      setSuccess('Verification successful!');
+
+      // If user checked "remember device", register this device as trusted
+      if (rememberDevice) {
+        try {
+          console.log('🔐 Registering device as trusted...');
+          const deviceName = trustedDeviceService.getCurrentDeviceName();
+          const registrationResult = await trustedDeviceService.registerCurrentDevice(deviceName);
+
+          if (registrationResult.success) {
+            console.log('✅ Device registered as trusted successfully');
+          } else {
+            console.log('⚠️ Failed to register device as trusted:', registrationResult.message);
+          }
+        } catch (deviceError) {
+          console.log('⚠️ Error registering trusted device:', deviceError);
+          // Don't block login on device registration failure
+        }
+      }
+
+      // Proceed to dashboard
       setTimeout(() => {
         onSuccess();
       }, 1500);
@@ -373,6 +457,42 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const handleTrustedDeviceRegister = async () => {
+    console.log('🔍 User chose to register trusted device');
+    setShowTrustedDevicePrompt(false); // Hide the prompt
+
+    try {
+      console.log('🔍 Registering trusted device...');
+      const response = await trustedDeviceService.registerCurrentDevice();
+      if (response.success) {
+        console.log('✅ Device registered successfully');
+        setSuccess('Device registered successfully! Redirecting to dashboard...');
+      } else {
+        console.log('❌ Device registration failed, proceeding anyway');
+        setSuccess('Redirecting to admin dashboard...');
+      }
+    } catch (error) {
+      console.error('❌ Error registering trusted device:', error);
+      setSuccess('Redirecting to admin dashboard...');
+    }
+
+    // Navigate to admin dashboard (MFA was already verified)
+    setTimeout(() => {
+      onSuccess();
+    }, 1500);
+  };
+
+  const handleTrustedDeviceSkip = async () => {
+    console.log('🔍 User chose to skip trusted device registration');
+    setShowTrustedDevicePrompt(false); // Hide the prompt
+    setSuccess('Redirecting to admin dashboard...');
+
+    // Navigate to admin dashboard (MFA was already verified)
+    setTimeout(() => {
+      onSuccess();
+    }, 1500);
   };
 
   const resetAllStates = () => {
@@ -795,6 +915,24 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
               </p>
             </div>
 
+            {/* Remember Device Checkbox */}
+            <div className="flex items-center">
+              <input
+                id="rememberDevice"
+                name="rememberDevice"
+                type="checkbox"
+                checked={rememberDevice}
+                onChange={(e) => setRememberDevice(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <label htmlFor="rememberDevice" className="ml-2 block text-sm text-gray-700">
+                Remember this device for 30 days
+              </label>
+            </div>
+            <p className="text-xs text-gray-500 mt-1">
+              Skip MFA verification on this device. Only use on personal devices you trust.
+            </p>
+
             <div className="space-y-3">
               <button
                 type="submit"
@@ -1101,6 +1239,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
           </form>
         )}
       </div>
+
     </div>
   );
 };

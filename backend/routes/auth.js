@@ -1691,4 +1691,143 @@ router.get('/sms-stats/:phoneNumber', async (req, res) => {
   }
 });
 
+// POST /api/auth/trusted-device-login - Complete authentication for trusted devices (bypass MFA)
+router.post('/trusted-device-login', async (req, res) => {
+  try {
+    const { email, password, deviceFingerprint } = req.body;
+
+    if (!email || !password || !deviceFingerprint) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, and device fingerprint are required'
+      });
+    }
+
+    // First check employees table for admin/sales/technician users
+    let userResult = await query(`
+      SELECT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
+             es.status_name as employee_status, 'employee' as user_type,
+             COALESCE(array_agg(r.name ORDER BY r.name) FILTER (WHERE r.name IS NOT NULL), ARRAY[]::text[]) as roles,
+             CASE WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin' ELSE 'employee' END as role
+      FROM employees e
+      LEFT JOIN employee_roles er ON e.id = er.employee_id
+      LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
+      LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
+      WHERE e.email = $1
+      GROUP BY e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified, es.status_name
+    `, [email]);
+
+    // If not found in employees, check users table for clients
+    if (userResult.rows.length === 0) {
+      userResult = await query(`
+        SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.email_verified,
+               u.role, b.business_name, 'client' as user_type, null as employee_status,
+               ARRAY[]::text[] as roles
+        FROM users u
+        LEFT JOIN businesses b ON u.business_id = b.id
+        WHERE u.email = $1
+      `, [email]);
+    }
+
+    if (userResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if employee is terminated (for employee accounts only)
+    if (user.user_type === 'employee' && user.employee_status === 'terminated') {
+      console.log(`🚫 Trusted device login denied for terminated employee: ${user.email}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Account access has been terminated. Please contact your administrator.'
+      });
+    }
+
+    // Check if email is verified
+    if (!user.email_verified) {
+      return res.status(401).json({
+        success: false,
+        message: 'Account not confirmed. Please check your email to confirm your account.'
+      });
+    }
+
+    // Verify password
+    const isValidPassword = await verifyPassword(password, user.password_hash);
+    if (!isValidPassword) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid credentials'
+      });
+    }
+
+    // Verify device is actually trusted
+    const { checkTrustedDevice } = await import('../utils/trustedDeviceUtils.js');
+    const trustedDevice = await checkTrustedDevice(user.id, user.user_type, deviceFingerprint);
+
+    if (!trustedDevice) {
+      return res.status(403).json({
+        success: false,
+        message: 'Device is not trusted for this user'
+      });
+    }
+
+    // Create session (same as MFA verification)
+    console.log('🔐 Creating new session for user:', user.email);
+    const sessionData = await sessionService.createSession(user.id, user.email, req.headers['user-agent'], req.ip);
+
+    // Set HttpOnly session cookie
+    res.cookie('sessionToken', sessionData.sessionToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 15 * 60 * 1000 // 15 minutes
+    });
+
+    console.log(`✅ Trusted device login successful for: ${user.email} (${user.user_type})`);
+
+    // Return user data appropriate for user type
+    const userData = {
+      id: user.id,
+      email: user.email,
+      role: user.role || (user.user_type === 'client' ? 'client' : 'employee'),
+      name: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      emailVerified: user.email_verified
+    };
+
+    // Add employee-specific fields
+    if (user.user_type === 'employee') {
+      userData.roles = user.roles;
+      userData.employeeStatus = user.employee_status;
+      userData.businessName = null;
+      userData.isFirstAdmin = true;
+    }
+
+    // Add client-specific fields
+    if (user.user_type === 'client') {
+      userData.businessName = user.business_name;
+      userData.isFirstAdmin = false;
+    }
+
+    res.json({
+      success: true,
+      message: 'Authentication successful via trusted device',
+      user: userData,
+      sessionToken: sessionData.sessionToken,
+      expiresAt: sessionData.expiresAt
+    });
+
+  } catch (error) {
+    console.error('Trusted device login error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Authentication failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;

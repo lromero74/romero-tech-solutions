@@ -26,7 +26,7 @@ function AppContent() {
     getPageFromPath(window.location.pathname)
   );
 
-  const { isLoading, isAuthenticated, isAdmin, isTechnician, isClient } = useEnhancedAuth();
+  const { isLoading, isAuthenticated, isAdmin, isTechnician, isClient, isSigningOut } = useEnhancedAuth();
 
   // Get theme preference for loading states (before context is available)
   const getThemeClasses = () => {
@@ -157,8 +157,21 @@ function AppContent() {
         );
       }
 
-      if (!isAuthenticated) {
+      if (!isAuthenticated && !isSigningOut) {
         return <UnauthenticatedDashboard onNavigate={setCurrentPage} />;
+      }
+
+      // Show signing out indicator during logout
+      if (isSigningOut) {
+        const themeClasses = getThemeClasses();
+        return (
+          <div className={`min-h-screen flex items-center justify-center ${themeClasses.background}`}>
+            <div className="text-center">
+              <div className={`animate-spin rounded-full h-8 w-8 border-b-2 ${themeClasses.spinner} mx-auto mb-4`}></div>
+              <p className={`text-sm ${themeClasses.text}`}>Signing out...</p>
+            </div>
+          </div>
+        );
       }
 
       // Render role-specific dashboard

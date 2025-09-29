@@ -21,6 +21,7 @@ import clientMfaRoutes from './routes/client/mfa.js';
 import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
 import clientSchedulerRoutes from './routes/client/scheduler.js';
 import translationsRoutes from './routes/translations.js';
+import trustedDevicesRoutes from './routes/trustedDevices.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -37,6 +38,9 @@ import {
   adminIPWhitelist,
   securityHeaders
 } from './middleware/security.js';
+
+// Import authentication middleware
+import authMiddleware from './middleware/authMiddleware.js';
 
 // Import enhanced security utilities
 import {
@@ -216,6 +220,77 @@ app.use('/api/client', generalLimiter, clientSchedulerRoutes); // Client schedul
 app.use('/api/client/profile', generalLimiter, clientProfileRoutes); // Client profile management
 app.use('/api/client/mfa', generalLimiter, clientMfaRoutes); // Client MFA management
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system
+
+// Pre-authentication trusted device check (no auth required)
+app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {
+  try {
+    const { checkTrustedDevice } = await import('./utils/trustedDeviceUtils.js');
+    const db = await import('./config/database.js');
+
+    const { deviceFingerprint, userEmail } = req.body;
+
+    if (!deviceFingerprint || !userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Device fingerprint and user email are required'
+      });
+    }
+
+    // Determine user type based on email domain
+    const userType = userEmail.includes('@romerotechsolutions.com') ? 'employee' : 'client';
+
+    // Find user by email to get userId
+    let userQuery;
+    if (userType === 'employee') {
+      userQuery = 'SELECT id FROM employees WHERE email = $1';
+    } else {
+      userQuery = 'SELECT id FROM users WHERE email = $1';
+    }
+
+    const pool = await db.getPool();
+    const userResult = await pool.query(userQuery, [userEmail]);
+
+    if (userResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        trusted: false,
+        message: 'User not found'
+      });
+    }
+
+    const userId = userResult.rows[0].id;
+    const trustedDevice = await checkTrustedDevice(userId, userType, deviceFingerprint);
+
+    if (trustedDevice) {
+      res.json({
+        success: true,
+        trusted: true,
+        data: {
+          deviceName: trustedDevice.device_name,
+          lastUsed: trustedDevice.last_used,
+          expiresAt: trustedDevice.expires_at,
+          isSharedDevice: trustedDevice.is_shared_device
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        trusted: false,
+        message: 'Device is not trusted'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error checking pre-auth trusted device:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check trusted device',
+      trusted: false // Default to not trusted on error
+    });
+  }
+});
+
+app.use('/api/trusted-devices', generalLimiter, authMiddleware, trustedDevicesRoutes); // Trusted device management
 
 // 404 handler
 app.use('*', (req, res) => {

@@ -4,7 +4,9 @@ import { useLanguage } from '../contexts/LanguageContext';
 import { Lock, Mail, Eye, EyeOff, User, ArrowRight, Shield, KeyRound } from 'lucide-react';
 import ClientRegistration from '../components/ClientRegistration';
 import ImageBasedSection from '../components/common/ImageBasedSection';
+import TrustedDevicePrompt from '../components/TrustedDevicePrompt';
 import { authService } from '../services/authService';
+import { trustedDeviceService } from '../services/trustedDeviceService';
 
 interface ClientLoginProps {
   onSuccess: () => void;
@@ -23,7 +25,9 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const [mfaCode, setMfaCode] = useState('');
   const [mfaEmail, setMfaEmail] = useState('');
   const [mfaPassword, setMfaPassword] = useState('');
-  const { signIn, sendAdminMfaCode, verifyAdminMfaCode, verifyClientMfaCode } = useEnhancedAuth();
+  const [showTrustedDevicePrompt, setShowTrustedDevicePrompt] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(false);
+  const { signIn, sendAdminMfaCode, verifyAdminMfaCode, verifyClientMfaCode, setUserFromTrustedDevice } = useEnhancedAuth();
   const { t } = useLanguage();
   const backgroundImageUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&ixid=M3wxMJA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2344&q=80';
 
@@ -79,6 +83,34 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     setError('');
 
     try {
+      // Check if device is trusted before attempting login
+      console.log('🔍 [Client] Checking if device is trusted for user:', email);
+      const deviceTrustResult = await trustedDeviceService.checkPreAuthDeviceTrust(email);
+
+      if (deviceTrustResult.success && deviceTrustResult.trusted) {
+        console.log('✅ [Client] Device is trusted, attempting direct login...');
+
+        // Device is trusted, try trusted device login
+        const trustedLoginResult = await trustedDeviceService.loginWithTrustedDevice(email, password);
+
+        if (trustedLoginResult.success && trustedLoginResult.user) {
+          console.log('✅ [Client] Trusted device authentication completed successfully');
+          console.log('🔄 [Client] Updating authentication context directly...');
+
+          await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
+          console.log('✅ [Client] setUserFromTrustedDevice() completed');
+
+          console.log('🔄 [Client] Calling onSuccess() to redirect to dashboard...');
+          onSuccess();
+          return;
+        } else {
+          console.log('⚠️ [Client] Trusted device login failed, falling back to normal flow');
+        }
+      } else {
+        console.log('⚠️ [Client] Device is not trusted, using normal login flow');
+      }
+
+      // Normal login flow (device not trusted or trusted login failed)
       await signIn(email, password);
       onSuccess();
     } catch (error: unknown) {
@@ -108,10 +140,28 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
 
     try {
       await verifyClientMfaCode(mfaEmail, mfaCode);
+      console.log('✅ [Client] MFA verification successful');
+
+      // Handle trusted device registration if checkbox is checked
+      if (rememberDevice) {
+        console.log('🔐 [Client] User chose to register device as trusted during MFA verification');
+        try {
+          const registrationResult = await trustedDeviceService.registerCurrentDevice();
+          if (registrationResult.success) {
+            console.log('✅ [Client] Trusted device registered successfully during MFA verification');
+          } else {
+            console.error('❌ [Client] Failed to register trusted device during MFA verification:', registrationResult.message);
+          }
+        } catch (registrationError) {
+          console.error('❌ [Client] Error registering trusted device during MFA verification:', registrationError);
+        }
+      }
+
+      // Complete the login process
+      console.log('🔄 [Client] Calling onSuccess() to redirect to client dashboard...');
       onSuccess();
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : t('login.mfa.verificationFailed'));
-    } finally {
       setIsLoading(false);
     }
   };
@@ -155,6 +205,30 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const handleRegistrationSuccess = () => {
     setShowRegistration(false);
     // User will receive email confirmation, so we don't automatically log them in
+  };
+
+  const handleTrustedDeviceRegister = async () => {
+    console.log('👾 Client chose to register device as trusted');
+    try {
+      const response = await trustedDeviceService.registerCurrentDevice();
+      if (response.success) {
+        console.log('✅ Trusted device registered successfully for client');
+      } else {
+        console.error('❌ Failed to register trusted device:', response.message);
+      }
+    } catch (error) {
+      console.error('❌ Error registering trusted device:', error);
+    }
+    onSuccess();
+  };
+
+  const handleTrustedDeviceSkip = () => {
+    console.log('👾 Client chose to skip trusted device registration');
+    onSuccess();
+  };
+
+  const handleTrustedDeviceClose = () => {
+    setShowTrustedDevicePrompt(false);
   };
 
   // Show registration component if requested
@@ -229,6 +303,26 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                   <p className="mt-1 text-xs text-blue-200">
                     {t('login.mfa.codeHelper')}
                   </p>
+                </div>
+
+                {/* Trusted Device Checkbox */}
+                <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+                  <label className="flex items-start space-x-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={rememberDevice}
+                      onChange={(e) => setRememberDevice(e.target.checked)}
+                      className="mt-1 h-4 w-4 rounded border-white/30 bg-white/10 text-blue-600 focus:ring-blue-500 focus:ring-2"
+                    />
+                    <div className="flex-1">
+                      <span className="text-sm font-medium text-white">
+                        Remember this device for 30 days
+                      </span>
+                      <p className="text-xs text-blue-200 mt-1">
+                        Skip MFA verification on this device. Only select if this is your personal device.
+                      </p>
+                    </div>
+                  </label>
                 </div>
 
                 <div className="space-y-3">
@@ -380,6 +474,15 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
           </div>
         </div>
       </ImageBasedSection>
+
+      {/* Trusted Device Prompt */}
+      <TrustedDevicePrompt
+        isOpen={showTrustedDevicePrompt}
+        onClose={handleTrustedDeviceClose}
+        onRegister={handleTrustedDeviceRegister}
+        onSkip={handleTrustedDeviceSkip}
+        userType="client"
+      />
     </div>
   );
 };
