@@ -287,20 +287,22 @@ router.get('/business', authenticateClient, async (req, res) => {
 
     const clientId = req.user.clientId;
 
+    // Get business info with headquarters address from service_locations
     const result = await pool.query(`
       SELECT
         b.id as id,
         b.business_name as name,
-        b.primary_street as street,
-        b.primary_city as city,
-        b.primary_state as state,
-        b.primary_zip_code as "zipCode",
-        b.primary_country as country,
-        b.primary_contact_person as "contactPerson",
-        b.primary_contact_phone as "contactPhone",
-        b.primary_contact_email as "contactEmail"
+        COALESCE(hq.street_address_1, b.primary_street) as street,
+        hq.city as city,
+        hq.state as state,
+        hq.zip_code as "zipCode",
+        hq.country as country,
+        hq.contact_person as "contactPerson",
+        hq.contact_phone as "contactPhone",
+        hq.contact_email as "contactEmail"
       FROM users u
       JOIN businesses b ON u.business_id = b.id
+      LEFT JOIN service_locations hq ON b.id = hq.business_id AND hq.is_headquarters = true AND hq.soft_delete = false
       WHERE u.id = $1 AND u.role = 'client' AND u.soft_delete = false AND b.soft_delete = false
     `, [clientId]);
 
@@ -319,14 +321,14 @@ router.get('/business', authenticateClient, async (req, res) => {
       SELECT
         sl.id as id,
         sl.location_name as name,
-        sl.street,
+        sl.street_address_1 as street,
         sl.city,
         sl.state,
         sl.zip_code as "zipCode",
         sl.country,
         sl.contact_person as "contactPerson",
         sl.contact_phone as "contactPhone",
-        NULL as "contactEmail"
+        sl.contact_email as "contactEmail"
       FROM service_locations sl
       JOIN businesses b ON sl.business_id = b.id
       JOIN users u ON u.business_id = b.id
