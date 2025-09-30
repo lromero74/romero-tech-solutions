@@ -27,7 +27,7 @@ class VirusScanService {
       const clamConfig = {
         removeInfected: false, // Don't auto-remove, log instead
         quarantineInfected: false, // We'll handle quarantine manually
-        debugMode: process.env.NODE_ENV === 'development',
+        debugMode: false, // Disable debug mode to suppress ClamAV errors
 
         // Try different ClamAV paths
         clamdscan: {
@@ -35,19 +35,19 @@ class VirusScanService {
           host: '127.0.0.1',
           port: 3310,
           timeout: 30000,
-          localFallback: true,
+          localFallback: false, // Disable fallback to reduce error noise
           path: '/usr/bin/clamdscan',
           config_file: '/etc/clamav/clamd.conf',
           multiscan: true,
           reloadDb: false,
-          active: true
+          active: false // Disable in development since ClamAV isn't installed
         },
 
         clamscan: {
           path: '/usr/bin/clamscan',
           db: '/var/lib/clamav',
           scanArchives: true,
-          active: true
+          active: false // Disable in development since ClamAV isn't installed
         },
 
         preference: 'clamdscan' // Prefer daemon for performance

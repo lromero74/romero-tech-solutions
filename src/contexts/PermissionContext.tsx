@@ -69,6 +69,17 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       return;
     }
 
+    // 🚨 CRITICAL: Wait for sessionToken to be available before loading permissions
+    // This prevents race condition where user is loaded from localStorage but session isn't validated yet
+    if (!sessionToken) {
+      console.log('⏳ Waiting for sessionToken before loading permissions...');
+      setPermissions([]);
+      setRoles([]);
+      setIsExecutive(false);
+      setLoading(false);
+      return;
+    }
+
     // 🚨 CRITICAL: Only load permissions for employee roles
     // Client users don't have permissions in the employee permission system
     if (user.role === 'client') {
@@ -107,7 +118,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, sessionToken]);
 
   /**
    * Refresh permissions (force reload from backend)
@@ -132,9 +143,15 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
   /**
    * Load permissions on mount and when user changes
+   * Add small delay to ensure browser has processed Set-Cookie header from auth response
    */
   useEffect(() => {
-    loadPermissions();
+    // Small delay to ensure sessionToken cookie is set before making permissions request
+    const timer = setTimeout(() => {
+      loadPermissions();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [loadPermissions]);
 
   /**

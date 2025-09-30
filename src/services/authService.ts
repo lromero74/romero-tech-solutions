@@ -308,6 +308,7 @@ export class AuthService {
     try {
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/verify-admin-mfa`, {
         method: 'POST',
+        credentials: 'include', // CRITICAL: Allow browser to store HttpOnly session cookie
         headers: {
           'Content-Type': 'application/json',
         },

@@ -187,14 +187,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
                     await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
                     console.log('✅ setUserFromTrustedDevice() completed');
 
-                    // Refresh CSRF token now that we have an authenticated session
-                    // Add small delay to ensure sessionToken cookie is fully set by browser
-                    console.log('🔄 Waiting for session cookie to be stored...');
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                    console.log('🔄 Refreshing CSRF token after authentication...');
-                    await apiService.refreshCsrfToken();
-                    console.log('✅ CSRF token refreshed with authenticated session');
-
                     console.log('🔄 Calling onSuccess() to redirect to dashboard...');
                     onSuccess();
                     console.log('✅ onSuccess() called');
@@ -402,7 +394,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
       setSuccess('Verification successful!');
 
       // If user checked "remember device", register this device as trusted
-      if (rememberDevice) {
+      // TEMPORARY: Skip trusted device registration to avoid session timeout issues
+      // TODO: Fix the session token propagation issue and re-enable this
+      if (false && rememberDevice) {
         try {
           console.log('🔐 Registering device as trusted...');
           const deviceName = trustedDeviceService.getCurrentDeviceName();

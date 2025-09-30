@@ -102,11 +102,12 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
       if (storedSessionToken) {
         try {
-          // Validate session with backend
+          // Validate session with backend using ONLY the HttpOnly cookie (not Authorization header)
+          // This ensures we're validating the actual session cookie, not stale localStorage data
           const sessionResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/validate-session`, {
             method: 'GET',
+            credentials: 'include', // Send cookies
             headers: {
-              'Authorization': `Bearer ${storedSessionToken}`,
               'Content-Type': 'application/json',
             }
           });

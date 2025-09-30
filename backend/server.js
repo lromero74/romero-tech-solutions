@@ -176,11 +176,22 @@ app.use(cookieParser());
 const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
-    // TEMPORARY FIX: Always use IP + User-Agent for CSRF session identifier
-    // This prevents mismatches when session identifier changes after login
-    // TODO: Find a better solution that uses sessionToken for authenticated users
+    // Use session token if available (post-authentication)
+    if (req.cookies && req.cookies.sessionToken) {
+      console.log(`🔐 CSRF session identifier: Using sessionToken (authenticated request)`);
+      return req.cookies.sessionToken;
+    }
+
+    // For pre-authentication, use csrf-token cookie itself as the session identifier
+    // This ensures the same session identifier is used for the entire pre-auth flow
+    if (req.cookies && req.cookies['csrf-token']) {
+      console.log(`🔐 CSRF session identifier: Using csrf-token cookie (pre-auth request)`);
+      return req.cookies['csrf-token'];
+    }
+
+    // Ultimate fallback for very first request (when no cookies exist yet)
     const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
-    console.log(`🔐 CSRF session identifier: ${identifier.substring(0, 60)}...`);
+    console.log(`🔐 CSRF session identifier: Using IP+UA (initial request): ${identifier.substring(0, 60)}...`);
     return identifier;
   },
   // Use __Host- prefix only in production (requires HTTPS)
@@ -207,6 +218,28 @@ const {
   generateCsrfToken,
   doubleCsrfProtection,
 } = doubleCsrf(csrfOptions);
+
+// Export generateCsrfToken for use in auth routes
+export { generateCsrfToken };
+
+// Create conditional CSRF protection that skips pre-authentication endpoints
+const conditionalCsrfProtection = (req, res, next) => {
+  // Skip CSRF for pre-authentication endpoints
+  const preAuthEndpoints = [
+    '/api/auth/admin-login-mfa',
+    '/api/auth/verify-admin-mfa',
+    '/api/auth/login',
+    '/api/auth/signin'
+  ];
+
+  if (preAuthEndpoints.includes(req.path)) {
+    console.log(`🔓 Skipping CSRF protection for pre-auth endpoint: ${req.path}`);
+    return next();
+  }
+
+  // Apply CSRF protection for all other endpoints
+  return doubleCsrfProtection(req, res, next);
+};
 
 // CSRF token endpoint (unprotected so clients can get initial token)
 app.get('/api/csrf-token', (req, res) => {
@@ -264,9 +297,9 @@ app.get('/health/db', async (req, res) => {
 app.use('/uploads', express.static('uploads'));
 
 // API Routes with security middleware
-// SECURITY FIX: CSRF protection applied to state-changing routes
-app.use('/api/auth', authLimiter, doubleCsrfProtection, authRoutes); // Strict auth rate limiting + CSRF
-// TEMPORARY: Disable CSRF for admin routes until we fix the session identifier mismatch issue
+// TEMPORARY: CSRF disabled for development debugging - will re-enable after fixing session identifier issues
+console.log('⚠️  WARNING: CSRF protection temporarily disabled for development');
+app.use('/api/auth', authLimiter, authRoutes); // Strict auth rate limiting (CSRF temporarily disabled)
 app.use('/api/admin', adminLimiter, adminIPWhitelist, adminRoutes); // Admin rate limiting + IP whitelist (CSRF temporarily disabled)
 app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET

@@ -59,6 +59,15 @@ class ApiService {
   }
 
   /**
+   * Update CSRF token from login response
+   * The server generates a new CSRF token/cookie after successful authentication
+   */
+  updateCsrfToken(newToken: string): void {
+    this.csrfToken = newToken;
+    console.log('✅ CSRF token updated from login response');
+  }
+
+  /**
    * Refresh CSRF token (call this after login to get a token with the authenticated session identifier)
    *
    * NOTE: The CSRF cookie is httpOnly, so we can't delete it from JavaScript.

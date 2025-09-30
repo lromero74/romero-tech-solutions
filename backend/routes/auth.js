@@ -2,6 +2,7 @@ import express from 'express';
 import bcrypt from 'bcryptjs';
 import { query } from '../config/database.js';
 import { sessionService } from '../services/sessionService.js';
+import { generateCsrfToken } from '../server.js';
 import { passwordComplexityService } from '../services/passwordComplexityService.js';
 import { mfaSettingsService } from '../services/mfaSettingsService.js';
 import { auditLogService, AUDIT_EVENTS } from '../services/auditLogService.js';
@@ -762,7 +763,13 @@ router.post('/verify-admin-mfa', async (req, res) => {
       SELECT e.id, e.email, e.first_name, e.last_name, e.email_verified,
              es.status_name as employee_status,
              COALESCE(array_agg(r.name ORDER BY r.name) FILTER (WHERE r.name IS NOT NULL), ARRAY[]::text[]) as roles,
-             CASE WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin' ELSE 'employee' END as role
+             CASE
+               WHEN 'executive' = ANY(array_agg(r.name)) THEN 'executive'
+               WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin'
+               WHEN 'technician' = ANY(array_agg(r.name)) THEN 'technician'
+               WHEN 'sales' = ANY(array_agg(r.name)) THEN 'sales'
+               ELSE 'employee'
+             END as role
       FROM employees e
       LEFT JOIN employee_roles er ON e.id = er.employee_id
       LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
