@@ -31,8 +31,6 @@ interface PermissionProviderProps {
   children: React.ReactNode;
 }
 
-const WEBSOCKET_URL = import.meta.env.VITE_API_BASE_URL?.replace('/api', '') || 'http://localhost:3001';
-
 export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children }) => {
   const { user, sessionToken } = useEnhancedAuth();
   const [permissions, setPermissions] = useState<string[]>([]);
@@ -41,6 +39,22 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [socket, setSocket] = useState<Socket | null>(null);
+
+  // Construct WebSocket URL from API base URL (same logic as AdminDataContext)
+  const getWebSocketUrl = () => {
+    const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+    if (apiBaseUrl.includes('api.romerotechsolutions.com')) {
+      return 'https://api.romerotechsolutions.com';
+    } else if (apiBaseUrl.includes('44.211.124.33:3001')) {
+      return 'http://44.211.124.33:3001';
+    } else if (apiBaseUrl.includes('localhost') || apiBaseUrl.includes('127.0.0.1')) {
+      return 'http://localhost:3001';
+    } else {
+      // Fallback: try to construct from API URL by removing /api suffix
+      return apiBaseUrl.replace('/api', '').replace(/\/$/, '');
+    }
+  };
 
   /**
    * Load permissions from backend
@@ -145,8 +159,9 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
     }
 
     // Connect to WebSocket server
-    console.log('🔌 Connecting to WebSocket for permission updates:', WEBSOCKET_URL);
-    const newSocket = io(WEBSOCKET_URL, {
+    const websocketUrl = getWebSocketUrl();
+    console.log('🔌 Connecting to WebSocket for permission updates:', websocketUrl);
+    const newSocket = io(websocketUrl, {
       transports: ['websocket', 'polling'],
       withCredentials: true
     });

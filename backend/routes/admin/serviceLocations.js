@@ -229,7 +229,6 @@ router.put('/service-locations/:id', requirePermission('modify.service_locations
 
 // PATCH /service-locations/:id/soft-delete - Soft delete service location (toggle soft_delete field)
 router.patch('/service-locations/:id/soft-delete',
-  requireLastRecordProtection('service_locations', (req) => req.body.business_id),
   requirePermission('softDelete.service_locations.enable'),
   async (req, res) => {
   try {

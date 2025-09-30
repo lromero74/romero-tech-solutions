@@ -605,10 +605,10 @@ export class AdminService {
     }
   }
 
-  async softDeleteServiceLocation(serviceLocationId: string, restore = false): Promise<void> {
+  async softDeleteServiceLocation(serviceLocationId: string, restore = false, businessId?: string): Promise<void> {
     try {
       const apiService = await this.getApiService();
-      await apiService.patch(`/admin/service-locations/${serviceLocationId}/soft-delete`, { restore });
+      await apiService.patch(`/admin/service-locations/${serviceLocationId}/soft-delete`, { restore, business_id: businessId });
     } catch (error) {
       console.error('Error soft deleting service location:', error);
       throw error;
@@ -641,10 +641,11 @@ export class AdminService {
     }
   }
 
-  async deleteServiceLocation(serviceLocationId: string): Promise<void> {
+  async deleteServiceLocation(serviceLocationId: string, businessId?: string): Promise<void> {
     try {
       const apiService = await this.getApiService();
-      await apiService.delete(`/admin/service-locations/${serviceLocationId}`);
+      const params = businessId ? { params: { business_id: businessId } } : {};
+      await apiService.delete(`/admin/service-locations/${serviceLocationId}`, params);
     } catch (error) {
       console.error('Error deleting service location:', error);
       throw error;

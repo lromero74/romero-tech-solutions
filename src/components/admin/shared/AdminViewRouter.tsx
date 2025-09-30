@@ -1308,7 +1308,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 confirmButtonColor: 'red' as const,
                 onConfirm: async () => {
                   try {
-                    await serviceLocationCRUD.deleteEntity(location.id);
+                    // Use adminService directly to pass business_id for last record protection
+                    await adminService.deleteServiceLocation(location.id, location.business_id);
                     await refreshAllData();
                     setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
                   } catch (error) {
@@ -1353,7 +1354,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 }
 
                 // Use the dedicated soft delete method instead of general update
-                await adminService.softDeleteServiceLocation(location.id, shouldRestore);
+                await adminService.softDeleteServiceLocation(location.id, shouldRestore, location.business_id);
 
                 // Also update the active status: inactive when soft deleting, active when restoring
                 const newActiveStatus = shouldRestore; // If restoring, set to active; if deleting, set to inactive
