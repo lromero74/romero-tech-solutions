@@ -19,6 +19,7 @@ export class RoleBasedStorage {
         try {
           const parsed = JSON.parse(storedUser);
           if (parsed.role) {
+            console.log(`🔑 [RoleBasedStorage] Found role from ${role}_authUser:`, parsed.role);
             return parsed.role;
           }
         } catch (e) {
@@ -33,6 +34,7 @@ export class RoleBasedStorage {
       try {
         const parsed = JSON.parse(legacyUser);
         if (parsed.role) {
+          console.log('🔑 [RoleBasedStorage] Found role from legacy authUser:', parsed.role);
           return parsed.role;
         }
       } catch (e) {
@@ -42,12 +44,15 @@ export class RoleBasedStorage {
 
     // LAST RESORT: Try to determine from URL path (only if no session found)
     const currentPath = window.location.pathname;
-    if (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/dashboard')) {
+    if (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/admin')) {
+      console.log('🔑 [RoleBasedStorage] Determined role from URL path:', 'employee');
       return 'employee';
-    } else if (currentPath.includes('/client') || currentPath === '/clogin') {
+    } else if (currentPath.includes('/client') || currentPath.includes('/clogin')) {
+      console.log('🔑 [RoleBasedStorage] Determined role from URL path:', 'client');
       return 'client';
     }
 
+    console.log('⚠️ [RoleBasedStorage] Could not determine role from storage or URL path');
     return undefined;
   }
 

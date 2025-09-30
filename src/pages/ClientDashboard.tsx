@@ -125,8 +125,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     const loadClientData = async () => {
       try {
         // First try to get from existing auth system
+        console.log('🔍 [ClientDashboard] Attempting to load auth data from storage...');
         const authUserData = RoleBasedStorage.getItem('authUser');
         const sessionToken = RoleBasedStorage.getItem('sessionToken');
+        console.log('🔍 [ClientDashboard] Auth data found:', { hasAuthUser: !!authUserData, hasSessionToken: !!sessionToken });
 
         if (authUserData && sessionToken) {
           const authUser = JSON.parse(authUserData);
