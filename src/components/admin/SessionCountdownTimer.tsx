@@ -23,6 +23,20 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
   const [warningTriggered, setWarningTriggered] = useState(false);
   const [, forceUpdate] = useState(0); // Force re-render trigger
 
+  // Use refs for state that needs to be checked in interval without causing re-runs
+  const isWarningActiveRef = useRef(false);
+  const warningTriggeredRef = useRef(false);
+
+  // Use refs for callbacks to prevent useEffect re-runs when they change
+  const onSessionExpiredRef = useRef(onSessionExpired);
+  const onWarningReachedRef = useRef(onWarningReached);
+
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onSessionExpiredRef.current = onSessionExpired;
+    onWarningReachedRef.current = onWarningReached;
+  }, [onSessionExpired, onWarningReached]);
+
   // Calculate time remaining on every render
   const now = Date.now();
   const timeSinceLastActivity = now - lastActivityRef.current;
@@ -41,6 +55,8 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
       lastActivityRef.current = Date.now();
       setIsWarningActive(false);
       setWarningTriggered(false);
+      isWarningActiveRef.current = false;
+      warningTriggeredRef.current = false;
     };
 
     // Throttle activity detection to avoid excessive updates
@@ -79,29 +95,33 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
 
       // Check for warning threshold
       if (remaining <= warningThresholdMs && remaining > 0) {
-        if (!isWarningActive) {
-          console.log(`🔔 Warning threshold reached! Remaining: ${remaining}ms, Threshold: ${warningThresholdMs}ms`);
+        if (!isWarningActiveRef.current) {
+          isWarningActiveRef.current = true;
           setIsWarningActive(true);
-          if (!warningTriggered && onWarningReached) {
+          if (!warningTriggeredRef.current && onWarningReachedRef.current) {
+            warningTriggeredRef.current = true;
             setWarningTriggered(true);
             const remainingSeconds = Math.floor(remaining / 1000);
-            console.log(`🔔 Calling onWarningReached with ${remainingSeconds} seconds`);
-            onWarningReached(remainingSeconds); // Pass remaining seconds to callback
+            onWarningReachedRef.current(remainingSeconds);
           }
         }
       } else if (remaining > warningThresholdMs) {
-        setIsWarningActive(false);
-        setWarningTriggered(false);
+        if (isWarningActiveRef.current || warningTriggeredRef.current) {
+          isWarningActiveRef.current = false;
+          warningTriggeredRef.current = false;
+          setIsWarningActive(false);
+          setWarningTriggered(false);
+        }
       }
 
       // Check for session expiration
-      if (remaining <= 0 && onSessionExpired) {
-        onSessionExpired();
+      if (remaining <= 0 && onSessionExpiredRef.current) {
+        onSessionExpiredRef.current();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [sessionTimeoutMs, warningThresholdMs, isWarningActive, warningTriggered, onSessionExpired, onWarningReached]);
+  }, [sessionTimeoutMs, warningThresholdMs]);
 
   // Format time for display
   const formatTime = (ms: number): string => {

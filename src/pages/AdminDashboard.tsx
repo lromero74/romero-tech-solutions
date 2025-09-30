@@ -106,8 +106,6 @@ const AdminDashboardContent: React.FC = () => {
   };
 
   const handleSessionWarning = (remainingSeconds: number) => {
-    console.log(`⚠️ Session warning - ${remainingSeconds} seconds remaining on local timer`);
-    // Update the sessionWarning state with the current time remaining
     updateSessionWarningTime(remainingSeconds);
   };
 
