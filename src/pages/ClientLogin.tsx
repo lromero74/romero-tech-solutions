@@ -97,7 +97,9 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
           console.log('✅ [Client] Trusted device authentication completed successfully');
           console.log('🔄 [Client] Updating authentication context directly...');
 
-          await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
+          // Extract session token from nested session object
+          const sessionToken = trustedLoginResult.session?.sessionToken;
+          await setUserFromTrustedDevice(trustedLoginResult.user, sessionToken);
           console.log('✅ [Client] setUserFromTrustedDevice() completed');
 
           console.log('🔄 [Client] Calling onSuccess() to redirect to dashboard...');
