@@ -267,7 +267,7 @@ export async function updateEmployeePronouns(employeeId, pronouns) {
 
 // Helper function to upsert employee photo in the employee_photos table
 export async function upsertEmployeePhoto(employeeId, photoData) {
-  if (!photoData || (!photoData.url && !photoData.filename && !photoData.positionX && !photoData.positionY && !photoData.scale)) return;
+  if (!photoData || (!photoData.url && !photoData.filename && !photoData.positionX && !photoData.positionY && !photoData.scale && !photoData.backgroundColor)) return;
 
   console.log('=== UPSERTING EMPLOYEE PHOTO ===');
 
@@ -311,6 +311,11 @@ export async function upsertEmployeePhoto(employeeId, photoData) {
       updateValues.push(photoData.scale);
     }
 
+    if (photoData.backgroundColor !== undefined) {
+      updateFields.push(`background_color = $${++paramCount}`);
+      updateValues.push(photoData.backgroundColor);
+    }
+
     // Always update timestamp
     updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
 
@@ -326,15 +331,16 @@ export async function upsertEmployeePhoto(employeeId, photoData) {
     // Insert new photo
     console.log('Creating new photo');
     await query(`
-      INSERT INTO employee_photos (employee_id, photo_type, file_url, filename, position_x, position_y, scale_factor, is_primary, is_active)
-      VALUES ($1, 'profile', $2, $3, $4, $5, $6, true, true)
+      INSERT INTO employee_photos (employee_id, photo_type, file_url, filename, position_x, position_y, scale_factor, background_color, is_primary, is_active)
+      VALUES ($1, 'profile', $2, $3, $4, $5, $6, $7, true, true)
     `, [
       employeeId,
       photoData.url || null,
       photoData.filename || null,
       photoData.positionX || 50.00,
       photoData.positionY || 50.00,
-      photoData.scale || 100.00
+      photoData.scale || 100.00,
+      photoData.backgroundColor || null
     ]);
   }
 

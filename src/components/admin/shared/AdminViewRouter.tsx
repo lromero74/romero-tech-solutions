@@ -2,11 +2,13 @@ import React, { useState, useEffect } from 'react';
 import {
   AdminOverview,
   AdminEmployees,
+  AdminEmployeeCalendar,
   AdminClients,
   AdminBusinesses,
   AdminServices,
   AdminServiceRequests,
   AdminServiceLocations,
+  AdminClosureReasons,
   AdminRoles,
   AdminSettings,
   AdminReports,
@@ -32,7 +34,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'reports' | 'settings' | 'password-complexity';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -100,6 +102,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     refreshClients,
     refreshBusinesses,
     refreshOnlineStatus,
+    setEmployees,
     // availableRoles
   } = useAdminData();
 
@@ -518,12 +521,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   //   setSelectedEmployee(employee as Employee);
   // };
 
-  // Wrapper function to update employee and refresh data
+  // Wrapper function to update employee (WebSocket will handle real-time updates)
   const handleUpdateEmployee = async (employeeId: string, updates: unknown) => {
     try {
       await employeeCRUD.updateEntity(employeeId, updates);
-      // Refresh employee data to update the UI
-      await refreshEmployees();
+      // No need to refresh - WebSocket will broadcast the update to all admins
+      console.log('✅ Employee updated, waiting for WebSocket broadcast...');
     } catch (error) {
       console.error('Failed to update employee:', error);
       throw error;
@@ -552,10 +555,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             console.log('Current softDelete status:', empData.softDelete);
 
             await adminService.softDeleteUser(empData.id, shouldRestore);
-            console.log('✅ Soft delete API call completed');
-
-            await refreshEmployees();
-            console.log('✅ Employee data refreshed');
+            console.log('✅ Soft delete API call completed, waiting for WebSocket broadcast...');
 
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {
@@ -589,7 +589,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Set loading state for this specific employee
             setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
             await adminService.deleteUser(empData.id);
-            await refreshEmployees();
+            console.log('✅ Hard delete API call completed, waiting for WebSocket broadcast...');
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {
             console.error('Failed to hard delete employee:', error);
@@ -636,7 +636,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
               isActive: false,
               terminationDate: today
             });
-            await refreshEmployees();
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {
             console.error('Failed to terminate employee:', error);
@@ -680,7 +679,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
               terminationDate: null,
               isActive: true
             });
-            await refreshEmployees();
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {
             console.error('Failed to rehire employee:', error);
@@ -736,9 +734,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             // Handlers
             toggleUserStatus={async (userId: string, statusType: 'active' | 'vacation' | 'sick' | 'other') => {
               try {
-                // Set loading state for this specific employee
-                setLoadingEmployeeOperations(prev => ({ ...prev, [userId]: true }));
-
                 // Find the employee to get current status
                 const employee = employees.find(emp => emp.id === userId);
                 if (!employee) {
@@ -788,20 +783,20 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                     break;
                 }
 
+                // Optimistic update - update local state immediately for instant UI feedback
+                setEmployees(prevEmployees =>
+                  prevEmployees.map(emp =>
+                    emp.id === userId ? { ...emp, ...updates } : emp
+                  )
+                );
+
+                // Send to backend (WebSocket will confirm/correct if needed)
                 await employeeCRUD.updateEntity(userId, updates);
-                await refreshEmployees();
-                // Also refresh online status to ensure real-time updates
-                await refreshOnlineStatus();
               } catch (error) {
                 console.error('Failed to toggle user status:', error);
+                // Rollback optimistic update on error
+                await refreshEmployees();
                 throw error;
-              } finally {
-                // Clear loading state for this specific employee
-                setLoadingEmployeeOperations(prev => {
-                  const newState = { ...prev };
-                  delete newState[userId];
-                  return newState;
-                });
               }
             }}
             handleAddUser={async (e) => {
@@ -814,7 +809,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                   userType: 'employee'
                 };
                 await employeeCRUD.createEntity(userData);
-                await refreshEmployees();
                 setShowAddUserForm(false);
                 // Reset form data
                 setNewUserData({
@@ -859,6 +853,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onTerminateEmployee={handleTerminateEmployee}
             onRehireEmployee={handleRehireEmployee}
             loadingEmployeeOperations={loadingEmployeeOperations}
+          />
+        );
+
+      case 'employee-calendar':
+        return (
+          <AdminEmployeeCalendar
+            loading={loading}
+            error={error}
+            onRefresh={refreshAllData}
           />
         );
 
@@ -1250,6 +1253,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onRefresh={refreshAllData}
           />
         );
+
+      case 'closure-reasons':
+        return <AdminClosureReasons />;
 
       case 'service-locations':
         return (

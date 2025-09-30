@@ -217,6 +217,55 @@ class WebSocketService {
     await this.broadcastLoginStatusChange(userId, isLoggedIn);
   }
 
+  // Broadcast entity data change to all admin clients (generic for all entity types)
+  broadcastEntityUpdate(entityType, entityId, action = 'updated', additionalData = {}) {
+    if (this.adminSockets.size === 0) {
+      console.log(`📡 No admin sockets connected, skipping ${entityType} update broadcast`);
+      return;
+    }
+
+    console.log(`📡 Broadcasting ${entityType} ${action}: ${entityId} to ${this.adminSockets.size} admin(s)`);
+
+    // Broadcast to all admin clients
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('entity-data-changed', {
+          entityType, // 'employee', 'client', 'business', 'service', 'serviceRequest', 'serviceLocation'
+          entityId,
+          action, // 'created', 'updated', 'deleted', 'restored'
+          timestamp: new Date().toISOString(),
+          ...additionalData
+        });
+      }
+    });
+  }
+
+  // Convenience methods for specific entity types
+  broadcastEmployeeUpdate(employeeId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('employee', employeeId, action, additionalData);
+  }
+
+  broadcastClientUpdate(clientId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('client', clientId, action, additionalData);
+  }
+
+  broadcastBusinessUpdate(businessId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('business', businessId, action, additionalData);
+  }
+
+  broadcastServiceUpdate(serviceId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('service', serviceId, action, additionalData);
+  }
+
+  broadcastServiceRequestUpdate(serviceRequestId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('serviceRequest', serviceRequestId, action, additionalData);
+  }
+
+  broadcastServiceLocationUpdate(serviceLocationId, action = 'updated', additionalData = {}) {
+    this.broadcastEntityUpdate('serviceLocation', serviceLocationId, action, additionalData);
+  }
+
   // Get connected user count
   getConnectedUserCount() {
     return this.connectedUsers.size;

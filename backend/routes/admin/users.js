@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../../config/database.js';
 import { sessionService } from '../../services/sessionService.js';
+import { websocketService } from '../../services/websocketService.js';
 import { buildUserListQuery } from '../../services/userQueryService.js';
 import { mapUsersArray, createUpdateResponseData, createNewUserResponseData } from '../../utils/userMappers.js';
 import { validateUserUpdateData, validateNewUserData, checkUserExists } from '../../utils/userValidation.js';
@@ -269,12 +270,13 @@ router.put('/users/:id', async (req, res) => {
       }
 
       // Update photo data in normalized employee_photos table
-      if (updateResult.rows.length > 0 && (photo !== undefined || photoPositionX !== undefined || photoPositionY !== undefined || photoScale !== undefined)) {
+      if (updateResult.rows.length > 0 && (photo !== undefined || photoPositionX !== undefined || photoPositionY !== undefined || photoScale !== undefined || photoBackgroundColor !== undefined)) {
         await upsertEmployeePhoto(id, {
           url: photo,
           positionX: photoPositionX,
           positionY: photoPositionY,
-          scale: photoScale
+          scale: photoScale,
+          backgroundColor: photoBackgroundColor
         });
       }
 
@@ -457,6 +459,13 @@ router.put('/users/:id', async (req, res) => {
     console.log('=== BACKEND RESPONSE ===');
     console.log('Response data:', JSON.stringify(responseData, null, 2));
 
+    // Broadcast update to other admin clients via WebSocket
+    if (isEmployee) {
+      websocketService.broadcastEmployeeUpdate(id, 'updated');
+    } else {
+      websocketService.broadcastClientUpdate(id, 'updated');
+    }
+
     res.status(200).json({
       success: true,
       message: 'User updated successfully',
@@ -535,6 +544,14 @@ router.delete('/users/:id', async (req, res) => {
       });
     }
 
+    // Broadcast delete to other admin clients via WebSocket
+    const action = hardDelete === 'true' ? 'deleted' : 'updated'; // Soft delete is really an update
+    if (userExistsResult.isEmployee) {
+      websocketService.broadcastEmployeeUpdate(id, action);
+    } else {
+      websocketService.broadcastClientUpdate(id, action);
+    }
+
     res.status(200).json({
       success: true,
       message: hardDelete === 'true' ? 'User deleted permanently' : 'User deactivated successfully'
@@ -606,6 +623,15 @@ router.patch('/users/:id/soft-delete', async (req, res) => {
     }
 
     const user = updateResult.rows[0];
+
+    // Broadcast soft delete/restore to other admin clients via WebSocket
+    const action = user.soft_delete ? 'deleted' : 'restored';
+    if (userExistsResult.isEmployee) {
+      websocketService.broadcastEmployeeUpdate(id, action);
+    } else {
+      websocketService.broadcastClientUpdate(id, action);
+    }
+
     res.status(200).json({
       success: true,
       message: user.soft_delete ? 'User soft deleted successfully' : 'User restored successfully',
@@ -746,6 +772,13 @@ router.post('/users', async (req, res) => {
     const responseData = createNewUserResponseData(newUser, isClient, rolesArray, department, businessName);
 
     console.log(`✅ ${isClient ? 'Client' : 'Employee'} created successfully:`, responseData);
+
+    // Broadcast creation to other admin clients via WebSocket
+    if (isClient) {
+      websocketService.broadcastClientUpdate(newUser.id, 'created');
+    } else {
+      websocketService.broadcastEmployeeUpdate(newUser.id, 'created');
+    }
 
     res.status(201).json({
       success: true,

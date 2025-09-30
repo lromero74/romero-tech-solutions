@@ -509,6 +509,53 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
           });
         });
 
+        // Listen for entity data changes (employees, clients, etc.)
+        websocketService.onEntityDataChange(async (change) => {
+          console.log(`📡 Entity ${change.entityType} ${change.action}:`, change.entityId);
+
+          // Handle employee changes
+          if (change.entityType === 'employee') {
+            if (change.action === 'deleted') {
+              // Remove from local state
+              setEmployees(prevEmployees => prevEmployees.filter(emp => emp.id !== change.entityId));
+            } else if (change.action === 'created' || change.action === 'updated' || change.action === 'restored') {
+              // Fetch updated employee data
+              try {
+                const updatedEmployee = await adminService.getEmployeeFull(change.entityId);
+                setEmployees(prevEmployees => {
+                  const index = prevEmployees.findIndex(emp => emp.id === change.entityId);
+                  if (index >= 0) {
+                    // Update existing employee
+                    const newEmployees = [...prevEmployees];
+                    newEmployees[index] = updatedEmployee;
+                    return newEmployees;
+                  } else {
+                    // Add new employee
+                    return [...prevEmployees, updatedEmployee];
+                  }
+                });
+                console.log(`✅ Employee ${change.action} in local state:`, change.entityId);
+              } catch (error) {
+                console.error(`❌ Failed to fetch updated employee ${change.entityId}:`, error);
+              }
+            }
+          }
+
+          // Handle client changes
+          if (change.entityType === 'client') {
+            // Similar logic for clients
+            if (change.action === 'deleted') {
+              setClients(prevClients => prevClients.filter(client => client.id !== change.entityId));
+            } else {
+              // For now, do a full refresh of clients since we don't have a single-client endpoint yet
+              // TODO: Create similar getClientFull endpoint
+              await refreshClients();
+            }
+          }
+
+          // TODO: Handle other entity types (business, serviceLocation, etc.)
+        });
+
         websocketService.onAuthenticationError((error) => {
           console.error('❌ WebSocket authentication failed:', error.message);
           // Fallback to polling if WebSocket auth fails

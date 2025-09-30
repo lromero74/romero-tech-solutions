@@ -131,6 +131,10 @@ interface Employee {
   roles: string[];
   userType: string;
   photo?: string;
+  photoPositionX?: number;
+  photoPositionY?: number;
+  photoScale?: number;
+  photoBackgroundColor?: string;
   phone?: string;
   isActive: boolean;
   isOnVacation?: boolean;
@@ -256,7 +260,10 @@ const ViewEmployeeModal: React.FC<ViewEmployeeModalProps> = ({
             {/* Photo Section */}
             <div className="flex-shrink-0">
               {viewingEmployee.photo && !imageLoadErrors.has(viewingEmployee.id) ? (
-                <div className={`h-24 w-24 rounded-full overflow-hidden border-4 ${themeClasses.border.primary} shadow-lg`}>
+                <div
+                  className={`h-24 w-24 rounded-full overflow-hidden border-4 ${themeClasses.border.primary} shadow-lg`}
+                  style={{ backgroundColor: viewingEmployee.photoBackgroundColor || '#f9fafb' }}
+                >
                   <img
                     src={viewingEmployee.photo}
                     alt={`${viewingEmployee.firstName} ${viewingEmployee.lastName}`}

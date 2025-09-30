@@ -302,6 +302,7 @@ export class AdminService {
     photoPositionX?: number;
     photoPositionY?: number;
     photoScale?: number;
+    photoBackgroundColor?: string;
     phone?: string;
     isOnVacation?: boolean;
     isOutSick?: boolean;
@@ -441,6 +442,18 @@ export class AdminService {
       return { employees: result.data };
     } catch (error) {
       console.error('Error fetching employees with login status:', error);
+      throw error;
+    }
+  }
+
+  // Get single employee with full data (for selective refresh)
+  async getEmployeeFull(employeeId: string): Promise<User> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get(`/admin/employees/${employeeId}/full`);
+      return result.data;
+    } catch (error) {
+      console.error('Error fetching single employee:', error);
       throw error;
     }
   }

@@ -3,6 +3,8 @@ import { X, Save, AlertTriangle } from 'lucide-react';
 import { Role, Department, EmployeeStatus } from '../../../types/database';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { applyDarkModeMuting } from '../../../utils/colorUtils';
+import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
+import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
 
 interface Employee {
   id: string;
@@ -21,6 +23,7 @@ interface Employee {
   photoPositionX?: number;
   photoPositionY?: number;
   photoScale?: number;
+  photoBackgroundColor?: string;
   phone?: string;
   isActive: boolean;
   isOnVacation?: boolean;
@@ -120,8 +123,13 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
   onEmployeeChange
 }) => {
   const { theme } = useTheme();
+  const { user } = useEnhancedAuth();
   const [originalEmployee, setOriginalEmployee] = useState<Employee | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [enableBackgroundColor, setEnableBackgroundColor] = useState(false);
+
+  // Check if current user is editing themselves
+  const isEditingSelf = user?.id === editingEmployee?.id;
 
   // Track original employee data when modal opens
   useEffect(() => {
@@ -131,6 +139,13 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
       setOriginalEmployee(null);
     }
   }, [showEditForm, editingEmployee, originalEmployee]);
+
+  // Initialize background color toggle based on existing value
+  useEffect(() => {
+    if (showEditForm && editingEmployee) {
+      setEnableBackgroundColor(!!editingEmployee.photoBackgroundColor);
+    }
+  }, [showEditForm, editingEmployee?.photoBackgroundColor]);
 
   const hasChanges = useCallback((): boolean => {
     if (!originalEmployee || !editingEmployee) return false;
@@ -318,38 +333,49 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                   <div>
                     <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Roles</label>
                     <div className="mt-1 space-y-2">
-                      {availableRoles.map(role => (
-                        <label key={role.id} className="flex items-center">
-                          <input
-                            type="checkbox"
-                            checked={(editingEmployee.roles || []).includes(role.name)}
-                            onChange={(e) => {
-                              const currentRoles = editingEmployee.roles || [];
-                              let newRoles;
-                              if (e.target.checked) {
-                                newRoles = [...currentRoles, role.name];
-                              } else {
-                                newRoles = currentRoles.filter(r => r !== role.name);
-                              }
-                              updateEmployee({ roles: newRoles });
-                            }}
-                            className={`mr-2 rounded border ${themeClasses.border.primary} text-blue-600 focus:ring-blue-500`}
-                          />
-                          <span
-                            className="text-sm font-medium"
-                            style={{
-                              color: applyDarkModeMuting(role.text_color, theme === 'dark'),
-                              backgroundColor: applyDarkModeMuting(role.background_color, theme === 'dark'),
-                              borderColor: applyDarkModeMuting(role.border_color, theme === 'dark'),
-                              border: '1px solid',
-                              borderRadius: '0.25rem',
-                              padding: '0.125rem 0.5rem'
-                            }}
-                          >
-                            {role.display_name}
-                          </span>
-                        </label>
-                      ))}
+                      {availableRoles.map(role => {
+                        const isExecutiveRole = role.name === 'executive';
+                        const cannotRemoveExecutive = isEditingSelf && isExecutiveRole && (editingEmployee.roles || []).includes(role.name);
+
+                        return (
+                          <label key={role.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={(editingEmployee.roles || []).includes(role.name)}
+                              disabled={cannotRemoveExecutive}
+                              onChange={(e) => {
+                                const currentRoles = editingEmployee.roles || [];
+                                let newRoles;
+                                if (e.target.checked) {
+                                  newRoles = [...currentRoles, role.name];
+                                } else {
+                                  newRoles = currentRoles.filter(r => r !== role.name);
+                                }
+                                updateEmployee({ roles: newRoles });
+                              }}
+                              className={`mr-2 rounded border ${themeClasses.border.primary} text-blue-600 focus:ring-blue-500 ${cannotRemoveExecutive ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            />
+                            <span
+                              className={`text-sm font-medium ${cannotRemoveExecutive ? 'opacity-50' : ''}`}
+                              style={{
+                                color: applyDarkModeMuting(role.text_color, theme === 'dark'),
+                                backgroundColor: applyDarkModeMuting(role.background_color, theme === 'dark'),
+                                borderColor: applyDarkModeMuting(role.border_color, theme === 'dark'),
+                                border: '1px solid',
+                                borderRadius: '0.25rem',
+                                padding: '0.125rem 0.5rem'
+                              }}
+                            >
+                              {role.display_name}
+                            </span>
+                            {cannotRemoveExecutive && (
+                              <span className={`ml-2 text-xs ${themeClasses.text.muted} italic`}>
+                                (Cannot remove your own executive role)
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
                     </div>
                     <p className={`mt-1 text-xs ${themeClasses.text.muted}`}>Select all roles that apply to this employee</p>
                   </div>
@@ -528,185 +554,24 @@ const EditEmployeeModal: React.FC<EditEmployeeModalProps> = ({
                   </svg>
                   Profile Photo
                 </h4>
-                <div className="space-y-3">
-                  {/* File Upload */}
-                  <div>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0];
-                        if (file) {
-                          // Check file size (2.5MB = 2,621,440 bytes)
-                          if (file.size > 2621440) {
-                            alert('Photo size must be less than 2.5MB. Please choose a smaller image.');
-                            e.target.value = '';
-                            return;
-                          }
-
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            const dataUrl = event.target?.result as string;
-                            updateEmployee({ photo: dataUrl });
-                          };
-                          reader.readAsDataURL(file);
-                        }
-                      }}
-                      className={`block w-full text-sm ${themeClasses.text.muted} file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-medium file:bg-gray-100 file:dark:bg-gray-700 file:hover:bg-gray-200 file:dark:hover:bg-gray-600 file:text-gray-700 file:dark:text-gray-300`}
-                    />
-                  </div>
-                  {/* URL Input */}
-                  <input
-                    type="url"
-                    value={editingEmployee.photo && !editingEmployee.photo.startsWith('data:') ? editingEmployee.photo : ''}
-                    onChange={(e) => updateEmployee({ photo: e.target.value })}
-                    className={`block w-full ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary} rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 px-3 py-2`}
-                    placeholder="Enter photo URL"
-                  />
-                  {/* Photo Preview */}
-                  {editingEmployee.photo && (
-                    <div className="space-y-4">
-                      <div className="flex justify-center">
-                        <div className="relative h-20 w-20 rounded-full overflow-hidden border-2 border-gray-300">
-                          <img
-                            src={editingEmployee.photo}
-                            alt="Profile preview"
-                            className="w-full h-full object-cover"
-                            style={{
-                              transform: `scale(${(editingEmployee.photoScale || 100) / 100})`,
-                              transformOrigin: `${editingEmployee.photoPositionX || 50}% ${editingEmployee.photoPositionY || 50}%`
-                            }}
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Photo Crop Tool */}
-                      <div className="space-y-3">
-                        <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>
-                          Photo Crop Tool - Drag to position, use slider to zoom
-                        </div>
-                        <div className="flex justify-center">
-                          <div className="relative">
-                            {/* Photo Container */}
-                            <div
-                              className="relative w-80 h-80 border-2 border-gray-300 rounded-lg overflow-hidden bg-gray-50 hover:border-gray-400 transition-colors duration-150 cursor-move"
-                              onMouseDown={(e) => {
-                                e.preventDefault();
-                                const startX = e.clientX;
-                                const startY = e.clientY;
-                                const startPosX = editingEmployee.photoPositionX || 50;
-                                const startPosY = editingEmployee.photoPositionY || 50;
-
-                                const handleMouseMove = (moveEvent: MouseEvent) => {
-                                  const deltaX = ((moveEvent.clientX - startX) / 320) * 100;
-                                  const deltaY = ((moveEvent.clientY - startY) / 320) * 100;
-
-                                  // Always use inverted movement for natural feel
-                                  let newPosX = startPosX - deltaX;
-                                  let newPosY = startPosY - deltaY;
-
-                                  // Keep within bounds
-                                  newPosX = Math.max(0, Math.min(100, newPosX));
-                                  newPosY = Math.max(0, Math.min(100, newPosY));
-
-                                  updateEmployee({
-                                    photoPositionX: newPosX,
-                                    photoPositionY: newPosY
-                                  });
-                                };
-
-                                const handleMouseUp = () => {
-                                  document.removeEventListener('mousemove', handleMouseMove);
-                                  document.removeEventListener('mouseup', handleMouseUp);
-                                  document.body.style.userSelect = '';
-                                  document.body.style.cursor = '';
-                                };
-
-                                document.body.style.userSelect = 'none';
-                                document.body.style.cursor = 'move';
-                                document.addEventListener('mousemove', handleMouseMove);
-                                document.addEventListener('mouseup', handleMouseUp);
-                              }}
-                            >
-                              <img
-                                src={editingEmployee.photo}
-                                alt="Photo crop preview"
-                                className="w-full h-full object-cover pointer-events-none"
-                                style={{
-                                  transform: `scale(${(editingEmployee.photoScale || 100) / 100})`,
-                                  transformOrigin: `${editingEmployee.photoPositionX || 50}% ${editingEmployee.photoPositionY || 50}%`
-                                }}
-                                onError={(e) => {
-                                  e.currentTarget.style.display = 'none';
-                                }}
-                              />
-                            </div>
-
-                            {/* Instructions */}
-                            <div className={`text-xs ${themeClasses.text.muted} text-center mt-2`}>
-                              Drag image to position • Use slider below to zoom
-                            </div>
-
-                            {/* Zoom Slider */}
-                            <div className="mt-4 w-80">
-                              <div className={`text-xs ${themeClasses.text.secondary} mb-2 flex justify-between`}>
-                                <span>Zoom: {editingEmployee.photoScale || 100}%</span>
-                                <span>100% - 400%</span>
-                              </div>
-                              <input
-                                type="range"
-                                min="100"
-                                max="400"
-                                step="5"
-                                value={editingEmployee.photoScale || 100}
-                                onChange={(e) => updateEmployee({ photoScale: parseInt(e.target.value) })}
-                                className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer slider"
-                                style={{
-                                  background: `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(((editingEmployee.photoScale || 100) - 100) / 300) * 100}%, #e5e7eb ${(((editingEmployee.photoScale || 100) - 100) / 300) * 100}%, #e5e7eb 100%)`
-                                }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Current Values Display */}
-                        <div className={`text-xs ${themeClasses.text.muted} text-center space-y-1`}>
-                          <div>Position: {Number(editingEmployee.photoPositionX || 50).toFixed(1)}%, {Number(editingEmployee.photoPositionY || 50).toFixed(1)}%</div>
-                          <div>Scale: {editingEmployee.photoScale || 100}%</div>
-                        </div>
-
-                        {/* Reset Controls */}
-                        <div className="flex justify-center space-x-4">
-                          <button
-                            type="button"
-                            onClick={() => updateEmployee({ photoPositionX: 50, photoPositionY: 50 })}
-                            className={`px-3 py-1 text-xs ${themeClasses.text.muted} hover:${themeClasses.text.secondary} ${themeClasses.bg.secondary} hover:${themeClasses.bg.hover} border ${themeClasses.border.primary} rounded transition-colors`}
-                          >
-                            Center
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateEmployee({ photoScale: 100 })}
-                            className={`px-3 py-1 text-xs ${themeClasses.text.muted} hover:${themeClasses.text.secondary} ${themeClasses.bg.secondary} hover:${themeClasses.bg.hover} border ${themeClasses.border.primary} rounded transition-colors`}
-                          >
-                            Reset Size
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => updateEmployee({ photoPositionX: 50, photoPositionY: 50, photoScale: 100 })}
-                            className={`px-3 py-1 text-xs ${themeClasses.text.muted} hover:${themeClasses.text.secondary} ${themeClasses.bg.secondary} hover:${themeClasses.bg.hover} border ${themeClasses.border.primary} rounded transition-colors`}
-                          >
-                            Reset All
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                  <p className={`text-xs ${themeClasses.text.muted}`}>Upload an image file or enter a URL to a profile photo.</p>
-                </div>
+                <PhotoUploadInterface
+                  photo={editingEmployee.photo || ''}
+                  photoPositionX={editingEmployee.photoPositionX || 50}
+                  photoPositionY={editingEmployee.photoPositionY || 50}
+                  photoScale={editingEmployee.photoScale || 100}
+                  photoBackgroundColor={editingEmployee.photoBackgroundColor}
+                  enableBackgroundColor={enableBackgroundColor}
+                  onPhotoChange={(photo) => updateEmployee({ photo })}
+                  onPositionChange={(x, y) => updateEmployee({ photoPositionX: x, photoPositionY: y })}
+                  onScaleChange={(scale) => updateEmployee({ photoScale: scale })}
+                  onBackgroundColorChange={(color) => updateEmployee({ photoBackgroundColor: color || undefined })}
+                  onBackgroundColorToggle={(enabled) => {
+                    setEnableBackgroundColor(enabled);
+                    if (!enabled) {
+                      updateEmployee({ photoBackgroundColor: undefined });
+                    }
+                  }}
+                />
               </div>
 
               {/* Address Information */}

@@ -486,6 +486,9 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
     if (editingEmployee.photoScale !== originalEmployee.photoScale) {
       changes.photoScale = editingEmployee.photoScale;
     }
+    if (editingEmployee.photoBackgroundColor !== originalEmployee.photoBackgroundColor) {
+      changes.photoBackgroundColor = editingEmployee.photoBackgroundColor;
+    }
 
     // Compare roles arrays
     const originalRoles = JSON.stringify(originalEmployee.roles || []);
@@ -517,6 +520,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
       photoPositionX: originalEmployee.photoPositionX,
       photoPositionY: originalEmployee.photoPositionY,
       photoScale: originalEmployee.photoScale,
+      photoBackgroundColor: originalEmployee.photoBackgroundColor,
       department: originalEmployee.department,
       roles: originalEmployee.roles
     });
@@ -527,6 +531,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
       photoPositionX: editingEmployee.photoPositionX,
       photoPositionY: editingEmployee.photoPositionY,
       photoScale: editingEmployee.photoScale,
+      photoBackgroundColor: editingEmployee.photoBackgroundColor,
       department: editingEmployee.department,
       roles: editingEmployee.roles
     });
@@ -623,7 +628,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
             {/* Large Photo Display with Same Transform Logic */}
             <div
               className="relative w-96 h-96 rounded-lg overflow-hidden border-2 border-gray-300 bg-gray-50"
-              style={{ backgroundColor: selectedPhoto.user.photoBackgroundColor || '#f9fafb' }}
+              style={{ backgroundColor: selectedPhoto.employee.photoBackgroundColor || '#f9fafb' }}
             >
               <img
                 src={selectedPhoto.src}

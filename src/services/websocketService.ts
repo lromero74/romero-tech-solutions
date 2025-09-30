@@ -29,9 +29,17 @@ interface EmployeeLoginChange {
   isRecentlyActive: boolean;
 }
 
+interface EntityDataChanged {
+  entityType: 'employee' | 'client' | 'business' | 'service' | 'serviceRequest' | 'serviceLocation';
+  entityId: string;
+  action: 'created' | 'updated' | 'deleted' | 'restored';
+  timestamp: string;
+}
+
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
 type EmployeeLoginCallback = (change: EmployeeLoginChange) => void;
 type AuthErrorCallback = (error: { message: string }) => void;
+type EntityDataChangedCallback = (change: EntityDataChanged) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -44,6 +52,7 @@ class WebSocketService {
   private onEmployeeStatusUpdate: EmployeeStatusCallback | null = null;
   private onEmployeeLoginChange: EmployeeLoginCallback | null = null;
   private onAuthError: AuthErrorCallback | null = null;
+  private onEntityDataChanged: EntityDataChangedCallback | null = null;
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -105,6 +114,13 @@ class WebSocketService {
           }
         });
 
+        this.socket.on('entity-data-changed', (change: EntityDataChanged) => {
+          console.log(`📡 Entity ${change.entityType} ${change.action}:`, change.entityId);
+          if (this.onEntityDataChanged) {
+            this.onEntityDataChanged(change);
+          }
+        });
+
         this.socket.on('error', (error) => {
           console.error('❌ WebSocket error:', error);
         });
@@ -142,6 +158,10 @@ class WebSocketService {
 
   onEmployeeLogin(callback: EmployeeLoginCallback): void {
     this.onEmployeeLoginChange = callback;
+  }
+
+  onEntityDataChange(callback: EntityDataChangedCallback): void {
+    this.onEntityDataChanged = callback;
   }
 
   onAuthenticationError(callback: AuthErrorCallback): void {
