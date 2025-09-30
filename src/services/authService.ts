@@ -229,6 +229,14 @@ export class AuthService {
         isFirstAdmin: data.user.isFirstAdmin || true
       };
 
+      // Clear all other role sessions to prevent conflicts (e.g., logging in as client after being logged in as employee)
+      const allRoles = ['admin', 'executive', 'employee', 'client', 'technician', 'sales'];
+      allRoles.forEach(role => {
+        if (role !== authUser.role) {
+          this.clearRoleStorage(role);
+        }
+      });
+
       // Store authentication state and session token in localStorage for persistence
       this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
       this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
@@ -316,6 +324,14 @@ export class AuthService {
         isFirstAdmin: data.user.isFirstAdmin || true
       };
 
+      // Clear all other role sessions to prevent conflicts
+      const allRoles = ['admin', 'executive', 'employee', 'client', 'technician', 'sales'];
+      allRoles.forEach(role => {
+        if (role !== authUser.role) {
+          this.clearRoleStorage(role);
+        }
+      });
+
       // Store authentication state and session token in localStorage for persistence
       this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
       this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
@@ -382,6 +398,14 @@ export class AuthService {
         businessName: data.user.businessName,
         isFirstAdmin: data.user.isFirstAdmin || false
       };
+
+      // Clear all other role sessions to prevent conflicts
+      const allRoles = ['admin', 'executive', 'employee', 'client', 'technician', 'sales'];
+      allRoles.forEach(role => {
+        if (role !== authUser.role) {
+          this.clearRoleStorage(role);
+        }
+      });
 
       // Store authentication state and session token in localStorage for persistence
       this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
