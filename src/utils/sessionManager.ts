@@ -47,7 +47,9 @@ class SessionManager {
   private syncInProgress: boolean = false;
   private readonly SYNC_INTERVAL = 2 * 60 * 1000; // 2 minutes
   private readonly DEBOUNCE_DELAY = 5000; // 5 seconds
+  private readonly MAX_DEBOUNCE_WAIT = 30000; // 30 seconds - force sync after this long
   private debounceTimeoutId: NodeJS.Timeout | null = null;
+  private firstDebouncedCall: number = 0;
 
   private constructor() {
     this.loadSession();
@@ -121,6 +123,25 @@ class SessionManager {
   }
 
   private debouncedServerSync() {
+    const now = Date.now();
+
+    // Track the first call to implement max wait
+    if (!this.firstDebouncedCall) {
+      this.firstDebouncedCall = now;
+    }
+
+    // If we've been debouncing for too long, force a sync immediately
+    if (now - this.firstDebouncedCall >= this.MAX_DEBOUNCE_WAIT) {
+      console.log('🔄 Max debounce wait reached - forcing server sync');
+      this.firstDebouncedCall = 0; // Reset
+      if (this.debounceTimeoutId) {
+        clearTimeout(this.debounceTimeoutId);
+        this.debounceTimeoutId = null;
+      }
+      this.syncWithServer();
+      return;
+    }
+
     // Clear existing debounce timer
     if (this.debounceTimeoutId) {
       clearTimeout(this.debounceTimeoutId);
@@ -128,6 +149,7 @@ class SessionManager {
 
     // Set new debounce timer
     this.debounceTimeoutId = setTimeout(() => {
+      this.firstDebouncedCall = 0; // Reset after successful sync
       this.syncWithServer();
     }, this.DEBOUNCE_DELAY);
   }
