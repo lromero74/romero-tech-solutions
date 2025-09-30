@@ -112,7 +112,14 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
 
       // Normal login flow (device not trusted or trusted login failed)
       await signIn(email, password);
-      onSuccess();
+
+      // Show trusted device prompt after successful login (if device is not already trusted)
+      if (!deviceTrustResult.trusted) {
+        console.log('🔐 [Client] Showing trusted device prompt after successful login');
+        setShowTrustedDevicePrompt(true);
+      } else {
+        onSuccess();
+      }
     } catch (error: unknown) {
       if (error instanceof Error && error.message === 'MFA_REQUIRED') {
         // Client user needs MFA verification (code already sent by backend)
