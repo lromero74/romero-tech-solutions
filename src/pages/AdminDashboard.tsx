@@ -14,7 +14,7 @@ import { useModalManager, useServiceLocationFilters, useClientFilters, useBusine
 type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity';
 
 const AdminDashboardContent: React.FC = () => {
-  const { user, signOut, sessionWarning, extendSession } = useEnhancedAuth();
+  const { user, signOut, sessionWarning, extendSession, sessionConfig } = useEnhancedAuth();
   const { refreshAllData, serviceLocations } = useAdminData();
   const { toggleTheme, isDark } = useTheme();
 
@@ -292,8 +292,8 @@ const AdminDashboardContent: React.FC = () => {
               {/* Session Countdown Timer */}
               <div className="flex items-center space-x-4">
                 <SessionCountdownTimer
-                  sessionTimeoutMs={15 * 60 * 1000} // 15 minutes
-                  warningThresholdMs={2 * 60 * 1000} // 2 minutes warning
+                  sessionTimeoutMs={sessionConfig ? sessionConfig.timeout * 60 * 1000 : 15 * 60 * 1000}
+                  warningThresholdMs={sessionConfig ? sessionConfig.warningTime * 60 * 1000 : 2 * 60 * 1000}
                   onSessionExpired={handleSessionExpired}
                   onWarningReached={handleSessionWarning}
                 />

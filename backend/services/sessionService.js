@@ -10,6 +10,37 @@ class SessionService {
   }
 
   /**
+   * Get session timeout from database system_settings, with fallback to SECURITY_CONFIG
+   * @returns {Promise<number>} Session timeout in milliseconds
+   */
+  async getSessionTimeoutMs() {
+    try {
+      const result = await query(`
+        SELECT setting_value FROM system_settings WHERE setting_key = 'session_config'
+      `);
+
+      if (result.rows.length > 0 && result.rows[0].setting_value) {
+        // setting_value is a JSONB column in PostgreSQL
+        const sessionConfig = result.rows[0].setting_value;
+
+        // sessionConfig is already parsed as a JavaScript object by the pg driver
+        if (sessionConfig && typeof sessionConfig === 'object' && sessionConfig.timeout) {
+          const timeoutMinutes = parseInt(sessionConfig.timeout, 10);
+          console.log(`📊 Using session timeout from database: ${timeoutMinutes} minutes`);
+          return timeoutMinutes * 60 * 1000; // Convert minutes to milliseconds
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Failed to fetch session timeout from database, using default:', error.message);
+    }
+
+    // Fallback to hardcoded value
+    const fallbackMinutes = SECURITY_CONFIG.SESSION_TIMEOUT_MS / (60 * 1000);
+    console.log(`📊 Using fallback session timeout: ${fallbackMinutes} minutes`);
+    return SECURITY_CONFIG.SESSION_TIMEOUT_MS;
+  }
+
+  /**
    * Generate a secure session token
    */
   generateSessionToken() {
@@ -50,10 +81,13 @@ class SessionService {
 
       console.log('🔐 Creating new session for user:', email);
 
-      // Use centralized session timeout configuration
+      // Get session timeout from database (falls back to SECURITY_CONFIG if unavailable)
+      const sessionTimeoutMs = await this.getSessionTimeoutMs();
+      const sessionTimeoutSeconds = sessionTimeoutMs / 1000;
+
       const result = await query(`
         INSERT INTO user_sessions (user_id, user_email, session_token, user_agent, ip_address, expires_at)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '${SECURITY_CONFIG.SESSION_TIMEOUT_MS / 1000} seconds')
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '${sessionTimeoutSeconds} seconds')
         RETURNING id, session_token, expires_at, created_at
       `, [userId, email, sessionToken, userAgent, ipAddress]);
 
@@ -132,11 +166,15 @@ class SessionService {
       // Only clean up expired sessions periodically (every 5 minutes)
       await this.conditionalCleanup();
 
+      // Get session timeout from database (falls back to SECURITY_CONFIG if unavailable)
+      const sessionTimeoutMs = await this.getSessionTimeoutMs();
+      const sessionTimeoutSeconds = sessionTimeoutMs / 1000;
+
       const result = await query(`
         UPDATE user_sessions
         SET last_activity = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP,
-            expires_at = CURRENT_TIMESTAMP + INTERVAL '${SECURITY_CONFIG.SESSION_TIMEOUT_MS / 1000} seconds'
+            expires_at = CURRENT_TIMESTAMP + INTERVAL '${sessionTimeoutSeconds} seconds'
         WHERE session_token = $1 AND is_active = true AND expires_at > CURRENT_TIMESTAMP
         RETURNING id, user_id, user_email, expires_at, last_activity
       `, [sessionToken]);
