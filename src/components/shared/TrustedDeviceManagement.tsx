@@ -104,6 +104,9 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
   };
 
   const getDeviceIcon = (deviceInfo: TrustedDevice['deviceInfo']) => {
+    if (!deviceInfo?.userAgent) {
+      return <Monitor className="h-6 w-6" />;
+    }
     const userAgent = deviceInfo.userAgent.toLowerCase();
     if (userAgent.includes('mobile') || userAgent.includes('android') || userAgent.includes('iphone')) {
       return <Smartphone className="h-6 w-6" />;
@@ -213,12 +216,22 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
 
                     {/* Device Details */}
                     <div className={`text-sm ${themeClasses.textSecondary} space-y-1`}>
-                      <div className="flex items-center">
-                        <Monitor className="h-4 w-4 mr-1.5" />
-                        <span>{device.deviceInfo.platform} • {device.deviceInfo.screenResolution}</span>
-                      </div>
+                      {device.deviceInfo?.platform || device.deviceInfo?.screenResolution ? (
+                        <div className="flex items-center">
+                          <Monitor className="h-4 w-4 mr-1.5" />
+                          <span>
+                            {device.deviceInfo.platform || 'Unknown platform'}
+                            {device.deviceInfo.screenResolution && ` • ${device.deviceInfo.screenResolution}`}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center">
+                          <Monitor className="h-4 w-4 mr-1.5" />
+                          <span>Device information not available</span>
+                        </div>
+                      )}
 
-                      {device.deviceInfo.geolocation && (
+                      {device.deviceInfo?.geolocation && (
                         <div className="flex items-center">
                           <MapPin className="h-4 w-4 mr-1.5" />
                           <span>{getLocationString(device.deviceInfo.geolocation)}</span>
