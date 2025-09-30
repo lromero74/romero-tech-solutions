@@ -10,6 +10,7 @@ export const authMiddleware = async (req, res, next) => {
     const sessionToken = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
     if (!sessionToken) {
+      console.warn(`⚠️ [authMiddleware] No session token found for ${req.path}`);
       return res.status(401).json({
         success: false,
         message: 'Authentication required',

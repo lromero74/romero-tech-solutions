@@ -634,19 +634,59 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
         const trustedDevice = await checkTrustedDevice(user.id, 'employee', deviceFingerprint);
 
         if (trustedDevice) {
-          console.log(`🔐 Trusted device detected for ${user.email}, skipping MFA email`);
+          console.log(`🔐 Trusted device detected for ${user.email}, skipping MFA and creating session`);
+
+          // Create session for trusted device login
+          const sessionData = await sessionService.createSession(
+            user.id,
+            user.email,
+            req.headers['user-agent'] || 'unknown',
+            clientIP
+          );
+
+          // Get employee roles
+          const rolesResult = await query(`
+            SELECT r.name
+            FROM roles r
+            JOIN employee_roles er ON r.id = er.role_id
+            WHERE er.employee_id = $1 AND r.is_active = true
+          `, [user.id]);
+
+          const roles = rolesResult.rows.map(row => row.name);
+
+          // Set session token cookie (camelCase to match authMiddleware)
+          res.cookie('sessionToken', sessionData.sessionToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+            maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS,
+            path: '/'
+          });
+
+
+          const userData = {
+            id: user.id,
+            email: user.email,
+            name: `${user.first_name} ${user.last_name}`,
+            firstName: user.first_name,
+            lastName: user.last_name,
+            role: roles[0] || 'admin',
+            roles: roles,
+            userType: 'employee',
+            phone: user.phone
+          };
+
+          console.log(`✅ Session created for trusted device login: ${sessionData.sessionToken.substring(0, 20)}...`);
 
           return res.json({
             success: true,
             requiresMfa: false,
             isTrustedDevice: true,
             message: 'Login successful with trusted device',
-            redirectTo: '/trusted-device-login',
-            user: {
-              id: user.id,
-              email: user.email,
-              name: `${user.first_name} ${user.last_name}`,
-              user_type: 'employee'
+            user: userData,
+            session: {
+              sessionToken: sessionData.sessionToken,
+              expiresAt: sessionData.expiresAt
             }
           });
         } else {
@@ -1905,9 +1945,11 @@ router.post('/trusted-device-login', async (req, res) => {
     res.cookie('sessionToken', sessionData.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
-      sameSite: 'strict',
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS // Use centralized timeout
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // lax for development
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      path: '/'
     });
+
 
     console.log(`✅ Trusted device login successful for: ${user.email} (${user.user_type})`);
 
@@ -1934,13 +1976,25 @@ router.post('/trusted-device-login', async (req, res) => {
       userData.isFirstAdmin = false;
     }
 
-    res.json({
+    const responsePayload = {
       success: true,
       message: 'Authentication successful via trusted device',
       user: userData,
-      sessionToken: sessionData.sessionToken,
-      expiresAt: sessionData.expiresAt
+      session: {
+        sessionToken: sessionData.sessionToken,
+        expiresAt: sessionData.expiresAt
+      }
+    };
+
+    console.log('📤 Sending trusted device login response:', {
+      success: responsePayload.success,
+      userEmail: responsePayload.user.email,
+      hasSessionToken: !!responsePayload.session.sessionToken,
+      sessionTokenLength: responsePayload.session.sessionToken?.length,
+      sessionStructure: Object.keys(responsePayload.session)
     });
+
+    res.json(responsePayload);
 
   } catch (error) {
     console.error('Trusted device login error:', error);

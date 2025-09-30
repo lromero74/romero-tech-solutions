@@ -13,6 +13,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { permissionService, UserPermissions, Role } from '../services/permissionService';
 import { useEnhancedAuth } from './EnhancedAuthContext';
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
 import { io, Socket } from 'socket.io-client';
 
 interface PermissionContextType {
@@ -71,13 +72,20 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
     // 🚨 CRITICAL: Wait for sessionToken to be available before loading permissions
     // This prevents race condition where user is loaded from localStorage but session isn't validated yet
-    if (!sessionToken) {
-      console.log('⏳ Waiting for sessionToken before loading permissions...');
+    // Try localStorage as fallback if context value is not yet available (timing issue after login)
+    const activeSessionToken = sessionToken || RoleBasedStorage.getItem('sessionToken');
+
+    if (!activeSessionToken) {
+      console.log('⏳ Waiting for sessionToken (context or localStorage) before loading permissions...');
       setPermissions([]);
       setRoles([]);
       setIsExecutive(false);
       setLoading(false);
       return;
+    }
+
+    if (!sessionToken && activeSessionToken) {
+      console.log('🔐 Using session token from localStorage for permissions (context not yet updated)');
     }
 
     // 🚨 CRITICAL: Only load permissions for employee roles

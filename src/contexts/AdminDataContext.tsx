@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { adminService } from '../services/adminService';
 import { websocketService } from '../services/websocketService';
 import { useEnhancedAuth } from './EnhancedAuthContext';
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
 
 export interface Employee {
   id: string;
@@ -301,9 +302,16 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
   const refreshOnlineStatus = async () => {
     // Don't make API calls if no session token
-    if (!sessionToken) {
-      console.log('🔐 No session token - skipping online status refresh');
+    // Try localStorage as fallback if context value is not yet available (timing issue after login)
+    const activeSessionToken = sessionToken || RoleBasedStorage.getItem('sessionToken');
+
+    if (!activeSessionToken) {
+      console.log('🔐 No session token (context or localStorage) - skipping online status refresh');
       return;
+    }
+
+    if (!sessionToken && activeSessionToken) {
+      console.log('🔐 Using session token from localStorage (context not yet updated)');
     }
 
     try {

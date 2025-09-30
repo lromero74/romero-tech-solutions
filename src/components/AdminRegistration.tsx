@@ -178,13 +178,26 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
                     formData.password
                   );
 
+                  console.log('📥 Received trusted device login response:', {
+                    success: trustedLoginResult.success,
+                    hasUser: !!trustedLoginResult.user,
+                    userEmail: trustedLoginResult.user?.email,
+                    hasSession: !!trustedLoginResult.session,
+                    hasSessionToken: !!trustedLoginResult.session?.sessionToken,
+                    sessionTokenLength: trustedLoginResult.session?.sessionToken?.length,
+                    sessionKeys: trustedLoginResult.session ? Object.keys(trustedLoginResult.session) : []
+                  });
+
                   if (trustedLoginResult.success && trustedLoginResult.user) {
                     console.log('✅ Trusted device authentication completed successfully');
                     console.log('🔄 Updating authentication context directly...');
 
                     // Use the new setUserFromTrustedDevice method to directly update the user context
-                    console.log('🔄 Calling setUserFromTrustedDevice() to update authentication context...');
-                    await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
+                    console.log('🔄 Calling setUserFromTrustedDevice() with:', {
+                      user: trustedLoginResult.user.email,
+                      sessionToken: trustedLoginResult.session?.sessionToken?.substring(0, 20) + '...'
+                    });
+                    await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.session?.sessionToken);
                     console.log('✅ setUserFromTrustedDevice() completed');
 
                     console.log('🔄 Calling onSuccess() to redirect to dashboard...');

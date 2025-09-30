@@ -6,21 +6,12 @@ import { UserRole } from '../types/database';
  */
 export class RoleBasedStorage {
   /**
-   * Determine the role from current context (URL path or stored user data)
+   * Determine the role from current context (stored user data first, then URL path)
+   * CRITICAL: Check localStorage FIRST to find existing sessions before inferring from URL
    */
   private static getCurrentRole(): UserRole | string | undefined {
-    // First try to determine from URL path
-    const currentPath = window.location.pathname;
-    if (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/dashboard')) {
-      return 'employee';
-    } else if (currentPath.includes('/client') || currentPath === '/clogin') {
-      return 'client';
-    } else if (currentPath.includes('/admin')) {
-      return 'admin';
-    }
-
-    // If URL doesn't help, try to get role from any stored user data
-    // Check all possible role-prefixed keys
+    // FIRST: Try to get role from any stored user data in localStorage
+    // This ensures we find existing sessions even if user is on a generic path like /employee
     const possibleRoles: Array<UserRole | string> = ['admin', 'executive', 'employee', 'client', 'technician', 'sales'];
     for (const role of possibleRoles) {
       const storedUser = localStorage.getItem(`${role}_authUser`);
@@ -36,7 +27,7 @@ export class RoleBasedStorage {
       }
     }
 
-    // Last resort: check legacy non-namespaced key
+    // SECOND: Check legacy non-namespaced key (for migration)
     const legacyUser = localStorage.getItem('authUser');
     if (legacyUser) {
       try {
@@ -47,6 +38,14 @@ export class RoleBasedStorage {
       } catch (e) {
         // Ignore parsing errors
       }
+    }
+
+    // LAST RESORT: Try to determine from URL path (only if no session found)
+    const currentPath = window.location.pathname;
+    if (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/dashboard')) {
+      return 'employee';
+    } else if (currentPath.includes('/client') || currentPath === '/clogin') {
+      return 'client';
     }
 
     return undefined;

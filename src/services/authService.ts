@@ -4,6 +4,7 @@ import {
 } from 'aws-amplify/auth';
 import { CognitoIdentityProviderClient, SignUpCommand, ConfirmSignUpCommand, ResendConfirmationCodeCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { AuthUser, UserRole, SignupRequest, LoginRequest } from '../types/database';
+import { getCurrentDeviceFingerprint } from '../utils/deviceFingerprinting';
 
 // Service-specific types
 interface SignUpResult {
@@ -143,49 +144,12 @@ export class AuthService {
     }
   }
 
-  // Generate device fingerprint for trusted device detection
-  // Designed to be stable across DST changes, browser updates, and display changes
+  // Generate device fingerprint for trusted device detection using the shared utility
   private generateDeviceFingerprint(): string {
-    // Normalize user agent to remove version numbers that change with updates
-    const normalizeUserAgent = (ua: string): string => {
-      return ua
-        // Remove specific version numbers but keep browser family
-        .replace(/Chrome\/[\d.]+/g, 'Chrome')
-        .replace(/Safari\/[\d.]+/g, 'Safari')
-        .replace(/Firefox\/[\d.]+/g, 'Firefox')
-        .replace(/Edge\/[\d.]+/g, 'Edge')
-        // Remove macOS/Windows version details that change with OS updates
-        .replace(/Mac OS X [\d_]+/g, 'Mac OS X')
-        .replace(/Windows NT [\d.]+/g, 'Windows NT')
-        // Remove WebKit/Gecko build numbers
-        .replace(/WebKit\/[\d.]+/g, 'WebKit')
-        .replace(/Gecko\/[\d]+/g, 'Gecko');
-    };
-
-    // Get primary display resolution (ignore secondary monitors)
-    const getPrimaryDisplaySize = (): string => {
-      // Use available screen dimensions which are more stable
-      const width = screen.availWidth || screen.width;
-      const height = screen.availHeight || screen.height;
-      return `${width}x${height}`;
-    };
-
-    const components = [
-      normalizeUserAgent(navigator.userAgent),
-      // Removed navigator.language - changes when user switches browser language
-      getPrimaryDisplaySize(),
-      // Removed timezone - changes when traveling or manually adjusting timezone
-      navigator.platform,  // Stable OS/architecture identifier
-      navigator.hardwareConcurrency?.toString() || 'unknown',  // CPU cores (stable hardware identifier)
-      // Add more stable hardware/software identifiers
-      screen.colorDepth?.toString() || 'unknown',  // Color depth (stable display property)
-      navigator.maxTouchPoints?.toString() || '0'   // Touch capability (stable device property)
-    ];
-
-    const fingerprint = components.join('|');
-    console.log('🔍 Stable fingerprint components:', components);
-    console.log('🔍 Generated stable device fingerprint:', CryptoJS.SHA256(fingerprint).toString());
-    return CryptoJS.SHA256(fingerprint).toString();
+    // Use the same fingerprinting method used by trustedDeviceService for consistency
+    const fingerprint = getCurrentDeviceFingerprint();
+    console.log('🔍 Generated device fingerprint:', fingerprint);
+    return fingerprint;
   }
 
   // Sign in user
@@ -198,7 +162,6 @@ export class AuthService {
 
       // Generate device fingerprint for trusted device detection
       const deviceFingerprint = this.generateDeviceFingerprint();
-      console.log('🔍 Generated device fingerprint:', deviceFingerprint);
 
       // Use apiService which handles CSRF tokens automatically
       const data = await apiService.post(endpoint, {
@@ -249,6 +212,15 @@ export class AuthService {
         throw mfaError;
       }
 
+      console.log('📥 signIn response data:', {
+        hasUser: !!data.user,
+        hasSession: !!data.session,
+        hasSessionToken: !!data.session?.sessionToken,
+        sessionTokenLength: data.session?.sessionToken?.length,
+        userEmail: data.user?.email,
+        userRole: data.user?.role
+      });
+
       const authUser = {
         id: data.user.id,
         email: data.user.email,
@@ -260,8 +232,19 @@ export class AuthService {
       // Store authentication state and session token in localStorage for persistence
       this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
       this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
+
+      console.log('🔍 Checking for session token:', {
+        hasSession: !!data.session,
+        hasSessionToken: !!data.session?.sessionToken,
+        sessionToken: data.session?.sessionToken?.substring(0, 20) + '...'
+      });
+
       if (data.session && data.session.sessionToken) {
+        console.log('💾 Storing session token in localStorage');
         this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
+        console.log('✅ Session token stored successfully');
+      } else {
+        console.warn('⚠️ No session token in response data!');
       }
 
       return authUser;

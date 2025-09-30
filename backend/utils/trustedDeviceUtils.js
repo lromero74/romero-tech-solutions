@@ -74,6 +74,8 @@ export async function registerTrustedDevice(
  */
 export async function checkTrustedDevice(userId, userType, deviceFingerprint) {
   try {
+    console.log(`🔍 Checking trusted device: userId=${userId}, userType=${userType}, fingerprint=${deviceFingerprint.substring(0, 20)}...`);
+
     const result = await query(`
       SELECT id, device_name, device_info, is_shared_device,
              last_used, expires_at, created_at
@@ -87,7 +89,10 @@ export async function checkTrustedDevice(userId, userType, deviceFingerprint) {
       LIMIT 1
     `, [userId, userType, deviceFingerprint]);
 
+    console.log(`📊 Trusted device query returned ${result.rows.length} rows`);
+
     if (result.rows.length === 0) {
+      console.log(`🔓 No trusted device found for userId=${userId}, userType=${userType}`);
       return null; // Device not trusted
     }
 

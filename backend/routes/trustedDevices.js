@@ -230,7 +230,8 @@ router.get('/', async (req, res) => {
     const formattedDevices = devices.map(device => ({
       id: device.id,
       deviceName: device.device_name,
-      deviceInfo: JSON.parse(device.device_info),
+      // device_info is already an object from JSONB column, no need to parse
+      deviceInfo: typeof device.device_info === 'string' ? JSON.parse(device.device_info) : device.device_info,
       isSharedDevice: device.is_shared_device,
       lastUsed: device.last_used,
       expiresAt: device.expires_at,
