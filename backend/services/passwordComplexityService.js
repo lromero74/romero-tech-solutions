@@ -18,15 +18,16 @@ export class PasswordComplexityService {
 
   /**
    * Get current active password complexity requirements
+   * @param {string} userType - The user type ('employee' or 'client')
    */
-  async getPasswordComplexityRequirements() {
+  async getPasswordComplexityRequirements(userType = 'employee') {
     try {
       const result = await query(`
         SELECT * FROM password_complexity_requirements
-        WHERE is_active = true
+        WHERE is_active = true AND user_type = $1
         ORDER BY created_at DESC
         LIMIT 1
-      `);
+      `, [userType]);
 
       if (result.rows.length === 0) {
         // Return default requirements if none found

@@ -1,10 +1,11 @@
 import express from 'express';
 import { query } from '../../config/database.js';
+import { requirePermission, requireLastRecordProtection } from '../../middleware/permissionMiddleware.js';
 
 const router = express.Router();
 
 // POST /service-locations - Create a new service location
-router.post('/service-locations', async (req, res) => {
+router.post('/service-locations', requirePermission('add.service_locations.enable'), async (req, res) => {
   try {
     console.log('=== CREATE SERVICE LOCATION ===');
     console.log('Request body:', req.body);
@@ -101,6 +102,11 @@ router.get('/service-locations', async (req, res) => {
         sl.contact_person,
         sl.contact_phone,
         sl.notes,
+        sl.building_image_url,
+        sl.building_image_position_x,
+        sl.building_image_position_y,
+        sl.building_image_scale,
+        sl.building_image_background_color,
         sl.is_active,
         sl.soft_delete,
         sl.created_at,
@@ -129,7 +135,7 @@ router.get('/service-locations', async (req, res) => {
 });
 
 // PUT /service-locations/:id - Update service location
-router.put('/service-locations/:id', async (req, res) => {
+router.put('/service-locations/:id', requirePermission('modify.service_locations.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -143,6 +149,8 @@ router.put('/service-locations/:id', async (req, res) => {
       'business_id', 'address_label', 'location_name', 'location_type',
       'street', 'city', 'state', 'zip_code', 'country',
       'contact_person', 'contact_phone', 'notes',
+      'building_image_url', 'building_image_position_x', 'building_image_position_y',
+      'building_image_scale', 'building_image_background_color',
       'is_active'
     ];
 
@@ -213,7 +221,10 @@ router.put('/service-locations/:id', async (req, res) => {
 });
 
 // PATCH /service-locations/:id/soft-delete - Soft delete service location (toggle soft_delete field)
-router.patch('/service-locations/:id/soft-delete', async (req, res) => {
+router.patch('/service-locations/:id/soft-delete',
+  requireLastRecordProtection('service_locations', (req) => req.body.business_id),
+  requirePermission('softDelete.service_locations.enable'),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { restore = false } = req.body;
@@ -288,7 +299,13 @@ router.patch('/service-locations/:id/toggle-status', async (req, res) => {
 });
 
 // DELETE /service-locations/:id - Permanently delete service location
-router.delete('/service-locations/:id', async (req, res) => {
+router.delete('/service-locations/:id',
+  requireLastRecordProtection('service_locations', (req) => {
+    // Get business_id from query param (frontend should send it)
+    return req.query.business_id;
+  }),
+  requirePermission('hardDelete.service_locations.enable'),
+  async (req, res) => {
   try {
     const { id } = req.params;
 

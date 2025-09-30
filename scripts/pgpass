@@ -1,0 +1,7 @@
+#!/bin/bash
+
+# Simple wrapper to update ~/.pgpass with AWS Secrets Manager credentials
+# Usage: scripts/pgpass
+
+cd "$(dirname "$0")/../backend"
+node scripts/update-pgpass.js

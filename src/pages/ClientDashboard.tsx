@@ -2,9 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../contexts/ClientThemeContext';
 import { useClientLanguage } from '../contexts/ClientLanguageContext';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import ServiceScheduler from '../components/client/ServiceScheduler';
+import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
 import LanguageSelector from '../components/client/LanguageSelector';
+import AddServiceLocationForm from '../components/client/AddServiceLocationForm';
+import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
 import {
   Building2,
   MapPin,
@@ -20,7 +24,8 @@ import {
   AlertCircle,
   Users,
   HardDrive,
-  Building
+  Building,
+  Plus
 } from 'lucide-react';
 
 interface User {
@@ -81,6 +86,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const { isDarkMode, toggleTheme } = useClientTheme();
   const { t } = useClientLanguage();
   const { signOut } = useEnhancedAuth();
+  const { hasNotifications, unseenServiceRequestChanges, startViewTimer, clearViewTimer } = useNotifications();
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   // Initialize activeTab from localStorage or default to 'dashboard'
@@ -93,6 +99,24 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
     localStorage.setItem('clientActiveTab', tab);
+  };
+
+  // State for AddServiceLocationForm modal
+  const [showAddLocationForm, setShowAddLocationForm] = useState(false);
+
+  // Function to handle successful service location addition
+  const handleServiceLocationAdded = (newLocation: any) => {
+    // Update the client data with the new location
+    if (clientData?.user?.accessibleLocations) {
+      setClientData(prev => ({
+        ...prev!,
+        user: {
+          ...prev!.user,
+          accessibleLocations: [...prev!.user.accessibleLocations!, newLocation]
+        }
+      }));
+    }
+    setShowAddLocationForm(false);
   };
 
   // Load client data from existing auth system or sessionStorage
@@ -109,7 +133,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             try {
               // Fetch real business data from API with timeout and retry
               const businessResponse = await Promise.race([
-                fetch('/api/client/profile/business', {
+                fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile/business`, {
                   method: 'GET',
                   headers: {
                     'Authorization': `Bearer ${sessionToken}`,
@@ -127,7 +151,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
                 // Get profile data with timeout
                 const profileResponse = await Promise.race([
-                  fetch('/api/client/profile', {
+                  fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile`, {
                     method: 'GET',
                     headers: {
                       'Authorization': `Bearer ${sessionToken}`,
@@ -264,6 +288,34 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     }
   };
 
+  // Handle session expiration
+  const handleSessionExpired = () => {
+    console.log('Session expired, redirecting to login');
+    handleLogout();
+  };
+
+  // Handle session warning (optional - could show a toast notification)
+  const handleSessionWarning = () => {
+    console.log('Session warning: 2 minutes remaining');
+    // Could add a toast notification here in the future
+  };
+
+  // Handle notification timer for Service Requests page
+  useEffect(() => {
+    if (activeTab === 'requests') {
+      // Start the 4-second timer when entering Service Requests page
+      startViewTimer();
+    } else {
+      // Clear timer if user navigates away
+      clearViewTimer();
+    }
+
+    // Cleanup timer on unmount or tab change
+    return () => {
+      clearViewTimer();
+    };
+  }, [activeTab, startViewTimer, clearViewTimer]);
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -330,6 +382,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
             {/* Header Actions */}
             <div className="flex items-center space-x-4">
+              {/* Session Countdown Timer */}
+              <SessionCountdownTimer
+                sessionTimeoutMs={15 * 60 * 1000} // 15 minutes
+                warningThresholdMs={2 * 60 * 1000} // 2 minutes warning
+                onSessionExpired={handleSessionExpired}
+                onWarningReached={handleSessionWarning}
+              />
+
               {/* Language Selector */}
               <LanguageSelector toggle={true} />
 
@@ -348,10 +408,21 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
               {/* Notifications */}
               <button
-                className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                className={`p-2 rounded-lg transition-colors relative ${
+                  hasNotifications
+                    ? 'bg-red-100 dark:bg-red-900/50 hover:bg-red-200 dark:hover:bg-red-800/50'
+                    : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'
+                }`}
                 title={t('client.notifications')}
               >
-                <Bell className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                <Bell className={`h-5 w-5 ${
+                  hasNotifications
+                    ? 'text-red-600 dark:text-red-400'
+                    : 'text-gray-600 dark:text-gray-400'
+                }`} />
+                {hasNotifications && (
+                  <span className="absolute -top-1 -right-1 h-3 w-3 bg-red-500 rounded-full animate-pulse"></span>
+                )}
               </button>
 
               {/* User Menu */}
@@ -367,7 +438,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
                   title={t('auth.logout')}
                 >
-                  <LogOut className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  <LogOut className="h-5 w-5 text-red-600 dark:text-red-400" />
                 </button>
               </div>
             </div>
@@ -387,7 +458,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
                   { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
                   { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
-                  { id: 'requests', label: t('dashboard.nav.requests', 'Service Requests'), icon: Clock },
+                  { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
                   { id: 'files', label: t('dashboard.nav.files', 'File Storage'), icon: FileText },
                   { id: 'settings', label: t('dashboard.nav.settings', 'Settings'), icon: Settings },
                 ].map((item) => {
@@ -397,16 +468,23 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     <li key={item.id}>
                       <button
                         onClick={() => setActiveTab(item.id)}
-                        className={`w-full flex items-center px-3 py-2 rounded-lg text-left transition-colors ${
+                        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-left transition-colors ${
                           isActive
                             ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-700'
                             : 'text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700'
                         }`}
                       >
-                        <Icon className={`h-5 w-5 mr-3 ${
-                          isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
-                        }`} />
-                        {item.label}
+                        <div className="flex items-center">
+                          <Icon className={`h-5 w-5 mr-3 ${
+                            isActive ? 'text-blue-600 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400'
+                          }`} />
+                          {item.label}
+                        </div>
+                        {item.id === 'requests' && unseenServiceRequestChanges > 0 && (
+                          <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse">
+                            {unseenServiceRequestChanges > 99 ? '99+' : unseenServiceRequestChanges}
+                          </span>
+                        )}
                       </button>
                     </li>
                   );
@@ -498,18 +576,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <button
                       onClick={() => setActiveTab('schedule')}
-                      className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
+                      className="flex items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
                     >
-                      <Calendar className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
-                      <span className="text-blue-700 dark:text-blue-300 font-medium">{t('dashboard.nav.schedule')}</span>
+                      <Calendar className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
+                      <span className="text-green-700 dark:text-green-300 font-medium">{t('dashboard.nav.schedule')}</span>
                     </button>
 
                     <button
                       onClick={() => setActiveTab('files')}
-                      className="flex items-center p-4 bg-green-50 dark:bg-green-900/20 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                      className="flex items-center p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                     >
-                      <Upload className="h-6 w-6 text-green-600 dark:text-green-400 mr-3" />
-                      <span className="text-green-700 dark:text-green-300 font-medium">{t('files.uploadFiles')}</span>
+                      <Upload className="h-6 w-6 text-blue-600 dark:text-blue-400 mr-3" />
+                      <span className="text-blue-700 dark:text-blue-300 font-medium">{t('files.uploadFiles')}</span>
                     </button>
 
                     <button
@@ -526,43 +604,91 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
             {activeTab === 'locations' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-                  {t('locations.title')}
-                </h2>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    {t('locations.title')}
+                  </h2>
+                  <button
+                    onClick={() => setShowAddLocationForm(true)}
+                    className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    {t('locations.addLocation')}
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {user.accessibleLocations.map((location) => (
-                    <div
-                      key={location.id}
-                      className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
-                    >
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <h3 className="font-medium text-gray-900 dark:text-white">
-                            {location.name}
-                          </h3>
-                          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                            {location.address.street}
-                          </p>
-                          <p className="text-sm text-gray-600 dark:text-gray-400">
-                            {location.address.city}, {location.address.state} {location.address.zipCode}
-                          </p>
-                          {location.contact.person && (
-                            <div className="mt-2">
-                              <p className="text-sm text-gray-600 dark:text-gray-400">
-                                <strong>Contact:</strong> {location.contact.person}
-                              </p>
-                              {location.contact.phone && (
+                  {user.accessibleLocations.map((location) => {
+                    const formatPhoneNumber = (phone: string) => {
+                      const cleaned = phone.replace(/\D/g, '');
+                      if (cleaned.length === 10) {
+                        return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+                      }
+                      return phone;
+                    };
+
+                    const getMapUrl = (address: any) => {
+                      const fullAddress = `${address.street}, ${address.city}, ${address.state} ${address.zipCode}`;
+                      return `https://maps.apple.com/?q=${encodeURIComponent(fullAddress)}`;
+                    };
+
+                    return (
+                      <div
+                        key={location.id}
+                        className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium text-gray-900 dark:text-white">
+                              {location.name}
+                            </h3>
+                            <a
+                              href={getMapUrl(location.address)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer mt-1 block"
+                            >
+                              {location.address.street}
+                            </a>
+                            <a
+                              href={getMapUrl(location.address)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline cursor-pointer block"
+                            >
+                              {location.address.city}, {location.address.state} {location.address.zipCode}
+                            </a>
+                            {location.contact.person && (
+                              <div className="mt-2">
                                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                                  <strong>Phone:</strong> {location.contact.phone}
+                                  <strong>{t('locations.contact')}:</strong> {location.contact.person}
                                 </p>
-                              )}
-                            </div>
-                          )}
+                                {location.contact.phone && (
+                                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                                    <strong>{t('locations.phone')}:</strong>{' '}
+                                    <a
+                                      href={`tel:${location.contact.phone}`}
+                                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline"
+                                    >
+                                      {formatPhoneNumber(location.contact.phone)}
+                                    </a>
+                                  </p>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                          <a
+                            href={getMapUrl(location.address)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer"
+                            title="Open in Maps"
+                          >
+                            <MapPin className="h-5 w-5 flex-shrink-0 ml-2" />
+                          </a>
                         </div>
-                        <MapPin className="h-5 w-5 text-gray-400 dark:text-gray-500 flex-shrink-0 ml-2" />
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {user.accessibleLocations.length === 0 && (
@@ -584,8 +710,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               <ClientSettings />
             )}
 
+            {/* Service Requests Tab */}
+            {activeTab === 'requests' && (
+              <ServiceRequests />
+            )}
+
             {/* Placeholder for other tabs */}
-            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && (
+            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && activeTab !== 'requests' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                 <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4 capitalize">
                   {activeTab.replace(/([A-Z])/g, ' $1').trim()}
@@ -602,6 +733,13 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           </div>
         </div>
       </div>
+
+      {/* Add Service Location Form Modal */}
+      <AddServiceLocationForm
+        isOpen={showAddLocationForm}
+        onClose={() => setShowAddLocationForm(false)}
+        onSuccess={handleServiceLocationAdded}
+      />
     </div>
   );
 };

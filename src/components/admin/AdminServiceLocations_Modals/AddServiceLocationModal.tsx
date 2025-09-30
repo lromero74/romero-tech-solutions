@@ -396,6 +396,10 @@ const AddServiceLocationModal: React.FC<AddServiceLocationModalProps> = ({
                     showLabels={false}
                     required={true}
                     onFieldBlur={handleFieldBlur}
+                    onZipLookupSuccess={() => {
+                      console.log('🚀 ZIP lookup success callback triggered, triggering service area validation');
+                      setTriggerValidation(Date.now());
+                    }}
                   />
                 </div>
 

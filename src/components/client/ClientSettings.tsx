@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import AlertModal from '../shared/AlertModal';
+import TrustedDeviceManagement from '../shared/TrustedDeviceManagement';
 import {
   User,
   Lock,
@@ -14,7 +15,8 @@ import {
   XCircle,
   AlertTriangle,
   Save,
-  RefreshCw
+  RefreshCw,
+  Smartphone
 } from 'lucide-react';
 
 interface ContactInfo {
@@ -420,7 +422,8 @@ const ClientSettings: React.FC = () => {
             {[
               { id: 'profile', label: t('settings.tabs.profile'), icon: User },
               { id: 'password', label: t('settings.tabs.password'), icon: Lock },
-              { id: 'security', label: t('settings.tabs.security'), icon: Shield }
+              { id: 'security', label: t('settings.tabs.security'), icon: Shield },
+              { id: 'devices', label: 'Trusted Devices', icon: Smartphone }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -758,6 +761,11 @@ const ClientSettings: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* Trusted Devices Tab */}
+        {activeTab === 'devices' && (
+          <TrustedDeviceManagement isDarkMode={isDarkMode} />
         )}
       </div>
 

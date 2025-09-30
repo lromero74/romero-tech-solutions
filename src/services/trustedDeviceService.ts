@@ -50,18 +50,19 @@ export class TrustedDeviceService {
     trustDurationDays: number = 30
   ): Promise<TrustedDeviceResponse> {
     try {
-      const deviceFingerprintData = createDeviceFingerprint(
-        '', // userId will be filled by backend from session
-        'employee', // userType will be filled by backend from session
-        customDeviceName,
-        trustDurationDays
-      );
+      // Use async version to get geolocation data
+      const { collectDeviceInfoAsync, generateDeviceFingerprint, generateDeviceName, detectSharedDevice } = await import('../utils/deviceFingerprinting');
+
+      const deviceInfo = await collectDeviceInfoAsync();
+      const fingerprint = generateDeviceFingerprint(deviceInfo);
+      const deviceName = customDeviceName || generateDeviceName(deviceInfo);
+      const isSharedDevice = detectSharedDevice(deviceInfo);
 
       const response = await apiService.post('/trusted-devices/register', {
-        deviceFingerprint: deviceFingerprintData.deviceFingerprint,
-        deviceName: deviceFingerprintData.deviceName,
-        deviceInfo: deviceFingerprintData.deviceInfo,
-        isSharedDevice: deviceFingerprintData.isSharedDevice,
+        deviceFingerprint: fingerprint,
+        deviceName: deviceName,
+        deviceInfo: deviceInfo,
+        isSharedDevice: isSharedDevice,
         trustDurationDays
       });
 

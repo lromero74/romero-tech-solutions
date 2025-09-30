@@ -6,6 +6,7 @@ interface LanguageContextType {
   t: (key: string, variables?: { [key: string]: string }, fallback?: string) => string;
   loading: boolean;
   availableLanguages: Array<{ code: string; name: string; nativeName: string }>;
+  clearTranslationCache: () => void;
 }
 
 const ClientLanguageContext = createContext<LanguageContextType | undefined>(undefined);
@@ -92,12 +93,26 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
   ];
 
   // Load translations from API
-  const loadTranslations = useCallback(async (languageCode: string) => {
-    // Check cache first
-    if (translationCache[languageCode]) {
-      setTranslations(translationCache[languageCode]);
-      setLoading(false);
-      return;
+  const loadTranslations = useCallback(async (languageCode: string, force: boolean = false) => {
+    // Check cache first (unless forced)
+    if (!force) {
+      if (translationCache[languageCode]) {
+        setTranslations(translationCache[languageCode]);
+        setLoading(false);
+        return;
+      }
+
+      // Check localStorage cache
+      const localCached = loadCachedTranslations(languageCode);
+      if (localCached && Object.keys(localCached).length > 0) {
+        translationCache[languageCode] = localCached;
+        setTranslations(localCached);
+        setLoading(false);
+        return;
+      }
+    } else {
+      delete translationCache[languageCode];
+      localStorage.removeItem(`translations_${languageCode}`);
     }
 
     // If we don't have initial translations, show we're loading
@@ -107,7 +122,6 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
 
     try {
       // Load translations from database API
-      console.log('Loading translations from database API for language:', languageCode);
       const response = await fetch(`/api/translations/client/${languageCode}`, {
         method: 'GET',
         credentials: 'include'
@@ -146,6 +160,7 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
   useEffect(() => {
     loadTranslations(language);
   }, [loadTranslations, language]);
+
 
   // Translation function with variable interpolation
   const t = useCallback((key: string, variables?: { [key: string]: string }, fallback?: string): string => {
@@ -211,12 +226,20 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
     }
   }, [language, loadTranslations]);
 
+  // Clear translation cache function
+  const clearTranslationCache = useCallback(() => {
+    delete translationCache[language];
+    localStorage.removeItem(`translations_${language}`);
+    loadTranslations(language, true); // Force reload
+  }, [language, loadTranslations]);
+
   const contextValue: LanguageContextType = {
     language,
     setLanguage,
     t,
     loading,
-    availableLanguages
+    availableLanguages,
+    clearTranslationCache
   };
 
   return (

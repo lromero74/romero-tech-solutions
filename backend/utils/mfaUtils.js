@@ -30,23 +30,25 @@ export function generateResetToken() {
  * @param {string} userId - The user ID
  * @param {string} email - The user's email
  * @param {string} mfaCode - The generated MFA code
+ * @param {string} userType - The user type (admin, employee, client)
  * @param {number} expirationMinutes - Minutes until expiration (default: 5)
  * @returns {Promise<void>}
  */
-export async function storeMfaCode(userId, email, mfaCode, expirationMinutes = 5) {
+export async function storeMfaCode(userId, email, mfaCode, userType = 'admin', expirationMinutes = 5) {
   try {
     const expiresAt = new Date(Date.now() + expirationMinutes * 60 * 1000);
 
     await query(`
-      INSERT INTO admin_login_mfa (user_id, email, mfa_code, expires_at)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO admin_login_mfa (user_id, email, mfa_code, user_type, expires_at)
+      VALUES ($1, $2, $3, $4, $5)
       ON CONFLICT (email)
       DO UPDATE SET
         mfa_code = $3,
-        expires_at = $4,
+        user_type = $4,
+        expires_at = $5,
         used = FALSE,
         created_at = CURRENT_TIMESTAMP
-    `, [userId, email, mfaCode, expiresAt]);
+    `, [userId, email, mfaCode, userType, expiresAt]);
   } catch (error) {
     console.error('Error storing MFA code:', error);
     throw new Error('Failed to store MFA code');

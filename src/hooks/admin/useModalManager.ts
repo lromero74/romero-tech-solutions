@@ -14,7 +14,8 @@ export type ModalName =
   | 'editService'
   | 'addServiceRequest'
   | 'editServiceRequest'
-  | 'changePassword';
+  | 'changePassword'
+  | 'trustedDevices';
 
 export interface ModalState {
   addClient: boolean;
@@ -31,6 +32,7 @@ export interface ModalState {
   addServiceRequest: boolean;
   editServiceRequest: boolean;
   changePassword: boolean;
+  trustedDevices: boolean;
 }
 
 export interface UseModalManagerReturn {
@@ -56,6 +58,7 @@ const initialModalState: ModalState = {
   addServiceRequest: false,
   editServiceRequest: false,
   changePassword: false,
+  trustedDevices: false,
 };
 
 export const useModalManager = (): UseModalManagerReturn => {

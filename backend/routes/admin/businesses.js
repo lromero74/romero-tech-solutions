@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../../config/database.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 
 const router = express.Router();
 
@@ -27,15 +28,16 @@ router.get('/businesses/by-email-domain/:email', async (req, res) => {
         b.logo_url,
         b.is_active,
         b.soft_delete,
-        b.primary_street as business_street,
-        b.primary_city as business_city,
-        b.primary_state as business_state,
-        b.primary_zip_code as business_zip_code,
-        b.primary_country as business_country,
+        hq.street as business_street,
+        hq.city as business_city,
+        hq.state as business_state,
+        hq.zip_code as business_zip_code,
+        hq.country as business_country,
         bad.domain as authorized_domain,
         bad.description as domain_description
       FROM businesses b
       JOIN business_authorized_domains bad ON b.id = bad.business_id
+      LEFT JOIN service_locations hq ON hq.business_id = b.id AND hq.is_headquarters = true
       WHERE bad.domain = $1
         AND bad.is_active = true
       ORDER BY
@@ -78,14 +80,14 @@ router.get('/businesses', async (req, res) => {
         b.is_active,
         COALESCE(b.soft_delete, false) as soft_delete,
         b.created_at,
-        -- Get primary business address
-        b.primary_street as street,
-        b.primary_city as city,
-        b.primary_state as state,
-        b.primary_zip_code as zip_code,
-        b.primary_country as country,
+        -- Get primary business address from headquarters service location
+        hq.street,
+        hq.city,
+        hq.state,
+        hq.zip_code,
+        hq.country,
         -- Count only actual service locations (not headquarters)
-        (SELECT COUNT(*) FROM service_locations sl2 WHERE sl2.business_id = b.id AND sl2.is_active = true AND sl2.soft_delete = false) as location_count,
+        (SELECT COUNT(*) FROM service_locations sl2 WHERE sl2.business_id = b.id AND sl2.is_active = true AND sl2.soft_delete = false AND sl2.is_headquarters = false) as location_count,
         -- Get authorized domains (comma-separated)
         COALESCE(
           (SELECT string_agg(bad.domain, ', ' ORDER BY bad.domain)
@@ -94,6 +96,7 @@ router.get('/businesses', async (req, res) => {
           ''
         ) as domain_emails
       FROM businesses b
+      LEFT JOIN service_locations hq ON hq.business_id = b.id AND hq.is_headquarters = true
       ORDER BY b.business_name
     `);
 
@@ -135,7 +138,7 @@ router.get('/businesses', async (req, res) => {
 });
 
 // PUT /businesses/:businessId - Update business
-router.put('/businesses/:businessId', async (req, res) => {
+router.put('/businesses/:businessId', requirePermission('modify.businesses.enable'), async (req, res) => {
   try {
     const { businessId } = req.params;
     const { businessName, address, isActive, logo, logoPositionX, logoPositionY, logoScale, logoBackgroundColor } = req.body;
@@ -187,34 +190,68 @@ router.put('/businesses/:businessId', async (req, res) => {
 
       const updatedBusiness = businessResult.rows[0];
 
-      // Update primary business address if provided
+      // Update headquarters service location address if provided
       if (address) {
-        await query(`
-          UPDATE businesses
-          SET
-            primary_street = $1,
-            primary_city = $2,
-            primary_state = $3,
-            primary_zip_code = $4,
-            primary_country = $5,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = $6
-        `, [
-          address.street || '',
-          address.city || '',
-          address.state || '',
-          address.zipCode || '',
-          address.country || 'USA',
-          businessId
-        ]);
+        // Check if headquarters service location exists
+        const hqCheck = await query(`
+          SELECT id FROM service_locations
+          WHERE business_id = $1 AND is_headquarters = TRUE
+          LIMIT 1
+        `, [businessId]);
+
+        if (hqCheck.rows.length > 0) {
+          // Update existing headquarters
+          await query(`
+            UPDATE service_locations
+            SET
+              street = $1,
+              city = $2,
+              state = $3,
+              zip_code = $4,
+              country = $5,
+              updated_at = CURRENT_TIMESTAMP
+            WHERE business_id = $6 AND is_headquarters = TRUE
+          `, [
+            address.street || '',
+            address.city || '',
+            address.state || '',
+            address.zipCode || '',
+            address.country || 'USA',
+            businessId
+          ]);
+        } else {
+          // Create headquarters if it doesn't exist
+          await query(`
+            INSERT INTO service_locations (
+              business_id,
+              location_name,
+              street,
+              city,
+              state,
+              zip_code,
+              country,
+              is_headquarters,
+              is_active,
+              soft_delete
+            )
+            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, FALSE)
+          `, [
+            businessId,
+            businessName + ' - Headquarters',
+            address.street || '',
+            address.city || '',
+            address.state || '',
+            address.zipCode || '',
+            address.country || 'USA'
+          ]);
+        }
       }
 
-      // Get the updated primary address
+      // Get the updated headquarters address
       const addressResult = await query(`
-        SELECT primary_street as street, primary_city as city, primary_state as state,
-               primary_zip_code as zip_code, primary_country as country
-        FROM businesses
-        WHERE id = $1
+        SELECT street, city, state, zip_code, country
+        FROM service_locations
+        WHERE business_id = $1 AND is_headquarters = TRUE
         LIMIT 1
       `, [businessId]);
 
@@ -265,7 +302,7 @@ router.put('/businesses/:businessId', async (req, res) => {
 });
 
 // POST /businesses - Create new business
-router.post('/businesses', async (req, res) => {
+router.post('/businesses', requirePermission('add.businesses.enable'), async (req, res) => {
   try {
     const {
       businessName,
@@ -297,7 +334,7 @@ router.post('/businesses', async (req, res) => {
     await query('BEGIN');
 
     try {
-      // Create the business record with primary address
+      // Create the business record (NO address columns - address goes in service_locations)
       const businessResult = await query(`
         INSERT INTO businesses (
           business_name,
@@ -306,14 +343,9 @@ router.post('/businesses', async (req, res) => {
           logo_position_x,
           logo_position_y,
           logo_scale,
-          logo_background_color,
-          primary_street,
-          primary_city,
-          primary_state,
-          primary_zip_code,
-          primary_country
+          logo_background_color
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
         RETURNING id, business_name, is_active, logo_url, logo_position_x, logo_position_y, logo_scale, logo_background_color, created_at
       `, [
         businessName,
@@ -322,17 +354,35 @@ router.post('/businesses', async (req, res) => {
         logoPositionX ? Math.round(logoPositionX) : null,
         logoPositionY ? Math.round(logoPositionY) : null,
         logoScale ? Math.round(logoScale) : null,
-        logoBackgroundColor || null,
+        logoBackgroundColor || null
+      ]);
+
+      const business = businessResult.rows[0];
+
+      // Create headquarters service location to store business address
+      await query(`
+        INSERT INTO service_locations (
+          business_id,
+          location_name,
+          street,
+          city,
+          state,
+          zip_code,
+          country,
+          is_headquarters,
+          is_active,
+          soft_delete
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, FALSE)
+      `, [
+        business.id,
+        businessName + ' - Headquarters',
         address.street,
         address.city,
         address.state,
         address.zipCode,
         address.country || 'USA'
       ]);
-
-      const business = businessResult.rows[0];
-
-      // No longer create headquarters service location - business address is now separate
 
       // Add authorized domains
       for (const domain of authorizedDomains) {
@@ -503,7 +553,7 @@ router.put('/businesses/:businessId/authorized-domains', async (req, res) => {
 });
 
 // PATCH /businesses/:id/soft-delete - Soft delete business with cascade to service locations and users
-router.patch('/businesses/:id/soft-delete', async (req, res) => {
+router.patch('/businesses/:id/soft-delete', requirePermission('softDelete.businesses.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const { restore = false } = req.body; // restore = true to undelete, false to soft delete
@@ -597,7 +647,7 @@ router.patch('/businesses/:id/soft-delete', async (req, res) => {
 });
 
 // DELETE /businesses/:id - Permanently delete business
-router.delete('/businesses/:id', async (req, res) => {
+router.delete('/businesses/:id', requirePermission('hardDelete.businesses.enable'), async (req, res) => {
   try {
     const { id } = req.params;
 

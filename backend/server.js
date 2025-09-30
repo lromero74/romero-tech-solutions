@@ -22,9 +22,15 @@ import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
 import clientSchedulerRoutes from './routes/client/scheduler.js';
 import translationsRoutes from './routes/translations.js';
 import trustedDevicesRoutes from './routes/trustedDevices.js';
+import serviceAreasRoutes from './routes/serviceAreas.js';
+import emailVerificationRoutes from './routes/emailVerification.js';
+import serviceRequestWorkflowRoutes from './routes/serviceRequestWorkflow.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
+
+// Import verification cleanup service
+import { verificationCleanupService } from './services/verificationCleanupService.js';
 
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
@@ -220,6 +226,9 @@ app.use('/api/client', generalLimiter, clientSchedulerRoutes); // Client schedul
 app.use('/api/client/profile', generalLimiter, clientProfileRoutes); // Client profile management
 app.use('/api/client/mfa', generalLimiter, clientMfaRoutes); // Client MFA management
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system
+app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation
+app.use('/api/service-request-workflow', generalLimiter, serviceRequestWorkflowRoutes); // Service request workflow (acknowledgment, start)
+app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { validateServiceArea, formatServiceAreasDisplay, getActiveServiceAreas } from '../../utils/serviceAreaValidation';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import AlertModal from './AlertModal';
 
 interface ServiceAreaValidatorProps {
@@ -24,6 +25,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
   disabled = false,
   triggerValidation
 }) => {
+  const { t } = useClientLanguage();
   const [validationState, setValidationState] = useState<{
     isValidating: boolean;
     isValid: boolean | null;
@@ -91,7 +93,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       });
       setShowErrorModal(false); // Clear any existing error modal
       onValidationChange(false, {
-        serviceArea: 'Please enter a ZIP code to validate service area.'
+        serviceArea: t('serviceArea.pleaseEnterZip', undefined, 'Please enter a ZIP code to validate service area.')
       });
       return;
     }
@@ -101,11 +103,11 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       setValidationState({
         isValidating: false,
         isValid: false,
-        reason: `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`
+        reason: t('serviceArea.invalidZipCode', { zipCode: address.zipCode }, `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`)
       });
       setShowErrorModal(false); // Clear any existing error modal
       onValidationChange(false, {
-        serviceArea: `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`
+        serviceArea: t('serviceArea.invalidZipCode', { zipCode: address.zipCode }, `ZIP code "${address.zipCode}" is not in our service area. Please enter a complete 5-digit ZIP code.`)
       });
       return;
     }
@@ -142,7 +144,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       if (!result.isValid && result.reason) {
         errors.serviceArea = result.reason;
         if (result.suggestedAreas && result.suggestedAreas.length > 0) {
-          errors.suggestedAreas = `We currently service: ${result.suggestedAreas.join(', ')}`;
+          errors.suggestedAreas = t('serviceArea.weCurrentlyService', { areas: result.suggestedAreas.join(', ') }, `We currently service: ${result.suggestedAreas.join(', ')}`);
         }
         // Show error modal for invalid results only
         setShowErrorModal(true);
@@ -166,7 +168,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
         reason: `Service area validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       });
       onValidationChange(false, {
-        serviceArea: 'Unable to verify service area. Please contact support.'
+        serviceArea: t('serviceArea.unableToVerify', undefined, 'Unable to verify service area. Please contact support.')
       });
       // Show error modal for validation failure
       setShowErrorModal(true);
@@ -217,7 +219,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
       <div className="mt-4 space-y-3">
         <div className={`flex items-center p-3 rounded-md ${themeClasses.bg.secondary} border ${themeClasses.border.primary}`}>
           <span className={`text-sm ${themeClasses.text.muted}`}>
-            Service area validation will start once ZIP code is complete...
+            {t('serviceArea.validationWillStart', undefined, 'Service area validation will start once ZIP code is complete...')}
           </span>
         </div>
       </div>
@@ -231,7 +233,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
         <div className={`flex items-center p-3 rounded-md ${themeClasses.bg.secondary} border ${themeClasses.border.primary}`}>
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-3"></div>
           <span className={`text-sm ${themeClasses.text.secondary}`}>
-            Verifying service area...
+            {t('serviceArea.verifying', undefined, 'Verifying service area...')}
           </span>
         </div>
       )}
@@ -240,7 +242,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
         <div className={`flex items-center p-3 rounded-md bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800`}>
           <CheckCircle className="w-4 h-4 text-green-600 dark:text-green-400 mr-3 flex-shrink-0" />
           <span className="text-sm text-green-800 dark:text-green-200">
-            ✅ This location is within our service area
+            {t('serviceArea.locationWithinArea', undefined, '✅ This location is within our service area')}
           </span>
         </div>
       )}
@@ -250,8 +252,8 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
         isOpen={showErrorModal}
         onClose={() => setShowErrorModal(false)}
         type="error"
-        title="Service Area Not Available"
-        message={validationState.reason || 'This location is outside our current service area.'}
+        title={t('serviceArea.notAvailableTitle', undefined, 'Service Area Not Available')}
+        message={validationState.reason || t('serviceArea.outsideArea', undefined, 'This location is outside our current service area.')}
         suggestedAreas={validationState.suggestedAreas}
         serviceStates={serviceAreas.states}
       />

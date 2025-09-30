@@ -11,6 +11,8 @@ import {
   ChevronDown
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
+import { usePermission } from '../../hooks/usePermission';
+import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 
 interface Client {
   id: string;
@@ -121,6 +123,22 @@ const AdminClients: React.FC<AdminClientsProps> = ({
 }) => {
   const filteredClients = getFilteredAndSortedClients();
 
+  // Permission checks
+  const { checkPermission } = usePermission();
+  const canAdd = checkPermission('add.users.enable');
+  const canModify = checkPermission('modify.users.enable');
+  const canModifyPhoto = checkPermission('modify.users.photo.enable');
+  const canSoftDelete = checkPermission('softDelete.users.enable');
+  const canHardDelete = checkPermission('hardDelete.users.enable');
+
+  // Permission denied modal state
+  const [permissionDenied, setPermissionDenied] = useState<{
+    show: boolean;
+    action?: string;
+    requiredPermission?: string;
+    message?: string;
+  }>({ show: false });
+
   // Helper function to check if a client can be restored
   const canClientBeRestored = (client: Client): boolean => {
     if (!client.softDelete) return true; // Not soft deleted, no restriction
@@ -212,13 +230,30 @@ const AdminClients: React.FC<AdminClientsProps> = ({
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Client Management</h1>
-        <button
-          onClick={onAddClient}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Add Client
-        </button>
+        {canAdd ? (
+          <button
+            onClick={onAddClient}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
+          </button>
+        ) : (
+          <button
+            onClick={() => setPermissionDenied({
+              show: true,
+              action: 'Add Client',
+              requiredPermission: 'add.users.enable',
+              message: 'You do not have permission to add clients'
+            })}
+            disabled
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-400 cursor-not-allowed opacity-50"
+            title="Admin, Sales, or Executive role required"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Add Client
+          </button>
+        )}
       </div>
 
       {/* Summary Stats */}
@@ -533,63 +568,132 @@ const AdminClients: React.FC<AdminClientsProps> = ({
                     </td>
                     <td className={`px-2 py-3 text-sm font-medium border-r ${themeClasses.border.primary}`}>
                       <div className="flex items-center space-x-2">
-                        <button
-                          onClick={() => onEditClient?.(client)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Edit client"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => toggleUserStatus(client.id, client.isActive ? 'inactive' : 'active')}
-                          disabled={loadingClientOperations[client.id]}
-                          className={`${client.isActive ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={client.isActive ? "Deactivate client" : "Activate client"}
-                        >
-                          {loadingClientOperations[client.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
+                        {/* Edit Button */}
+                        {canModify ? (
+                          <button
+                            onClick={() => onEditClient?.(client)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit client"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setPermissionDenied({
+                              show: true,
+                              action: 'Edit Client',
+                              requiredPermission: 'modify.users.enable',
+                              message: 'You do not have permission to modify clients'
+                            })}
+                            disabled
+                            className="text-gray-300 cursor-not-allowed opacity-50"
+                            title="Technician, Admin, or Executive role required"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Toggle Active/Inactive Button */}
+                        {canModify ? (
+                          <button
+                            onClick={() => toggleUserStatus(client.id, client.isActive ? 'inactive' : 'active')}
+                            disabled={loadingClientOperations[client.id]}
+                            className={`${client.isActive ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={client.isActive ? "Deactivate client" : "Activate client"}
+                          >
+                            {loadingClientOperations[client.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Power className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            disabled
+                            className="text-gray-300 cursor-not-allowed opacity-50"
+                            title="Technician, Admin, or Executive role required"
+                          >
                             <Power className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => onSoftDeleteClient?.(client)}
-                          disabled={loadingClientOperations[client.id]}
-                          className={`${
-                            client.softDelete && !canClientBeRestored(client)
-                              ? 'text-gray-400'
-                              : client.softDelete
-                                ? 'text-blue-600 hover:text-blue-900'
-                                : 'text-orange-600 hover:text-orange-900'
-                          } ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={
-                            client.softDelete && !canClientBeRestored(client)
-                              ? "Cannot restore: parent business is soft deleted"
-                              : client.softDelete
-                                ? "Restore client"
-                                : "Soft delete client"
-                          }
-                        >
-                          {loadingClientOperations[client.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : client.softDelete ? (
-                            <Undo2 className="w-4 h-4" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => onDeleteClient?.(client)}
-                          disabled={loadingClientOperations[client.id]}
-                          className={`text-red-600 hover:text-red-900 ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title="Permanently delete client"
-                        >
-                          {loadingClientOperations[client.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
+                          </button>
+                        )}
+
+                        {/* Soft Delete/Restore Button */}
+                        {canSoftDelete ? (
+                          <button
+                            onClick={() => onSoftDeleteClient?.(client)}
+                            disabled={loadingClientOperations[client.id]}
+                            className={`${
+                              client.softDelete && !canClientBeRestored(client)
+                                ? 'text-gray-400'
+                                : client.softDelete
+                                  ? 'text-blue-600 hover:text-blue-900'
+                                  : 'text-orange-600 hover:text-orange-900'
+                            } ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={
+                              client.softDelete && !canClientBeRestored(client)
+                                ? "Cannot restore: parent business is soft deleted"
+                                : client.softDelete
+                                  ? "Restore client"
+                                  : "Soft delete client"
+                            }
+                          >
+                            {loadingClientOperations[client.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : client.softDelete ? (
+                              <Undo2 className="w-4 h-4" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setPermissionDenied({
+                              show: true,
+                              action: client.softDelete ? 'Restore Client' : 'Soft Delete Client',
+                              requiredPermission: 'softDelete.users.enable',
+                              message: 'You do not have permission to soft delete clients'
+                            })}
+                            disabled
+                            className="text-gray-300 cursor-not-allowed opacity-50"
+                            title="Admin or Executive role required"
+                          >
+                            {client.softDelete ? (
+                              <Undo2 className="w-4 h-4" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+
+                        {/* Hard Delete Button */}
+                        {canHardDelete ? (
+                          <button
+                            onClick={() => onDeleteClient?.(client)}
+                            disabled={loadingClientOperations[client.id]}
+                            className={`text-red-600 hover:text-red-900 ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title="Permanently delete client"
+                          >
+                            {loadingClientOperations[client.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <X className="w-4 h-4" />
+                            )}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setPermissionDenied({
+                              show: true,
+                              action: 'Permanently Delete Client',
+                              requiredPermission: 'hardDelete.users.enable',
+                              message: 'You do not have permission to permanently delete clients'
+                            })}
+                            disabled
+                            className="text-gray-300 cursor-not-allowed opacity-50"
+                            title="Executive role required"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -650,6 +754,15 @@ const AdminClients: React.FC<AdminClientsProps> = ({
           </div>
         </div>
       )}
+
+      {/* Permission Denied Modal */}
+      <PermissionDeniedModal
+        isOpen={permissionDenied.show}
+        onClose={() => setPermissionDenied({ show: false })}
+        action={permissionDenied.action}
+        requiredPermission={permissionDenied.requiredPermission}
+        message={permissionDenied.message}
+      />
     </div>
   );
 };

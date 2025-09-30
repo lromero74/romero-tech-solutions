@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Shield, ChevronDown, User, Lock, Globe, Bell, Moon, Sun, Smartphone, LogOut } from 'lucide-react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
-import { ThemeProvider } from '../contexts/ThemeContext';
+import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { AdminDataProvider, useAdminData } from '../contexts/AdminDataContext';
 import SessionWarning from '../components/common/SessionWarning';
-import EmergencyAlerts from '../components/admin/EmergencyAlerts';
+import SessionCountdownTimer from '../components/admin/SessionCountdownTimer';
+// import EmergencyAlerts from '../components/admin/EmergencyAlerts'; // Removed - mock data moved to .plans/templates/
 import { AdminSidebar } from '../components/admin';
 import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
@@ -14,6 +16,66 @@ type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession } = useEnhancedAuth();
   const { refreshAllData, serviceLocations } = useAdminData();
+  const { toggleTheme, isDark } = useTheme();
+
+  // User dropdown state
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    if (isUserMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isUserMenuOpen]);
+
+  // Handle account dropdown actions
+  const handleAccountAction = (action: string) => {
+    setIsUserMenuOpen(false);
+
+    switch (action) {
+      case 'profile':
+        // Profile settings
+        break;
+      case 'password':
+        modalManager.openModal('changePassword');
+        break;
+      case 'trusted-devices':
+        modalManager.openModal('trustedDevices');
+        break;
+      case 'preferences':
+        // User preferences
+        break;
+      case 'notifications':
+        // Notification settings
+        break;
+      case 'theme':
+        toggleTheme();
+        break;
+      case 'signout':
+        signOut();
+        break;
+    }
+  };
+
+  // Session countdown handlers
+  const handleSessionExpired = () => {
+    console.log('⏰ Session expired - signing out');
+    signOut();
+  };
+
+  const handleSessionWarning = () => {
+    console.log('⚠️ Session warning - 2 minutes remaining');
+  };
 
   // View state
   const [currentView, setCurrentView] = useState<AdminView>(() => {
@@ -188,8 +250,7 @@ const AdminDashboardContent: React.FC = () => {
   };
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex">
+    <div className="h-screen bg-gray-50 dark:bg-gray-900 flex flex-col overflow-hidden">
         {/* Session Warning - Only render when user is authenticated */}
         {user && (
           <SessionWarning
@@ -200,21 +261,141 @@ const AdminDashboardContent: React.FC = () => {
           />
         )}
 
-        {/* Emergency Alerts - Only render when user is authenticated */}
-        {user && <EmergencyAlerts />}
+        {/* Emergency Alerts - Disabled: mock data moved to .plans/templates/ */}
+        {/* {user && <EmergencyAlerts />} */}
 
-        {/* Sidebar */}
-        <AdminSidebar
-          currentView={currentView}
-          setCurrentView={handleViewChange}
-          signOut={signOut}
-          user={user}
-          onOpenChangePasswordModal={() => modalManager.openModal('changePassword')}
-        />
+        {/* Sticky Header */}
+        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+          <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              {/* Logo and Title */}
+              <div className="flex items-center">
+                <div className="flex-shrink-0 h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <Shield className="h-5 w-5 text-white" />
+                </div>
+                <div className="ml-3">
+                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                    Romero Tech Solutions
+                  </h1>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Admin Dashboard</p>
+                </div>
+              </div>
 
-        {/* Main Content */}
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <main className="flex-1 overflow-x-hidden overflow-y-auto pr-6 mt-2">
+              {/* Session Countdown Timer */}
+              <div className="flex items-center space-x-4">
+                <SessionCountdownTimer
+                  sessionTimeoutMs={15 * 60 * 1000} // 15 minutes
+                  warningThresholdMs={2 * 60 * 1000} // 2 minutes warning
+                  onSessionExpired={handleSessionExpired}
+                  onWarningReached={handleSessionWarning}
+                />
+              </div>
+
+              {/* User Info & Dropdown */}
+              {user && (
+                <div className="flex items-center space-x-3">
+                  <div className="relative" ref={userMenuRef}>
+                    <button
+                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                      className="flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-3 py-2 transition-colors"
+                    >
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
+                      </div>
+                      <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
+                        <span className="text-white font-medium text-sm">
+                          {user.name?.charAt(0).toUpperCase() || 'A'}
+                        </span>
+                      </div>
+                      <ChevronDown
+                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${
+                          isUserMenuOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </button>
+
+                    {/* Dropdown Menu */}
+                    {isUserMenuOpen && (
+                      <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                        <button
+                          onClick={() => handleAccountAction('profile')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <User className="h-4 w-4" />
+                          <span>Profile Settings</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAccountAction('password')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <Lock className="h-4 w-4" />
+                          <span>Change Password</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAccountAction('trusted-devices')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <Smartphone className="h-4 w-4" />
+                          <span>Trusted Devices</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAccountAction('preferences')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <Globe className="h-4 w-4" />
+                          <span>Preferences</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAccountAction('notifications')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <Bell className="h-4 w-4" />
+                          <span>Notifications</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleAccountAction('theme')}
+                          className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          {isDark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+                          <span>{isDark ? 'Light Mode' : 'Dark Mode'}</span>
+                        </button>
+
+                        <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
+
+                        <button
+                          onClick={() => handleAccountAction('signout')}
+                          className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
+                        >
+                          <LogOut className="h-4 w-4" />
+                          <span>Sign Out</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+
+        {/* Main Container */}
+        <div className="flex flex-1 overflow-hidden">
+          {/* Sidebar */}
+          <AdminSidebar
+            currentView={currentView}
+            setCurrentView={handleViewChange}
+            user={user}
+          />
+
+          {/* Main Content */}
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <main className="flex-1 overflow-x-hidden overflow-y-auto pr-6 mt-2">
             <AdminViewRouter
               currentView={currentView}
               onLocationCountClick={handleLocationCountClick}
@@ -239,6 +420,7 @@ const AdminDashboardContent: React.FC = () => {
               setShowSoftDeletedServiceLocations={setShowSoftDeletedServiceLocations}
             />
           </main>
+          </div>
         </div>
 
         {/* Modal Manager */}
@@ -257,15 +439,16 @@ const AdminDashboardContent: React.FC = () => {
           onRefresh={refreshAllData}
         />
       </div>
-    </ThemeProvider>
   );
 };
 
 const AdminDashboard: React.FC = () => {
   return (
-    <AdminDataProvider>
-      <AdminDashboardContent />
-    </AdminDataProvider>
+    <ThemeProvider>
+      <AdminDataProvider>
+        <AdminDashboardContent />
+      </AdminDataProvider>
+    </ThemeProvider>
   );
 };
 

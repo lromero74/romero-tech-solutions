@@ -112,11 +112,12 @@ export async function getPasswordExpirationInfo(userId) {
 
 /**
  * Get current password complexity requirements
+ * @param {string} userType - The user type ('employee' or 'client')
  * @returns {Promise<Object>} Current password complexity requirements
  */
-export async function getPasswordComplexityRequirements() {
+export async function getPasswordComplexityRequirements(userType = 'employee') {
   try {
-    return await passwordComplexityService.getPasswordComplexityRequirements();
+    return await passwordComplexityService.getPasswordComplexityRequirements(userType);
   } catch (error) {
     console.error('Error getting password complexity requirements:', error);
     throw new Error('Failed to get password complexity requirements');

@@ -7,6 +7,7 @@ import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplet
 import LocationTypeSelector from '../../shared/LocationTypeSelector';
 import { validateServiceAreaField } from '../../../utils/serviceAreaValidation';
 import AlertModal from '../../shared/AlertModal';
+import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 
 interface Business {
   id: string;
@@ -29,6 +30,11 @@ interface ServiceLocation {
   contact_person?: string;
   contact_phone?: string;
   notes?: string;
+  building_image_url?: string;
+  building_image_position_x?: number;
+  building_image_position_y?: number;
+  building_image_scale?: number;
+  building_image_background_color?: string;
   is_active: boolean;
   is_headquarters: boolean;
   soft_delete: boolean;
@@ -54,6 +60,11 @@ interface EditServiceLocationModalProps {
     contact_person?: string;
     contact_phone?: string;
     notes?: string;
+    building_image_url?: string;
+    building_image_position_x?: number;
+    building_image_position_y?: number;
+    building_image_scale?: number;
+    building_image_background_color?: string;
     is_active: boolean;
     is_headquarters: boolean;
   }>) => void;
@@ -74,9 +85,15 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     contact_person: '',
     contact_phone: '',
     notes: '',
+    building_image_url: '',
+    building_image_position_x: 50,
+    building_image_position_y: 50,
+    building_image_scale: 100,
+    building_image_background_color: '',
     is_active: true,
     is_headquarters: false
   });
+  const [enableBackgroundColor, setEnableBackgroundColor] = useState(false);
 
   const [address, setAddress] = useState({
     street: '',
@@ -102,6 +119,9 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
     suggestedAreas?: string[];
   }>({});
 
+  // Trigger for forcing service area validation after ZIP lookup
+  const [triggerValidation, setTriggerValidation] = useState<number>(0);
+
   useEffect(() => {
     if (serviceLocation) {
       const locationData = {
@@ -112,9 +132,15 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
         contact_person: serviceLocation.contact_person || '',
         contact_phone: serviceLocation.contact_phone || '',
         notes: serviceLocation.notes || '',
+        building_image_url: serviceLocation.building_image_url || '',
+        building_image_position_x: serviceLocation.building_image_position_x || 50,
+        building_image_position_y: serviceLocation.building_image_position_y || 50,
+        building_image_scale: serviceLocation.building_image_scale || 100,
+        building_image_background_color: serviceLocation.building_image_background_color || '',
         is_active: serviceLocation.is_active,
         is_headquarters: serviceLocation.is_headquarters
       };
+      setEnableBackgroundColor(!!serviceLocation.building_image_background_color);
 
       const addressData = {
         street: serviceLocation.street || '',
@@ -315,9 +341,15 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
       contact_person: '',
       contact_phone: '',
       notes: '',
+      building_image_url: '',
+      building_image_position_x: 50,
+      building_image_position_y: 50,
+      building_image_scale: 100,
+      building_image_background_color: '',
       is_active: true,
       is_headquarters: false
     });
+    setEnableBackgroundColor(false);
     setAddress({
       street: '',
       city: '',
@@ -487,6 +519,10 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
                     showLabels={false}
                     required={true}
                     onFieldBlur={handleFieldBlur}
+                    onZipLookupSuccess={() => {
+                      console.log('🚀 ZIP lookup success callback triggered, triggering service area validation');
+                      setTriggerValidation(Date.now());
+                    }}
                   />
                 </div>
 
@@ -502,6 +538,7 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
                       console.log('🌍 EditServiceLocationModal validation change:', { isValid, errors });
                       setServiceAreaValid(isValid);
                     }}
+                    triggerValidation={triggerValidation}
                   />
                 </div>
 
@@ -548,6 +585,34 @@ const EditServiceLocationModal: React.FC<EditServiceLocationModalProps> = ({
                     rows={3}
                     className={`w-full px-3 py-2 rounded-md ${themeClasses.input} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                     placeholder="Additional notes about this location..."
+                  />
+                </div>
+
+                {/* Building Image */}
+                <div>
+                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                    Building Image (optional)
+                  </label>
+                  <p className={`text-xs ${themeClasses.text.muted} mb-3`}>
+                    Upload a photo of the building to help technicians identify the location
+                  </p>
+                  <PhotoUploadInterface
+                    photo={formData.building_image_url}
+                    photoPositionX={formData.building_image_position_x}
+                    photoPositionY={formData.building_image_position_y}
+                    photoScale={formData.building_image_scale}
+                    photoBackgroundColor={formData.building_image_background_color}
+                    enableBackgroundColor={enableBackgroundColor}
+                    onPhotoChange={(photo) => setFormData(prev => ({ ...prev, building_image_url: photo }))}
+                    onPositionChange={(x, y) => setFormData(prev => ({ ...prev, building_image_position_x: x, building_image_position_y: y }))}
+                    onScaleChange={(scale) => setFormData(prev => ({ ...prev, building_image_scale: scale }))}
+                    onBackgroundColorChange={(color) => setFormData(prev => ({ ...prev, building_image_background_color: color || '' }))}
+                    onBackgroundColorToggle={(enabled) => {
+                      setEnableBackgroundColor(enabled);
+                      if (!enabled) {
+                        setFormData(prev => ({ ...prev, building_image_background_color: '' }));
+                      }
+                    }}
                   />
                 </div>
 

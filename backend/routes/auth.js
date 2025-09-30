@@ -29,6 +29,12 @@ import {
   markResetTokenAsUsed,
   sendPasswordResetEmail
 } from '../utils/mfaUtils.js';
+import {
+  employeeLoginLimiter,
+  clearEmployeeLoginAttempts,
+  recordFailedEmployeeLogin,
+  getEmployeeLoginStats
+} from '../middleware/employeeLoginRateLimiter.js';
 
 const router = express.Router();
 
@@ -501,9 +507,12 @@ router.get('/check-admin', async (req, res) => {
 });
 
 // POST /api/auth/admin-login-mfa - Send MFA code for admin login
-router.post('/admin-login-mfa', async (req, res) => {
+router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+
   try {
-    const { email, password } = req.body;
+    const { email, password, deviceFingerprint } = req.body;
+    console.log('🔍 ADMIN-LOGIN-MFA REQUEST:', { email, hasPassword: !!password, deviceFingerprint: deviceFingerprint ? `${deviceFingerprint.substring(0, 16)}...` : 'MISSING' });
 
     if (!email || !password) {
       return res.status(400).json({
@@ -524,6 +533,8 @@ router.post('/admin-login-mfa', async (req, res) => {
     `, [email]);
 
     if (userResult.rows.length === 0) {
+      // Record failed attempt for non-existent employee account
+      await recordFailedEmployeeLogin(clientIP, email, 'account_not_found');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
@@ -535,6 +546,7 @@ router.post('/admin-login-mfa', async (req, res) => {
     // Check if employee is terminated
     if (user.employee_status === 'terminated') {
       console.log(`🚫 Login denied for terminated admin: ${user.email}`);
+      await recordFailedEmployeeLogin(clientIP, email, 'account_terminated');
       return res.status(401).json({
         success: false,
         message: 'Account access has been terminated. Please contact your administrator.'
@@ -543,6 +555,7 @@ router.post('/admin-login-mfa', async (req, res) => {
 
     // Check if email is verified
     if (!user.email_verified) {
+      await recordFailedEmployeeLogin(clientIP, email, 'email_not_verified');
       return res.status(401).json({
         success: false,
         message: 'Account not confirmed. Please check your email to confirm your account.'
@@ -552,15 +565,50 @@ router.post('/admin-login-mfa', async (req, res) => {
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
+      await recordFailedEmployeeLogin(clientIP, email, 'invalid_password');
       return res.status(401).json({
         success: false,
         message: 'Invalid email or password'
       });
     }
 
-    // Generate and store MFA code
+    // Clear successful login attempts (password was correct)
+    clearEmployeeLoginAttempts(clientIP, email);
+
+    // Check if device is trusted (skip MFA if trusted)
+    if (deviceFingerprint) {
+      try {
+        const { checkTrustedDevice } = await import('../utils/trustedDeviceUtils.js');
+        const trustedDevice = await checkTrustedDevice(user.id, 'employee', deviceFingerprint);
+
+        if (trustedDevice) {
+          console.log(`🔐 Trusted device detected for ${user.email}, skipping MFA email`);
+
+          return res.json({
+            success: true,
+            requiresMfa: false,
+            isTrustedDevice: true,
+            message: 'Login successful with trusted device',
+            redirectTo: '/trusted-device-login',
+            user: {
+              id: user.id,
+              email: user.email,
+              name: `${user.first_name} ${user.last_name}`,
+              user_type: 'employee'
+            }
+          });
+        } else {
+          console.log(`🔓 Device not trusted for ${user.email}, proceeding with MFA`);
+        }
+      } catch (error) {
+        console.error('Error checking trusted device:', error);
+        // Continue with MFA flow if trusted device check fails
+      }
+    }
+
+    // Generate and store MFA code (only reached if device is NOT trusted)
     const mfaCode = generateMfaCode();
-    await storeMfaCode(user.id, user.email, mfaCode);
+    await storeMfaCode(user.id, user.email, mfaCode, 'employee');
 
     // Initialize message variable
     let message = 'Verification code sent. Please check and enter the code to complete login.';
@@ -1708,7 +1756,13 @@ router.post('/trusted-device-login', async (req, res) => {
       SELECT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
              es.status_name as employee_status, 'employee' as user_type,
              COALESCE(array_agg(r.name ORDER BY r.name) FILTER (WHERE r.name IS NOT NULL), ARRAY[]::text[]) as roles,
-             CASE WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin' ELSE 'employee' END as role
+             CASE
+               WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin'
+               WHEN 'executive' = ANY(array_agg(r.name)) THEN 'executive'
+               WHEN 'sales' = ANY(array_agg(r.name)) THEN 'sales'
+               WHEN 'technician' = ANY(array_agg(r.name)) THEN 'technician'
+               ELSE 'employee'
+             END as role
       FROM employees e
       LEFT JOIN employee_roles er ON e.id = er.employee_id
       LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
@@ -1825,6 +1879,159 @@ router.post('/trusted-device-login', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Authentication failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/client-login - Client-specific login (only checks users table)
+router.post('/client-login', async (req, res) => {
+  const clientIP = req.ip || req.connection.remoteAddress;
+
+  // Check if IP is blocked due to too many failed attempts
+  const rateLimitCheck = checkFailedAttempts(clientIP);
+  if (rateLimitCheck.blocked) {
+    return res.status(429).json({
+      success: false,
+      message: 'Too many failed login attempts. Please try again later.',
+      retryAfter: rateLimitCheck.retryAfter
+    });
+  }
+
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      recordFailedAttempt(clientIP);
+      return res.status(400).json({
+        success: false,
+        message: 'Email and password are required'
+      });
+    }
+
+    // Only check users table for clients
+    const userResult = await query(`
+      SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
+             b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email
+      FROM users u
+      LEFT JOIN businesses b ON u.business_id = b.id
+      WHERE u.email = $1
+    `, [email]);
+
+    if (userResult.rows.length === 0) {
+      recordFailedAttempt(clientIP);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Check if email is verified
+    if (!user.email_verified) {
+      return res.status(401).json({
+        success: false,
+        message: 'Account not confirmed. Please check your email to confirm your account.'
+      });
+    }
+
+    // Verify password
+    const isPasswordValid = await verifyPassword(password, user.password_hash);
+    if (!isPasswordValid) {
+      recordFailedAttempt(clientIP);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password'
+      });
+    }
+
+    // Clear failed attempts on successful authentication
+    clearFailedAttempts(clientIP);
+
+    // Check if this client has MFA enabled
+    if (user.mfa_enabled === true) {
+      try {
+        // Generate and send MFA code to client
+        const mfaCode = generateMfaCode();
+        await storeMfaCode(user.id, user.email, mfaCode);
+
+        // Get user's language preference for email
+        const languageResult = await query(`
+          SELECT language_preference FROM users WHERE email = $1
+        `, [user.email]);
+        const userLanguage = languageResult.rows[0]?.language_preference || 'en';
+
+        await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
+
+        return res.status(200).json({
+          success: true,
+          requiresMfa: true,
+          userType: 'client',
+          message: 'Multi-factor authentication required. Please verify with the code sent to your email.',
+          email: user.email,
+          mfaEmail: user.mfa_email || user.email
+        });
+      } catch (error) {
+        console.error('Error sending client MFA code:', error);
+        return res.status(500).json({
+          success: false,
+          message: 'Failed to send verification code. Please try again.'
+        });
+      }
+    }
+
+    // Create a new session for the user (users not requiring MFA)
+    const userAgent = req.get('User-Agent');
+    const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null);
+
+    const session = await sessionService.createSession(
+      user.id,
+      user.email,
+      userAgent,
+      ipAddress
+    );
+
+    // Set HttpOnly session cookie for enhanced security
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production', // HTTPS only in production
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      path: '/'
+    };
+
+    res.cookie('sessionToken', session.sessionToken, cookieOptions);
+
+    // Return successful login response with session
+    const userData = {
+      id: user.id,
+      email: user.email,
+      role: user.role || 'client',
+      name: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      businessName: user.business_name,
+      isFirstAdmin: false
+    };
+
+    console.log(`✅ Client login successful: ${user.email}`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      user: userData,
+      session: {
+        sessionToken: session.sessionToken,
+        expiresAt: session.expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Client login error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Login failed',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

@@ -5,6 +5,7 @@ import { websocketService } from '../../services/websocketService.js';
 import { buildUserListQuery } from '../../services/userQueryService.js';
 import { mapUsersArray, createUpdateResponseData, createNewUserResponseData } from '../../utils/userMappers.js';
 import { validateUserUpdateData, validateNewUserData, checkUserExists } from '../../utils/userValidation.js';
+import { requirePermission, requireLastRecordProtection, requirePermissionOrSelf } from '../../middleware/permissionMiddleware.js';
 import {
   formatDateForUI,
   generateEmployeeNumber,
@@ -59,7 +60,9 @@ router.get('/users', async (req, res) => {
 });
 
 // PUT /users/:id - Update user (employee or client)
-router.put('/users/:id', async (req, res) => {
+router.put('/users/:id',
+  requirePermissionOrSelf('modify.users.enable', (req) => req.params.id),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -485,7 +488,10 @@ router.put('/users/:id', async (req, res) => {
 });
 
 // DELETE /users/:id - Delete user (soft delete by default, hard delete with ?hardDelete=true)
-router.delete('/users/:id', async (req, res) => {
+router.delete('/users/:id',
+  requireLastRecordProtection('users', (req) => req.query.business_id),
+  requirePermission('hardDelete.users.enable'),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { hardDelete } = req.query;
@@ -568,7 +574,10 @@ router.delete('/users/:id', async (req, res) => {
 });
 
 // PATCH /users/:id/soft-delete - Soft delete user (toggle soft_delete field)
-router.patch('/users/:id/soft-delete', async (req, res) => {
+router.patch('/users/:id/soft-delete',
+  requireLastRecordProtection('users', (req) => req.body.business_id),
+  requirePermission('softDelete.users.enable'),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { restore = false } = req.body; // restore = true to undelete, false to soft delete
@@ -649,7 +658,7 @@ router.patch('/users/:id/soft-delete', async (req, res) => {
 });
 
 // POST /users - Create a new user (employee or client)
-router.post('/users', async (req, res) => {
+router.post('/users', requirePermission('add.users.enable'), async (req, res) => {
   try {
     const {
       name,

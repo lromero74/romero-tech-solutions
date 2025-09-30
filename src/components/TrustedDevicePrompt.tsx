@@ -15,15 +15,13 @@ interface TrustedDevicePromptProps {
   onClose: () => void;
   onRegister: () => void;
   onSkip: () => void;
-  userType?: 'employee' | 'client';
 }
 
 const TrustedDevicePrompt: React.FC<TrustedDevicePromptProps> = ({
   isOpen,
   onClose,
   onRegister,
-  onSkip,
-  userType = 'employee'
+  onSkip
 }) => {
   const [showCustomName, setShowCustomName] = useState(false);
   const [customName, setCustomName] = useState('');
@@ -60,11 +58,24 @@ const TrustedDevicePrompt: React.FC<TrustedDevicePromptProps> = ({
     onClose();
   };
 
+  const sanitizeDeviceName = (name: string): string => {
+    // Remove potentially dangerous characters while allowing Unicode letters, numbers, spaces, and common punctuation
+    return name
+      .trim()
+      // eslint-disable-next-line no-useless-escape
+      .replace(/[<>{}[\]\\\/'"`;]/g, '') // Remove injection characters
+      .substring(0, 100); // Limit length
+  };
+
   const handleCustomNameSubmit = () => {
-    if (!customName.trim()) {
-      setError('Please enter a device name');
+    const sanitized = sanitizeDeviceName(customName);
+    if (!sanitized) {
+      setError('Please enter a valid device name');
       return;
     }
+    // Use the sanitized name
+    const finalName = sanitized;
+    setCustomName(finalName);
     handleRegisterDevice(true);
   };
 

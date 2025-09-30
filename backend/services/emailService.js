@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
+import crypto from 'crypto';
 import dotenv from 'dotenv';
-import { query } from '../config/database.js';
+import { query, getPool } from '../config/database.js';
 
 dotenv.config();
 
@@ -34,15 +35,15 @@ const transporter = nodemailer.createTransport({
 });
 
 // Helper function to fetch email translations from database
-async function getEmailTranslations(language = 'en') {
+async function getEmailTranslations(language = 'en', pattern = 'email.%') {
   try {
     const result = await query(`
       SELECT tk.key_path, t.value
       FROM t_translation_keys tk
       JOIN t_translations t ON tk.id = t.key_id
       JOIN t_languages l ON t.language_id = l.id
-      WHERE l.code = $1 AND tk.key_path LIKE 'email.mfa.%'
-    `, [language]);
+      WHERE l.code = $1 AND tk.key_path LIKE $2
+    `, [language, pattern]);
 
     const translations = {};
     result.rows.forEach(row => {
@@ -52,21 +53,53 @@ async function getEmailTranslations(language = 'en') {
     return translations;
   } catch (error) {
     console.error('Failed to fetch email translations:', error);
-    // Return fallback English translations
+    // Return fallback English translations based on pattern
+    if (pattern.includes('mfa')) {
+      return {
+        'email.mfa.body.requestMessage': 'We received a request to {{action}}. To {{action}}, please use the verification code below.',
+        'email.mfa.body.codeInstructions': 'Enter the following 6-digit verification code to complete your {{purpose}}:',
+        'email.mfa.body.codeLabel': 'Your Verification Code:',
+        'email.mfa.body.securityTitle': 'Security Information:',
+        'email.mfa.body.securityExpiry': 'This code expires in 10 minutes',
+        'email.mfa.body.securitySingleUse': 'This code can only be used once',
+        'email.mfa.body.securityNoShare': 'Never share this code with anyone',
+        'email.mfa.body.securityContact': 'If you did not request this {{purpose}}, please contact us immediately',
+        'email.mfa.body.troubleMessage': 'Having trouble? Contact our support team at {{phone}} or {{email}}',
+        'email.mfa.footer.questionsLabel': 'Questions? Contact us:',
+        'email.mfa.footer.copyright': '© 2025 Romero Tech Solutions. All rights reserved.',
+        'email.mfa.footer.serviceArea': 'Serving Escondido, CA and surrounding areas.'
+      };
+    }
+    // Return fallback translations for other email types
     return {
-      'email.mfa.body.requestMessage': 'We received a request to {{action}}. To {{action}}, please use the verification code below.',
-      'email.mfa.body.codeInstructions': 'Enter the following 6-digit verification code to complete your {{purpose}}:',
-      'email.mfa.body.codeLabel': 'Your Verification Code:',
-      'email.mfa.body.securityTitle': 'Security Information:',
-      'email.mfa.body.securityExpiry': 'This code expires in 10 minutes',
-      'email.mfa.body.securitySingleUse': 'This code can only be used once',
-      'email.mfa.body.securityNoShare': 'Never share this code with anyone',
-      'email.mfa.body.securityContact': 'If you did not request this {{purpose}}, please contact us immediately',
-      'email.mfa.body.troubleMessage': 'Having trouble? Contact our support team at {{phone}} or {{email}}',
-      'email.mfa.footer.questionsLabel': 'Questions? Contact us:',
-      'email.mfa.footer.copyright': '© 2025 Romero Tech Solutions. All rights reserved.',
-      'email.mfa.footer.serviceArea': 'Serving Escondido, CA and surrounding areas.'
+      'email.serviceRequest.subject': 'Service Request Confirmed: {{requestNumber}}',
+      'email.serviceRequest.tagline': 'Service Request Confirmation',
+      'email.serviceRequest.greeting': 'Hello {{firstName}},',
+      'email.serviceRequest.confirmationMessage': 'Thank you for your service request! We have received and confirmed your request. Our team will review it and contact you shortly with next steps.',
+      'email.passwordReset.subject': 'Password Reset - Romero Tech Solutions',
+      'email.passwordReset.tagline': 'Password Reset Request',
+      'email.passwordReset.greeting': 'Hello {{userName}},',
+      'email.passwordReset.requestMessage': 'We received a request to reset the password for your account. If you did not make this request, please ignore this email and your password will remain unchanged.',
+      'email.registration.subject': 'Welcome to Romero Tech Solutions - Confirm Your Email',
+      'email.registration.tagline': 'Professional IT Support',
+      'email.registration.greeting': 'Hello {{contactName}},'
     };
+  }
+}
+
+// Helper function to get user's preferred language
+async function getUserLanguage(userEmail) {
+  try {
+    const result = await query(`
+      SELECT language_preference
+      FROM users
+      WHERE email = $1
+    `, [userEmail]);
+
+    return result.rows.length > 0 ? result.rows[0].language_preference || 'en' : 'en';
+  } catch (error) {
+    console.error('Failed to get user language preference:', error);
+    return 'en'; // Default to English
   }
 }
 
@@ -290,7 +323,14 @@ ${confirmationUrl}
     try {
       console.log('🔐 Sending password reset email to:', toEmail);
 
-      const subject = 'Password Reset - Romero Tech Solutions';
+      // Get user's preferred language and email translations
+      const userLanguage = await getUserLanguage(toEmail);
+      const translations = await getEmailTranslations(userLanguage, 'email.passwordReset.%');
+
+      const subject = interpolateTranslation(
+        translations['email.passwordReset.subject'] || 'Password Reset - Romero Tech Solutions',
+        {}
+      );
 
       const html = `
         <!DOCTYPE html>
@@ -754,6 +794,550 @@ ${translations['email.mfa.footer.serviceArea']}
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }
+
+  /**
+   * Send service request notification to technicians with acknowledgment links
+   */
+  async sendServiceRequestNotificationToTechnicians({ serviceRequestData, technicians, serviceRequestId }) {
+    try {
+      console.log('📧 Sending service request notifications to', technicians.length, 'active technicians');
+
+      const { requestNumber, title, description, businessName, clientName,
+              serviceLocation, urgencyLevel, priorityLevel, serviceType,
+              scheduledDate, scheduledTime, contactName, contactPhone, contactEmail,
+              serviceLocationDetails } = serviceRequestData;
+
+      const subject = `New Service Request: ${requestNumber} - ${title}`;
+
+      // Create acknowledgment tokens for each technician and prepare emails
+      const pool = await getPool();
+      const emailPromises = technicians.map(async (technician) => {
+        // Generate unique acknowledgment token for this technician
+        const acknowledgmentToken = crypto.randomBytes(32).toString('hex');
+
+        // Create acknowledgment record in database
+        try {
+          await pool.query(`
+            INSERT INTO service_request_acknowledgments (
+              service_request_id,
+              employee_id,
+              acknowledgment_token,
+              created_at
+            ) VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
+          `, [serviceRequestId, technician.id, acknowledgmentToken]);
+
+          console.log(`🔐 Created acknowledgment token for ${technician.firstName} - Token: ${acknowledgmentToken.substring(0, 8)}...`);
+        } catch (tokenError) {
+          console.error(`❌ Error creating acknowledgment token for ${technician.firstName}:`, tokenError);
+          throw tokenError;
+        }
+
+        // Generate acknowledgment URL
+        const acknowledgmentUrl = `${process.env.API_BASE_URL || 'http://localhost:3001'}/api/service-request-workflow/acknowledge/${acknowledgmentToken}`;
+
+        console.log(`📧 Sending notification to ${technician.firstName} with acknowledgment link`);
+
+        const html = `
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>${subject}</title>
+              <style>
+                body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+                .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+                .tagline { font-size: 14px; opacity: 0.9; }
+                .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+                .request-header { background: #3b82f6; color: white; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; }
+                .request-number { font-size: 20px; font-weight: bold; font-family: monospace; }
+                .details-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin: 15px 0; }
+                .detail-label { font-weight: bold; color: #374151; }
+                .detail-value { color: #111827; }
+                .urgent-notice { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+                .high-priority { background: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px; }
+                .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+                .action-note { background: #dcfce7; border-left: 4px solid #16a34a; padding: 15px; margin: 20px 0; border-radius: 4px; }
+                .acknowledge-button { display: inline-block; background: #3b82f6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; margin: 15px 0; font-size: 16px; }
+                .acknowledge-button:hover { background: #2563eb; }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <div class="header">
+                  <div style="text-align: center; margin-bottom: 10px;">
+                    <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                  </div>
+                  <div class="logo">Romero Tech Solutions</div>
+                  <div class="tagline">New Service Request Alert</div>
+                </div>
+
+                <div class="content">
+                  <h2 style="color: #1e293b; margin-bottom: 15px;">Hello ${technician.firstName},</h2>
+
+                  <p style="margin-bottom: 15px;">
+                    A new service request has been submitted and requires technician attention.
+                  </p>
+
+                  <div class="request-header">
+                    <div style="margin-bottom: 5px; font-size: 14px;">Service Request Number:</div>
+                    <div class="request-number">${requestNumber}</div>
+                  </div>
+
+                  ${urgencyLevel === 'Urgent' ? `
+                    <div class="urgent-notice">
+                      <p style="margin: 0; font-weight: bold; color: #92400e;">⚠️ URGENT REQUEST</p>
+                      <p style="margin: 5px 0 0 0; color: #92400e;">This service request requires immediate attention.</p>
+                    </div>
+                  ` : ''}
+
+                  ${priorityLevel === 'High' ? `
+                    <div class="high-priority">
+                      <p style="margin: 0; font-weight: bold; color: #dc2626;">🔴 HIGH PRIORITY</p>
+                      <p style="margin: 5px 0 0 0; color: #dc2626;">This service request has high priority.</p>
+                    </div>
+                  ` : ''}
+
+                  <div class="details-grid">
+                    <div class="detail-label">Title:</div>
+                    <div class="detail-value"><strong>${title}</strong></div>
+
+                    <div class="detail-label">Description:</div>
+                    <div class="detail-value">${description}</div>
+
+                    <div class="detail-label">Business:</div>
+                    <div class="detail-value">${businessName}</div>
+
+                    <div class="detail-label">Client:</div>
+                    <div class="detail-value">${clientName}</div>
+
+                    <div class="detail-label">Service Location:</div>
+                    <div class="detail-value">
+                      ${serviceLocationDetails ? `
+                        <div style="margin-bottom: 8px;">
+                          <strong>${serviceLocationDetails.location_name || serviceLocation}</strong>
+                        </div>
+                        ${serviceLocationDetails.street_address_1 || serviceLocationDetails.street ? `
+                          <div style="margin-bottom: 5px;">
+                            <a href="https://maps.google.com/?q=${encodeURIComponent(
+                              `${serviceLocationDetails.street_address_1 || serviceLocationDetails.street}${serviceLocationDetails.street_address_2 ? ' ' + serviceLocationDetails.street_address_2 : ''}, ${serviceLocationDetails.city || ''}, ${serviceLocationDetails.state || ''} ${serviceLocationDetails.zip_code || ''}`
+                            )}"
+                               style="color: #3b82f6; text-decoration: none;"
+                               target="_blank">
+                              📍 ${serviceLocationDetails.street_address_1 || serviceLocationDetails.street}
+                              ${serviceLocationDetails.street_address_2 ? ', ' + serviceLocationDetails.street_address_2 : ''}
+                              <br>
+                              ${serviceLocationDetails.city || ''}, ${serviceLocationDetails.state || ''} ${serviceLocationDetails.zip_code || ''}
+                            </a>
+                          </div>
+                        ` : ''}
+                        ${serviceLocationDetails.contact_phone ? `
+                          <div style="margin-bottom: 5px;">
+                            <a href="tel:${serviceLocationDetails.contact_phone}"
+                               style="color: #16a34a; text-decoration: none;">
+                              📞 ${serviceLocationDetails.contact_phone}
+                            </a>
+                            ${serviceLocationDetails.contact_person ? ` (${serviceLocationDetails.contact_person})` : ''}
+                          </div>
+                        ` : ''}
+                        ${serviceLocationDetails.contact_email ? `
+                          <div style="margin-bottom: 5px;">
+                            <a href="mailto:${serviceLocationDetails.contact_email}"
+                               style="color: #3b82f6; text-decoration: none;">
+                              ✉️ ${serviceLocationDetails.contact_email}
+                            </a>
+                          </div>
+                        ` : ''}
+                        ${serviceLocationDetails.notes ? `
+                          <div style="margin-top: 8px; font-size: 14px; color: #64748b; font-style: italic;">
+                            Note: ${serviceLocationDetails.notes}
+                          </div>
+                        ` : ''}
+                      ` : serviceLocation}
+                    </div>
+
+                    ${serviceType ? `
+                      <div class="detail-label">Service Type:</div>
+                      <div class="detail-value">${serviceType}</div>
+                    ` : ''}
+
+                    <div class="detail-label">Urgency Level:</div>
+                    <div class="detail-value">${urgencyLevel}</div>
+
+                    <div class="detail-label">Priority Level:</div>
+                    <div class="detail-value">${priorityLevel}</div>
+
+                    ${scheduledDate ? `
+                      <div class="detail-label">Requested Date:</div>
+                      <div class="detail-value">${scheduledDate}</div>
+                    ` : ''}
+
+                    ${scheduledTime ? `
+                      <div class="detail-label">Requested Time:</div>
+                      <div class="detail-value">${scheduledTime}</div>
+                    ` : ''}
+
+                    <div class="detail-label">Primary Contact:</div>
+                    <div class="detail-value">${contactName}</div>
+
+                    <div class="detail-label">Contact Phone:</div>
+                    <div class="detail-value"><a href="tel:${contactPhone}" style="color: #3b82f6;">${contactPhone}</a></div>
+
+                    <div class="detail-label">Contact Email:</div>
+                    <div class="detail-value"><a href="mailto:${contactEmail}" style="color: #3b82f6;">${contactEmail}</a></div>
+                  </div>
+
+                  <div style="text-align: center; margin: 30px 0;">
+                    <a href="${acknowledgmentUrl}" class="acknowledge-button">
+                      ✅ ACKNOWLEDGE SERVICE REQUEST
+                    </a>
+                  </div>
+
+                  <div class="action-note">
+                    <p style="margin: 0; font-weight: bold; color: #166534;">📋 Action Required:</p>
+                    <p style="margin: 10px 0 0 0; color: #166534;">
+                      Click the "Acknowledge Service Request" button above to confirm that you have received this service request.
+                      You will then receive a follow-up email with a link to start working on the request.
+                    </p>
+                  </div>
+
+                  <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
+                    <strong>Note:</strong> Only the first technician to acknowledge this request will be able to work on it.
+                    Other technicians will be notified that it has already been acknowledged.
+                  </p>
+
+                  <p style="color: #64748b; font-size: 12px; margin-top: 15px;">
+                    If the button doesn't work, you can copy and paste this link into your browser:<br>
+                    <span style="word-break: break-all; color: #3b82f6;">${acknowledgmentUrl}</span>
+                  </p>
+                </div>
+
+                <div class="footer">
+                  <p><strong>Questions? Contact us:</strong></p>
+                  <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                  <p style="margin-top: 15px;">
+                    © 2025 Romero Tech Solutions. All rights reserved.<br>
+                    Serving Escondido, CA and surrounding areas.
+                  </p>
+                </div>
+              </div>
+            </body>
+          </html>
+        `;
+
+        const text = `
+New Service Request: ${requestNumber} - ${title}
+
+Hello ${technician.firstName},
+
+A new service request has been submitted and requires technician attention.
+
+SERVICE REQUEST DETAILS:
+Request Number: ${requestNumber}
+Title: ${title}
+Description: ${description}
+Business: ${businessName}
+Client: ${clientName}
+Service Location: ${serviceLocationDetails ?
+          `${serviceLocationDetails.location_name || serviceLocation}${serviceLocationDetails.street_address_1 || serviceLocationDetails.street ?
+            `\n  Address: ${serviceLocationDetails.street_address_1 || serviceLocationDetails.street}${serviceLocationDetails.street_address_2 ? ' ' + serviceLocationDetails.street_address_2 : ''}, ${serviceLocationDetails.city || ''}, ${serviceLocationDetails.state || ''} ${serviceLocationDetails.zip_code || ''}` : ''}${serviceLocationDetails.contact_phone ?
+            `\n  Site Contact Phone: ${serviceLocationDetails.contact_phone}${serviceLocationDetails.contact_person ? ' (' + serviceLocationDetails.contact_person + ')' : ''}` : ''}${serviceLocationDetails.contact_email ?
+            `\n  Site Contact Email: ${serviceLocationDetails.contact_email}` : ''}${serviceLocationDetails.notes ?
+            `\n  Note: ${serviceLocationDetails.notes}` : ''}` : serviceLocation}
+${serviceType ? `Service Type: ${serviceType}` : ''}
+Urgency Level: ${urgencyLevel}
+Priority Level: ${priorityLevel}
+${scheduledDate ? `Requested Date: ${scheduledDate}` : ''}
+${scheduledTime ? `Requested Time: ${scheduledTime}` : ''}
+
+CONTACT INFORMATION:
+Primary Contact: ${contactName}
+Contact Phone: ${contactPhone}
+Contact Email: ${contactEmail}
+
+${urgencyLevel === 'Urgent' ? 'URGENT REQUEST - This service request requires immediate attention.' : ''}
+${priorityLevel === 'High' ? 'HIGH PRIORITY - This service request has high priority.' : ''}
+
+NEXT STEPS:
+- Review the service request details
+- Contact the client within 1 hour to confirm receipt
+- Schedule the service appointment
+- Update the service request status in the system
+
+To view and manage this service request, please log in to the technician portal.
+
+Questions? Contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+Serving Escondido, CA and surrounding areas.
+        `;
+
+        const mailOptions = {
+          from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+          to: technician.email,
+          subject: subject,
+          text: text,
+          html: html
+        };
+
+        return transporter.sendMail(mailOptions);
+      });
+
+      const results = await Promise.allSettled(emailPromises);
+
+      // Log results
+      let successCount = 0;
+      let failureCount = 0;
+
+      results.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          successCount++;
+          console.log(`✅ Service request notification sent to ${technicians[index].email}:`, result.value.messageId);
+        } else {
+          failureCount++;
+          console.error(`❌ Failed to send notification to ${technicians[index].email}:`, result.reason);
+        }
+      });
+
+      console.log(`📊 Service request notification summary: ${successCount} sent, ${failureCount} failed`);
+
+      return {
+        success: true,
+        totalTechnicians: technicians.length,
+        successCount,
+        failureCount,
+        message: `Service request notifications sent to ${successCount}/${technicians.length} technicians`
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending service request notifications to technicians:', error);
+      throw new Error(`Failed to send technician notifications: ${error.message}`);
+    }
+  }
+
+  /**
+   * Send service request confirmation email to client
+   */
+  async sendServiceRequestConfirmationToClient({ serviceRequestData, clientData }) {
+    try {
+      console.log('📧 Sending service request confirmation to client:', clientData.email);
+
+      const { requestNumber, title, description, serviceLocation,
+              scheduledDate, scheduledTime, contactName, contactPhone } = serviceRequestData;
+
+      const subject = `Service Request Confirmed: ${requestNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #059669, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+              .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+              .tagline { font-size: 14px; opacity: 0.9; }
+              .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+              .confirmation-box { background: #dcfce7; border-left: 4px solid #16a34a; padding: 20px; margin: 20px 0; border-radius: 4px; }
+              .request-number { font-size: 18px; font-weight: bold; font-family: monospace; color: #059669; }
+              .details-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin: 15px 0; }
+              .detail-label { font-weight: bold; color: #374151; }
+              .detail-value { color: #111827; }
+              .response-promise { background: #e0f2fe; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div style="text-align: center; margin-bottom: 10px;">
+                  <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                </div>
+                <div class="logo">Romero Tech Solutions</div>
+                <div class="tagline">Service Request Confirmation</div>
+              </div>
+
+              <div class="content">
+                <h2 style="color: #059669; margin-bottom: 15px;">Hello ${clientData.firstName},</h2>
+
+                <div class="confirmation-box">
+                  <p style="margin: 0; font-weight: bold; color: #166534;">✅ Your service request has been successfully submitted!</p>
+                  <p style="margin: 10px 0 0 0; color: #166534;">
+                    Request Number: <span class="request-number">${requestNumber}</span>
+                  </p>
+                </div>
+
+                <p style="margin-bottom: 15px;">
+                  Thank you for choosing Romero Tech Solutions for your technology needs. We have received
+                  your service request and our team has been notified.
+                </p>
+
+                <div class="details-grid">
+                  <div class="detail-label">Service Title:</div>
+                  <div class="detail-value"><strong>${title}</strong></div>
+
+                  <div class="detail-label">Description:</div>
+                  <div class="detail-value">${description}</div>
+
+                  <div class="detail-label">Service Location:</div>
+                  <div class="detail-value">${serviceLocation}</div>
+
+                  ${scheduledDate ? `
+                    <div class="detail-label">Requested Date:</div>
+                    <div class="detail-value">${scheduledDate}</div>
+                  ` : ''}
+
+                  ${scheduledTime ? `
+                    <div class="detail-label">Requested Time:</div>
+                    <div class="detail-value">${scheduledTime}</div>
+                  ` : ''}
+
+                  <div class="detail-label">Primary Contact:</div>
+                  <div class="detail-value">${contactName}</div>
+
+                  <div class="detail-label">Contact Phone:</div>
+                  <div class="detail-value">${contactPhone}</div>
+                </div>
+
+                <div class="response-promise">
+                  <p style="margin: 0; font-weight: bold; color: #0c4a6e;">🕐 Response Commitment:</p>
+                  <p style="margin: 10px 0 0 0; color: #0c4a6e;">
+                    A qualified technician will contact you within <strong>1 hour</strong> to discuss your
+                    service request and schedule an appointment.
+                  </p>
+                </div>
+
+                <p style="margin-bottom: 15px;">
+                  You can track the status of your service request by logging into your client portal
+                  or by referencing your request number <strong>${requestNumber}</strong> when contacting us.
+                </p>
+
+                <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
+                  If you have any questions or need to update your request, please contact us at
+                  <strong>(619) 940-5550</strong> or <strong>info@romerotechsolutions.com</strong>
+                </p>
+              </div>
+
+              <div class="footer">
+                <p><strong>Questions? Contact us:</strong></p>
+                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p style="margin-top: 15px;">
+                  © 2025 Romero Tech Solutions. All rights reserved.<br>
+                  Serving Escondido, CA and surrounding areas.
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const text = `
+Service Request Confirmed: ${requestNumber}
+
+Hello ${clientData.firstName},
+
+✅ Your service request has been successfully submitted!
+Request Number: ${requestNumber}
+
+Thank you for choosing Romero Tech Solutions for your technology needs. We have received your service request and our team has been notified.
+
+SERVICE REQUEST DETAILS:
+Service Title: ${title}
+Description: ${description}
+Service Location: ${serviceLocationDetails ?
+          `${serviceLocationDetails.location_name || serviceLocation}${serviceLocationDetails.street_address_1 || serviceLocationDetails.street ?
+            `\n  Address: ${serviceLocationDetails.street_address_1 || serviceLocationDetails.street}${serviceLocationDetails.street_address_2 ? ' ' + serviceLocationDetails.street_address_2 : ''}, ${serviceLocationDetails.city || ''}, ${serviceLocationDetails.state || ''} ${serviceLocationDetails.zip_code || ''}` : ''}${serviceLocationDetails.contact_phone ?
+            `\n  Site Contact Phone: ${serviceLocationDetails.contact_phone}${serviceLocationDetails.contact_person ? ' (' + serviceLocationDetails.contact_person + ')' : ''}` : ''}${serviceLocationDetails.contact_email ?
+            `\n  Site Contact Email: ${serviceLocationDetails.contact_email}` : ''}${serviceLocationDetails.notes ?
+            `\n  Note: ${serviceLocationDetails.notes}` : ''}` : serviceLocation}
+${scheduledDate ? `Requested Date: ${scheduledDate}` : ''}
+${scheduledTime ? `Requested Time: ${scheduledTime}` : ''}
+Primary Contact: ${contactName}
+Contact Phone: ${contactPhone}
+
+RESPONSE COMMITMENT:
+A qualified technician will contact you within 1 HOUR to discuss your service request and schedule an appointment.
+
+You can track the status of your service request by logging into your client portal or by referencing your request number ${requestNumber} when contacting us.
+
+If you have any questions or need to update your request, please contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+Serving Escondido, CA and surrounding areas.
+      `;
+
+      const mailOptions = {
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: clientData.email,
+        subject: subject,
+        text: text,
+        html: html
+      };
+
+      const result = await transporter.sendMail(mailOptions);
+      console.log('✅ Service request confirmation sent to client:', result.messageId);
+
+      return {
+        success: true,
+        messageId: result.messageId,
+        message: 'Service request confirmation email sent successfully'
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending service request confirmation to client:', error);
+      throw new Error(`Failed to send client confirmation: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generic email sending method for custom emails
+   * @param {Object} params - Email parameters
+   * @param {string} params.to - Recipient email address
+   * @param {string} params.subject - Email subject
+   * @param {string} params.html - HTML email body
+   * @param {string} [params.text] - Plain text email body (optional)
+   * @returns {Promise<Object>} Email sending result
+   */
+  async sendEmail({ to, subject, html, text = null }) {
+    try {
+      console.log('🔍 Starting generic email send process...');
+      console.log('📧 Email config:', {
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: to,
+        subject: subject
+      });
+
+      const mailOptions = {
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: to,
+        subject: subject,
+        text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML tags for text version if not provided
+        html: html
+      };
+
+      const result = await transporter.sendMail(mailOptions);
+      console.log('✅ Email sent successfully:', result.messageId);
+
+      return {
+        success: true,
+        messageId: result.messageId,
+        message: 'Email sent successfully'
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending email:', error);
+      throw new Error(`Failed to send email: ${error.message}`);
+    }
+  }
 }
 
 export const emailService = new EmailService();
@@ -761,5 +1345,8 @@ export const emailService = new EmailService();
 // Export individual functions for convenience
 export const sendConfirmationEmail = (params) => emailService.sendConfirmationEmail(params);
 export const sendNotificationEmail = (params) => emailService.sendNotificationEmail(params);
+export const sendEmail = (params) => emailService.sendEmail(params);
+export const sendServiceRequestNotificationToTechnicians = (params) => emailService.sendServiceRequestNotificationToTechnicians(params);
+export const sendServiceRequestConfirmationToClient = (params) => emailService.sendServiceRequestConfirmationToClient(params);
 
 export default emailService;

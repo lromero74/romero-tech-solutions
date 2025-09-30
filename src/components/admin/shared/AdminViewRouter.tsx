@@ -10,10 +10,13 @@ import {
   AdminServiceLocations,
   AdminClosureReasons,
   AdminRoles,
+  AdminPermissionManager,
   AdminSettings,
   AdminReports,
   AdminPasswordComplexity
 } from '..';
+import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
+import AdminRoleHierarchy from '../AdminRoleHierarchy';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -34,7 +37,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'reports' | 'settings' | 'password-complexity';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'password-complexity';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1458,6 +1461,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onRefresh={refreshAllData}
           />
         );
+
+      case 'permissions':
+        return <AdminPermissionManager />;
+
+      case 'permission-audit-log':
+        return <AdminPermissionAuditLog />;
+
+      case 'role-hierarchy':
+        return <AdminRoleHierarchy />;
 
       case 'reports':
         return (

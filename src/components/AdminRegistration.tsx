@@ -153,6 +153,12 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
           }
         } catch (signInError: unknown) {
           if (signInError && typeof signInError === 'object' && 'message' in signInError && signInError.message === 'MFA_REQUIRED') {
+            // Extract phoneNumber from the MFA error if available
+            const mfaPhoneNumber = 'phoneNumber' in signInError && typeof signInError.phoneNumber === 'string' ? signInError.phoneNumber : '';
+            if (mfaPhoneNumber) {
+              setMfaPhoneNumber(mfaPhoneNumber);
+            }
+
             // Check if device is trusted before requiring MFA using pre-auth endpoint
             try {
               console.log('🔍 MFA required - checking if device is trusted before authentication...');
@@ -196,16 +202,10 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
                   setShowMfaVerification(true);
                   setIsLoading(false);
 
-                  // Send MFA code as fallback
-                  try {
-                    const mfaResponse = await sendAdminMfaCode(formData.email, formData.password);
-                    setMfaPhoneNumber(mfaResponse.phoneNumber || '');
-                    setSuccess('Verification code sent to your email and phone. Please check your email and text messages and enter the code below.');
-                    setErrors({});
-                  } catch (mfaError) {
-                    console.error('Error sending MFA code:', mfaError);
-                    setErrors({ email: 'Failed to send verification code. Please try again.' });
-                  }
+                  // Note: MFA code was already sent by the initial signIn() call (line 144)
+                  // No need to send another code here - just inform the user
+                  setSuccess('Verification code was sent to your email and phone. Please check your email and text messages and enter the code below.');
+                  setErrors({});
                 }
                 return;
               }
@@ -219,19 +219,10 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
             setShowMfaVerification(true);
             setIsLoading(false);
 
-            // Automatically send MFA code
-            try {
-              const mfaResponse = await sendAdminMfaCode(formData.email, formData.password);
-              setMfaPhoneNumber(mfaResponse.phoneNumber || '');
-              setSuccess('Verification code sent to your email and phone. Please check your email and text messages and enter the code below.');
-              setErrors({});
-            } catch (mfaError: unknown) {
-              const errorMessage = mfaError && typeof mfaError === 'object' && 'message' in mfaError && typeof mfaError.message === 'string'
-                ? mfaError.message
-                : 'Failed to send verification code';
-              setErrors({ general: errorMessage });
-              setIsLoading(false);
-            }
+            // Note: MFA code was already sent by the initial signIn() call (line 144)
+            // No need to send another code here - just inform the user
+            setSuccess('Verification code was sent to your email and phone. Please check your email and text messages and enter the code below.');
+            setErrors({});
             return; // Exit early to prevent setting isLoading to false again
           } else {
             throw signInError; // Re-throw other errors to be handled by the outer catch

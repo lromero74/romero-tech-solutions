@@ -17,6 +17,13 @@ export interface DeviceInfo {
   hardwareConcurrency: number;
   maxTouchPoints: number;
   pixelRatio: number;
+  geolocation?: {
+    city?: string;
+    region?: string;
+    country?: string;
+    ip?: string;
+    timestamp: string;
+  };
 }
 
 export interface TrustedDevice {
@@ -34,12 +41,72 @@ export interface TrustedDevice {
 }
 
 /**
+ * Fetch geolocation data from IP address
+ * @returns Promise with geolocation data
+ */
+async function fetchGeolocation(): Promise<DeviceInfo['geolocation']> {
+  try {
+    const response = await fetch('https://ipapi.co/json/');
+    if (response.ok) {
+      const data = await response.json();
+      return {
+        city: data.city,
+        region: data.region,
+        country: data.country_name,
+        ip: data.ip,
+        timestamp: new Date().toISOString()
+      };
+    }
+  } catch (error) {
+    console.warn('Failed to fetch geolocation data:', error);
+  }
+  return {
+    timestamp: new Date().toISOString()
+  };
+}
+
+/**
  * Collect device characteristics for fingerprinting
+ * @param includeGeolocation Whether to include geolocation data (async operation)
  * @returns DeviceInfo object with device characteristics
  */
-export function collectDeviceInfo(): DeviceInfo {
+export function collectDeviceInfo(includeGeolocation: boolean = false): DeviceInfo {
   const nav = navigator;
   const screen = window.screen;
+
+  const deviceInfo: DeviceInfo = {
+    userAgent: nav.userAgent,
+    screenResolution: `${screen.width}x${screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    language: nav.language,
+    colorDepth: screen.colorDepth,
+    platform: nav.platform,
+    cookieEnabled: nav.cookieEnabled,
+    doNotTrack: nav.doNotTrack,
+    hardwareConcurrency: nav.hardwareConcurrency || 1,
+    maxTouchPoints: nav.maxTouchPoints || 0,
+    pixelRatio: window.devicePixelRatio || 1
+  };
+
+  // Add geolocation if requested (will be populated async)
+  if (includeGeolocation) {
+    fetchGeolocation().then(geo => {
+      deviceInfo.geolocation = geo;
+    });
+  }
+
+  return deviceInfo;
+}
+
+/**
+ * Collect device characteristics for fingerprinting (async version with geolocation)
+ * @returns Promise with DeviceInfo object including geolocation
+ */
+export async function collectDeviceInfoAsync(): Promise<DeviceInfo> {
+  const nav = navigator;
+  const screen = window.screen;
+
+  const geolocation = await fetchGeolocation();
 
   return {
     userAgent: nav.userAgent,
@@ -52,7 +119,8 @@ export function collectDeviceInfo(): DeviceInfo {
     doNotTrack: nav.doNotTrack,
     hardwareConcurrency: nav.hardwareConcurrency || 1,
     maxTouchPoints: nav.maxTouchPoints || 0,
-    pixelRatio: window.devicePixelRatio || 1
+    pixelRatio: window.devicePixelRatio || 1,
+    geolocation
   };
 }
 

@@ -352,6 +352,7 @@ export interface AuthUser {
 export interface LoginRequest {
   email: string;
   password: string;
+  loginType?: 'employee' | 'client';
 }
 
 export interface SignupRequest extends LoginRequest {

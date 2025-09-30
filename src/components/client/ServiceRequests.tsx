@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { useNotifications } from '../../contexts/NotificationContext';
 import {
   Clock,
   Calendar,
@@ -63,6 +64,7 @@ interface PaginationInfo {
 const ServiceRequests: React.FC = () => {
   const { isDarkMode } = useClientTheme();
   const { t } = useClientLanguage();
+  const { addServiceRequestChange } = useNotifications();
 
   const themeClasses = {
     background: isDarkMode ? 'bg-gray-800' : 'bg-white',
@@ -81,6 +83,7 @@ const ServiceRequests: React.FC = () => {
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const previousServiceRequestsRef = useRef<ServiceRequest[]>([]);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 10,
@@ -125,6 +128,50 @@ const ServiceRequests: React.FC = () => {
     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
 
+  // Detect changes in service requests
+  const detectServiceRequestChanges = (newRequests: ServiceRequest[]) => {
+    const previousRequests = previousServiceRequestsRef.current;
+
+    // Skip change detection on initial load
+    if (previousRequests.length === 0) {
+      return false;
+    }
+
+    // Check if any service request has changed
+    let hasChanges = false;
+
+    // Check for different number of requests
+    if (newRequests.length !== previousRequests.length) {
+      hasChanges = true;
+    } else {
+      // Check each request for changes in key fields
+      for (const newRequest of newRequests) {
+        const previousRequest = previousRequests.find(prev => prev.id === newRequest.id);
+
+        if (!previousRequest) {
+          // New request added
+          hasChanges = true;
+          break;
+        }
+
+        // Check for changes in critical fields that would indicate status updates
+        if (
+          newRequest.status !== previousRequest.status ||
+          newRequest.statusDescription !== previousRequest.statusDescription ||
+          newRequest.priority !== previousRequest.priority ||
+          newRequest.scheduledDate !== previousRequest.scheduledDate ||
+          newRequest.scheduledTimeStart !== previousRequest.scheduledTimeStart ||
+          newRequest.updatedAt !== previousRequest.updatedAt
+        ) {
+          hasChanges = true;
+          break;
+        }
+      }
+    }
+
+    return hasChanges;
+  };
+
   // Fetch service requests
   const fetchServiceRequests = async (page = 1) => {
     try {
@@ -151,7 +198,16 @@ const ServiceRequests: React.FC = () => {
 
       const data = await response.json();
       if (data.success) {
-        setServiceRequests(data.data.serviceRequests);
+        const newServiceRequests = data.data.serviceRequests;
+
+        // Detect changes and trigger notification if needed
+        if (detectServiceRequestChanges(newServiceRequests)) {
+          addServiceRequestChange();
+        }
+
+        // Update state and store reference for future comparisons
+        setServiceRequests(newServiceRequests);
+        previousServiceRequestsRef.current = newServiceRequests;
         setPagination(data.data.pagination);
       } else {
         throw new Error(data.message || 'Failed to fetch service requests');
@@ -250,6 +306,15 @@ const ServiceRequests: React.FC = () => {
   useEffect(() => {
     fetchServiceRequests();
   }, []);
+
+  // Set up periodic polling for service request changes
+  useEffect(() => {
+    const pollInterval = setInterval(() => {
+      fetchServiceRequests(pagination.page);
+    }, 30000); // Poll every 30 seconds
+
+    return () => clearInterval(pollInterval);
+  }, [pagination.page]);
 
   if (loading && serviceRequests.length === 0) {
     return (

@@ -59,12 +59,14 @@ class WebSocketService {
 
           const user = userResult.rows[0];
 
-          // Check admin role
+          // Check if user has any employee role (admin, executive, technician, sales)
           const roleResult = await query(`
             SELECT r.name
             FROM employee_roles er
             JOIN roles r ON er.role_id = r.id
-            WHERE er.employee_id = $1 AND r.name = 'admin' AND r.is_active = true
+            WHERE er.employee_id = $1
+              AND r.name IN ('admin', 'executive', 'technician', 'sales')
+              AND r.is_active = true
           `, [user.id]);
 
           if (roleResult.rows.length === 0) {
@@ -72,16 +74,18 @@ class WebSocketService {
             return;
           }
 
-          // Store admin socket
+          // Store employee socket
           this.adminSockets.add(socket.id);
           socket.userId = user.id;
           socket.userEmail = user.email;
+          socket.userRole = roleResult.rows[0].name;
 
-          console.log(`🔐 Admin authenticated: ${user.email} (${socket.id})`);
+          console.log(`🔐 Employee authenticated: ${user.email} (${roleResult.rows[0].name}) (${socket.id})`);
           socket.emit('admin-authenticated', {
-            message: 'Successfully authenticated as admin',
+            message: 'Successfully authenticated',
             userId: user.id,
-            email: user.email
+            email: user.email,
+            role: roleResult.rows[0].name
           });
 
           // Send initial employee status data
@@ -264,6 +268,69 @@ class WebSocketService {
 
   broadcastServiceLocationUpdate(serviceLocationId, action = 'updated', additionalData = {}) {
     this.broadcastEntityUpdate('serviceLocation', serviceLocationId, action, additionalData);
+  }
+
+  /**
+   * Broadcast permission-related updates to all connected admin clients
+   * Used when permissions or role assignments are updated
+   */
+  broadcastPermissionUpdate(permissionData) {
+    if (this.adminSockets.size === 0) {
+      console.log('📡 No admin sockets connected, skipping permission update broadcast');
+      return;
+    }
+
+    console.log(`📡 Broadcasting permission update to ${this.adminSockets.size} admin(s)`);
+
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('permissionUpdated', permissionData);
+      }
+    });
+  }
+
+  /**
+   * Broadcast role permission changes to all connected admin clients
+   * Triggers permission cache refresh on frontend
+   */
+  broadcastRolePermissionsUpdated(roleData) {
+    if (this.adminSockets.size === 0) {
+      console.log('📡 No admin sockets connected, skipping role permissions update broadcast');
+      return;
+    }
+
+    console.log(`📡 Broadcasting role permissions update to ${this.adminSockets.size} admin(s)`, {
+      roleId: roleData.roleId,
+      roleName: roleData.roleName
+    });
+
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('rolePermissionsUpdated', roleData);
+      }
+    });
+  }
+
+  /**
+   * Broadcast generic message to all admins
+   * Used by permission management routes
+   */
+  broadcastToAdmins(message) {
+    if (this.adminSockets.size === 0) {
+      console.log('📡 No admin sockets connected, skipping broadcast');
+      return;
+    }
+
+    console.log(`📡 Broadcasting to ${this.adminSockets.size} admin(s):`, message.type);
+
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit(message.type, message.data);
+      }
+    });
   }
 
   // Get connected user count

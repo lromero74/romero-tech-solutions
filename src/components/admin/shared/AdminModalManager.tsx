@@ -17,6 +17,8 @@ import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServic
 // import EditEmployeeModal from '../AdminEmployees_Modals/EditEmployeeModal';
 import ChangePasswordModal from './ChangePasswordModal';
 import DeleteConfirmModal from './DeleteConfirmModal';
+import TrustedDeviceManagement from '../../shared/TrustedDeviceManagement';
+import GenericModal from '../../shared/GenericModal';
 
 interface AdminModalManagerProps {
   modals: ModalState;
@@ -256,6 +258,16 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
         userEmail={user?.email}
         userName={user?.name}
       />
+
+      {/* Trusted Devices Modal */}
+      <GenericModal
+        isOpen={modals.trustedDevices}
+        onClose={() => onCloseModal('trustedDevices')}
+        title="Manage Trusted Devices"
+        maxWidth="4xl"
+      >
+        <TrustedDeviceManagement isDarkMode={false} />
+      </GenericModal>
 
       {/* Delete Confirmation Modal */}
       <DeleteConfirmModal

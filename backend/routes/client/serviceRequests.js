@@ -4,6 +4,7 @@ import { clientContextMiddleware, requireClientAccess } from '../../middleware/c
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 import crypto from 'crypto';
+import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient } from '../../services/emailService.js';
 
 const router = express.Router();
 
@@ -142,6 +143,142 @@ router.post('/', async (req, res) => {
     // Log the creation
     console.log(`📋 Service request created: ${requestNumber} for business ${businessId}`);
 
+    // Send email notifications (async - don't block response)
+    const sendNotifications = async () => {
+      try {
+        // 1. Fetch active technicians
+        const techniciansQuery = `
+          SELECT e.id, e.first_name as "firstName", e.email
+          FROM employees e
+          WHERE e.role = 'technician'
+            AND e.active = true
+            AND e.soft_delete = false
+            AND e.employee_status_id IN (
+              SELECT id FROM employee_statuses
+              WHERE name IN ('Active', 'Available')
+                AND name NOT IN ('Vacation', 'Sick', 'Unavailable')
+            )
+        `;
+        const techniciansResult = await pool.query(techniciansQuery);
+        const activeTechnicians = techniciansResult.rows;
+
+        // 2. Fetch detailed service request data for notifications
+        const serviceRequestDetailsQuery = `
+          SELECT
+            sr.request_number,
+            sr.title,
+            sr.description,
+            sr.scheduled_date,
+            sr.scheduled_time_start as scheduled_time,
+            sr.primary_contact_name as contact_name,
+            sr.primary_contact_phone as contact_phone,
+            sr.primary_contact_email as contact_email,
+            b.business_name,
+            u.first_name as client_first_name,
+            u.last_name as client_last_name,
+            u.email as client_email,
+            sl.location_name as service_location,
+            sl.street_address_1,
+            sl.street_address_2,
+            sl.street,
+            sl.city,
+            sl.state,
+            sl.zip_code,
+            sl.contact_phone as location_contact_phone,
+            sl.contact_person as location_contact_person,
+            sl.contact_email as location_contact_email,
+            sl.notes as location_notes,
+            ul.name as urgency_level,
+            pl.name as priority_level,
+            st.name as service_type
+          FROM service_requests sr
+          JOIN businesses b ON sr.business_id = b.id
+          JOIN users u ON sr.client_id = u.id
+          LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
+          LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
+          LEFT JOIN priority_levels pl ON sr.priority_level_id = pl.id
+          LEFT JOIN service_types st ON sr.service_type_id = st.id
+          WHERE sr.id = $1
+        `;
+        const detailsResult = await pool.query(serviceRequestDetailsQuery, [serviceRequestId]);
+        const srDetails = detailsResult.rows[0];
+
+        // 3. Send notifications to technicians if any are active
+        if (activeTechnicians.length > 0) {
+          const serviceRequestData = {
+            requestNumber: srDetails.request_number,
+            title: srDetails.title,
+            description: srDetails.description,
+            businessName: srDetails.business_name,
+            clientName: `${srDetails.client_first_name} ${srDetails.client_last_name}`,
+            serviceLocation: srDetails.service_location || 'Not specified',
+            serviceLocationDetails: srDetails.service_location ? {
+              location_name: srDetails.service_location,
+              street_address_1: srDetails.street_address_1,
+              street_address_2: srDetails.street_address_2,
+              street: srDetails.street,
+              city: srDetails.city,
+              state: srDetails.state,
+              zip_code: srDetails.zip_code,
+              contact_phone: srDetails.location_contact_phone,
+              contact_person: srDetails.location_contact_person,
+              contact_email: srDetails.location_contact_email,
+              notes: srDetails.location_notes
+            } : null,
+            urgencyLevel: srDetails.urgency_level || 'Normal',
+            priorityLevel: srDetails.priority_level || 'Normal',
+            serviceType: srDetails.service_type || 'General Support',
+            scheduledDate: srDetails.scheduled_date ? new Date(srDetails.scheduled_date).toLocaleDateString() : null,
+            scheduledTime: srDetails.scheduled_time || null,
+            contactName: srDetails.contact_name,
+            contactPhone: srDetails.contact_phone,
+            contactEmail: srDetails.contact_email
+          };
+
+          const techResult = await sendServiceRequestNotificationToTechnicians({
+            serviceRequestData,
+            technicians: activeTechnicians,
+            serviceRequestId: serviceRequestId
+          });
+
+          console.log(`📧 Technician notifications: ${techResult.message}`);
+        } else {
+          console.warn('⚠️ No active technicians found for service request notifications');
+        }
+
+        // 4. Send confirmation email to client
+        const clientData = {
+          firstName: srDetails.client_first_name,
+          email: srDetails.client_email
+        };
+
+        const clientServiceRequestData = {
+          requestNumber: srDetails.request_number,
+          title: srDetails.title,
+          description: srDetails.description,
+          serviceLocation: srDetails.service_location || 'Not specified',
+          scheduledDate: srDetails.scheduled_date ? new Date(srDetails.scheduled_date).toLocaleDateString() : null,
+          scheduledTime: srDetails.scheduled_time || null,
+          contactName: srDetails.contact_name,
+          contactPhone: srDetails.contact_phone
+        };
+
+        const clientResult = await sendServiceRequestConfirmationToClient({
+          serviceRequestData: clientServiceRequestData,
+          clientData
+        });
+
+        console.log(`📧 Client confirmation: ${clientResult.message}`);
+
+      } catch (emailError) {
+        console.error('❌ Error sending service request notifications:', emailError);
+        // Don't throw - notifications are supplementary and shouldn't break the main flow
+      }
+    };
+
+    // Send notifications asynchronously (don't await - don't block response)
+    sendNotifications();
+
     res.status(201).json({
       success: true,
       message: 'Service request created successfully',
@@ -190,9 +327,9 @@ router.get('/', async (req, res) => {
         sr.updated_at,
         srs.name as status_name,
         srs.description as status_description,
-        ul.urgency_name,
-        pl.priority_name,
-        st.service_name,
+        ul.name as urgency_name,
+        pl.name as priority_name,
+        st.name as service_name,
         sl.location_name,
         COUNT(cf.id) as file_count,
         COUNT(*) OVER() as total_count
@@ -201,11 +338,11 @@ router.get('/', async (req, res) => {
       LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
       LEFT JOIN priority_levels pl ON sr.priority_level_id = pl.id
       LEFT JOIN service_types st ON sr.service_type_id = st.id
-      LEFT JOIN service_locations sl ON sr.service_location_id = sl.service_location_id
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
       LEFT JOIN t_client_files cf ON sr.id = cf.service_request_id AND cf.soft_delete = false
       WHERE sr.business_id = $1 AND sr.client_id = $2 AND sr.soft_delete = false
-      GROUP BY sr.id, srs.name, srs.description, ul.urgency_name,
-               pl.priority_name, st.service_name, sl.location_name
+      GROUP BY sr.id, srs.name, srs.description, ul.name,
+               pl.name, st.name, sl.location_name
       ORDER BY sr.created_at DESC
       LIMIT $3 OFFSET $4
     `;

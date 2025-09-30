@@ -311,12 +311,13 @@ router.post('/login', async (req, res) => {
         u.is_active,
         u.email_verified,
         b.business_name,
-        b.primary_street,
-        b.primary_city,
-        b.primary_state,
-        b.primary_zip_code
+        hq.street as primary_street,
+        hq.city as primary_city,
+        hq.state as primary_state,
+        hq.zip_code as primary_zip_code
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
+      LEFT JOIN service_locations hq ON hq.business_id = b.id AND hq.is_headquarters = true
       WHERE u.email = $1 AND u.role = 'client'
     `, [email]);
 

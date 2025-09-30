@@ -2,8 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { useLanguage } from '../contexts/LanguageContext';
 import { Lock, Mail, Eye, EyeOff, User, ArrowRight, Shield, KeyRound } from 'lucide-react';
-import ClientRegistration from '../components/ClientRegistration';
-import ImageBasedSection from '../components/common/ImageBasedSection';
+import SimplifiedClientRegistration from '../components/SimplifiedClientRegistration';
 import TrustedDevicePrompt from '../components/TrustedDevicePrompt';
 import { authService } from '../services/authService';
 import { trustedDeviceService } from '../services/trustedDeviceService';
@@ -20,6 +19,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const formClearTimerRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showRegistration, setShowRegistration] = useState(false);
   const [showMfaVerification, setShowMfaVerification] = useState(false);
   const [mfaCode, setMfaCode] = useState('');
@@ -202,9 +202,24 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     setError('');
   };
 
-  const handleRegistrationSuccess = () => {
+  const handleRegistrationSuccess = async (credentials?: { email: string; password: string }) => {
     setShowRegistration(false);
-    // User will receive email confirmation, so we don't automatically log them in
+
+    if (credentials) {
+      // Auto-login after successful registration since account is already verified
+      console.log('🚀 Auto-login after registration for:', credentials.email);
+      setEmail(credentials.email);
+      setPassword(credentials.password);
+
+      // Automatically trigger login
+      try {
+        await handleLogin({ preventDefault: () => {} } as React.FormEvent);
+      } catch (error) {
+        console.error('Auto-login after registration failed:', error);
+        setSuccess('Registration successful! Please log in with your credentials.');
+        setError('');
+      }
+    }
   };
 
   const handleTrustedDeviceRegister = async () => {
@@ -234,7 +249,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   // Show registration component if requested
   if (showRegistration) {
     return (
-      <ClientRegistration
+      <SimplifiedClientRegistration
         onSuccess={handleRegistrationSuccess}
         onCancel={handleHideRegistration}
       />
@@ -243,28 +258,54 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
 
   return (
     <div className="min-h-screen">
-      <ImageBasedSection imageUrl={backgroundImageUrl}>
-        <div className="max-w-md w-full mx-auto px-4 sm:px-6 lg:px-8 space-y-8">
-          <div className="text-center">
-            <div className="mx-auto h-16 w-16 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center">
-              {showMfaVerification ? (
-                <Shield className="h-8 w-8 text-white" />
-              ) : (
-                <User className="h-8 w-8 text-white" />
-              )}
-            </div>
-            <h2 className="mt-6 text-3xl font-extrabold text-white">
-              {showMfaVerification ? t('login.mfa.title') : t('login.title')}
-            </h2>
-            <p className="mt-2 text-sm text-blue-100">
-              {showMfaVerification
-                ? `${t('login.mfa.subtitle')} ${mfaEmail}`
-                : t('login.subtitle')
-              }
-            </p>
-          </div>
+      <section
+        className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white min-h-screen flex items-center justify-center overflow-hidden"
+        onClick={(e) => {
+          const rect = e.currentTarget.getBoundingClientRect();
+          const clickX = e.clientX - rect.left;
+          const clickY = e.clientY - rect.top;
 
-          <div className="bg-white/5 backdrop-blur-sm rounded-2xl p-8 border border-white/10">
+          const particleEvent = new CustomEvent('generateParticles', {
+            detail: { x: clickX, y: clickY }
+          });
+          window.dispatchEvent(particleEvent);
+        }}
+      >
+        {/* Background elements */}
+        <div className="absolute inset-0 opacity-40">
+          <div className="w-full h-full" style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Ccircle cx='30' cy='30' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            backgroundSize: '60px 60px'
+          }}></div>
+        </div>
+
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-20"
+          style={{
+            backgroundImage: `url("${backgroundImageUrl}")`
+          }}
+        />
+
+        <div className="relative z-10 max-w-2xl w-full mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 shadow-2xl">
+            <div className="text-center mb-8">
+              <div className="mx-auto h-16 w-16 bg-white/10 backdrop-blur-sm rounded-full flex items-center justify-center">
+                {showMfaVerification ? (
+                  <Shield className="h-8 w-8 text-white" />
+                ) : (
+                  <User className="h-8 w-8 text-white" />
+                )}
+              </div>
+              <h2 className="mt-6 text-3xl font-extrabold text-white">
+                {showMfaVerification ? t('login.mfa.title') : t('login.title')}
+              </h2>
+              <p className="mt-2 text-sm text-blue-100">
+                {showMfaVerification
+                  ? `${t('login.mfa.subtitle')} ${mfaEmail}`
+                  : t('login.subtitle')
+                }
+              </p>
+            </div>
             {showMfaVerification ? (
               <form className="space-y-6" onSubmit={handleMfaSubmit}>
                 {error && (
@@ -366,6 +407,11 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                     <p className="text-sm text-red-800">{error}</p>
                   </div>
                 )}
+                {success && (
+                  <div className="bg-green-50 border border-green-200 rounded-md p-4">
+                    <p className="text-sm text-green-800">{success}</p>
+                  </div>
+                )}
 
                 <div>
                   <label htmlFor="email" className="block text-sm font-medium text-white">
@@ -464,7 +510,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                   <button
                     type="button"
                     onClick={handleShowRegistration}
-                    className="text-sm text-blue-300 hover:text-blue-200 transition-colors"
+                    className="inline-flex items-center justify-center px-4 py-2 text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors shadow-lg"
                   >
                     {t('login.noAccount')}
                   </button>
@@ -473,7 +519,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
             )}
           </div>
         </div>
-      </ImageBasedSection>
+      </section>
 
       {/* Trusted Device Prompt */}
       <TrustedDevicePrompt
