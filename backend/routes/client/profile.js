@@ -292,7 +292,7 @@ router.get('/business', authenticateClient, async (req, res) => {
       SELECT
         b.id as id,
         b.business_name as name,
-        COALESCE(hq.street_address_1, b.primary_street) as street,
+        hq.street_address_1 as street,
         hq.city as city,
         hq.state as state,
         hq.zip_code as "zipCode",
@@ -379,6 +379,153 @@ router.get('/business', authenticateClient, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch business information'
+    });
+  }
+});
+
+// Add a new service location for the client's business
+router.post('/add-service-location', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const clientId = req.user.clientId;
+    const {
+      locationName,
+      streetAddress,
+      city,
+      state,
+      zipCode,
+      country = 'United States',
+      contactPerson,
+      contactPhone,
+      contactEmail
+    } = req.body;
+
+    // Validate required fields
+    if (!locationName || !streetAddress || !city || !state || !zipCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Location name, street address, city, state, and ZIP code are required'
+      });
+    }
+
+    // Validate ZIP code format (5 digits)
+    const zipRegex = /^\d{5}$/;
+    if (!zipRegex.test(zipCode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ZIP code must be exactly 5 digits'
+      });
+    }
+
+    // Validate email format if provided
+    if (contactEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contactEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+    }
+
+    // Get client's business ID
+    const businessResult = await pool.query(`
+      SELECT business_id
+      FROM users
+      WHERE id = $1 AND role = 'client' AND soft_delete = false
+    `, [clientId]);
+
+    if (businessResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Client business not found'
+      });
+    }
+
+    const businessId = businessResult.rows[0].business_id;
+
+    // Check if location name already exists for this business
+    const existingLocation = await pool.query(`
+      SELECT id FROM service_locations
+      WHERE business_id = $1 AND location_name = $2 AND soft_delete = false
+    `, [businessId, locationName]);
+
+    if (existingLocation.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'A service location with this name already exists for your business'
+      });
+    }
+
+    // Insert new service location
+    const insertResult = await pool.query(`
+      INSERT INTO service_locations (
+        business_id,
+        location_name,
+        street_address_1,
+        city,
+        state,
+        zip_code,
+        country,
+        contact_person,
+        contact_phone,
+        contact_email,
+        is_headquarters,
+        soft_delete,
+        created_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, false, false, CURRENT_TIMESTAMP)
+      RETURNING
+        id,
+        location_name as name,
+        street_address_1 as street,
+        city,
+        state,
+        zip_code as "zipCode",
+        country,
+        contact_person as "contactPerson",
+        contact_phone as "contactPhone",
+        contact_email as "contactEmail"
+    `, [
+      businessId,
+      locationName,
+      streetAddress,
+      city,
+      state,
+      zipCode,
+      country,
+      contactPerson,
+      contactPhone,
+      contactEmail
+    ]);
+
+    const newLocation = insertResult.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Service location added successfully',
+      data: {
+        id: newLocation.id,
+        name: newLocation.name,
+        address: {
+          street: newLocation.street,
+          city: newLocation.city,
+          state: newLocation.state,
+          zipCode: newLocation.zipCode,
+          country: newLocation.country
+        },
+        contact: {
+          person: newLocation.contactPerson,
+          phone: newLocation.contactPhone,
+          email: newLocation.contactEmail
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error adding service location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add service location'
     });
   }
 });

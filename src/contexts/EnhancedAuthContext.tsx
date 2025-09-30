@@ -6,6 +6,7 @@ import { Hub } from 'aws-amplify/utils';
 import SessionManager, { SessionConfig } from '../utils/sessionManager';
 import { systemSettingsService } from '../services/systemSettingsService';
 import ConfirmationDialog from '../components/common/ConfirmationDialog';
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
 
 interface EnhancedAuthContextType {
   user: AuthUser | null;
@@ -14,6 +15,8 @@ interface EnhancedAuthContextType {
   role: UserRole | null;
   isAdmin: boolean;
   isTechnician: boolean;
+  isExecutive: boolean;
+  isSales: boolean;
   isClient: boolean;
   isFirstAdmin: boolean;
   isSigningOut: boolean;
@@ -47,7 +50,13 @@ interface EnhancedAuthProviderProps {
 }
 
 export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ children }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUserState] = useState<AuthUser | null>(null);
+
+  // Wrapper to log all user state changes
+  const setUser = (newUser: AuthUser | null) => {
+    console.log('🔄 setUser called:', newUser ? `${newUser.email} (${newUser.role})` : 'null', new Error().stack);
+    setUserState(newUser);
+  };
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
   const [sessionManager] = useState(() => SessionManager.getInstance());
@@ -87,7 +96,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setHasError(false);
 
       // First validate with backend session if we have a token
-      const storedSessionToken = localStorage.getItem('sessionToken');
+      const storedSessionToken = RoleBasedStorage.getItem('sessionToken');
       setSessionToken(storedSessionToken);
       let currentUser = null;
 
@@ -108,8 +117,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
             // PERFORMANCE OPTIMIZATION: Skip MFA check for existing sessions
             // MFA verification should only be required during initial login, not page refreshes
-            const mfaVerified = localStorage.getItem('mfaVerified');
-            const storedTimestamp = localStorage.getItem('authTimestamp');
+            const mfaVerified = RoleBasedStorage.getItem('mfaVerified');
+            const storedTimestamp = RoleBasedStorage.getItem('authTimestamp');
 
             if (currentUser && !mfaVerified && await requiresMfa(currentUser)) {
               // Only check MFA for sessions that haven't been verified yet
@@ -120,12 +129,12 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
                 // If the stored session is old, force re-authentication with MFA
                 if (timeSinceAuth > maxAge) {
                   console.log('🔒 User session too old, forcing re-authentication with MFA');
-                  localStorage.removeItem('sessionToken');
+                  RoleBasedStorage.removeItem('sessionToken');
                   setSessionToken(null);
-                  localStorage.removeItem('user');
-                  localStorage.removeItem('authUser');
-                  localStorage.removeItem('authTimestamp');
-                  localStorage.removeItem('mfaVerified');
+                  RoleBasedStorage.removeItem('user');
+                  RoleBasedStorage.removeItem('authUser');
+                  RoleBasedStorage.removeItem('authTimestamp');
+                  RoleBasedStorage.removeItem('mfaVerified');
                   currentUser = null;
                 }
               }
@@ -134,27 +143,27 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
             }
           } else {
             // Session is invalid, clear it
-            localStorage.removeItem('sessionToken');
+            RoleBasedStorage.removeItem('sessionToken');
             setSessionToken(null);
-            localStorage.removeItem('user');
-            localStorage.removeItem('authUser');
-            localStorage.removeItem('authTimestamp');
+            RoleBasedStorage.removeItem('user');
+            RoleBasedStorage.removeItem('authUser');
+            RoleBasedStorage.removeItem('authTimestamp');
           }
         } catch (error) {
           console.warn('EnhancedAuthContext: Backend session validation failed:', error);
           // SECURITY: For users with MFA enabled, don't fall back to localStorage restoration
           // Force them to go through proper login with MFA
-          const storedUser = localStorage.getItem('authUser');
+          const storedUser = RoleBasedStorage.getItem('authUser');
           if (storedUser) {
             try {
               const parsedUser = JSON.parse(storedUser);
               if (parsedUser && await requiresMfa(parsedUser)) {
                 console.log('🔒 User with MFA detected with failed backend validation, forcing re-login with MFA');
-                localStorage.removeItem('sessionToken');
+                RoleBasedStorage.removeItem('sessionToken');
                 setSessionToken(null);
-                localStorage.removeItem('user');
-                localStorage.removeItem('authUser');
-                localStorage.removeItem('authTimestamp');
+                RoleBasedStorage.removeItem('user');
+                RoleBasedStorage.removeItem('authUser');
+                RoleBasedStorage.removeItem('authTimestamp');
                 currentUser = null;
               } else {
                 // Users without MFA can fall back to Cognito validation
@@ -162,11 +171,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
               }
             } catch {
               // If we can't parse the stored user, clear everything and force re-login
-              localStorage.removeItem('sessionToken');
+              RoleBasedStorage.removeItem('sessionToken');
               setSessionToken(null);
-              localStorage.removeItem('user');
-              localStorage.removeItem('authUser');
-              localStorage.removeItem('authTimestamp');
+              RoleBasedStorage.removeItem('user');
+              RoleBasedStorage.removeItem('authUser');
+              RoleBasedStorage.removeItem('authTimestamp');
               currentUser = null;
             }
           } else {
@@ -175,15 +184,15 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         }
       } else {
         // No session token - check if there's a stored user with MFA that should be forced to re-authenticate
-        const storedUser = localStorage.getItem('authUser');
+        const storedUser = RoleBasedStorage.getItem('authUser');
         if (storedUser) {
           try {
             const parsedUser = JSON.parse(storedUser);
             if (parsedUser && await requiresMfa(parsedUser)) {
               console.log('🔒 User with MFA without session token detected, forcing re-login with MFA');
-              localStorage.removeItem('user');
-              localStorage.removeItem('authUser');
-              localStorage.removeItem('authTimestamp');
+              RoleBasedStorage.removeItem('user');
+              RoleBasedStorage.removeItem('authUser');
+              RoleBasedStorage.removeItem('authTimestamp');
               currentUser = null;
             } else {
               // Users without MFA can try Cognito restoration
@@ -191,9 +200,9 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
             }
           } catch {
             // If we can't parse the stored user, clear everything
-            localStorage.removeItem('user');
-            localStorage.removeItem('authUser');
-            localStorage.removeItem('authTimestamp');
+            RoleBasedStorage.removeItem('user');
+            RoleBasedStorage.removeItem('authUser');
+            RoleBasedStorage.removeItem('authTimestamp');
             currentUser = null;
           }
         } else {
@@ -219,7 +228,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
           console.log('⚡ Using cached session config for faster loading');
         } else {
           // Check localStorage cache first (faster than database)
-          const cachedConfig = localStorage.getItem('sessionConfig');
+          const cachedConfig = RoleBasedStorage.getItem('sessionConfig');
           if (cachedConfig) {
             try {
               sessionConfig = JSON.parse(cachedConfig);
@@ -235,7 +244,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
               if (dbConfig) {
                 sessionConfig = dbConfig;
                 // Cache in localStorage for next time
-                localStorage.setItem('sessionConfig', JSON.stringify(dbConfig));
+                RoleBasedStorage.setItem('sessionConfig', JSON.stringify(dbConfig));
                 console.log('📥 Loaded and cached session config from database');
               } else {
                 sessionConfig = defaultConfig;
@@ -291,11 +300,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     } catch (error) {
       console.error('Error during logout:', error);
       // Even if signOut fails, still clear localStorage manually for security
-      localStorage.removeItem('authUser');
-      localStorage.removeItem('authTimestamp');
-      localStorage.removeItem('sessionToken');
-      localStorage.removeItem('mfaVerified');
-      localStorage.removeItem('sessionConfig');
+      RoleBasedStorage.removeItem('authUser');
+      RoleBasedStorage.removeItem('authTimestamp');
+      RoleBasedStorage.removeItem('sessionToken');
+      RoleBasedStorage.removeItem('mfaVerified');
+      RoleBasedStorage.removeItem('sessionConfig');
     }
 
     setShowTimeoutDialog(true);
@@ -329,8 +338,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       apiService.setUnauthorizedHandler(() => {
         console.log('🔐 API service detected unauthorized response');
         // Only show timeout dialog if user was actually logged in
-        const currentUser = localStorage.getItem('authUser');
-        const sessionToken = localStorage.getItem('sessionToken');
+        const currentUser = RoleBasedStorage.getItem('authUser');
+        const sessionToken = RoleBasedStorage.getItem('sessionToken');
 
         if (currentUser && sessionToken) {
           console.log('🔐 User was logged in - showing timeout dialog');
@@ -395,11 +404,18 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   const handleSignIn = async (email: string, password: string): Promise<AuthUser> => {
     try {
-      const user = await authService.signIn({ email, password });
+      // Determine login type based on current URL
+      const currentPath = window.location.pathname;
+      const loginType: 'employee' | 'client' =
+        (currentPath.includes('/employee') || currentPath.includes('/admin') || currentPath.includes('/technician') || currentPath.includes('/sales'))
+          ? 'employee'
+          : 'client';
+
+      const user = await authService.signIn({ email, password, loginType });
       setUser(user);
 
       // Update sessionToken from localStorage after successful sign in
-      const newSessionToken = localStorage.getItem('sessionToken');
+      const newSessionToken = RoleBasedStorage.getItem('sessionToken');
       setSessionToken(newSessionToken);
 
       return user;
@@ -566,7 +582,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setUser(user);
 
       // Update sessionToken from localStorage after successful MFA
-      const newSessionToken = localStorage.getItem('sessionToken');
+      const newSessionToken = RoleBasedStorage.getItem('sessionToken');
       setSessionToken(newSessionToken);
 
       // Initialize session management after successful MFA
@@ -633,11 +649,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setUser(user);
 
       // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session
-      localStorage.setItem('mfaVerified', 'true');
+      RoleBasedStorage.setItem('mfaVerified', 'true');
       console.log('⚡ MFA verification flag set for faster future page loads');
 
       // Update sessionToken from localStorage after successful MFA
-      const storedToken = localStorage.getItem('sessionToken');
+      const storedToken = RoleBasedStorage.getItem('sessionToken');
       if (storedToken) {
         setSessionToken(storedToken);
       }
@@ -701,89 +717,101 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   };
 
   // Set user from trusted device authentication - bypasses MFA requirement
-  const setUserFromTrustedDevice = async (userData: AuthUser, sessionToken?: string) => {
-    try {
-      console.log('🔄 [Trusted Device] Setting user directly from trusted device authentication');
-      setUser(userData);
-
-      // Store authentication state in localStorage for persistence (same as normal MFA flow)
-      localStorage.setItem('authUser', JSON.stringify(userData));
-      localStorage.setItem('authTimestamp', Date.now().toString());
-      console.log('💾 [Trusted Device] Stored authUser and authTimestamp in localStorage');
-
-      // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session since trusted device bypassed it
-      localStorage.setItem('mfaVerified', 'true');
-      console.log('⚡ MFA verification flag set for trusted device authentication');
-
-      // Update sessionToken if provided
-      if (sessionToken) {
-        localStorage.setItem('sessionToken', sessionToken);
-        setSessionToken(sessionToken);
-        console.log('🔐 [Trusted Device] Session token updated');
-      } else {
-        // Check if there's already a token in localStorage
-        const existingToken = localStorage.getItem('sessionToken');
-        if (existingToken) {
-          setSessionToken(existingToken);
-          console.log('🔐 [Trusted Device] Using existing session token');
-        }
-      }
-
-      // Initialize session management after trusted device authentication
-      const defaultConfig: SessionConfig = {
-        timeout: 15, // 15 minutes default
-        warningTime: 2 // 2 minutes warning
-      };
-
-      // Try to load config from database first, then local storage, then default
-      let sessionConfig: SessionConfig;
+  const setUserFromTrustedDevice = async (userData: AuthUser, sessionToken?: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
       try {
-        console.log('🔍 [Trusted Device] Attempting to load session config from database...');
-        const dbConfig = await systemSettingsService.getSessionConfig();
-        console.log('🔍 [Trusted Device] Database response:', dbConfig);
-        if (dbConfig) {
-          sessionConfig = dbConfig;
-          console.log('📥 [Trusted Device] Using database session config:', sessionConfig);
+        console.log('🔄 [Trusted Device] Setting user directly from trusted device authentication');
+
+        // Store authentication state in localStorage for persistence (same as normal MFA flow)
+        RoleBasedStorage.setItem('authUser', JSON.stringify(userData));
+        RoleBasedStorage.setItem('authTimestamp', Date.now().toString());
+        console.log('💾 [Trusted Device] Stored authUser and authTimestamp in localStorage');
+
+        // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session since trusted device bypassed it
+        RoleBasedStorage.setItem('mfaVerified', 'true');
+        console.log('⚡ MFA verification flag set for trusted device authentication');
+
+        // Update sessionToken if provided
+        if (sessionToken) {
+          RoleBasedStorage.setItem('sessionToken', sessionToken);
+          setSessionToken(sessionToken);
+          console.log('🔐 [Trusted Device] Session token updated');
         } else {
-          console.log('⚠️ [Trusted Device] No database config found, checking local storage...');
-          const existingConfig = sessionManager.getConfig();
-          if (existingConfig) {
-            sessionConfig = existingConfig;
-            console.log('📥 [Trusted Device] Using local session config:', sessionConfig);
-          } else {
-            sessionConfig = defaultConfig;
-            console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
+          // Check if there's already a token in localStorage
+          const existingToken = RoleBasedStorage.getItem('sessionToken');
+          if (existingToken) {
+            setSessionToken(existingToken);
+            console.log('🔐 [Trusted Device] Using existing session token');
           }
         }
+
+        // Initialize session management after trusted device authentication
+        const defaultConfig: SessionConfig = {
+          timeout: 15, // 15 minutes default
+          warningTime: 2 // 2 minutes warning
+        };
+
+        // Try to load config from database first, then local storage, then default
+        let sessionConfig: SessionConfig;
+
+        (async () => {
+          try {
+            console.log('🔍 [Trusted Device] Attempting to load session config from database...');
+            const dbConfig = await systemSettingsService.getSessionConfig();
+            console.log('🔍 [Trusted Device] Database response:', dbConfig);
+            if (dbConfig) {
+              sessionConfig = dbConfig;
+              console.log('📥 [Trusted Device] Using database session config:', sessionConfig);
+            } else {
+              console.log('⚠️ [Trusted Device] No database config found, checking local storage...');
+              const existingConfig = sessionManager.getConfig();
+              if (existingConfig) {
+                sessionConfig = existingConfig;
+                console.log('📥 [Trusted Device] Using local session config:', sessionConfig);
+              } else {
+                sessionConfig = defaultConfig;
+                console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
+              }
+            }
+          } catch (error) {
+            console.warn('⚠️ [Trusted Device] Failed to load database config, using fallback:', error);
+            const existingConfig = sessionManager.getConfig();
+            if (existingConfig) {
+              sessionConfig = existingConfig;
+              console.log('📥 [Trusted Device] Using local session config (fallback):', sessionConfig);
+            } else {
+              sessionConfig = defaultConfig;
+              console.log('📥 [Trusted Device] Using default session config (fallback):', sessionConfig);
+            }
+          }
+
+          setSessionConfig(sessionConfig);
+
+          // Reset session warning state for new session
+          setSessionWarning({ isVisible: false, timeLeft: 0 });
+
+          // Initialize session if not already active
+          if (!sessionManager.isSessionActive()) {
+            sessionManager.initSession(sessionConfig);
+          }
+
+          setIsSessionActive(true);
+
+          // Set user state - this triggers React re-render
+          // We resolve the promise after setting state to ensure caller waits for state update
+          setUser(userData);
+
+          console.log('✅ [Trusted Device] User authentication state updated successfully');
+
+          // Resolve promise on next tick to ensure React has processed state update
+          setTimeout(() => resolve(), 0);
+        })().catch(reject);
+
       } catch (error) {
-        console.warn('⚠️ [Trusted Device] Failed to load database config, using fallback:', error);
-        const existingConfig = sessionManager.getConfig();
-        if (existingConfig) {
-          sessionConfig = existingConfig;
-          console.log('📥 [Trusted Device] Using local session config (fallback):', sessionConfig);
-        } else {
-          sessionConfig = defaultConfig;
-          console.log('📥 [Trusted Device] Using default session config (fallback):', sessionConfig);
-        }
+        console.error('❌ [Trusted Device] Error setting user from trusted device:', error);
+        reject(error);
       }
-
-      setSessionConfig(sessionConfig);
-
-      // Reset session warning state for new session
-      setSessionWarning({ isVisible: false, timeLeft: 0 });
-
-      // Initialize session if not already active
-      if (!sessionManager.isSessionActive()) {
-        sessionManager.initSession(sessionConfig);
-      }
-
-      setIsSessionActive(true);
-
-      console.log('✅ [Trusted Device] User authentication state updated successfully');
-    } catch (error) {
-      console.error('❌ [Trusted Device] Error setting user from trusted device:', error);
-      throw error;
-    }
+    });
   };
 
   // Computed properties
@@ -791,6 +819,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const role = user?.role || null;
   const isAdmin = user?.role === 'admin';
   const isTechnician = user?.role === 'technician';
+  const isExecutive = user?.role === 'executive';
+  const isSales = user?.role === 'sales';
   const isClient = user?.role === 'client';
   const isFirstAdmin = user?.isFirstAdmin || false;
 
@@ -801,6 +831,8 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     role,
     isAdmin,
     isTechnician,
+    isExecutive,
+    isSales,
     isClient,
     isFirstAdmin,
     isSigningOut,

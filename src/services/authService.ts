@@ -25,6 +25,7 @@ interface CognitoResponse {
 }
 import { databaseService } from './databaseService';
 import CryptoJS from 'crypto-js';
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
 
 export class AuthService {
   private cognitoClient: CognitoIdentityProviderClient;
@@ -33,6 +34,23 @@ export class AuthService {
     this.cognitoClient = new CognitoIdentityProviderClient({
       region: import.meta.env.VITE_AWS_REGION || 'us-east-1'
     });
+  }
+
+  // Use RoleBasedStorage utility for all localStorage operations
+  private setStorageItem(key: string, value: string, role?: UserRole | string): void {
+    RoleBasedStorage.setItem(key, value, role);
+  }
+
+  private getStorageItem(key: string, role?: UserRole | string): string | null {
+    return RoleBasedStorage.getItem(key, role);
+  }
+
+  private removeStorageItem(key: string, role?: UserRole | string): void {
+    RoleBasedStorage.removeItem(key, role);
+  }
+
+  private clearRoleStorage(role: UserRole | string): void {
+    RoleBasedStorage.clearRoleStorage(role);
   }
 
   // Calculate SECRET_HASH for Cognito requests
@@ -124,20 +142,72 @@ export class AuthService {
     }
   }
 
+  // Generate device fingerprint for trusted device detection
+  // Designed to be stable across DST changes, browser updates, and display changes
+  private generateDeviceFingerprint(): string {
+    // Normalize user agent to remove version numbers that change with updates
+    const normalizeUserAgent = (ua: string): string => {
+      return ua
+        // Remove specific version numbers but keep browser family
+        .replace(/Chrome\/[\d.]+/g, 'Chrome')
+        .replace(/Safari\/[\d.]+/g, 'Safari')
+        .replace(/Firefox\/[\d.]+/g, 'Firefox')
+        .replace(/Edge\/[\d.]+/g, 'Edge')
+        // Remove macOS/Windows version details that change with OS updates
+        .replace(/Mac OS X [\d_]+/g, 'Mac OS X')
+        .replace(/Windows NT [\d.]+/g, 'Windows NT')
+        // Remove WebKit/Gecko build numbers
+        .replace(/WebKit\/[\d.]+/g, 'WebKit')
+        .replace(/Gecko\/[\d]+/g, 'Gecko');
+    };
+
+    // Get primary display resolution (ignore secondary monitors)
+    const getPrimaryDisplaySize = (): string => {
+      // Use available screen dimensions which are more stable
+      const width = screen.availWidth || screen.width;
+      const height = screen.availHeight || screen.height;
+      return `${width}x${height}`;
+    };
+
+    const components = [
+      normalizeUserAgent(navigator.userAgent),
+      // Removed navigator.language - changes when user switches browser language
+      getPrimaryDisplaySize(),
+      // Removed timezone - changes when traveling or manually adjusting timezone
+      navigator.platform,  // Stable OS/architecture identifier
+      navigator.hardwareConcurrency?.toString() || 'unknown',  // CPU cores (stable hardware identifier)
+      // Add more stable hardware/software identifiers
+      screen.colorDepth?.toString() || 'unknown',  // Color depth (stable display property)
+      navigator.maxTouchPoints?.toString() || '0'   // Touch capability (stable device property)
+    ];
+
+    const fingerprint = components.join('|');
+    console.log('🔍 Stable fingerprint components:', components);
+    console.log('🔍 Generated stable device fingerprint:', CryptoJS.SHA256(fingerprint).toString());
+    return CryptoJS.SHA256(fingerprint).toString();
+  }
+
   // Sign in user
   async signIn(credentials: LoginRequest): Promise<AuthUser> {
     try {
-      // For now, let's use a backend API approach instead of direct Cognito
-      // This bypasses the CLIENT_SECRET issues with frontend Cognito calls
+      // Determine the correct endpoint based on loginType
+      const endpoint = credentials.loginType === 'employee'
+        ? '/auth/admin-login-mfa'  // Employee login uses admin-login-mfa endpoint
+        : '/auth/client-login';    // Client login uses client-login endpoint
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/login`, {
+      // Generate device fingerprint for trusted device detection
+      const deviceFingerprint = this.generateDeviceFingerprint();
+      console.log('🔍 Generated device fingerprint:', deviceFingerprint);
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}${endpoint}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
           email: credentials.email,
-          password: credentials.password
+          password: credentials.password,
+          deviceFingerprint: deviceFingerprint
         })
       });
 
@@ -157,25 +227,36 @@ export class AuthService {
           email: string;
           userType?: string;
           mfaEmail?: string;
+          phoneNumber?: string;
         }).requiresMfa = true;
         (mfaError as Error & {
           requiresMfa: boolean;
           email: string;
           userType?: string;
           mfaEmail?: string;
+          phoneNumber?: string;
         }).email = data.email;
         (mfaError as Error & {
           requiresMfa: boolean;
           email: string;
           userType?: string;
           mfaEmail?: string;
+          phoneNumber?: string;
         }).userType = data.userType;
         (mfaError as Error & {
           requiresMfa: boolean;
           email: string;
           userType?: string;
           mfaEmail?: string;
+          phoneNumber?: string;
         }).mfaEmail = data.mfaEmail;
+        (mfaError as Error & {
+          requiresMfa: boolean;
+          email: string;
+          userType?: string;
+          mfaEmail?: string;
+          phoneNumber?: string;
+        }).phoneNumber = data.phoneNumber;
         throw mfaError;
       }
 
@@ -188,10 +269,10 @@ export class AuthService {
       };
 
       // Store authentication state and session token in localStorage for persistence
-      localStorage.setItem('authUser', JSON.stringify(authUser));
-      localStorage.setItem('authTimestamp', Date.now().toString());
+      this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
+      this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
       if (data.session && data.session.sessionToken) {
-        localStorage.setItem('sessionToken', data.session.sessionToken);
+        this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
       }
 
       return authUser;
@@ -263,10 +344,10 @@ export class AuthService {
       };
 
       // Store authentication state and session token in localStorage for persistence
-      localStorage.setItem('authUser', JSON.stringify(authUser));
-      localStorage.setItem('authTimestamp', Date.now().toString());
+      this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
+      this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
       if (data.session && data.session.sessionToken) {
-        localStorage.setItem('sessionToken', data.session.sessionToken);
+        this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
       }
 
       return authUser;
@@ -330,10 +411,10 @@ export class AuthService {
       };
 
       // Store authentication state and session token in localStorage for persistence
-      localStorage.setItem('authUser', JSON.stringify(authUser));
-      localStorage.setItem('authTimestamp', Date.now().toString());
+      this.setStorageItem('authUser', JSON.stringify(authUser), authUser.role);
+      this.setStorageItem('authTimestamp', Date.now().toString(), authUser.role);
       if (data.session && data.session.sessionToken) {
-        localStorage.setItem('sessionToken', data.session.sessionToken);
+        this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
       }
 
       return authUser;
@@ -346,8 +427,20 @@ export class AuthService {
   // Sign out user
   async signOut(): Promise<void> {
     try {
+      // Determine current role from stored user
+      let currentRole: UserRole | string | undefined;
+      const storedUser = this.getStorageItem('authUser');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          currentRole = parsedUser.role;
+        } catch (e) {
+          // Ignore parsing errors
+        }
+      }
+
       // Get session token for backend logout
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = this.getStorageItem('sessionToken', currentRole);
 
       // Call backend logout if we have a session token
       if (sessionToken) {
@@ -364,10 +457,10 @@ export class AuthService {
         }
       }
 
-      // Clear localStorage authentication state
-      localStorage.removeItem('authUser');
-      localStorage.removeItem('authTimestamp');
-      localStorage.removeItem('sessionToken');
+      // Clear role-specific localStorage authentication state
+      if (currentRole) {
+        this.clearRoleStorage(currentRole);
+      }
 
       // Also clear Cognito session if it exists
       await signOut();
@@ -382,9 +475,9 @@ export class AuthService {
     try {
       console.log('Attempting to get current user from localStorage...');
 
-      // Check localStorage for stored authentication state
-      const storedUser = localStorage.getItem('authUser');
-      const storedTimestamp = localStorage.getItem('authTimestamp');
+      // Check localStorage for stored authentication state (role-based)
+      const storedUser = this.getStorageItem('authUser');
+      const storedTimestamp = this.getStorageItem('authTimestamp');
 
       if (!storedUser || !storedTimestamp) {
         console.log('No user found in localStorage');
@@ -398,9 +491,8 @@ export class AuthService {
 
       if (now - timestamp > maxAge) {
         console.log('Stored auth session expired');
-        localStorage.removeItem('authUser');
-        localStorage.removeItem('authTimestamp');
-        localStorage.removeItem('sessionToken');
+        const authUser = JSON.parse(storedUser) as AuthUser;
+        this.clearRoleStorage(authUser.role);
         return null;
       }
 
@@ -408,11 +500,17 @@ export class AuthService {
       console.log('Returning stored auth user:', authUser);
       return authUser;
     } catch (error) {
-      console.log('Error reading stored auth user:', error.message);
-      // Clean up invalid localStorage data
-      localStorage.removeItem('authUser');
-      localStorage.removeItem('authTimestamp');
-      localStorage.removeItem('sessionToken');
+      console.log('Error reading stored auth user:', (error as Error).message);
+      // Clean up invalid localStorage data - try to determine role first
+      const storedUser = this.getStorageItem('authUser');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          this.clearRoleStorage(parsedUser.role);
+        } catch (e) {
+          // If we can't parse, just clear without role
+        }
+      }
       return null;
     }
   }
@@ -602,8 +700,8 @@ export class AuthService {
     try {
       console.log('🔐 Changing password for authenticated user');
 
-      // Get session token from localStorage
-      const sessionToken = localStorage.getItem('sessionToken');
+      // Get session token from localStorage (role-based)
+      const sessionToken = this.getStorageItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No active session found. Please log in again.');
       }
@@ -665,7 +763,7 @@ export class AuthService {
 
   // Get stored session token
   getToken(): string | null {
-    return localStorage.getItem('sessionToken');
+    return this.getStorageItem('sessionToken');
   }
 
   // Session heartbeat (for periodic activity sync)
