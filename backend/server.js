@@ -177,9 +177,11 @@ const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
     // Use session token if available (post-authentication)
-    if (req.cookies && req.cookies.sessionToken) {
-      console.log(`🔐 CSRF session identifier: Using sessionToken (authenticated request)`);
-      return req.cookies.sessionToken;
+    // Check both session_token (snake_case) and sessionToken (camelCase)
+    const sessionToken = req.cookies?.session_token || req.cookies?.sessionToken;
+    if (sessionToken) {
+      console.log(`🔐 CSRF session identifier: Using session token (authenticated request)`);
+      return sessionToken;
     }
 
     // For pre-authentication, use csrf-token cookie itself as the session identifier
@@ -225,13 +227,15 @@ export { generateCsrfToken };
 // Create conditional CSRF protection that skips pre-authentication endpoints
 const conditionalCsrfProtection = (req, res, next) => {
   // Skip CSRF for pre-authentication endpoints (before session cookie exists)
+  // NOTE: When middleware is mounted at /api/auth, req.path does NOT include the /api/auth prefix
   const preAuthEndpoints = [
-    '/api/auth/admin-login-mfa',
-    '/api/auth/verify-admin-mfa',
-    '/api/auth/verify-client-mfa',
-    '/api/auth/login',
-    '/api/auth/signin',
-    '/api/auth/check-admin'
+    '/admin-login-mfa',
+    '/verify-admin-mfa',
+    '/verify-client-mfa',
+    '/login',
+    '/signin',
+    '/check-admin',
+    '/trusted-device-login'
   ];
 
   // Check if this is a pre-auth endpoint
@@ -241,6 +245,7 @@ const conditionalCsrfProtection = (req, res, next) => {
   }
 
   // Apply CSRF protection for all other endpoints
+  console.log(`🔒 Applying CSRF protection for endpoint: ${req.path}`);
   return doubleCsrfProtection(req, res, next);
 };
 
