@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import FileUpload from './FileUpload';
 import ResourceTimeSlotScheduler from './ResourceTimeSlotScheduler';
 import { useUrgencyLevels } from './ServiceScheduler/useUrgencyLevels';
@@ -42,7 +43,7 @@ const ServiceScheduler: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
-  const [calendarView, setCalendarView] = useState<'month' | 'week' | 'day'>('month');
+  const [calendarView, setCalendarView] = useState<'year' | 'month' | 'week' | 'today'>('month');
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
 
   // Data state
@@ -59,29 +60,45 @@ const ServiceScheduler: React.FC = () => {
   useEffect(() => {
     const loadClientData = () => {
       // First try to get from existing auth system
-      const authUserData = localStorage.getItem('authUser');
+      const authUserData = RoleBasedStorage.getItem('authUser');
       if (authUserData) {
         try {
           const authUser = JSON.parse(authUserData);
           if (authUser.role === 'client') {
-            // Use mock locations since we don't have real client location data yet
-            const mockLocations = [
-              {
-                id: 'loc-1',
-                address_label: 'Main Office',
-                street: '1350 Hotel Circle N',
-                city: 'San Diego',
-                state: 'CA'
-              },
-              {
-                id: 'loc-2',
-                address_label: 'Donation Center',
-                street: '2828 Camino Del Rio S',
-                city: 'San Diego',
-                state: 'CA'
+            // Fetch real client location data from API
+            const fetchLocations = async () => {
+              try {
+                // Get session token from localStorage for authorization
+                const sessionToken = localStorage.getItem('sessionToken');
+                const headers: HeadersInit = {
+                  'Content-Type': 'application/json'
+                };
+
+                if (sessionToken) {
+                  headers['Authorization'] = `Bearer ${sessionToken}`;
+                }
+
+                const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile/business`, {
+                  credentials: 'include',
+                  headers
+                });
+
+                if (response.ok) {
+                  const result = await response.json();
+                  if (result.success && result.data.accessibleLocations) {
+                    setLocations(result.data.accessibleLocations);
+                  }
+                } else {
+                  console.error('Failed to fetch client business data:', response.statusText);
+                  setLocations([]); // Empty array instead of mock data
+                }
+              } catch (error) {
+                console.error('Error fetching client business data:', error);
+                setLocations([]); // Empty array instead of mock data
               }
-            ];
-            setLocations(mockLocations);
+            };
+
+            fetchLocations();
 
             // Pre-fill contact info from auth user data
             setContactName(authUser.name || 'Client User');
@@ -169,9 +186,33 @@ const ServiceScheduler: React.FC = () => {
     return [[currentDate]]; // Return as array of arrays to match month format
   };
 
+  const generateYearCalendar = () => {
+    // For year view, return 12 months as a 3x4 grid
+    const year = currentDate.getFullYear();
+    const months = [];
+    for (let month = 0; month < 12; month++) {
+      const monthDate = new Date(year, month, 1);
+      months.push(monthDate);
+    }
+
+    // Group into 4 rows of 3 months each
+    const yearCalendar = [];
+    for (let row = 0; row < 4; row++) {
+      const monthRow = [];
+      for (let col = 0; col < 3; col++) {
+        const monthIndex = row * 3 + col;
+        monthRow.push(months[monthIndex]);
+      }
+      yearCalendar.push(monthRow);
+    }
+    return yearCalendar;
+  };
+
   // Get calendar based on view mode
   const getCalendarData = () => {
     switch (calendarView) {
+      case 'year':
+        return generateYearCalendar();
       case 'week':
         return generateWeekCalendar();
       case 'day':
@@ -324,7 +365,7 @@ const ServiceScheduler: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`
+          'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken') || ''}`
         },
         body: JSON.stringify(request)
       });
@@ -369,7 +410,7 @@ const ServiceScheduler: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('sessionToken') || ''}`
+          'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken') || ''}`
         },
         body: JSON.stringify({
           resourceId,
@@ -547,11 +588,18 @@ const ServiceScheduler: React.FC = () => {
 
                   {/* View Toggle Buttons */}
                   <div className="flex mt-2 space-x-1">
-                    {(['month', 'week', 'day'] as const).map((view) => (
+                    {(['year', 'month', 'week', 'today'] as const).map((view) => (
                       <button
                         key={view}
                         type="button"
-                        onClick={() => setCalendarView(view)}
+                        onClick={() => {
+                          if (view === 'today') {
+                            setCurrentDate(new Date());
+                            setCalendarView('month');
+                          } else {
+                            setCalendarView(view);
+                          }
+                        }}
                         className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
                           calendarView === view
                             ? 'bg-blue-600 text-white'
@@ -565,39 +613,7 @@ const ServiceScheduler: React.FC = () => {
                     ))}
                   </div>
 
-                  {/* Today Button */}
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => setCurrentDate(new Date())}
-                      className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                        isDarkMode
-                          ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                      }`}
-                    >
-                      {t('calendar.today')}
-                    </button>
-                  </div>
 
-                  {/* Time Slot Scheduler Button */}
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={handleOpenTimeSlotScheduler}
-                      className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-colors ${
-                        isDarkMode
-                          ? 'bg-purple-600 text-white hover:bg-purple-700'
-                          : 'bg-purple-600 text-white hover:bg-purple-700'
-                      }`}
-                    >
-                      <Calendar className="h-4 w-4" />
-                      <span>{t('schedule.advancedPicker')}</span>
-                    </button>
-                    <p className={`text-xs mt-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                      {t('schedule.advancedPickerDesc')}
-                    </p>
-                  </div>
                 </div>
 
                 <button
@@ -636,19 +652,29 @@ const ServiceScheduler: React.FC = () => {
                     const isCurrentMonth = date.getMonth() === currentDate.getMonth();
                     const isToday = date.toDateString() === new Date().toDateString();
                     const isSelected = selectedDate?.toDateString() === date.toDateString();
-                    const isValid = isCurrentMonth && isDateValid(date);
+                    const isPastDate = date < new Date(new Date().setHours(0, 0, 0, 0));
+
+                    // Allow clicks on future dates (either current month valid dates OR future month dates)
+                    const isValid = (isCurrentMonth && isDateValid(date)) || (!isCurrentMonth && !isPastDate);
 
                     return (
                       <button
                         key={`${weekIdx}-${dayIdx}`}
                         type="button"
-                        onClick={() => isValid && setSelectedDate(date)}
+                        onClick={() => {
+                          if (isValid) {
+                            setSelectedDate(date);
+                            setShowTimeSlotScheduler(true);
+                          }
+                        }}
                         disabled={!isValid}
                         className={`p-2 text-sm rounded-lg ${
                           isSelected
                             ? 'bg-blue-600 text-white'
                             : isToday
                             ? isDarkMode ? 'bg-blue-900 text-blue-300' : 'bg-blue-100 text-blue-600'
+                            : isPastDate && isCurrentMonth
+                            ? isDarkMode ? 'text-gray-400 bg-red-900/20' : 'text-gray-600 bg-red-100/30'
                             : isValid
                             ? isDarkMode ? 'text-white hover:bg-gray-700' : 'text-gray-900 hover:bg-gray-100'
                             : isDarkMode ? 'text-gray-600' : 'text-gray-400'
@@ -663,128 +689,7 @@ const ServiceScheduler: React.FC = () => {
             </div>
           </div>
 
-          {/* Time Selection */}
-          {selectedDate && (
-            <div>
-              <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                {t('schedule.selectTime')}
-              </label>
 
-              {/* Timeline Interface */}
-              <div className="space-y-4">
-                {/* Timeline Bar */}
-                <div className="relative">
-                  <div className={`h-12 rounded-lg border-2 ${isDarkMode ? 'border-gray-700 bg-gray-800' : 'border-gray-300 bg-gray-50'} relative overflow-hidden`}>
-                    {/* Hour markers */}
-                    <div className="absolute inset-0 flex">
-                      {timeSlots.map((time) => {
-                        const [hour] = time.split(':').map(Number);
-                        const isPremium = isPremiumTime(time);
-                        const isAvailable = getAvailableTimeSlots().includes(time);
-                        const width = 100 / timeSlots.length;
-
-                        return (
-                          <div
-                            key={time}
-                            className={`flex-1 border-r ${isDarkMode ? 'border-gray-600' : 'border-gray-200'} relative group ${
-                              !isAvailable ? 'opacity-40' : ''
-                            }`}
-                            style={{ width: `${width}%` }}
-                          >
-                            {/* Time slot background */}
-                            <div
-                              className={`h-full ${
-                                isPremium
-                                  ? isDarkMode
-                                    ? 'bg-yellow-900/20 hover:bg-yellow-900/30'
-                                    : 'bg-yellow-50 hover:bg-yellow-100'
-                                  : isDarkMode
-                                  ? 'hover:bg-gray-700'
-                                  : 'hover:bg-gray-100'
-                              } cursor-pointer transition-colors`}
-                              onClick={() => isAvailable && handleTimelineSelect(time, 1)}
-                            >
-                              {/* Hour label */}
-                              <div className={`text-xs text-center pt-1 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                                {hour === 12 ? '12p' : hour > 12 ? `${hour - 12}p` : hour === 0 ? '12a' : `${hour}a`}
-                              </div>
-
-                              {/* Premium indicator */}
-                              {isPremium && (
-                                <div className="absolute top-0 right-0 text-xs text-yellow-500">💰</div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Selected time block overlay */}
-                    {selectedTime && (
-                      <div
-                        className="absolute top-0 h-full bg-blue-500 bg-opacity-30 border-2 border-blue-500 rounded"
-                        style={{
-                          left: `${(timeSlots.indexOf(selectedTime) / timeSlots.length) * 100}%`,
-                          width: `${(selectedDuration / timeSlots.length) * 100}%`
-                        }}
-                      >
-                        <div className={`text-center text-xs font-medium pt-1 ${isDarkMode ? 'text-blue-200' : 'text-blue-800'}`}>
-                          {selectedDuration}h
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Timeline labels */}
-                  <div className="flex justify-between text-xs mt-1">
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>6 AM</span>
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>12 PM</span>
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>6 PM</span>
-                    <span className={isDarkMode ? 'text-gray-400' : 'text-gray-500'}>10 PM</span>
-                  </div>
-                </div>
-
-                {/* Duration Controls */}
-                {selectedTime && (
-                  <div className="space-y-3">
-                    <div>
-                      <label className={`block text-sm font-medium mb-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {t('schedule.duration')}
-                      </label>
-                      <div className="flex space-x-2">
-                        {getAvailableDurations(selectedTime).map((duration) => (
-                          <button
-                            key={duration}
-                            type="button"
-                            onClick={() => handleTimelineSelect(selectedTime, duration)}
-                            className={`px-3 py-2 text-sm rounded-lg border ${
-                              selectedDuration === duration
-                                ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-                                : isDarkMode
-                                ? 'border-gray-600 text-gray-300 hover:border-gray-500'
-                                : 'border-gray-300 text-gray-700 hover:border-gray-400'
-                            }`}
-                          >
-                            {duration}h
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Selected time summary */}
-                    <div className={`p-3 rounded-lg ${isDarkMode ? 'bg-gray-700' : 'bg-gray-100'}`}>
-                      <div className={`text-sm ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-                        <strong>Selected:</strong> {selectedTime} - {selectedEndTime} ({selectedDuration} hour{selectedDuration > 1 ? 's' : ''})
-                        {(isPremiumTime(selectedTime) || isPremiumTime(selectedEndTime)) && (
-                          <span className="ml-2 text-yellow-600">💰 Premium pricing applies</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Right Column - Service Details */}

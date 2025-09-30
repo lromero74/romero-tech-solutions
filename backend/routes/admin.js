@@ -14,6 +14,13 @@ import locationContactsRoutes from './admin/locationContacts.js';
 import systemSettingsRoutes from './admin/systemSettings.js';
 import serviceAreasRoutes from './admin/serviceAreas.js';
 import locationTypesRoutes from './admin/locationTypes.js';
+import closureReasonsRoutes from './admin/closureReasons.js';
+import employeeCalendarRoutes from './admin/employeeCalendar.js';
+import serviceRequestsRoutes from './admin/serviceRequests.js';
+import permissionsRoutes from './admin/permissions.js';
+import permissionAuditLogRoutes from './admin/permissionAuditLog.js';
+import { getSignupStats } from '../middleware/signupRateLimiter.js';
+import { getEmployeeLoginStats } from '../middleware/employeeLoginRateLimiter.js';
 
 const router = express.Router();
 
@@ -34,5 +41,14 @@ router.use('/', locationContactsRoutes);
 router.use('/', systemSettingsRoutes);
 router.use('/', serviceAreasRoutes);
 router.use('/', locationTypesRoutes);
+router.use('/closure-reasons', closureReasonsRoutes);
+router.use('/', employeeCalendarRoutes);
+router.use('/', serviceRequestsRoutes);
+router.use('/', permissionsRoutes);
+router.use('/permission-audit-log', permissionAuditLogRoutes);
+
+// Security monitoring endpoints
+router.get('/signup-stats', getSignupStats);
+router.get('/employee-login-security', getEmployeeLoginStats);
 
 export default router;

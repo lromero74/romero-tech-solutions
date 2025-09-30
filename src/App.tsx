@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { LanguageProvider } from './contexts/LanguageContext';
 import { EnhancedAuthProvider, useEnhancedAuth } from './contexts/EnhancedAuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { PermissionProvider } from './contexts/PermissionContext';
 import Header from './components/Header';
 import Footer from './components/Footer';
 import ParticleBackground from './components/common/ParticleBackground';
@@ -20,13 +22,15 @@ import ComingSoon from './pages/ComingSoon';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import './config/aws-config';
+// Development utility for clearing auth state
+import './utils/clearAuthState';
 
 function AppContent() {
   const [currentPage, setCurrentPage] = useState<AppPage>(() =>
     getPageFromPath(window.location.pathname)
   );
 
-  const { isLoading, isAuthenticated, isAdmin, isTechnician, isClient, isSigningOut } = useEnhancedAuth();
+  const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut } = useEnhancedAuth();
 
   // Get theme preference for loading states (before context is available)
   const getThemeClasses = () => {
@@ -65,20 +69,12 @@ function AppContent() {
         );
       }
 
-      if (!isAuthenticated || (!isAdmin && !isTechnician)) {
+      if (!isAuthenticated || (!isAdmin && !isTechnician && !isExecutive && !isSales)) {
         return <AdminRegistration onSuccess={() => setCurrentPage('dashboard')} currentPage={currentPage} />;
       }
 
-      // Route to appropriate dashboard based on role
-      if (isAdmin) {
-        return <AdminDashboard />;
-      }
-
-      if (isTechnician) {
-        return <UnauthenticatedDashboard />;
-      }
-
-      // Fallback to admin dashboard for other employee roles
+      // All authenticated employees access the same dashboard
+      // Permission system inside AdminDashboard controls what they can see/do
       return <AdminDashboard />;
     }
 
@@ -131,7 +127,9 @@ function AppContent() {
         return (
           <ClientLanguageProvider>
             <ClientThemeProvider>
-              <ClientDashboard onNavigate={setCurrentPage} />
+              <NotificationProvider>
+                <ClientDashboard onNavigate={setCurrentPage} />
+              </NotificationProvider>
             </ClientThemeProvider>
           </ClientLanguageProvider>
         );
@@ -174,26 +172,26 @@ function AppContent() {
         );
       }
 
-      // Render role-specific dashboard
-      if (isAdmin) {
-        return <AdminDashboard />;
-      }
-
-      if (isTechnician) {
-        return <UnauthenticatedDashboard />;
-      }
-
+      // Route to appropriate dashboard based on user type
       if (isClient) {
         return (
           <ClientLanguageProvider>
             <ClientThemeProvider>
-              <ClientDashboard onNavigate={setCurrentPage} />
+              <NotificationProvider>
+                <ClientDashboard onNavigate={setCurrentPage} />
+              </NotificationProvider>
             </ClientThemeProvider>
           </ClientLanguageProvider>
         );
       }
 
-      // For other roles, show simple dashboard
+      // All authenticated employees (Admin, Technician, Executive, Sales) use AdminDashboard
+      // Permission system inside AdminDashboard controls what they can see/do
+      if (isAdmin || isTechnician || isExecutive || isSales) {
+        return <AdminDashboard />;
+      }
+
+      // Fallback for authenticated users without recognized roles
       return <UnauthenticatedDashboard />;
     }
 
@@ -225,7 +223,7 @@ function AppContent() {
   // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated or loading
   if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
-      (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isClient))))) {
+      (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isExecutive || isSales || isClient))))) {
     return renderPage();
   }
 
@@ -244,9 +242,11 @@ function AppContent() {
 function App() {
   return (
     <EnhancedAuthProvider>
-      <LanguageProvider>
-        <AppContent />
-      </LanguageProvider>
+      <PermissionProvider>
+        <LanguageProvider>
+          <AppContent />
+        </LanguageProvider>
+      </PermissionProvider>
     </EnhancedAuthProvider>
   );
 }
