@@ -245,6 +245,10 @@ interface AdminEmployeesProps {
   onTerminateEmployee?: (employee: Employee) => void;
   onRehireEmployee?: (employee: Employee) => void;
   loadingEmployeeOperations?: Record<string, boolean>;
+  showInactiveEmployees?: boolean;
+  toggleShowInactiveEmployees?: () => void;
+  showSoftDeletedEmployees?: boolean;
+  toggleShowSoftDeletedEmployees?: () => void;
 }
 
 const AdminEmployees: React.FC<AdminEmployeesProps> = ({
@@ -277,7 +281,11 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
   onHardDeleteEmployee,
   onTerminateEmployee,
   onRehireEmployee,
-  loadingEmployeeOperations = {}
+  loadingEmployeeOperations = {},
+  showInactiveEmployees,
+  toggleShowInactiveEmployees,
+  showSoftDeletedEmployees,
+  toggleShowSoftDeletedEmployees
 }) => {
   const { theme } = useTheme();
   const [editingEmployee, setEditingEmployee] = React.useState<Employee | null>(null);
@@ -732,7 +740,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
       {/* Employee Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
         <h3 className={`text-lg font-medium ${themeClasses.text.primary} mb-4`}>Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Search</label>
             <div className="relative">
@@ -807,6 +815,38 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
                 <option value="offline">Offline</option>
               </select>
             </div>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Inactive</label>
+            <button
+              onClick={toggleShowInactiveEmployees}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                showInactiveEmployees ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  showInactiveEmployees ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
+            <button
+              onClick={toggleShowSoftDeletedEmployees}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                showSoftDeletedEmployees ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  showSoftDeletedEmployees ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
           </div>
         </div>
 

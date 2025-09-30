@@ -16,9 +16,45 @@ interface RequestOptions extends RequestInit {
 class ApiService {
   private baseUrl: string;
   private onUnauthorized?: () => void;
+  private csrfToken: string | null = null;
 
   constructor() {
     this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+    // Fetch CSRF token on initialization
+    this.fetchCsrfToken();
+  }
+
+  /**
+   * Fetch CSRF token from backend
+   */
+  private async fetchCsrfToken(): Promise<void> {
+    try {
+      console.log('🔐 Fetching CSRF token from:', `${this.baseUrl}/csrf-token`);
+      const response = await fetch(`${this.baseUrl}/csrf-token`, {
+        credentials: 'include', // Include cookies
+      });
+      console.log('🔐 CSRF token response status:', response.status);
+      const data = await response.json();
+      console.log('🔐 CSRF token response data:', data);
+      if (data.success && data.csrfToken) {
+        this.csrfToken = data.csrfToken;
+        console.log('✅ CSRF token fetched successfully');
+      } else {
+        console.warn('⚠️ CSRF token response missing success or token');
+      }
+    } catch (error) {
+      console.error('❌ Failed to fetch CSRF token:', error);
+    }
+  }
+
+  /**
+   * Get CSRF token (refetch if not available)
+   */
+  private async getCsrfToken(): Promise<string | null> {
+    if (!this.csrfToken) {
+      await this.fetchCsrfToken();
+    }
+    return this.csrfToken;
   }
 
   /**
@@ -108,6 +144,19 @@ class ApiService {
       Object.assign(headers, this.getAuthHeaders());
     }
 
+    // Add CSRF token for state-changing requests (POST, PUT, DELETE, PATCH)
+    const method = (fetchOptions.method || 'GET').toUpperCase();
+    if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(method)) {
+      const csrfToken = await this.getCsrfToken();
+      console.log(`🔐 ${method} request - CSRF token:`, csrfToken ? `${csrfToken.substring(0, 20)}...` : 'NOT AVAILABLE');
+      if (csrfToken) {
+        Object.assign(headers, { 'x-csrf-token': csrfToken });
+        console.log('✅ Added CSRF token to request headers');
+      } else {
+        console.warn('⚠️ CSRF token not available for POST request!');
+      }
+    }
+
     // Temporarily skip unauthorized handling for specific requests
     this.skipUnauthorizedHandling = skipAuth;
 
@@ -115,6 +164,7 @@ class ApiService {
       const response = await fetch(url, {
         ...fetchOptions,
         headers,
+        credentials: 'include', // Include cookies for CSRF
       });
 
       return await this.handleResponse<T>(response);

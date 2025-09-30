@@ -11,7 +11,7 @@ export class RoleBasedStorage {
   private static getCurrentRole(): UserRole | string | undefined {
     // First try to determine from URL path
     const currentPath = window.location.pathname;
-    if (currentPath.includes('/employee') || currentPath.includes('/technician')) {
+    if (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/dashboard')) {
       return 'employee';
     } else if (currentPath.includes('/client') || currentPath === '/clogin') {
       return 'client';
@@ -21,7 +21,7 @@ export class RoleBasedStorage {
 
     // If URL doesn't help, try to get role from any stored user data
     // Check all possible role-prefixed keys
-    const possibleRoles: Array<UserRole | string> = ['admin', 'employee', 'client', 'technician', 'sales'];
+    const possibleRoles: Array<UserRole | string> = ['admin', 'executive', 'employee', 'client', 'technician', 'sales'];
     for (const role of possibleRoles) {
       const storedUser = localStorage.getItem(`${role}_authUser`);
       if (storedUser) {

@@ -1,8 +1,11 @@
 import express from 'express';
+import bcrypt from 'bcryptjs';
 import { query } from '../config/database.js';
 import { sessionService } from '../services/sessionService.js';
 import { passwordComplexityService } from '../services/passwordComplexityService.js';
 import { mfaSettingsService } from '../services/mfaSettingsService.js';
+import { auditLogService, AUDIT_EVENTS } from '../services/auditLogService.js';
+import { SECURITY_CONFIG, SECURITY_MESSAGES, DUMMY_BCRYPT_HASH, ALLOWED_USER_TABLES } from '../config/security.js';
 import {
   hashPassword,
   verifyPassword,
@@ -135,40 +138,88 @@ router.post('/login', async (req, res) => {
       `, [email]);
     }
 
+    // SECURITY FIX: Timing attack prevention with dummy password comparison
     if (userResult.rows.length === 0) {
+      // Perform dummy bcrypt comparison to maintain consistent timing
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+
+      recordFailedAttempt(clientIP);
+      await auditLogService.logEvent(AUDIT_EVENTS.LOGIN_FAILURE, null, {
+        email,
+        ipAddress: clientIP,
+        userAgent: req.get('User-Agent'),
+        reason: 'account_not_found'
+      });
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: SECURITY_MESSAGES.INVALID_CREDENTIALS
       });
     }
 
     const user = userResult.rows[0];
 
+    // SECURITY FIX: Use generic error message for all authentication failures
+    // This prevents account enumeration attacks
+
     // Check if employee is terminated (for employee accounts only)
     if (user.user_type === 'employee' && user.employee_status === 'terminated') {
+      // Perform dummy password comparison for consistent timing
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+
       console.log(`🚫 Login denied for terminated employee: ${user.email}`);
+      recordFailedAttempt(clientIP);
+      await auditLogService.logEvent(AUDIT_EVENTS.LOGIN_FAILURE, user.id, {
+        email: user.email,
+        ipAddress: clientIP,
+        userAgent: req.get('User-Agent'),
+        reason: 'account_terminated'
+      });
+
       return res.status(401).json({
         success: false,
-        message: 'Account access has been terminated. Please contact your administrator.'
+        message: SECURITY_MESSAGES.INVALID_CREDENTIALS
       });
     }
 
     // Check if email is verified
     if (!user.email_verified) {
+      // Perform dummy password comparison for consistent timing
+      await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
+
+      recordFailedAttempt(clientIP);
+      await auditLogService.logEvent(AUDIT_EVENTS.LOGIN_FAILURE, user.id, {
+        email: user.email,
+        ipAddress: clientIP,
+        userAgent: req.get('User-Agent'),
+        reason: 'email_not_verified'
+      });
+
       return res.status(401).json({
         success: false,
-        message: 'Account not confirmed. Please check your email to confirm your account.'
+        message: SECURITY_MESSAGES.INVALID_CREDENTIALS
       });
     }
 
     // Verify password
     const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
+      recordFailedAttempt(clientIP);
+      await auditLogService.logEvent(AUDIT_EVENTS.LOGIN_FAILURE, user.id, {
+        email: user.email,
+        ipAddress: clientIP,
+        userAgent: req.get('User-Agent'),
+        reason: 'invalid_password'
+      });
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: SECURITY_MESSAGES.INVALID_CREDENTIALS
       });
     }
+
+    // Clear failed attempts on successful authentication
+    clearFailedAttempts(clientIP);
 
     // Check if this user requires MFA based on system settings OR individual client MFA setting
     const systemRequiresMfa = await mfaSettingsService.requiresMfaForUser(user.user_type, user.role);
@@ -235,7 +286,7 @@ router.post('/login', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
       path: '/'
     };
 
@@ -654,14 +705,14 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
       });
     }
 
+    // SECURITY FIX: Never expose MFA codes in API responses (even in development)
+    // Use server console logs or separate test/staging environment for debugging
     res.status(200).json({
       success: true,
       message,
       requiresMfa: true,
       email: user.email,
-      phoneNumber: user.phone,
-      // Include mfaCode in development for testing
-      ...(process.env.NODE_ENV === 'development' && { mfaCode })
+      phoneNumber: user.phone
     });
 
   } catch (error) {
@@ -756,7 +807,7 @@ router.post('/verify-admin-mfa', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
       path: '/'
     };
 
@@ -848,7 +899,7 @@ router.post('/verify-client-mfa', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
       path: '/'
     };
 
@@ -934,11 +985,10 @@ router.post('/forgot-password', async (req, res) => {
     // Send password reset email
     await sendPasswordResetEmail(email, user.first_name, resetCode);
 
+    // SECURITY FIX: Never expose reset codes in API responses (even in development)
     res.status(200).json({
       success: true,
-      message: 'If an account with that email exists, you will receive a password reset code.',
-      // Include resetCode in development for testing
-      ...(process.env.NODE_ENV === 'development' && { resetCode })
+      message: 'If an account with that email exists, you will receive a password reset code.'
     });
 
   } catch (error) {
@@ -1017,20 +1067,22 @@ router.post('/reset-password', async (req, res) => {
     // Hash the new password
     const passwordHash = await hashPassword(newPassword);
 
-    // Update the password in the appropriate table
-    if (tokenData.user_type === 'employee') {
-      await query(`
-        UPDATE employees
-        SET password_hash = $1
-        WHERE id = $2
-      `, [passwordHash, tokenData.user_id]);
-    } else {
-      await query(`
-        UPDATE users
-        SET password_hash = $1
-        WHERE id = $2
-      `, [passwordHash, tokenData.user_id]);
+    // SECURITY FIX: Use whitelist for table names to prevent SQL injection
+    const table = ALLOWED_USER_TABLES[tokenData.user_type];
+
+    if (!table) {
+      console.error(`Invalid user type for password reset: ${tokenData.user_type}`);
+      return res.status(500).json({
+        success: false,
+        message: SECURITY_MESSAGES.SERVER_ERROR
+      });
     }
+
+    await query(`
+      UPDATE ${table}
+      SET password_hash = $1
+      WHERE id = $2
+    `, [passwordHash, tokenData.user_id]);
 
     // Mark the token as used
     await markResetTokenAsUsed(email, resetCode);
@@ -1258,8 +1310,17 @@ router.post('/change-password', async (req, res) => {
       });
     }
 
-    // Update password in database
-    const table = user.user_type === 'employee' ? 'employees' : 'users';
+    // SECURITY FIX: Use whitelist for table names to prevent SQL injection
+    const table = ALLOWED_USER_TABLES[user.user_type];
+
+    if (!table) {
+      console.error(`Invalid user type for password update: ${user.user_type}`);
+      return res.status(500).json({
+        success: false,
+        message: SECURITY_MESSAGES.SERVER_ERROR
+      });
+    }
+
     await query(`
       UPDATE ${table}
       SET password_hash = $1
@@ -1838,7 +1899,7 @@ router.post('/trusted-device-login', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'strict',
-      maxAge: 15 * 60 * 1000 // 15 minutes
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS // Use centralized timeout
     });
 
     console.log(`✅ Trusted device login successful for: ${user.email} (${user.user_type})`);
@@ -1998,7 +2059,7 @@ router.post('/client-login', async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: 15 * 60 * 1000, // 15 minutes (matches session expiry)
+      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
       path: '/'
     };
 

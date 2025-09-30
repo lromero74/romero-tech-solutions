@@ -123,13 +123,8 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
       await businessCRUD.createEntity(businessData);
       console.log('🟢 Business created successfully');
 
-      console.log('🟢 Refreshing businesses...');
-      await refreshBusinesses();
-      console.log('🟢 Businesses refreshed');
-
-      console.log('🟢 Closing modal...');
+      // WebSocket will handle the refresh automatically
       onCloseModal('addBusiness');
-      console.log('🟢 Modal closed');
     } catch (error) {
       console.error('🔴 Error adding business:', error);
       throw error; // Re-throw to let the modal handle the error
@@ -140,7 +135,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     if (!selectedEntities.business?.id) return;
     try {
       await businessCRUD.updateEntity(selectedEntities.business.id, businessData);
-      await refreshBusinesses();
+      // WebSocket will handle the refresh automatically
       onCloseModal('editBusiness');
     } catch (error) {
       console.error('Error updating business:', error);
@@ -152,8 +147,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
   const handleAddServiceLocation = async (serviceLocationData: unknown) => {
     try {
       const result = await serviceLocationCRUD.createEntity(serviceLocationData);
-      // Use targeted refresh instead of full refresh for better performance and reliability
-      await refreshServiceLocations();
+      // WebSocket will handle the refresh automatically
       onCloseModal('addServiceLocation');
       return result; // Return the result so modal can continue its flow
     } catch (error) {
@@ -166,8 +160,7 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     if (!selectedEntities.serviceLocation?.id) return;
     try {
       await serviceLocationCRUD.updateEntity(selectedEntities.serviceLocation.id, serviceLocationData);
-      // Use targeted refresh instead of full refresh for better performance and reliability
-      await refreshServiceLocations();
+      // WebSocket will handle the refresh automatically
       onCloseModal('editServiceLocation');
     } catch (error) {
       console.error('Error updating service location:', error);

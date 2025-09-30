@@ -92,8 +92,13 @@ export const employeeLoginLimiter = async (req, res, next) => {
 
   } catch (error) {
     console.error('❌ Error in employee login rate limiter:', error);
-    // Allow request to continue if rate limiter fails (fail open for availability)
-    next();
+    // SECURITY FIX: Fail closed - deny access during rate limiter errors
+    // This prevents bypassing rate limiting during database outages
+    return res.status(503).json({
+      success: false,
+      message: 'Service temporarily unavailable. Please try again in a few moments.',
+      code: 'SERVICE_UNAVAILABLE'
+    });
   }
 };
 

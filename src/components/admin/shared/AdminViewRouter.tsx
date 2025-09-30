@@ -56,6 +56,8 @@ interface AdminViewRouterProps {
   externalShowSoftDeletedBusinesses?: boolean;
   externalShowInactiveServiceLocations?: boolean;
   externalShowSoftDeletedServiceLocations?: boolean;
+  externalShowInactiveEmployees?: boolean;
+  externalShowSoftDeletedEmployees?: boolean;
   // Toggle setter functions from parent (optional - falls back to internal state)
   setShowInactiveClients?: (show: boolean) => void;
   setShowSoftDeletedClients?: (show: boolean) => void;
@@ -63,6 +65,8 @@ interface AdminViewRouterProps {
   setShowSoftDeletedBusinesses?: (show: boolean) => void;
   setShowInactiveServiceLocations?: (show: boolean) => void;
   setShowSoftDeletedServiceLocations?: (show: boolean) => void;
+  setShowInactiveEmployees?: (show: boolean) => void;
+  setShowSoftDeletedEmployees?: (show: boolean) => void;
   // Modal handlers
   onOpenModal?: (modalName: string, entity?: unknown) => void;
 }
@@ -83,12 +87,16 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // externalShowSoftDeletedBusinesses,
   externalShowInactiveServiceLocations,
   externalShowSoftDeletedServiceLocations,
+  externalShowInactiveEmployees,
+  externalShowSoftDeletedEmployees,
   setShowInactiveClients: externalSetShowInactiveClients,
   setShowSoftDeletedClients: externalSetShowSoftDeletedClients,
   // setShowInactiveBusinesses: externalSetShowInactiveBusinesses,
   // setShowSoftDeletedBusinesses: externalSetShowSoftDeletedBusinesses,
   setShowInactiveServiceLocations: externalSetShowInactiveServiceLocations,
-  setShowSoftDeletedServiceLocations: externalSetShowSoftDeletedServiceLocations
+  setShowSoftDeletedServiceLocations: externalSetShowSoftDeletedServiceLocations,
+  setShowInactiveEmployees: externalSetShowInactiveEmployees,
+  setShowSoftDeletedEmployees: externalSetShowSoftDeletedEmployees
 }) => {
   const {
     dashboardData,
@@ -727,7 +735,27 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             setEmployeeSortOrder={employeeFilters.setSortOrder}
             employeeSearchTerm={employeeFilters.filters.searchTerm}
             setEmployeeSearchTerm={employeeFilters.setSearchTerm}
-            getFilteredAndSortedEmployees={() => employeeFilters.getFilteredAndSortedEmployees(employees)}
+            getFilteredAndSortedEmployees={() => {
+              // First apply the hook's filtering logic
+              const hookFiltered = employeeFilters.getFilteredAndSortedEmployees(employees);
+
+              // Then apply the toggle filters
+              const finalFiltered = hookFiltered.filter(employee => {
+                // Filter by show inactive toggle
+                if (!externalShowInactiveEmployees && !employee.isActive) {
+                  return false;
+                }
+
+                // Filter by show soft deleted toggle
+                if (!externalShowSoftDeletedEmployees && employee.softDelete) {
+                  return false;
+                }
+
+                return true;
+              });
+
+              return finalFiltered;
+            }}
             clearEmployeeFilters={employeeFilters.clearFilters}
             // Form state
             showAddUserForm={showAddUserForm}
@@ -856,6 +884,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onTerminateEmployee={handleTerminateEmployee}
             onRehireEmployee={handleRehireEmployee}
             loadingEmployeeOperations={loadingEmployeeOperations}
+            showInactiveEmployees={externalShowInactiveEmployees}
+            toggleShowInactiveEmployees={() => externalSetShowInactiveEmployees?.(!externalShowInactiveEmployees)}
+            showSoftDeletedEmployees={externalShowSoftDeletedEmployees}
+            toggleShowSoftDeletedEmployees={() => externalSetShowSoftDeletedEmployees?.(!externalShowSoftDeletedEmployees)}
           />
         );
 
@@ -1203,7 +1235,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                   businessName: business.businessName,
                   isActive
                 });
-                await refreshAllData();
+                // WebSocket will handle the refresh automatically
               } catch (error) {
                 console.error('Failed to toggle business status:', error);
                 throw error;
@@ -1398,7 +1430,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
                 const isActive = statusType === 'active';
                 await serviceLocationCRUD.updateEntity(locationId, { is_active: isActive });
-                await refreshAllData();
+                // WebSocket will handle the refresh automatically
               } catch (error) {
                 console.error('Failed to toggle service location status:', error);
                 throw error;

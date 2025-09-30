@@ -17,6 +17,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 
 interface EmployeeEngagement {
   serviceRequestId: string;
@@ -87,6 +88,7 @@ interface AvailabilityData {
 
 const AdminEmployeeCalendar: React.FC = () => {
   const { isDark } = useTheme();
+  const { sessionToken } = useEnhancedAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
   const [calendarData, setCalendarData] = useState<CalendarData | null>(null);
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null);
@@ -149,7 +151,6 @@ const AdminEmployeeCalendar: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -191,7 +192,6 @@ const AdminEmployeeCalendar: React.FC = () => {
   // Fetch availability data for today
   const fetchAvailabilityData = async () => {
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
       if (!sessionToken) {
         console.log('No session token available for availability data');
         return;
@@ -220,9 +220,11 @@ const AdminEmployeeCalendar: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchCalendarData();
-    fetchAvailabilityData();
-  }, [selectedDate, view, selectedEmployee]);
+    if (sessionToken) {
+      fetchCalendarData();
+      fetchAvailabilityData();
+    }
+  }, [selectedDate, view, selectedEmployee, sessionToken]);
 
   // Navigation functions
   const navigateDate = (direction: 'prev' | 'next') => {

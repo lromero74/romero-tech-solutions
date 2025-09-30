@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
+import { doubleCsrf } from 'csrf-csrf';
 import { testConnection } from './config/database.js';
 
 // Import routes
@@ -171,6 +172,46 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parsing middleware for HttpOnly sessions
 app.use(cookieParser());
 
+// CSRF Protection Configuration
+const csrfOptions = {
+  getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
+  getSessionIdentifier: (req) => {
+    // Use session token if available, otherwise use a combination of IP and user agent
+    if (req.cookies && req.cookies.session_token) {
+      return req.cookies.session_token;
+    }
+    // Fallback for pre-authentication requests
+    return `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
+  },
+  // Use __Host- prefix only in production (requires HTTPS)
+  cookieName: process.env.NODE_ENV === 'production' ? '__Host-csrf' : 'csrf-token',
+  cookieOptions: {
+    httpOnly: true,
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // lax for development
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+  },
+  size: 64,
+  ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
+  getTokenFromRequest: (req) => req.headers['x-csrf-token'], // Read CSRF token from header
+};
+
+// Destructure the utilities from doubleCsrf
+const {
+  generateCsrfToken,
+  doubleCsrfProtection,
+} = doubleCsrf(csrfOptions);
+
+// CSRF token endpoint (unprotected so clients can get initial token)
+app.get('/api/csrf-token', (req, res) => {
+  // Generate token using the generateCsrfToken function
+  const token = generateCsrfToken(req, res);
+  res.json({
+    success: true,
+    csrfToken: token
+  });
+});
+
 // Logging middleware
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'));
@@ -217,21 +258,22 @@ app.get('/health/db', async (req, res) => {
 app.use('/uploads', express.static('uploads'));
 
 // API Routes with security middleware
-app.use('/api/auth', authLimiter, authRoutes); // Strict auth rate limiting
-app.use('/api/admin', adminLimiter, adminIPWhitelist, adminRoutes); // Admin rate limiting + IP whitelist
-app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only)
-app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes
-app.use('/api/locations', generalLimiter, locationRoutes); // General rate limiting
-app.use('/api/clients', generalLimiter, clientRegistrationRoutes); // General rate limiting
-app.use('/api/uploads', generalLimiter, uploadRoutes); // General rate limiting
-app.use('/api/client/files', generalLimiter, clientFilesRoutes); // Client file management with virus scanning
-app.use('/api/client/service-requests', generalLimiter, clientServiceRequestRoutes); // Client service request management
-app.use('/api/client', generalLimiter, clientSchedulerRoutes); // Client scheduler management
-app.use('/api/client/profile', generalLimiter, clientProfileRoutes); // Client profile management
-app.use('/api/client/mfa', generalLimiter, clientMfaRoutes); // Client MFA management
-app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system
-app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation
-app.use('/api/service-request-workflow', generalLimiter, serviceRequestWorkflowRoutes); // Service request workflow (acknowledgment, start)
+// SECURITY FIX: CSRF protection applied to state-changing routes
+app.use('/api/auth', authLimiter, doubleCsrfProtection, authRoutes); // Strict auth rate limiting + CSRF
+app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRoutes); // Admin rate limiting + IP whitelist + CSRF
+app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
+app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET
+app.use('/api/locations', generalLimiter, doubleCsrfProtection, locationRoutes); // General rate limiting + CSRF
+app.use('/api/clients', generalLimiter, doubleCsrfProtection, clientRegistrationRoutes); // General rate limiting + CSRF
+app.use('/api/uploads', generalLimiter, doubleCsrfProtection, uploadRoutes); // General rate limiting + CSRF
+app.use('/api/client/files', generalLimiter, doubleCsrfProtection, clientFilesRoutes); // Client file management + CSRF
+app.use('/api/client/service-requests', generalLimiter, doubleCsrfProtection, clientServiceRequestRoutes); // Client service request + CSRF
+app.use('/api/client', generalLimiter, doubleCsrfProtection, clientSchedulerRoutes); // Client scheduler + CSRF
+app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfileRoutes); // Client profile + CSRF
+app.use('/api/client/mfa', generalLimiter, doubleCsrfProtection, clientMfaRoutes); // Client MFA + CSRF
+app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
+app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
+app.use('/api/service-request-workflow', generalLimiter, doubleCsrfProtection, serviceRequestWorkflowRoutes); // Service request workflow + CSRF
 app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 
 // Pre-authentication trusted device check (no auth required)

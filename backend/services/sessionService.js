@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import { query } from '../config/database.js';
 import { websocketService } from './websocketService.js';
+import { SECURITY_CONFIG } from '../config/security.js';
 
 class SessionService {
   constructor() {
@@ -16,17 +17,43 @@ class SessionService {
   }
 
   /**
-   * Create a new user session
+   * Create a new user session with maximum session limit enforcement
    */
   async createSession(userId, email, userAgent = null, ipAddress = null) {
     try {
+      // SECURITY FIX: Enforce maximum concurrent sessions per user
+      const existingSessionsResult = await query(`
+        SELECT COUNT(*) as session_count
+        FROM user_sessions
+        WHERE user_id = $1 AND is_active = true AND expires_at > CURRENT_TIMESTAMP
+      `, [userId]);
+
+      const existingSessionCount = parseInt(existingSessionsResult.rows[0].session_count);
+
+      if (existingSessionCount >= SECURITY_CONFIG.MAX_SESSIONS_PER_USER) {
+        // Terminate oldest session to make room for new one
+        console.log(`⚠️ Max sessions (${SECURITY_CONFIG.MAX_SESSIONS_PER_USER}) reached for user ${email}, terminating oldest session`);
+
+        await query(`
+          UPDATE user_sessions
+          SET is_active = false, updated_at = CURRENT_TIMESTAMP
+          WHERE id = (
+            SELECT id FROM user_sessions
+            WHERE user_id = $1 AND is_active = true
+            ORDER BY created_at ASC
+            LIMIT 1
+          )
+        `, [userId]);
+      }
+
       const sessionToken = this.generateSessionToken();
 
       console.log('🔐 Creating new session for user:', email);
 
+      // Use centralized session timeout configuration
       const result = await query(`
         INSERT INTO user_sessions (user_id, user_email, session_token, user_agent, ip_address, expires_at)
-        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '15 minutes')
+        VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP + INTERVAL '${SECURITY_CONFIG.SESSION_TIMEOUT_MS / 1000} seconds')
         RETURNING id, session_token, expires_at, created_at
       `, [userId, email, sessionToken, userAgent, ipAddress]);
 
@@ -54,6 +81,30 @@ class SessionService {
   }
 
   /**
+   * Regenerate session token after authentication (prevents session fixation)
+   * SECURITY FIX: Addresses session fixation vulnerability
+   */
+  async regenerateSession(oldSessionToken, userId, email, userAgent = null, ipAddress = null) {
+    try {
+      console.log('🔄 Regenerating session for user:', email);
+
+      // End old session
+      await this.endSession(oldSessionToken);
+
+      // Create new session with new token
+      const newSession = await this.createSession(userId, email, userAgent, ipAddress);
+
+      console.log('✅ Session regenerated successfully for user:', email);
+
+      return newSession;
+
+    } catch (error) {
+      console.error('❌ Error regenerating session:', error);
+      throw new Error(`Failed to regenerate session: ${error.message}`);
+    }
+  }
+
+  /**
    * Check if it's time to run cleanup (only every 5 minutes)
    */
   shouldRunCleanup() {
@@ -74,6 +125,7 @@ class SessionService {
 
   /**
    * Validate a session token and update last activity
+   * SECURITY FIX: Uses centralized session timeout configuration
    */
   async validateSession(sessionToken) {
     try {
@@ -84,7 +136,7 @@ class SessionService {
         UPDATE user_sessions
         SET last_activity = CURRENT_TIMESTAMP,
             updated_at = CURRENT_TIMESTAMP,
-            expires_at = CURRENT_TIMESTAMP + INTERVAL '15 minutes'
+            expires_at = CURRENT_TIMESTAMP + INTERVAL '${SECURITY_CONFIG.SESSION_TIMEOUT_MS / 1000} seconds'
         WHERE session_token = $1 AND is_active = true AND expires_at > CURRENT_TIMESTAMP
         RETURNING id, user_id, user_email, expires_at, last_activity
       `, [sessionToken]);

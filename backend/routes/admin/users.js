@@ -489,7 +489,6 @@ router.put('/users/:id',
 
 // DELETE /users/:id - Delete user (soft delete by default, hard delete with ?hardDelete=true)
 router.delete('/users/:id',
-  requireLastRecordProtection('users', (req) => req.query.business_id),
   requirePermission('hardDelete.users.enable'),
   async (req, res) => {
   try {
@@ -575,7 +574,6 @@ router.delete('/users/:id',
 
 // PATCH /users/:id/soft-delete - Soft delete user (toggle soft_delete field)
 router.patch('/users/:id/soft-delete',
-  requireLastRecordProtection('users', (req) => req.body.business_id),
   requirePermission('softDelete.users.enable'),
   async (req, res) => {
   try {

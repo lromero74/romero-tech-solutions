@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../../config/database.js';
 import { requirePermission } from '../../middleware/permissionMiddleware.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -260,6 +261,9 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
       // Commit transaction
       await query('COMMIT');
 
+      // Broadcast update to other admin clients via WebSocket
+      websocketService.broadcastBusinessUpdate(businessId, 'updated');
+
       res.status(200).json({
         success: true,
         message: 'Business updated successfully',
@@ -417,6 +421,9 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
           }
         }
       });
+
+      // Broadcast creation to other admin clients via WebSocket
+      websocketService.broadcastBusinessUpdate(business.id, 'created');
 
     } catch (error) {
       // Rollback transaction on error
@@ -616,6 +623,10 @@ router.patch('/businesses/:id/soft-delete', requirePermission('softDelete.busine
       const affectedServiceLocations = updateServiceLocationsResult.rows.length;
       const affectedUsers = updateUsersResult.rows.length;
 
+      // Broadcast soft delete/restore to other admin clients via WebSocket
+      const action = business.soft_delete ? 'deleted' : 'restored';
+      websocketService.broadcastBusinessUpdate(id, action);
+
       res.status(200).json({
         success: true,
         message: business.soft_delete
@@ -668,6 +679,9 @@ router.delete('/businesses/:id', requirePermission('hardDelete.businesses.enable
     }
 
     console.log('Deleted business:', result.rows[0]);
+
+    // Broadcast delete to other admin clients via WebSocket
+    websocketService.broadcastBusinessUpdate(id, 'deleted');
 
     res.status(200).json({
       success: true,

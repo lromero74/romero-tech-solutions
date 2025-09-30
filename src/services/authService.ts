@@ -26,6 +26,7 @@ interface CognitoResponse {
 import { databaseService } from './databaseService';
 import CryptoJS from 'crypto-js';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
+import { apiService } from './apiService';
 
 export class AuthService {
   private cognitoClient: CognitoIdentityProviderClient;
@@ -199,24 +200,12 @@ export class AuthService {
       const deviceFingerprint = this.generateDeviceFingerprint();
       console.log('🔍 Generated device fingerprint:', deviceFingerprint);
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}${endpoint}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: credentials.email,
-          password: credentials.password,
-          deviceFingerprint: deviceFingerprint
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Login failed');
-      }
-
-      const data = await response.json();
+      // Use apiService which handles CSRF tokens automatically
+      const data = await apiService.post(endpoint, {
+        email: credentials.email,
+        password: credentials.password,
+        deviceFingerprint: deviceFingerprint
+      }, { skipAuth: true }); // Skip auth since we're logging in
 
       // Check if MFA is required for admin users or client users
       if (data.requiresMfa) {
@@ -445,13 +434,7 @@ export class AuthService {
       // Call backend logout if we have a session token
       if (sessionToken) {
         try {
-          await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/logout`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({ sessionToken })
-          });
+          await apiService.post('/auth/logout', { sessionToken });
         } catch (error) {
           console.warn('Failed to logout from backend:', error);
         }

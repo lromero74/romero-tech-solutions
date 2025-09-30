@@ -488,10 +488,36 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const { apiService } = await import('../services/apiService');
       apiService.disableUnauthorizedHandling();
 
+      // CRITICAL: Complete ALL logout operations before navigating
       await authService.signOut();
+
+      // DOUBLE-CHECK: Force clear ALL role-based localStorage entries
+      // Instead of hardcoding roles, find and remove all keys matching the pattern
+      const authKeys = ['authUser', 'authTimestamp', 'sessionToken', 'mfaVerified', 'sessionConfig', 'user'];
+      const keysToRemove: string[] = [];
+
+      // Scan all localStorage keys and find role-prefixed auth keys
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key) {
+          // Check if this key matches any of our auth key patterns (role_keyname)
+          for (const authKey of authKeys) {
+            if (key.endsWith(`_${authKey}`)) {
+              keysToRemove.push(key);
+              break;
+            }
+          }
+        }
+      }
+
+      // Remove all found keys
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key);
+      });
+
+      // Immediately clear React state
       setUser(null);
       setSessionToken(null);
-      // Clear session timers to prevent timeout popup after manual logout
       sessionManager.endSession();
       setIsSessionActive(false);
       setSessionConfig(null);
@@ -502,20 +528,18 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         apiService.enableUnauthorizedHandling();
       }, 1000);
 
-      // Redirect to appropriate login page based on user role
-      // Use shorter delay to minimize "Authentication Required" flash
-      setTimeout(() => {
-        if (currentUserRole === 'client') {
-          window.location.href = '/clogin';
-        } else if (currentUserRole === 'technician') {
-          window.location.href = '/technician';
-        } else if (currentUserRole === 'sales') {
-          window.location.href = '/sales';
-        } else {
-          // Default for admin and any other employee roles
-          window.location.href = '/admin';
-        }
-      }, 100); // Minimal delay to ensure cleanup completes
+      // Determine redirect URL based on user role
+      let redirectUrl = '/admin'; // Default for admin and any other employee roles
+      if (currentUserRole === 'client') {
+        redirectUrl = '/clogin';
+      } else if (currentUserRole === 'technician') {
+        redirectUrl = '/technician';
+      } else if (currentUserRole === 'sales') {
+        redirectUrl = '/sales';
+      }
+
+      // Use replace() instead of href to prevent back button from restoring session
+      window.location.replace(redirectUrl);
     } catch (error) {
       console.error('Error signing out:', error);
       throw error;

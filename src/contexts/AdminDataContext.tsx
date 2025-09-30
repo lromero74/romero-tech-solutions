@@ -553,7 +553,25 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
             }
           }
 
-          // TODO: Handle other entity types (business, serviceLocation, etc.)
+          // Handle service location changes
+          if (change.entityType === 'serviceLocation') {
+            if (change.action === 'deleted') {
+              setServiceLocations(prevLocations => prevLocations.filter(loc => loc.id !== change.entityId));
+            } else if (change.action === 'created' || change.action === 'updated' || change.action === 'restored') {
+              // Refresh service locations
+              await refreshServiceLocations();
+            }
+          }
+
+          // Handle business changes
+          if (change.entityType === 'business') {
+            if (change.action === 'deleted') {
+              setBusinesses(prevBusinesses => prevBusinesses.filter(biz => biz.id !== change.entityId));
+            } else if (change.action === 'created' || change.action === 'updated' || change.action === 'restored') {
+              // Refresh businesses
+              await refreshBusinesses();
+            }
+          }
         });
 
         websocketService.onAuthenticationError((error) => {

@@ -1,6 +1,7 @@
 import express from 'express';
 import { query } from '../../config/database.js';
 import { requirePermission, requireLastRecordProtection } from '../../middleware/permissionMiddleware.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -68,6 +69,9 @@ router.post('/service-locations', requirePermission('add.service_locations.enabl
     ]);
 
     console.log('Service location created:', result.rows[0]);
+
+    // Broadcast creation to other admin clients via WebSocket
+    websocketService.broadcastServiceLocationUpdate(result.rows[0].id, 'created');
 
     res.status(201).json({
       success: true,
@@ -202,6 +206,9 @@ router.put('/service-locations/:id', requirePermission('modify.service_locations
 
     console.log('Updated service location:', result.rows[0]);
 
+    // Broadcast update to other admin clients via WebSocket
+    websocketService.broadcastServiceLocationUpdate(id, 'updated');
+
     res.status(200).json({
       success: true,
       message: 'Service location updated successfully',
@@ -243,6 +250,10 @@ router.patch('/service-locations/:id/soft-delete',
       });
     }
 
+    // Broadcast soft delete/restore to other admin clients via WebSocket
+    const action = restore ? 'restored' : 'deleted';
+    websocketService.broadcastServiceLocationUpdate(id, action);
+
     res.status(200).json({
       success: true,
       message: restore ? 'Service location restored successfully' : 'Service location soft deleted successfully',
@@ -279,6 +290,9 @@ router.patch('/service-locations/:id/toggle-status', async (req, res) => {
         message: 'Service location not found'
       });
     }
+
+    // Broadcast toggle status to other admin clients via WebSocket
+    websocketService.broadcastServiceLocationUpdate(id, 'updated');
 
     res.status(200).json({
       success: true,
@@ -326,6 +340,9 @@ router.delete('/service-locations/:id',
     }
 
     console.log('Deleted service location:', result.rows[0]);
+
+    // Broadcast delete to other admin clients via WebSocket
+    websocketService.broadcastServiceLocationUpdate(id, 'deleted');
 
     res.status(200).json({
       success: true,

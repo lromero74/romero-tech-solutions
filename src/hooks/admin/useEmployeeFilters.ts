@@ -45,9 +45,13 @@ export const useEmployeeFilters = (): UseEmployeeFiltersReturn => {
 
   const getFilteredAndSortedEmployees = useCallback((employees: Employee[]): Employee[] => {
     const filteredEmployees = employees.filter(employee => {
-      // Filter by role
-      if (roleFilter !== 'all' && employee.role !== roleFilter) {
-        return false;
+      // Filter by role (employees have exactly one role in roles array)
+      if (roleFilter !== 'all') {
+        // Check if the employee has the selected role in their roles array
+        // Note: employees.roles is an array but contains only 1 role per employee
+        if (!employee.roles || !employee.roles.includes(roleFilter)) {
+          return false;
+        }
       }
 
       // Filter by status
@@ -63,8 +67,8 @@ export const useEmployeeFilters = (): UseEmployeeFiltersReturn => {
         const searchLower = searchTerm.toLowerCase();
         const fullName = `${employee.firstName} ${employee.lastName}`.toLowerCase();
         const email = employee.email.toLowerCase();
-        const employeeNumber = employee.employeeNumber.toLowerCase();
-        const department = employee.department.toLowerCase();
+        const employeeNumber = employee.employeeNumber?.toLowerCase() || '';
+        const department = employee.department?.toLowerCase() || '';
 
         if (
           !fullName.includes(searchLower) &&
@@ -94,16 +98,17 @@ export const useEmployeeFilters = (): UseEmployeeFiltersReturn => {
           bValue = b.email.toLowerCase();
           break;
         case 'role':
-          aValue = a.role.toLowerCase();
-          bValue = b.role.toLowerCase();
+          // Sort by first role in roles array (or empty string if no roles)
+          aValue = (a.roles && a.roles.length > 0) ? a.roles[0].toLowerCase() : '';
+          bValue = (b.roles && b.roles.length > 0) ? b.roles[0].toLowerCase() : '';
           break;
         case 'department':
-          aValue = a.department.toLowerCase();
-          bValue = b.department.toLowerCase();
+          aValue = a.department?.toLowerCase() || '';
+          bValue = b.department?.toLowerCase() || '';
           break;
         case 'employeeNumber':
-          aValue = a.employeeNumber.toLowerCase();
-          bValue = b.employeeNumber.toLowerCase();
+          aValue = a.employeeNumber?.toLowerCase() || '';
+          bValue = b.employeeNumber?.toLowerCase() || '';
           break;
         case 'createdAt':
           aValue = new Date(a.createdAt).getTime();

@@ -39,7 +39,7 @@ const AdminDashboardContent: React.FC = () => {
   }, [isUserMenuOpen]);
 
   // Handle account dropdown actions
-  const handleAccountAction = (action: string) => {
+  const handleAccountAction = async (action: string) => {
     setIsUserMenuOpen(false);
 
     switch (action) {
@@ -62,7 +62,13 @@ const AdminDashboardContent: React.FC = () => {
         toggleTheme();
         break;
       case 'signout':
-        signOut();
+        console.log('🚪 Logout button clicked - calling signOut()...');
+        try {
+          await signOut();
+          console.log('✅ signOut() completed successfully');
+        } catch (error) {
+          console.error('❌ Error during signOut():', error);
+        }
         break;
     }
   };
@@ -103,6 +109,8 @@ const AdminDashboardContent: React.FC = () => {
   const [showSoftDeletedServiceLocations, setShowSoftDeletedServiceLocations] = useState(false);
   const [showInactiveBusinesses, setShowInactiveBusinesses] = useState(true);
   const [showSoftDeletedBusinesses, setShowSoftDeletedBusinesses] = useState(false);
+  const [showInactiveEmployees, setShowInactiveEmployees] = useState(true);
+  const [showSoftDeletedEmployees, setShowSoftDeletedEmployees] = useState(false);
 
   // Selected entities for modals
   const [selectedClient, setSelectedClient] = useState(null);
@@ -296,6 +304,7 @@ const AdminDashboardContent: React.FC = () => {
                 <div className="flex items-center space-x-3">
                   <div className="relative" ref={userMenuRef}>
                     <button
+                      type="button"
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
                       className="flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-3 py-2 transition-colors"
                     >
@@ -369,7 +378,17 @@ const AdminDashboardContent: React.FC = () => {
                         <div className="border-t border-gray-200 dark:border-gray-700 my-2" />
 
                         <button
-                          onClick={() => handleAccountAction('signout')}
+                          type="button"
+                          onMouseDown={async (e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setIsUserMenuOpen(false);
+                            try {
+                              await signOut();
+                            } catch (error) {
+                              console.error('Error during signOut:', error);
+                            }
+                          }}
                           className="w-full px-4 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
                         >
                           <LogOut className="h-4 w-4" />
@@ -418,6 +437,10 @@ const AdminDashboardContent: React.FC = () => {
               setShowSoftDeletedBusinesses={setShowSoftDeletedBusinesses}
               setShowInactiveServiceLocations={setShowInactiveServiceLocations}
               setShowSoftDeletedServiceLocations={setShowSoftDeletedServiceLocations}
+              externalShowInactiveEmployees={showInactiveEmployees}
+              externalShowSoftDeletedEmployees={showSoftDeletedEmployees}
+              setShowInactiveEmployees={setShowInactiveEmployees}
+              setShowSoftDeletedEmployees={setShowSoftDeletedEmployees}
             />
           </main>
           </div>

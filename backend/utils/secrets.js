@@ -3,7 +3,10 @@ import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-sec
 class SecretsManager {
   constructor() {
     this.client = new SecretsManagerClient({
-      region: process.env.AWS_REGION || 'us-east-1'
+      region: process.env.AWS_REGION || 'us-east-1',
+      requestHandler: {
+        requestTimeout: 10000, // 10 second timeout
+      },
     });
     this.cache = new Map();
     this.cacheExpiry = new Map();
@@ -25,7 +28,15 @@ class SecretsManager {
         SecretId: secretName
       });
 
-      const response = await this.client.send(command);
+      // Add timeout wrapper
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Secrets Manager request timed out after 10 seconds')), 10000);
+      });
+
+      const response = await Promise.race([
+        this.client.send(command),
+        timeoutPromise
+      ]);
 
       if (!response.SecretString) {
         throw new Error('Secret string is empty');
