@@ -87,6 +87,74 @@ router.post('/register', async (req, res) => {
 });
 
 /**
+ * POST /api/trusted-devices/check-pre-auth
+ * Check if device is trusted for a user BEFORE authentication (uses email instead of session)
+ */
+router.post('/check-pre-auth', async (req, res) => {
+  try {
+    const { deviceFingerprint, userEmail } = req.body;
+
+    if (!deviceFingerprint || !userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'Device fingerprint and user email are required'
+      });
+    }
+
+    // Import db pool for direct query
+    const { pool } = await import('../config/database.js');
+
+    // Look up user by email to get user_id and user_type
+    const userQuery = `
+      SELECT id, 'client' as user_type FROM users WHERE email = $1
+      UNION
+      SELECT id, 'employee' as user_type FROM employees WHERE email = $1
+    `;
+    const userResult = await pool.query(userQuery, [userEmail]);
+
+    if (userResult.rows.length === 0) {
+      // User not found - return not trusted (don't reveal if email exists)
+      return res.json({
+        success: true,
+        trusted: false,
+        message: 'Device is not trusted'
+      });
+    }
+
+    const { id: userId, user_type: userType } = userResult.rows[0];
+
+    // Check if device is trusted
+    const trustedDevice = await checkTrustedDevice(userId, userType, deviceFingerprint);
+
+    if (trustedDevice) {
+      res.json({
+        success: true,
+        trusted: true,
+        data: {
+          deviceName: trustedDevice.device_name,
+          lastUsed: trustedDevice.last_used,
+          expiresAt: trustedDevice.expires_at,
+          isSharedDevice: trustedDevice.is_shared_device
+        }
+      });
+    } else {
+      res.json({
+        success: true,
+        trusted: false,
+        message: 'Device is not trusted'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error checking pre-auth trusted device:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check trusted device'
+    });
+  }
+});
+
+/**
  * POST /api/trusted-devices/check
  * Check if current device is trusted for the user
  */
