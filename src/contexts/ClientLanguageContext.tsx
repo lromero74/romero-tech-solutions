@@ -122,7 +122,8 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
 
     try {
       // Load translations from database API
-      const response = await fetch(`/api/translations/client/${languageCode}`, {
+      const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${API_BASE_URL}/translations/client/${languageCode}`, {
         method: 'GET',
         credentials: 'include'
       });

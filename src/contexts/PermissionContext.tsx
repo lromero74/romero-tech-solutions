@@ -55,6 +55,17 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       return;
     }
 
+    // 🚨 CRITICAL: Only load permissions for employee roles
+    // Client users don't have permissions in the employee permission system
+    if (user.role === 'client') {
+      console.log('ℹ️ Client user detected, skipping permission load');
+      setPermissions([]);
+      setRoles([]);
+      setIsExecutive(false);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       setError(null);
@@ -123,6 +134,13 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
         socket.disconnect();
         setSocket(null);
       }
+      return;
+    }
+
+    // 🚨 CRITICAL: Only connect WebSocket for employee roles
+    // Client users don't need permission update notifications
+    if (user.role === 'client') {
+      console.log('ℹ️ Client user detected, skipping WebSocket connection for permissions');
       return;
     }
 

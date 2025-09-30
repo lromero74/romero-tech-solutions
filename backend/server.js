@@ -70,6 +70,10 @@ dotenv.config(); // Lower priority - default configuration
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Trust proxy - required when behind nginx reverse proxy
+// This allows express-rate-limit to correctly identify users via X-Forwarded-For header
+app.set('trust proxy', 1);
+
 // Create HTTP server for Socket.IO integration
 const httpServer = createServer(app);
 
