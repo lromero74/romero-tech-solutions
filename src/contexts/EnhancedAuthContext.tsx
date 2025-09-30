@@ -562,6 +562,10 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       try {
         await systemSettingsService.updateSessionConfig(newConfig);
         console.log('✅ Session config saved to database:', newConfig);
+
+        // Update localStorage cache so it's correct on next page load
+        RoleBasedStorage.setItem('sessionConfig', JSON.stringify(newConfig));
+        console.log('✅ Session config cache updated in localStorage');
       } catch (error) {
         console.error('❌ Failed to save session config to database:', error);
         // Don't revert local changes - they'll still work for this session

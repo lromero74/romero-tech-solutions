@@ -4,6 +4,7 @@ import { authService } from '../services/authService';
 import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { AppPage } from '../constants/config';
 import { trustedDeviceService } from '../services/trustedDeviceService';
+import apiService from '../services/apiService';
 
 interface AdminRegistrationProps {
   onSuccess: () => void;
@@ -185,6 +186,14 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
                     console.log('🔄 Calling setUserFromTrustedDevice() to update authentication context...');
                     await setUserFromTrustedDevice(trustedLoginResult.user, trustedLoginResult.sessionToken);
                     console.log('✅ setUserFromTrustedDevice() completed');
+
+                    // Refresh CSRF token now that we have an authenticated session
+                    // Add small delay to ensure sessionToken cookie is fully set by browser
+                    console.log('🔄 Waiting for session cookie to be stored...');
+                    await new Promise(resolve => setTimeout(resolve, 100));
+                    console.log('🔄 Refreshing CSRF token after authentication...');
+                    await apiService.refreshCsrfToken();
+                    console.log('✅ CSRF token refreshed with authenticated session');
 
                     console.log('🔄 Calling onSuccess() to redirect to dashboard...');
                     onSuccess();

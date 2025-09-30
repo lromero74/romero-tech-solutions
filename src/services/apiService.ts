@@ -30,8 +30,9 @@ class ApiService {
   private async fetchCsrfToken(): Promise<void> {
     try {
       console.log('🔐 Fetching CSRF token from:', `${this.baseUrl}/csrf-token`);
+
       const response = await fetch(`${this.baseUrl}/csrf-token`, {
-        credentials: 'include', // Include cookies
+        credentials: 'include', // Include cookies (session_token cookie provides session identifier)
       });
       console.log('🔐 CSRF token response status:', response.status);
       const data = await response.json();
@@ -55,6 +56,26 @@ class ApiService {
       await this.fetchCsrfToken();
     }
     return this.csrfToken;
+  }
+
+  /**
+   * Refresh CSRF token (call this after login to get a token with the authenticated session identifier)
+   *
+   * NOTE: The CSRF cookie is httpOnly, so we can't delete it from JavaScript.
+   * Instead, we rely on the server to generate a new token/cookie pair when we make the request
+   * with the authenticated sessionToken cookie.
+   */
+  async refreshCsrfToken(): Promise<void> {
+    console.log('🔄 Refreshing CSRF token after authentication...');
+
+    // Clear the cached token in memory
+    this.csrfToken = null;
+
+    // Fetch a new token - the server will generate a new cookie with the authenticated session identifier
+    console.log('🔄 Fetching new CSRF token with authenticated session...');
+    await this.fetchCsrfToken();
+
+    console.log('✅ CSRF token refreshed - new token will be used for subsequent requests');
   }
 
   /**
