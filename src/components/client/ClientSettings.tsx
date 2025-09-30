@@ -19,6 +19,8 @@ import {
   Smartphone
 } from 'lucide-react';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
 interface ContactInfo {
   firstName: string;
   lastName: string;
@@ -133,7 +135,7 @@ const ClientSettings: React.FC = () => {
       const sessionToken = localStorage.getItem('sessionToken');
 
       // Load contact info
-      const contactResponse = await fetch('/api/client/profile', {
+      const contactResponse = await fetch(`${API_BASE_URL}/client/profile`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -155,7 +157,7 @@ const ClientSettings: React.FC = () => {
       }
 
       // Load MFA settings
-      const mfaResponse = await fetch('/api/client/mfa/settings', {
+      const mfaResponse = await fetch(`${API_BASE_URL}/client/mfa/settings`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -198,7 +200,7 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch('/api/client/profile', {
+      const response = await fetch(`${API_BASE_URL}/client/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -237,7 +239,7 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch('/api/client/change-password', {
+      const response = await fetch(`${API_BASE_URL}/client/change-password`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -271,7 +273,7 @@ const ClientSettings: React.FC = () => {
       setLoading(true);
       try {
         const sessionToken = localStorage.getItem('sessionToken');
-        const response = await fetch('/api/client/mfa/disable', {
+        const response = await fetch(`${API_BASE_URL}/client/mfa/disable`, {
           method: 'POST',
           headers: {
             'Authorization': `Bearer ${sessionToken}`,
@@ -304,7 +306,7 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch('/api/client/mfa/send-code', {
+      const response = await fetch(`${API_BASE_URL}/client/mfa/send-code`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -335,7 +337,7 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch('/api/client/mfa/verify-setup', {
+      const response = await fetch(`${API_BASE_URL}/client/mfa/verify-setup`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,

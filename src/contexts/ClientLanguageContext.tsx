@@ -1,5 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
 interface LanguageContextType {
   language: string;
   setLanguage: (lang: string) => void;
@@ -205,7 +207,7 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
       const authUser = localStorage.getItem('authUser');
       const sessionToken = localStorage.getItem('sessionToken');
       if (authUser && sessionToken) {
-        const response = await fetch('/api/client/profile/language-preference', {
+        const response = await fetch(`${API_BASE_URL}/client/profile/language-preference`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
