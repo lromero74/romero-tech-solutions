@@ -3,6 +3,7 @@ import { useClientTheme } from '../contexts/ClientThemeContext';
 import { useClientLanguage } from '../contexts/ClientLanguageContext';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
 import ServiceScheduler from '../components/client/ServiceScheduler';
 import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
@@ -91,14 +92,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const [loading, setLoading] = useState(true);
   // Initialize activeTab from localStorage or default to 'dashboard'
   const [activeTab, setActiveTabState] = useState(() => {
-    const savedTab = localStorage.getItem('clientActiveTab');
+    const savedTab = RoleBasedStorage.getItem('clientActiveTab');
     return savedTab || 'dashboard';
   });
 
   // Custom setActiveTab that also persists to localStorage
   const setActiveTab = (tab: string) => {
     setActiveTabState(tab);
-    localStorage.setItem('clientActiveTab', tab);
+    RoleBasedStorage.setItem('clientActiveTab', tab);
   };
 
   // State for AddServiceLocationForm modal
@@ -124,8 +125,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     const loadClientData = async () => {
       try {
         // First try to get from existing auth system
-        const authUserData = localStorage.getItem('authUser');
-        const sessionToken = localStorage.getItem('sessionToken');
+        const authUserData = RoleBasedStorage.getItem('authUser');
+        const sessionToken = RoleBasedStorage.getItem('sessionToken');
 
         if (authUserData && sessionToken) {
           const authUser = JSON.parse(authUserData);
@@ -201,8 +202,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               } else if (businessResponse.status === 401) {
                 // Authentication expired, clear tokens and redirect
                 console.log('Session expired, clearing auth data');
-                localStorage.removeItem('authUser');
-                localStorage.removeItem('sessionToken');
+                RoleBasedStorage.removeItem('authUser');
+                RoleBasedStorage.removeItem('sessionToken');
                 sessionStorage.removeItem('clientData');
                 if (onNavigate) onNavigate('clogin');
                 return;
@@ -232,8 +233,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
         // Give additional time for auth context to load before redirecting
         setTimeout(() => {
           // Re-check storage one more time before redirecting
-          const authUserCheck = localStorage.getItem('authUser');
-          const sessionTokenCheck = localStorage.getItem('sessionToken');
+          const authUserCheck = RoleBasedStorage.getItem('authUser');
+          const sessionTokenCheck = RoleBasedStorage.getItem('sessionToken');
           const savedClientCheck = sessionStorage.getItem('clientData');
 
           if (!authUserCheck || !sessionTokenCheck || (!savedClientCheck && !clientData)) {
@@ -247,8 +248,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
         console.error('Error loading client data:', error);
         // Don't immediately redirect on general errors, let auth context handle it
         setTimeout(() => {
-          const authUserCheck = localStorage.getItem('authUser');
-          const sessionTokenCheck = localStorage.getItem('sessionToken');
+          const authUserCheck = RoleBasedStorage.getItem('authUser');
+          const sessionTokenCheck = RoleBasedStorage.getItem('sessionToken');
 
           if (!authUserCheck || !sessionTokenCheck) {
             console.log('Error in client data loading, redirecting to login');

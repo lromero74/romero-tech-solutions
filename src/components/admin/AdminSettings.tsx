@@ -614,7 +614,7 @@ const AdminSettings: React.FC = () => {
                 id="mfa-toggle"
                 onClick={handleMfaToggle}
                 className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                  mfaRequired ? 'bg-red-600' : 'bg-gray-200 dark:bg-gray-700'
+                  mfaRequired ? 'bg-green-600' : 'bg-red-600'
                 }`}
                 role="switch"
                 aria-checked={mfaRequired}
@@ -636,7 +636,7 @@ const AdminSettings: React.FC = () => {
           <div className={`${themeClasses.bg.secondary} rounded-lg p-4`}>
             <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>Current Security Settings</h3>
             <div className="flex items-center space-x-2">
-              <div className={`w-3 h-3 rounded-full ${mfaRequired ? 'bg-red-500' : 'bg-gray-400'}`}></div>
+              <div className={`w-3 h-3 rounded-full ${mfaRequired ? 'bg-green-500' : 'bg-red-500'}`}></div>
               <span className={`text-sm ${themeClasses.text.primary}`}>
                 MFA is currently <strong>{mfaRequired ? 'REQUIRED' : 'DISABLED'}</strong> for all employee accounts
               </span>
