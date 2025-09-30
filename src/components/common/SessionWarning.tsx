@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { Clock, RefreshCw, LogOut } from 'lucide-react';
-import SessionManager from '../../utils/sessionManager';
 
 interface SessionWarningProps {
   isVisible: boolean;
-  timeLeft: number; // in minutes (initial value, but we'll use real-time data)
+  timeLeft: number; // Initial time in seconds when warning appears
   onExtend: () => void;
   onLogout: () => void;
 }
@@ -15,41 +14,37 @@ const SessionWarning: React.FC<SessionWarningProps> = React.memo(({
   onExtend,
   onLogout
 }) => {
-  const [realTimeSeconds, setRealTimeSeconds] = useState(0);
-  const sessionManager = SessionManager.getInstance();
+  const [countdown, setCountdown] = useState(timeLeft);
 
-  // Debug logging (only when visible to reduce noise)
-  if (isVisible) {
-    console.log(`🚨 SessionWarning component props:`, { isVisible, timeLeft });
-  }
-
+  // Reset countdown when timeLeft changes (warning first appears)
   useEffect(() => {
-    if (!isVisible) return;
+    if (isVisible) {
+      setCountdown(timeLeft);
+    }
+  }, [isVisible, timeLeft]);
 
-    // Get real-time remaining seconds
-    const updateRealTime = () => {
-      const remainingSeconds = sessionManager.getTimeUntilExpiryInSeconds();
-      setRealTimeSeconds(remainingSeconds);
+  // Countdown timer
+  useEffect(() => {
+    if (!isVisible || countdown <= 0) return;
 
-      // Auto-logout when time reaches 0
-      if (remainingSeconds <= 0) {
-        onLogout();
-      }
-    };
-
-    // Update immediately
-    updateRealTime();
-
-    // Update every second
-    const interval = setInterval(updateRealTime, 1000);
+    const interval = setInterval(() => {
+      setCountdown(prev => {
+        const next = prev - 1;
+        if (next <= 0) {
+          onLogout();
+          return 0;
+        }
+        return next;
+      });
+    }, 1000);
 
     return () => clearInterval(interval);
-  }, [isVisible, sessionManager, onLogout]);
+  }, [isVisible, countdown, onLogout]);
 
   if (!isVisible) return null;
 
-  const minutes = Math.floor(realTimeSeconds / 60);
-  const seconds = realTimeSeconds % 60;
+  const minutes = Math.floor(countdown / 60);
+  const seconds = countdown % 60;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">

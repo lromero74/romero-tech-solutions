@@ -1,4 +1,4 @@
-import { authService } from './authService';
+import { apiService } from './apiService';
 
 interface SystemSetting {
   key: string;
@@ -16,69 +16,26 @@ interface ApiResponse<T> {
 }
 
 class SystemSettingsService {
-  private baseUrl = `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/admin`;
+  private baseUrl = '/admin'; // Relative to API base URL
 
   async getSystemSetting(key: string): Promise<SystemSetting | null> {
     try {
-      const token = authService.getToken();
-
-      if (!token) {
-        console.warn('No authentication token available for system settings');
-        return null;
-      }
-
-      const response = await fetch(`${this.baseUrl}/system-settings/${key}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      // Check if response is JSON
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        console.warn(`System settings endpoint returned non-JSON response (status: ${response.status})`);
-        return null; // Graceful fallback for authentication issues
-      }
-
-      const result: ApiResponse<SystemSetting> = await response.json();
+      const result = await apiService.get<ApiResponse<SystemSetting>>(`${this.baseUrl}/system-settings/${key}`);
 
       if (result.success && result.data) {
         return result.data;
       }
 
-      // Handle authentication errors gracefully
-      if (response.status === 401 || response.status === 403) {
-        console.warn('Authentication failed for system settings, using fallback');
-        return null;
-      }
-
       throw new Error(result.message || 'Failed to get system setting');
     } catch (error) {
       console.error(`Error getting system setting ${key}:`, error);
-      throw error;
+      return null; // Graceful fallback
     }
   }
 
   async updateSystemSetting(key: string, value: unknown): Promise<SystemSetting> {
     try {
-      const token = authService.getToken();
-
-      if (!token) {
-        throw new Error('No authentication token available for updating system settings');
-      }
-
-      const response = await fetch(`${this.baseUrl}/system-settings/${key}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ value })
-      });
-
-      const result: ApiResponse<SystemSetting> = await response.json();
+      const result = await apiService.put<ApiResponse<SystemSetting>>(`${this.baseUrl}/system-settings/${key}`, { value });
 
       if (result.success && result.data) {
         return result.data;
@@ -93,21 +50,7 @@ class SystemSettingsService {
 
   async getAllSystemSettings(): Promise<SystemSetting[]> {
     try {
-      const token = authService.getToken();
-
-      if (!token) {
-        throw new Error('No authentication token available for getting system settings');
-      }
-
-      const response = await fetch(`${this.baseUrl}/system-settings`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        }
-      });
-
-      const result: ApiResponse<{ settings: SystemSetting[] }> = await response.json();
+      const result = await apiService.get<ApiResponse<{ settings: SystemSetting[] }>>(`${this.baseUrl}/system-settings`);
 
       if (result.success && result.data) {
         return result.data.settings;

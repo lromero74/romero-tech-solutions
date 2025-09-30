@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
 
 interface SessionCountdownTimerProps {
@@ -8,8 +8,8 @@ interface SessionCountdownTimerProps {
   warningThresholdMs?: number;
   // Callback when session expires
   onSessionExpired?: () => void;
-  // Callback when warning threshold is reached
-  onWarningReached?: () => void;
+  // Callback when warning threshold is reached - passes remaining seconds
+  onWarningReached?: (remainingSeconds: number) => void;
 }
 
 const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
@@ -18,19 +18,27 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
   onSessionExpired,
   onWarningReached
 }) => {
-  const [timeRemaining, setTimeRemaining] = useState<number>(sessionTimeoutMs);
   const [isWarningActive, setIsWarningActive] = useState(false);
-  const [lastActivity, setLastActivity] = useState<number>(Date.now());
+  const lastActivityRef = useRef<number>(Date.now());
   const [warningTriggered, setWarningTriggered] = useState(false);
+  const [, forceUpdate] = useState(0); // Force re-render trigger
+
+  // Calculate time remaining on every render
+  const now = Date.now();
+  const timeSinceLastActivity = now - lastActivityRef.current;
+  const timeRemaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
+
+  // Update lastActivity when sessionTimeoutMs changes
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+  }, [sessionTimeoutMs]);
 
   // Track user activity to reset timer
   useEffect(() => {
     const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
 
     const resetTimer = () => {
-      const now = Date.now();
-      setLastActivity(now);
-      setTimeRemaining(sessionTimeoutMs);
+      lastActivityRef.current = Date.now();
       setIsWarningActive(false);
       setWarningTriggered(false);
     };
@@ -59,22 +67,26 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
     };
   }, [sessionTimeoutMs]);
 
-  // Main countdown timer
+  // Main countdown timer - just force re-renders, calculation happens above
   useEffect(() => {
     const interval = setInterval(() => {
-      const now = Date.now();
-      const timeSinceLastActivity = now - lastActivity;
-      const remaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
+      forceUpdate(prev => prev + 1); // Force re-render every second to recalculate timeRemaining
 
-      setTimeRemaining(remaining);
+      // Get current time remaining for threshold checks
+      const now = Date.now();
+      const timeSinceLastActivity = now - lastActivityRef.current;
+      const remaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
 
       // Check for warning threshold
       if (remaining <= warningThresholdMs && remaining > 0) {
         if (!isWarningActive) {
+          console.log(`🔔 Warning threshold reached! Remaining: ${remaining}ms, Threshold: ${warningThresholdMs}ms`);
           setIsWarningActive(true);
           if (!warningTriggered && onWarningReached) {
             setWarningTriggered(true);
-            onWarningReached();
+            const remainingSeconds = Math.floor(remaining / 1000);
+            console.log(`🔔 Calling onWarningReached with ${remainingSeconds} seconds`);
+            onWarningReached(remainingSeconds); // Pass remaining seconds to callback
           }
         }
       } else if (remaining > warningThresholdMs) {
@@ -89,7 +101,7 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [lastActivity, sessionTimeoutMs, warningThresholdMs, isWarningActive, warningTriggered, onSessionExpired, onWarningReached]);
+  }, [sessionTimeoutMs, warningThresholdMs, isWarningActive, warningTriggered, onSessionExpired, onWarningReached]);
 
   // Format time for display
   const formatTime = (ms: number): string => {

@@ -5,6 +5,7 @@ import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { AdminDataProvider, useAdminData } from '../contexts/AdminDataContext';
 import SessionWarning from '../components/common/SessionWarning';
 import SessionCountdownTimer from '../components/admin/SessionCountdownTimer';
+import { systemSettingsService } from '../services/systemSettingsService';
 // import EmergencyAlerts from '../components/admin/EmergencyAlerts'; // Removed - mock data moved to .plans/templates/
 import { AdminSidebar } from '../components/admin';
 import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
@@ -14,9 +15,32 @@ import { useModalManager, useServiceLocationFilters, useClientFilters, useBusine
 type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity';
 
 const AdminDashboardContent: React.FC = () => {
-  const { user, signOut, sessionWarning, extendSession, sessionConfig } = useEnhancedAuth();
+  const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();
   const { refreshAllData, serviceLocations } = useAdminData();
   const { toggleTheme, isDark } = useTheme();
+
+  // Load session config when dashboard mounts (same time as other dashboard data)
+  // Always load from database to ensure fresh values, regardless of cached config
+  useEffect(() => {
+    const loadSessionConfig = async () => {
+      if (user) {
+        console.log('📊 [AdminDashboard] Loading session config from database...');
+        try {
+          const config = await systemSettingsService.getSessionConfig();
+          if (config) {
+            console.log('✅ [AdminDashboard] Loaded session config:', config);
+            // Update the context with the loaded config (use the full config, not partial)
+            await updateSessionConfig(config);
+          }
+        } catch (error) {
+          console.error('❌ [AdminDashboard] Failed to load session config:', error);
+        }
+      }
+    };
+
+    loadSessionConfig();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]); // Only depend on user, not sessionConfig or updateSessionConfig (stable context function)
 
   // User dropdown state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
@@ -74,13 +98,17 @@ const AdminDashboardContent: React.FC = () => {
   };
 
   // Session countdown handlers
+  // Note: Actual session expiration is handled by EnhancedAuthContext via API 401 responses
+  // This timer is just for visual countdown - it doesn't enforce expiration
   const handleSessionExpired = () => {
-    console.log('⏰ Session expired - signing out');
-    signOut();
+    console.log('⏰ Local timer expired - actual session state managed by backend');
+    // Don't sign out here - let the backend/EnhancedAuthContext handle it
   };
 
-  const handleSessionWarning = () => {
-    console.log('⚠️ Session warning - 2 minutes remaining');
+  const handleSessionWarning = (remainingSeconds: number) => {
+    console.log(`⚠️ Session warning - ${remainingSeconds} seconds remaining on local timer`);
+    // Update the sessionWarning state with the current time remaining
+    updateSessionWarningTime(remainingSeconds);
   };
 
   // View state
@@ -289,15 +317,17 @@ const AdminDashboardContent: React.FC = () => {
                 </div>
               </div>
 
-              {/* Session Countdown Timer */}
-              <div className="flex items-center space-x-4">
-                <SessionCountdownTimer
-                  sessionTimeoutMs={sessionConfig ? sessionConfig.timeout * 60 * 1000 : 15 * 60 * 1000}
-                  warningThresholdMs={sessionConfig ? sessionConfig.warningTime * 60 * 1000 : 2 * 60 * 1000}
-                  onSessionExpired={handleSessionExpired}
-                  onWarningReached={handleSessionWarning}
-                />
-              </div>
+              {/* Session Countdown Timer - Only show after config is loaded */}
+              {sessionConfig && (
+                <div className="flex items-center space-x-4">
+                  <SessionCountdownTimer
+                    sessionTimeoutMs={sessionConfig.timeout * 60 * 1000}
+                    warningThresholdMs={sessionConfig.warningTime * 60 * 1000}
+                    onSessionExpired={handleSessionExpired}
+                    onWarningReached={handleSessionWarning}
+                  />
+                </div>
+              )}
 
               {/* User Info & Dropdown */}
               {user && (

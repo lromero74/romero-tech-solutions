@@ -40,6 +40,7 @@ interface EnhancedAuthContextType {
   extendSession: () => void;
   isSessionActive: boolean;
   sessionWarning: { isVisible: boolean; timeLeft: number };
+  updateSessionWarningTime: (timeLeftSeconds: number) => void;
   sessionToken: string | null;
 }
 
@@ -52,9 +53,7 @@ interface EnhancedAuthProviderProps {
 export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ children }) => {
   const [user, setUserState] = useState<AuthUser | null>(null);
 
-  // Wrapper to log all user state changes
   const setUser = (newUser: AuthUser | null) => {
-    console.log('🔄 setUser called:', newUser ? `${newUser.email} (${newUser.role})` : 'null', new Error().stack);
     setUserState(newUser);
   };
   const [isLoading, setIsLoading] = useState(true);
@@ -95,8 +94,25 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setIsLoading(true);
       setHasError(false);
 
-      // First validate with backend session if we have a token
-      const storedSessionToken = RoleBasedStorage.getItem('sessionToken');
+      // First get the stored user to determine the role, then read the session token with that role
+      let storedSessionToken: string | null = null;
+      const storedAuthUser = RoleBasedStorage.getItem('authUser');
+
+      if (storedAuthUser) {
+        try {
+          const parsedUser = JSON.parse(storedAuthUser);
+          const userRole = parsedUser.role;
+          storedSessionToken = RoleBasedStorage.getItem('sessionToken', userRole);
+        } catch (error) {
+          console.error('Failed to parse stored user:', error);
+          // Fall back to checking without role
+          storedSessionToken = RoleBasedStorage.getItem('sessionToken');
+        }
+      } else {
+        // No stored user, try reading session token without role
+        storedSessionToken = RoleBasedStorage.getItem('sessionToken');
+      }
+
       setSessionToken(storedSessionToken);
       let currentUser = null;
 
@@ -408,7 +424,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       // Determine login type based on current URL
       const currentPath = window.location.pathname;
       const loginType: 'employee' | 'client' =
-        (currentPath.includes('/employee') || currentPath.includes('/admin') || currentPath.includes('/technician') || currentPath.includes('/sales'))
+        (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/sales'))
           ? 'employee'
           : 'client';
 
@@ -416,7 +432,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setUser(user);
 
       // Update sessionToken from localStorage after successful sign in
-      const newSessionToken = RoleBasedStorage.getItem('sessionToken');
+      const newSessionToken = RoleBasedStorage.getItem('sessionToken', user.role);
       setSessionToken(newSessionToken);
 
       return user;
@@ -530,20 +546,23 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       }, 1000);
 
       // Determine redirect URL based on user role
-      let redirectUrl = '/admin'; // Default for admin and any other employee roles
+      // All employee types (admin, executive, sales, technician) use /employee
+      let redirectUrl = '/employee'; // Default for all employee roles
       if (currentUserRole === 'client') {
         redirectUrl = '/clogin';
-      } else if (currentUserRole === 'technician') {
-        redirectUrl = '/technician';
-      } else if (currentUserRole === 'sales') {
-        redirectUrl = '/sales';
       }
 
+
       // Use replace() instead of href to prevent back button from restoring session
+      // Force the redirect to happen even if there's an error
       window.location.replace(redirectUrl);
     } catch (error) {
       console.error('Error signing out:', error);
-      throw error;
+      // Still redirect even if there was an error during logout
+      window.location.replace('/employee');
+    } finally {
+      // Reset signing out flag
+      setIsSigningOut(false);
     }
   };
 
@@ -554,12 +573,16 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   // Session management methods
   const updateSessionConfig = async (config: Partial<SessionConfig>) => {
-    if (sessionConfig) {
-      const newConfig = { ...sessionConfig, ...config };
-      setSessionConfig(newConfig);
-      sessionManager.updateConfig(newConfig);
+    // Handle both initial load (when sessionConfig is null) and updates (when it exists)
+    const newConfig = sessionConfig ? { ...sessionConfig, ...config } : config as SessionConfig;
 
-      // Also save to database
+    setSessionConfig(newConfig);
+    sessionConfigRef.current = newConfig;
+    sessionManager.updateConfig(newConfig);
+    console.log('✅ Session config updated in context:', newConfig);
+
+    // Also save to database (skip if this is just an initial load, not a user change)
+    if (sessionConfig) {
       try {
         await systemSettingsService.updateSessionConfig(newConfig);
         console.log('✅ Session config saved to database:', newConfig);
@@ -571,6 +594,10 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         console.error('❌ Failed to save session config to database:', error);
         // Don't revert local changes - they'll still work for this session
       }
+    } else {
+      // Initial load - just cache it, don't save to database
+      RoleBasedStorage.setItem('sessionConfig', JSON.stringify(newConfig));
+      console.log('💾 Session config cached in localStorage (initial load)');
     }
   };
 
@@ -593,6 +620,13 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       // Still hide the warning since user tried to extend
       setSessionWarning({ isVisible: false, timeLeft: 0 });
     }
+  };
+
+  const updateSessionWarningTime = (timeLeftSeconds: number) => {
+    setSessionWarning({
+      isVisible: true,
+      timeLeft: timeLeftSeconds
+    });
   };
 
   // MFA handlers
@@ -620,39 +654,48 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         warningTime: 2 // 2 minutes warning
       };
 
-      // Try to load config from database first, then local storage, then default
+      // Try to load config: localStorage cache first (fast), then database, then default
       let sessionConfig: SessionConfig;
-      try {
-        console.log('🔍 [MFA] Attempting to load session config from database...');
-        const dbConfig = await systemSettingsService.getSessionConfig();
-        console.log('🔍 [MFA] Database response:', dbConfig);
-        if (dbConfig) {
-          sessionConfig = dbConfig;
-          console.log('📥 [MFA] Using database session config:', sessionConfig);
-        } else {
-          console.log('⚠️ [MFA] No database config found, checking local storage...');
-          const existingConfig = sessionManager.getConfig();
-          if (existingConfig) {
-            sessionConfig = existingConfig;
-            console.log('📥 [MFA] Using local session config:', sessionConfig);
+
+      // First, check localStorage cache
+      const cachedConfigStr = RoleBasedStorage.getItem('sessionConfig');
+      if (cachedConfigStr) {
+        try {
+          sessionConfig = JSON.parse(cachedConfigStr);
+          console.log('📥 [MFA] Using cached session config from localStorage:', sessionConfig);
+        } catch (error) {
+          console.warn('⚠️ [MFA] Failed to parse cached config, will try database');
+        }
+      }
+
+      // If no cached config, try database
+      if (!sessionConfig) {
+        try {
+          console.log('🔍 [MFA] Attempting to load session config from database...');
+          const dbConfig = await systemSettingsService.getSessionConfig();
+          console.log('🔍 [MFA] Database response:', dbConfig);
+          if (dbConfig) {
+            sessionConfig = dbConfig;
+            console.log('📥 [MFA] Using database session config:', sessionConfig);
           } else {
+            console.log('⚠️ [MFA] No database config found, using default');
             sessionConfig = defaultConfig;
             console.log('📥 [MFA] Using default session config:', sessionConfig);
           }
-        }
-      } catch (error) {
-        console.warn('⚠️ [MFA] Failed to load database config, using fallback:', error);
-        const existingConfig = sessionManager.getConfig();
-        if (existingConfig) {
-          sessionConfig = existingConfig;
-          console.log('📥 [MFA] Using local session config (fallback):', sessionConfig);
-        } else {
+        } catch (error) {
+          console.warn('⚠️ [MFA] Failed to load database config, using default:', error);
           sessionConfig = defaultConfig;
           console.log('📥 [MFA] Using default session config (fallback):', sessionConfig);
         }
       }
 
       setSessionConfig(sessionConfig);
+      sessionConfigRef.current = sessionConfig; // Update ref immediately
+      console.log('✅ [MFA] Session config set in state:', sessionConfig);
+
+      // Save session config to localStorage for future use
+      RoleBasedStorage.setItem('sessionConfig', JSON.stringify(sessionConfig));
+      console.log('💾 [MFA] Saved session config to localStorage:', sessionConfig);
 
       // Reset session warning state for new session
       setSessionWarning({ isVisible: false, timeLeft: 0 });
@@ -761,16 +804,21 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         console.log('⚡ MFA verification flag set for trusted device authentication');
 
         // Update sessionToken if provided
+        // CRITICAL: Store in localStorage first (synchronous), then update React state
         if (sessionToken) {
+          console.log('🔐 [Trusted Device] Storing session token (length:', sessionToken.length, ')');
           RoleBasedStorage.setItem('sessionToken', sessionToken);
           setSessionToken(sessionToken);
-          console.log('🔐 [Trusted Device] Session token updated');
+          console.log('🔐 [Trusted Device] Session token stored in localStorage and state updated');
         } else {
+          console.warn('⚠️ [Trusted Device] No session token provided!');
           // Check if there's already a token in localStorage
           const existingToken = RoleBasedStorage.getItem('sessionToken');
           if (existingToken) {
             setSessionToken(existingToken);
-            console.log('🔐 [Trusted Device] Using existing session token');
+            console.log('🔐 [Trusted Device] Using existing session token from localStorage');
+          } else {
+            console.error('❌ [Trusted Device] No session token available - this will cause authentication to fail');
           }
         }
 
@@ -885,6 +933,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     extendSession,
     isSessionActive,
     sessionWarning,
+    updateSessionWarningTime,
     sessionToken
   };
 

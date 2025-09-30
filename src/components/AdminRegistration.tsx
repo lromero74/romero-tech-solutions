@@ -394,9 +394,7 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
       setSuccess('Verification successful!');
 
       // If user checked "remember device", register this device as trusted
-      // TEMPORARY: Skip trusted device registration to avoid session timeout issues
-      // TODO: Fix the session token propagation issue and re-enable this
-      if (false && rememberDevice) {
+      if (rememberDevice) {
         try {
           console.log('🔐 Registering device as trusted...');
           const deviceName = trustedDeviceService.getCurrentDeviceName();

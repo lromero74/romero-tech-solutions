@@ -224,15 +224,18 @@ export { generateCsrfToken };
 
 // Create conditional CSRF protection that skips pre-authentication endpoints
 const conditionalCsrfProtection = (req, res, next) => {
-  // Skip CSRF for pre-authentication endpoints
+  // Skip CSRF for pre-authentication endpoints (before session cookie exists)
   const preAuthEndpoints = [
     '/api/auth/admin-login-mfa',
     '/api/auth/verify-admin-mfa',
+    '/api/auth/verify-client-mfa',
     '/api/auth/login',
-    '/api/auth/signin'
+    '/api/auth/signin',
+    '/api/auth/check-admin'
   ];
 
-  if (preAuthEndpoints.includes(req.path)) {
+  // Check if this is a pre-auth endpoint
+  if (preAuthEndpoints.some(endpoint => req.path === endpoint || req.path.startsWith(endpoint))) {
     console.log(`🔓 Skipping CSRF protection for pre-auth endpoint: ${req.path}`);
     return next();
   }
@@ -297,10 +300,8 @@ app.get('/health/db', async (req, res) => {
 app.use('/uploads', express.static('uploads'));
 
 // API Routes with security middleware
-// TEMPORARY: CSRF disabled for development debugging - will re-enable after fixing session identifier issues
-console.log('⚠️  WARNING: CSRF protection temporarily disabled for development');
-app.use('/api/auth', authLimiter, authRoutes); // Strict auth rate limiting (CSRF temporarily disabled)
-app.use('/api/admin', adminLimiter, adminIPWhitelist, adminRoutes); // Admin rate limiting + IP whitelist (CSRF temporarily disabled)
+app.use('/api/auth', authLimiter, conditionalCsrfProtection, authRoutes); // Strict auth rate limiting + conditional CSRF (skips pre-auth endpoints)
+app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRoutes); // Admin rate limiting + IP whitelist + CSRF
 app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET
 app.use('/api/locations', generalLimiter, doubleCsrfProtection, locationRoutes); // General rate limiting + CSRF
