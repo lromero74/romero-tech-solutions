@@ -10,6 +10,7 @@ export default defineConfig({
     force: true, // Force pre-bundling to avoid dynamic import issues
   },
   server: {
+    host: '0.0.0.0', // Allow access from network devices (mobile testing)
     // Firefox-specific headers to prevent caching issues
     headers: {
       'Cache-Control': 'no-cache, no-store, must-revalidate',

@@ -70,16 +70,129 @@ else
     kill_by_pattern "nodemon" "Nodemon Servers"
 fi
 
-# Step 2: Wait for cleanup
+# Step 2: Update network configuration
 echo ""
-echo "⏳ Step 2: Waiting for cleanup..."
+echo "🌐 Step 2: Updating network configuration..."
+echo "=============================================="
+
+# Detect current network IP
+CURRENT_IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null)
+
+if [ -z "$CURRENT_IP" ]; then
+    echo "⚠️  Warning: Could not detect network IP, using localhost only"
+    CURRENT_IP="localhost"
+else
+    echo "📍 Detected network IP: $CURRENT_IP"
+fi
+
+# Update frontend .env.local with current IP
+if [ -f ".env.local" ]; then
+    echo "📝 Updating .env.local with API base URL..."
+    # Use sed to replace the VITE_API_BASE_URL line
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS sed
+        sed -i '' "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://${CURRENT_IP}:3001/api|" .env.local
+    else
+        # Linux sed
+        sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://${CURRENT_IP}:3001/api|" .env.local
+    fi
+    echo "✅ Updated .env.local"
+else
+    echo "⚠️  Warning: .env.local not found"
+fi
+
+# Update backend .env with CORS origins (clean list without accumulating IPs)
+if [ -f "backend/.env" ]; then
+    echo "📝 Updating backend/.env with CORS origins..."
+    CORS_ORIGINS="http://localhost:5173,http://localhost:5174,http://${CURRENT_IP}:5173,https://romerotechsolutions.com,https://*.amplifyapp.com"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        # macOS sed
+        sed -i '' "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|" backend/.env
+    else
+        # Linux sed
+        sed -i "s|^CORS_ORIGINS=.*|CORS_ORIGINS=${CORS_ORIGINS}|" backend/.env
+    fi
+    echo "✅ Updated backend/.env"
+    echo "🔒 CORS origins: ${CORS_ORIGINS}"
+else
+    echo "⚠️  Warning: backend/.env not found"
+fi
+
+# Update AWS RDS Security Group to allow current IP
+echo ""
+echo "🔐 Updating AWS RDS Security Group..."
+RDS_SG_ID="YOUR_RDS_SECURITY_GROUP_ID"  # e.g., sg-xxxxxxxxxxxxx
+EC2_BACKEND_IP="YOUR_EC2_BACKEND_IP/32"  # e.g., 1.2.3.4/32
+AWS_REGION="us-east-1"
+
+# Get current public IP for outbound connections (for when not on local network)
+PUBLIC_IP=$(curl -s -m 5 https://api.ipify.org 2>/dev/null)
+
+if [ -z "$PUBLIC_IP" ]; then
+    echo "⚠️  Warning: Could not detect public IP, skipping AWS security group update"
+else
+    echo "📍 Detected public IP: $PUBLIC_IP"
+
+    # Get current security group rules for port 5432
+    echo "🔍 Checking current RDS security group rules..."
+    CURRENT_IPS=$(aws ec2 describe-security-groups \
+        --group-ids "$RDS_SG_ID" \
+        --region "$AWS_REGION" \
+        --query 'SecurityGroups[0].IpPermissions[?ToPort==`5432`].IpRanges[].CidrIp' \
+        --output text 2>/dev/null)
+
+    if [ $? -eq 0 ]; then
+        # Check if current IP is already in the list
+        if echo "$CURRENT_IPS" | grep -q "${PUBLIC_IP}/32"; then
+            echo "✅ Current IP already allowed in RDS security group"
+        else
+            echo "📝 Updating RDS security group with current IP..."
+
+            # Revoke all old IPs except EC2 backend server
+            for ip in $CURRENT_IPS; do
+                if [ "$ip" != "$EC2_BACKEND_IP" ]; then
+                    echo "🗑️  Removing old IP: $ip"
+                    aws ec2 revoke-security-group-ingress \
+                        --group-id "$RDS_SG_ID" \
+                        --region "$AWS_REGION" \
+                        --protocol tcp \
+                        --port 5432 \
+                        --cidr "$ip" 2>/dev/null
+                fi
+            done
+
+            # Add current IP
+            echo "➕ Adding current IP: ${PUBLIC_IP}/32"
+            aws ec2 authorize-security-group-ingress \
+                --group-id "$RDS_SG_ID" \
+                --region "$AWS_REGION" \
+                --protocol tcp \
+                --port 5432 \
+                --cidr "${PUBLIC_IP}/32" 2>/dev/null
+
+            if [ $? -eq 0 ]; then
+                echo "✅ RDS security group updated successfully"
+                echo "🔒 Allowed IPs: $EC2_BACKEND_IP, ${PUBLIC_IP}/32"
+            else
+                echo "⚠️  Warning: Failed to update RDS security group"
+            fi
+        fi
+    else
+        echo "⚠️  Warning: Failed to query RDS security group"
+    fi
+fi
+
+# Step 3: Wait for cleanup
+echo ""
+echo "⏳ Step 3: Waiting for cleanup..."
 echo "=============================================="
 echo "Waiting 3 seconds for processes to terminate..."
 sleep 3
 
-# Step 3: Verify ports are free
+# Step 4: Verify ports are free
 echo ""
-echo "🔍 Step 3: Verifying ports are free..."
+echo "🔍 Step 4: Verifying ports are free..."
 echo "=============================================="
 if lsof -ti:3001 >/dev/null 2>&1; then
     echo "⚠️  Warning: Port 3001 still in use"
@@ -93,9 +206,9 @@ else
     echo "✅ Port 5173 is free"
 fi
 
-# Step 4: Start Backend Service
+# Step 5: Start Backend Service
 echo ""
-echo "🔄 Step 4: Starting Backend Service..."
+echo "🔄 Step 5: Starting Backend Service..."
 echo "=============================================="
 echo "Starting backend on port 3001..."
 
@@ -120,9 +233,9 @@ cd ..
 echo "⏳ Waiting 3 seconds for backend to initialize..."
 sleep 3
 
-# Step 5: Start Frontend Service
+# Step 6: Start Frontend Service
 echo ""
-echo "🔄 Step 5: Starting Frontend Service..."
+echo "🔄 Step 6: Starting Frontend Service..."
 echo "=============================================="
 echo "Starting frontend on port 5173..."
 
@@ -140,9 +253,9 @@ frontend_pid=$!
 echo "✅ Frontend started with nohup (PID: $frontend_pid)"
 echo "📋 Frontend logs: nohup_frontend.out"
 
-# Step 6: Verification and Summary
+# Step 7: Verification and Summary
 echo ""
-echo "🔍 Step 6: Verification..."
+echo "🔍 Step 7: Verification..."
 echo "=============================================="
 sleep 3
 
@@ -193,8 +306,12 @@ echo "  Backend:  kill $backend_pid"
 echo "  Frontend: kill $frontend_pid"
 echo ""
 echo "URLs:"
-echo "  Frontend: http://localhost:5173"
-echo "  Backend:  http://localhost:3001"
+echo "  Local Frontend:   http://localhost:5173"
+echo "  Local Backend:    http://localhost:3001"
+if [ "$CURRENT_IP" != "localhost" ]; then
+    echo "  Network Frontend: http://${CURRENT_IP}:5173"
+    echo "  Network Backend:  http://${CURRENT_IP}:3001"
+fi
 echo ""
 echo "✅ Script completed successfully!"
 echo "🌟 Services are now running with nohup - they will persist after session ends!"
