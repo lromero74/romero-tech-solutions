@@ -2,10 +2,19 @@ import React from 'react';
 
 export interface ServiceLocation {
   id: string;
-  address_label: string;
-  street: string;
-  city: string;
-  state: string;
+  name: string;
+  address: {
+    street: string;
+    city: string;
+    state: string;
+    zipCode: string;
+    country: string;
+  };
+  contact: {
+    person: string;
+    phone: string;
+    email: string;
+  };
 }
 
 export interface UrgencyLevel {
@@ -20,9 +29,13 @@ export interface UrgencyLevel {
 
 export interface ServiceType {
   id: string;
+  type_code: string;
   type_name: string;
   category: string;
   description: string;
+  is_active: boolean;
+  is_system: boolean;
+  sort_order: number;
 }
 
 export interface ServiceRequest {

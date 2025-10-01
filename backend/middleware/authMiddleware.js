@@ -120,9 +120,38 @@ export const requireRole = (requiredRoles) => {
         });
       }
 
-      // TODO: Add role checking logic here when roles are implemented
-      // For now, we'll assume the user has the required role if they're authenticated
-      console.log(`🔐 Role check passed for user: ${req.user.email}`);
+      // Fetch user role from database
+      const pool = (await import('../config/database.js')).default;
+      const userResult = await pool.query(
+        'SELECT role FROM users WHERE id = $1',
+        [req.user.id]
+      );
+
+      if (userResult.rows.length === 0) {
+        return res.status(403).json({
+          success: false,
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
+        });
+      }
+
+      const userRole = userResult.rows[0].role;
+
+      // Check if user has one of the required roles
+      if (!requiredRoles.includes(userRole)) {
+        console.warn(`🚫 Role check failed for user ${req.user.email}: has ${userRole}, needs one of [${requiredRoles.join(', ')}]`);
+        return res.status(403).json({
+          success: false,
+          message: 'Insufficient permissions',
+          code: 'INSUFFICIENT_PERMISSIONS',
+          required: requiredRoles,
+          actual: userRole
+        });
+      }
+
+      // Attach role to request for future use
+      req.user.role = userRole;
+      console.log(`🔐 Role check passed for user: ${req.user.email} (${userRole})`);
       next();
 
     } catch (error) {
@@ -141,5 +170,20 @@ export const requireRole = (requiredRoles) => {
  * Admin role requirement middleware
  */
 export const requireAdmin = requireRole(['admin']);
+
+/**
+ * Executive role requirement middleware
+ */
+export const requireExecutive = requireRole(['executive']);
+
+/**
+ * Admin or Executive role requirement middleware
+ */
+export const requireAdminOrExecutive = requireRole(['admin', 'executive']);
+
+/**
+ * Employee role requirement middleware (any employee role)
+ */
+export const requireEmployee = requireRole(['admin', 'executive', 'manager', 'technician', 'employee']);
 
 export default authMiddleware;

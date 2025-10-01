@@ -1263,16 +1263,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
       }
 
       case 'services':
-        return (
-          <AdminServices
-            services={services}
-            loading={loading}
-            error={error}
-            selectedService={serviceCRUD.selectedEntity}
-            onSelectService={serviceCRUD.setSelectedEntity}
-            onRefresh={refreshAllData}
-          />
-        );
+        return <AdminServices />;
 
       case 'service-requests':
         return (

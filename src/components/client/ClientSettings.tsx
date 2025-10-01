@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import AlertModal from '../shared/AlertModal';
 import TrustedDeviceManagement from '../shared/TrustedDeviceManagement';
 import { apiService } from '../../services/apiService';
@@ -130,7 +131,7 @@ const ClientSettings: React.FC = () => {
   const loadUserData = async () => {
     setLoading(true);
     try {
-      const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
+      const authUser = JSON.parse(RoleBasedStorage.getItem('authUser') || '{}');
 
       // Load contact info
       const contactData = await apiService.get('/client/profile');
@@ -295,8 +296,8 @@ const ClientSettings: React.FC = () => {
 
   return (
     <div className="space-y-6">
-      <div className={`rounded-lg border p-6 ${themeClasses.container}`}>
-        <h2 className={`text-xl font-semibold mb-6 ${themeClasses.text}`}>{t('settings.title')}</h2>
+      <div className={`rounded-lg border p-4 sm:p-6 ${themeClasses.container}`}>
+        <h2 className={`text-lg sm:text-xl font-semibold mb-4 sm:mb-6 ${themeClasses.text}`}>{t('settings.title')}</h2>
 
         {/* Message Display */}
         {message && (
@@ -320,8 +321,8 @@ const ClientSettings: React.FC = () => {
         )}
 
         {/* Tab Navigation */}
-        <div className="border-b mb-6">
-          <nav className="-mb-px flex space-x-8">
+        <div className="border-b mb-4 sm:mb-6 overflow-x-auto">
+          <nav className="-mb-px flex space-x-4 sm:space-x-8 min-w-max sm:min-w-0">
             {[
               { id: 'profile', label: t('settings.tabs.profile'), icon: User },
               { id: 'password', label: t('settings.tabs.password'), icon: Lock },
@@ -331,13 +332,13 @@ const ClientSettings: React.FC = () => {
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`py-2 px-1 border-b-2 font-medium text-sm flex items-center ${
+                className={`py-2 px-1 border-b-2 font-medium text-xs sm:text-sm flex items-center whitespace-nowrap ${
                   activeTab === tab.id
                     ? `${themeClasses.tabActive} border-blue-500`
                     : `${themeClasses.tab} border-transparent`
                 }`}
               >
-                <tab.icon className="h-4 w-4 mr-2" />
+                <tab.icon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
                 {tab.label}
               </button>
             ))}
@@ -407,7 +408,7 @@ const ClientSettings: React.FC = () => {
               <button
                 onClick={handleContactInfoSave}
                 disabled={!hasContactChanges() || loading}
-                className={`flex items-center px-4 py-2 rounded-md ${
+                className={`flex items-center justify-center px-4 py-2 rounded-md text-sm sm:text-base w-full sm:w-auto ${
                   hasContactChanges() && !loading
                     ? themeClasses.button
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -536,7 +537,7 @@ const ClientSettings: React.FC = () => {
               <button
                 onClick={handlePasswordChange}
                 disabled={!passwordData.currentPassword || !isPasswordValid() || passwordData.newPassword !== passwordData.confirmPassword || loading}
-                className={`flex items-center px-4 py-2 rounded-md ${
+                className={`flex items-center justify-center px-4 py-2 rounded-md text-sm sm:text-base w-full sm:w-auto ${
                   passwordData.currentPassword && isPasswordValid() && passwordData.newPassword === passwordData.confirmPassword && !loading
                     ? themeClasses.button
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -557,16 +558,16 @@ const ClientSettings: React.FC = () => {
         {activeTab === 'security' && (
           <div className="space-y-6">
             <div className={`p-4 rounded-md border ${themeClasses.card}`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className={`text-lg font-medium ${themeClasses.text}`}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                <div className="flex-1">
+                  <h3 className={`text-base sm:text-lg font-medium ${themeClasses.text}`}>
                     {t('settings.security.mfaTitle')}
                   </h3>
-                  <p className={`text-sm ${themeClasses.textSecondary} mt-1`}>
+                  <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mt-1`}>
                     {t('settings.security.mfaDescription')}
                   </p>
                   {mfaSettings.isEnabled && (
-                    <p className={`text-sm text-green-600 mt-2`}>
+                    <p className={`text-xs sm:text-sm text-green-600 mt-2`}>
                       {t('settings.security.mfaEnabledFor', { email: mfaSettings.email })}
                     </p>
                   )}
@@ -574,7 +575,7 @@ const ClientSettings: React.FC = () => {
                 <button
                   onClick={handleMfaToggle}
                   disabled={loading}
-                  className={`px-4 py-2 rounded-md flex items-center ${
+                  className={`px-4 py-2 rounded-md flex items-center justify-center text-sm sm:text-base w-full sm:w-auto whitespace-nowrap ${
                     mfaSettings.isEnabled
                       ? 'bg-red-600 hover:bg-red-700 text-white'
                       : themeClasses.button
@@ -595,23 +596,23 @@ const ClientSettings: React.FC = () => {
             {/* MFA Setup Modal */}
             {showMfaSetup && (
               <div className={`p-4 rounded-md border ${themeClasses.card}`}>
-                <h4 className={`text-lg font-medium mb-4 ${themeClasses.text}`}>{t('settings.security.setupMfa')}</h4>
-                <p className={`text-sm ${themeClasses.textSecondary} mb-4`}>
+                <h4 className={`text-base sm:text-lg font-medium mb-4 ${themeClasses.text}`}>{t('settings.security.setupMfa')}</h4>
+                <p className={`text-xs sm:text-sm ${themeClasses.textSecondary} mb-4`}>
                   {t('settings.security.enterCode', { email: contactInfo.email })}
                 </p>
-                <div className="flex space-x-4">
+                <div className="flex flex-col sm:flex-row gap-3 sm:space-x-4 sm:gap-0">
                   <input
                     type="text"
                     value={mfaVerificationCode}
                     onChange={(e) => setMfaVerificationCode(e.target.value)}
                     placeholder={t('settings.security.codePlaceholder')}
                     maxLength={6}
-                    className={`flex-1 px-3 py-2 border rounded-md ${themeClasses.input}`}
+                    className={`flex-1 px-3 py-2 border rounded-md text-sm sm:text-base ${themeClasses.input}`}
                   />
                   <button
                     onClick={verifyMfaCode}
                     disabled={mfaVerificationCode.length !== 6 || loading}
-                    className={`px-4 py-2 rounded-md ${
+                    className={`px-4 py-2 rounded-md text-sm sm:text-base whitespace-nowrap ${
                       mfaVerificationCode.length === 6 && !loading
                         ? themeClasses.button
                         : 'bg-gray-300 text-gray-500 cursor-not-allowed'
@@ -620,11 +621,11 @@ const ClientSettings: React.FC = () => {
                     {t('settings.security.verifyButton')}
                   </button>
                 </div>
-                <div className="mt-4 flex space-x-2">
+                <div className="mt-4 flex flex-col sm:flex-row gap-2 sm:space-x-2 sm:gap-0">
                   <button
                     onClick={sendMfaCode}
                     disabled={loading}
-                    className={`text-sm ${themeClasses.buttonSecondary} px-3 py-1 rounded`}
+                    className={`text-xs sm:text-sm ${themeClasses.buttonSecondary} px-3 py-2 sm:py-1 rounded`}
                   >
                     {t('settings.security.resendCode')}
                   </button>
@@ -633,7 +634,7 @@ const ClientSettings: React.FC = () => {
                       setShowMfaSetup(false);
                       setMfaVerificationCode('');
                     }}
-                    className={`text-sm ${themeClasses.buttonSecondary} px-3 py-1 rounded`}
+                    className={`text-xs sm:text-sm ${themeClasses.buttonSecondary} px-3 py-2 sm:py-1 rounded`}
                   >
                     {t('general.cancel')}
                   </button>
@@ -644,20 +645,20 @@ const ClientSettings: React.FC = () => {
             {/* Backup Codes Display */}
             {showBackupCodes && mfaSettings.backupCodes.length > 0 && (
               <div className={`p-4 rounded-md border border-yellow-300 bg-yellow-50`}>
-                <h4 className="text-lg font-medium mb-2 text-yellow-800">{t('settings.security.backupCodes')}</h4>
-                <p className="text-sm text-yellow-700 mb-4">
+                <h4 className="text-base sm:text-lg font-medium mb-2 text-yellow-800">{t('settings.security.backupCodes')}</h4>
+                <p className="text-xs sm:text-sm text-yellow-700 mb-4">
                   {t('settings.security.backupCodesDesc')}
                 </p>
-                <div className="grid grid-cols-2 gap-2 mb-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-4">
                   {mfaSettings.backupCodes.map((code, index) => (
-                    <div key={index} className="font-mono text-sm bg-white p-2 rounded border">
+                    <div key={index} className="font-mono text-xs sm:text-sm bg-white p-2 rounded border">
                       {code}
                     </div>
                   ))}
                 </div>
                 <button
                   onClick={() => setShowBackupCodes(false)}
-                  className={`${themeClasses.button} px-4 py-2 rounded-md`}
+                  className={`${themeClasses.button} px-4 py-2 rounded-md text-sm sm:text-base w-full sm:w-auto`}
                 >
                   {t('settings.security.savedCodes')}
                 </button>

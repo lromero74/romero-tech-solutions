@@ -26,6 +26,7 @@ import trustedDevicesRoutes from './routes/trustedDevices.js';
 import serviceAreasRoutes from './routes/serviceAreas.js';
 import emailVerificationRoutes from './routes/emailVerification.js';
 import serviceRequestWorkflowRoutes from './routes/serviceRequestWorkflow.js';
+import serviceTypesRoutes from './routes/serviceTypes.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -342,6 +343,7 @@ app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfi
 app.use('/api/client/mfa', generalLimiter, methodBasedCsrfProtection, clientMfaRoutes); // Client MFA (CSRF skipped for GET)
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
+app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD
 app.use('/api/service-request-workflow', generalLimiter, doubleCsrfProtection, serviceRequestWorkflowRoutes); // Service request workflow + CSRF
 app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { useNotifications } from '../../contexts/NotificationContext';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import {
   Clock,
   Calendar,
@@ -178,7 +179,7 @@ const ServiceRequests: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token found');
       }
@@ -225,7 +226,7 @@ const ServiceRequests: React.FC = () => {
     try {
       setLoadingFiles(true);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token found');
       }

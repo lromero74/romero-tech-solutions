@@ -68,8 +68,8 @@ const ServiceScheduler: React.FC = () => {
             // Fetch real client location data from API
             const fetchLocations = async () => {
               try {
-                // Get session token from localStorage for authorization
-                const sessionToken = localStorage.getItem('sessionToken');
+                // Get session token from RoleBasedStorage for authorization
+                const sessionToken = RoleBasedStorage.getItem('sessionToken');
                 const headers: HeadersInit = {
                   'Content-Type': 'application/json'
                 };
@@ -131,16 +131,47 @@ const ServiceScheduler: React.FC = () => {
     loadClientData();
   }, []);
 
-  // Load service types
+  // Load service types from API
   useEffect(() => {
-    // For now, use static data - this would be fetched from API
-    setServiceTypes([
-      { id: 'network-support', type_name: 'Network Support', category: 'Infrastructure', description: 'Network troubleshooting and maintenance' },
-      { id: 'server-maintenance', type_name: 'Server Maintenance', category: 'Infrastructure', description: 'Server updates and maintenance' },
-      { id: 'security-audit', type_name: 'Security Audit', category: 'Security', description: 'Security assessment and recommendations' },
-      { id: 'help-desk', type_name: 'Help Desk Support', category: 'Support', description: 'General technical support' },
-      { id: 'backup-recovery', type_name: 'Backup & Recovery', category: 'Data', description: 'Data backup and recovery services' }
-    ]);
+    const fetchServiceTypes = async () => {
+      try {
+        const sessionToken = RoleBasedStorage.getItem('sessionToken');
+        const headers: HeadersInit = {
+          'Content-Type': 'application/json'
+        };
+
+        if (sessionToken) {
+          headers['Authorization'] = `Bearer ${sessionToken}`;
+        }
+
+        // Get user's preferred language for translations
+        const languageCode = localStorage.getItem('clientLanguage') || 'en';
+
+        const response = await fetch(
+          `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/service-types?lang=${languageCode}`,
+          {
+            credentials: 'include',
+            headers
+          }
+        );
+
+        if (response.ok) {
+          const result = await response.json();
+          if (result.success && result.data.serviceTypes) {
+            setServiceTypes(result.data.serviceTypes);
+          }
+        } else {
+          console.error('Failed to fetch service types:', response.statusText);
+          // Fallback to empty array if API fails
+          setServiceTypes([]);
+        }
+      } catch (error) {
+        console.error('Error fetching service types:', error);
+        setServiceTypes([]);
+      }
+    };
+
+    fetchServiceTypes();
   }, []);
 
   // Calendar generation
@@ -712,7 +743,7 @@ const ServiceScheduler: React.FC = () => {
               <option value="">{t('schedule.selectLocation')}</option>
               {locations.map((location) => (
                 <option key={location.id} value={location.id}>
-                  {location.address_label} - {location.city}, {location.state}
+                  {location.name} - {location.address.city}, {location.address.state}
                 </option>
               ))}
             </select>
