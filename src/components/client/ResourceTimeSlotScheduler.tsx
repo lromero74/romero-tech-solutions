@@ -68,6 +68,27 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
   const BUFFER_HOURS = 1;
 
+  // Helper function to find rate tier for a given time
+  const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
+    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+
+    // Find matching tier for this day and time
+    const matchingTier = rateTiers.find(tier => {
+      if (tier.dayOfWeek !== dayOfWeek) return false;
+
+      // Compare time strings
+      return timeString >= tier.timeStart && timeString < tier.timeEnd;
+    });
+
+    // If no exact match, find the highest priority tier (Emergency > Premium > Standard)
+    if (!matchingTier && rateTiers.length > 0) {
+      const tiersForDay = rateTiers.filter(t => t.dayOfWeek === dayOfWeek);
+      return tiersForDay.sort((a, b) => b.tierLevel - a.tierLevel)[0];
+    }
+
+    return matchingTier;
+  };
+
   // Check if selected time range includes emergency hours
   const getSelectedTimeRateInfo = () => {
     if (!selectedStartTime || !selectedEndTime) return null;
@@ -122,28 +143,6 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     if (container) {
       container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
     }
-  };
-
-
-  // Helper function to find rate tier for a given time
-  const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
-    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
-
-    // Find matching tier for this day and time
-    const matchingTier = rateTiers.find(tier => {
-      if (tier.dayOfWeek !== dayOfWeek) return false;
-
-      // Compare time strings
-      return timeString >= tier.timeStart && timeString < tier.timeEnd;
-    });
-
-    // If no exact match, find the highest priority tier (Emergency > Premium > Standard)
-    if (!matchingTier && rateTiers.length > 0) {
-      const tiersForDay = rateTiers.filter(t => t.dayOfWeek === dayOfWeek);
-      return tiersForDay.sort((a, b) => b.tierLevel - a.tierLevel)[0];
-    }
-
-    return matchingTier;
   };
 
   // Generate time slots for the day (30-minute intervals, 24 hours)
