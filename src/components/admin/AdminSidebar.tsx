@@ -15,11 +15,12 @@ import {
   Calendar,
   Network,
   ChevronDown,
-  ChevronRight
+  ChevronRight,
+  Clock
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'password-complexity';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'password-complexity';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -70,6 +71,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network },
         { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText },
         { id: 'password-complexity', label: 'Password Policy', icon: Lock },
+        { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock },
         { id: 'reports', label: 'Reports', icon: FileText },
         { id: 'settings', label: 'Settings', icon: Settings }
       ]

@@ -11,5 +11,6 @@ export { default as AdminRoles } from './AdminRoles';
 export { default as AdminPermissionManager } from './AdminPermissionManager';
 export { default as AdminBusinesses } from './AdminBusinesses';
 export { default as AdminSettings } from './AdminSettings';
+export { default as AdminServiceHourRates } from './AdminServiceHourRates';
 export { default as AdminReports } from './AdminReports';
 export { AdminPasswordComplexity } from './AdminPasswordComplexity';

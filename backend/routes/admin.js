@@ -19,6 +19,7 @@ import employeeCalendarRoutes from './admin/employeeCalendar.js';
 import serviceRequestsRoutes from './admin/serviceRequests.js';
 import permissionsRoutes from './admin/permissions.js';
 import permissionAuditLogRoutes from './admin/permissionAuditLog.js';
+import serviceHourRatesRoutes from './admin/serviceHourRates.js';
 import { getSignupStats } from '../middleware/signupRateLimiter.js';
 import { getEmployeeLoginStats } from '../middleware/employeeLoginRateLimiter.js';
 
@@ -46,6 +47,7 @@ router.use('/', employeeCalendarRoutes);
 router.use('/', serviceRequestsRoutes);
 router.use('/', permissionsRoutes);
 router.use('/permission-audit-log', permissionAuditLogRoutes);
+router.use('/service-hour-rates', serviceHourRatesRoutes);
 
 // Security monitoring endpoints
 router.get('/signup-stats', getSignupStats);
