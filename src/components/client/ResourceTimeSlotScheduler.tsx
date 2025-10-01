@@ -66,45 +66,12 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const currentSlotIndex = hours * 2 + Math.floor(minutes / 30);
     const scrollPosition = currentSlotIndex * 64; // 64px per slot
 
-    // Scroll both containers together
-    const headerContainer = document.getElementById('timeline-scroll');
-    const contentContainer = document.getElementById('timeline-scroll-content');
-
-    if (headerContainer) {
-      headerContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
-    }
-    if (contentContainer) {
-      contentContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+    const container = document.getElementById('timeline-scroll');
+    if (container) {
+      container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
     }
   };
 
-  // Synchronize scroll between header and content
-  useEffect(() => {
-    const headerContainer = document.getElementById('timeline-scroll');
-    const contentContainer = document.getElementById('timeline-scroll-content');
-
-    if (!headerContainer || !contentContainer) return;
-
-    const handleHeaderScroll = () => {
-      if (contentContainer.scrollLeft !== headerContainer.scrollLeft) {
-        contentContainer.scrollLeft = headerContainer.scrollLeft;
-      }
-    };
-
-    const handleContentScroll = () => {
-      if (headerContainer.scrollLeft !== contentContainer.scrollLeft) {
-        headerContainer.scrollLeft = contentContainer.scrollLeft;
-      }
-    };
-
-    headerContainer.addEventListener('scroll', handleHeaderScroll);
-    contentContainer.addEventListener('scroll', handleContentScroll);
-
-    return () => {
-      headerContainer.removeEventListener('scroll', handleHeaderScroll);
-      contentContainer.removeEventListener('scroll', handleContentScroll);
-    };
-  }, [loading]); // Re-attach when loading completes
 
   // Generate time slots for the day (30-minute intervals from 6 AM to 10 PM)
   const timeSlots = useMemo(() => {
@@ -289,23 +256,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         setSelectedEndTime(endTime);
         setErrorMessage('');
 
-        // Scroll to the suggested time - need to scroll both containers
+        // Scroll to the suggested time
         setTimeout(() => {
           const hours = startTime.getHours();
           const minutes = startTime.getMinutes();
           const slotIndex = (hours - 6) * 2 + (minutes / 30);
           const scrollPosition = slotIndex * 64;
 
-          // Scroll the header
-          const headerContainer = document.getElementById('timeline-scroll');
-          if (headerContainer) {
-            headerContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
-          }
-
-          // Scroll the content area
-          const contentContainer = document.getElementById('timeline-scroll-content');
-          if (contentContainer) {
-            contentContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+          const container = document.getElementById('timeline-scroll');
+          if (container) {
+            container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
           }
         }, 100); // Small delay to ensure state update has rendered
       } else {
@@ -589,33 +549,32 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </div>
             </div>
           ) : (
-            <>
-              {/* Timeline Header */}
-              <div className="sticky top-0 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 z-10">
-                <div className="flex">
-                  <div className="w-32 p-3 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center">
-                    <span className="font-medium text-sm">Time</span>
-                  </div>
-                  <div className="flex-1 overflow-x-auto scroll-smooth" id="timeline-scroll">
-                    <div className="flex min-w-max">
-                      {timeSlots.map((slot, i) => (
-                        <div key={i} className="flex-shrink-0 w-16 p-1 text-center text-xs font-medium border-r border-gray-200 dark:border-gray-700">
-                          {slot.time}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+            <div className="flex-1 flex overflow-hidden">
+              {/* Row labels */}
+              <div className="flex flex-col border-r border-gray-200 dark:border-gray-700">
+                <div className="w-32 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
+                  <span className="font-medium text-sm">Time</span>
+                </div>
+                <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-750">
+                  <span className="text-sm font-medium">Available Slots</span>
                 </div>
               </div>
 
-              {/* Timeline Grid */}
-              <div className="flex-1 relative">
-                <div className="flex h-full">
-                  <div className="w-32 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center bg-gray-50 dark:bg-gray-750">
-                    <span className="text-sm font-medium">Available Slots</span>
+              {/* Scrollable timeline content (both rows together) */}
+              <div className="flex-1 overflow-x-auto scroll-smooth" id="timeline-scroll">
+                <div className="min-w-max">
+                  {/* Time labels row */}
+                  <div className="flex border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800">
+                    {timeSlots.map((slot, i) => (
+                      <div key={i} className="flex-shrink-0 w-16 p-1 text-center text-xs font-medium border-r border-gray-200 dark:border-gray-700">
+                        {slot.time}
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex-1 overflow-x-auto scroll-smooth relative" id="timeline-scroll-content">
-                    <div className="flex min-w-max h-20 relative">
+
+                  {/* Selection grid row */}
+                  <div className="relative h-20">
+                    <div className="flex h-20 relative">
                       {/* Current time indicator */}
                       {currentTimePosition !== null && (
                         <div
@@ -742,7 +701,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   </div>
                 </div>
               </div>
-            </>
+            </div>
           )}
         </div>
 
