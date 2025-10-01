@@ -567,7 +567,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             <div className="flex-1 flex overflow-hidden">
               {/* Row labels */}
               <div className="flex flex-col border-r border-gray-200 dark:border-gray-700">
-                <div className="w-32 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
+                <div className="w-32 p-1 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
                   <span className="font-medium text-sm">Time</span>
                 </div>
                 <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
