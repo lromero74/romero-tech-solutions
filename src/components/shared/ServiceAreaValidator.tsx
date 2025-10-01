@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useContext } from 'react';
 import { CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { validateServiceArea, formatServiceAreasDisplay, getActiveServiceAreas } from '../../utils/serviceAreaValidation';
-import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { ClientLanguageContext } from '../../contexts/ClientLanguageContext';
 import AlertModal from './AlertModal';
 
 interface ServiceAreaValidatorProps {
@@ -25,7 +25,10 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
   disabled = false,
   triggerValidation
 }) => {
-  const { t } = useClientLanguage();
+  // Safely use client language context with fallback for admin context
+  const clientLanguageContext = useContext(ClientLanguageContext);
+  const t = clientLanguageContext?.t || ((_key: string, _params?: Record<string, unknown>, defaultText?: string) => defaultText || '');
+
   const [validationState, setValidationState] = useState<{
     isValidating: boolean;
     isValid: boolean | null;
