@@ -242,7 +242,7 @@ const ViewEmployeeModal: React.FC<ViewEmployeeModalProps> = ({
 
   return (
     <div className={`fixed inset-0 ${themeClasses.bg.overlay} flex items-center justify-center p-4 z-50`}>
-      <div className={`w-full max-w-2xl border shadow-lg rounded-lg ${themeClasses.bg.modal} max-h-[95vh] flex flex-col`}>
+      <div className={`w-full max-w-2xl border shadow-lg rounded-lg ${themeClasses.bg.modal} max-h-[90vh] flex flex-col`}>
         {/* Fixed Header */}
         <div className={`${themeClasses.bg.secondary} rounded-t-lg p-4 flex-shrink-0 relative`}>
           {/* Close button */}
@@ -368,7 +368,7 @@ const ViewEmployeeModal: React.FC<ViewEmployeeModalProps> = ({
         </div>
 
         {/* Scrollable Content Area with indicators outside the scroll flow */}
-        <div className="flex-1 relative">
+        <div className="flex-1 relative overflow-hidden">
           {/* Scroll Up Indicator - Fixed to container viewport */}
           {scrollState.canScrollUp && (
             <div className={`absolute top-6 left-1/2 transform -translate-x-1/2 z-20
@@ -393,7 +393,7 @@ const ViewEmployeeModal: React.FC<ViewEmployeeModalProps> = ({
             </div>
           )}
 
-          <div ref={scrollableRef} className="h-full overflow-y-auto p-4">
+          <div ref={scrollableRef} className="absolute inset-0 overflow-y-auto p-4">
             {/* Information Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           {/* Contact Information */}
