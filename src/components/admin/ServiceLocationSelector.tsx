@@ -66,12 +66,12 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     }
   };
 
-  // Build tree when both location data and initial selections are available
+  // Build tree when location data is available (only once)
   useEffect(() => {
     if (locations.length > 0) {
       buildLocationTree(locations);
     }
-  }, [locations, initialSelections]);
+  }, [locations]);
 
   const buildLocationTree = useCallback((locationData: LocationItem[]) => {
     // Group by type and build hierarchy
