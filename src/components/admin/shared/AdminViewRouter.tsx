@@ -329,7 +329,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           // Delete related service locations first
           for (const serviceLocation of relatedServiceLocations) {
             try {
-              await adminService.deleteServiceLocation(serviceLocation.id);
+              await adminService.deleteServiceLocation(serviceLocation.id, serviceLocation.business_id);
               console.log('Deleted service location:', serviceLocation.location_name);
             } catch (error) {
               console.error('Failed to delete service location:', serviceLocation.location_name, error);
