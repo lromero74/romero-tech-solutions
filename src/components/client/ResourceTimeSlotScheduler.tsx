@@ -272,13 +272,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const slotTime = new Date(selectedDate);
     slotTime.setHours(slot.hour, slot.minute, 0, 0);
 
-    // Check if slot would exceed business hours
+    // Check if appointment would go past midnight into next day
     const slotEnd = new Date(slotTime.getTime() + (selectedDuration * 60 * 60 * 1000));
     const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(22, 0, 0, 0);
+    endOfDay.setHours(23, 59, 59, 999);
 
     if (slotEnd > endOfDay) {
-      setErrorMessage(`Selected duration (${selectedDuration}h) would exceed business hours (10 PM). Please select an earlier time or shorter duration.`);
+      setErrorMessage(`Selected duration (${selectedDuration}h) would extend past midnight. Please select an earlier time or shorter duration.`);
       return;
     }
 
@@ -302,10 +302,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     if (selectedStartTime) {
       const newEndTime = new Date(selectedStartTime.getTime() + (newDuration * 60 * 60 * 1000));
       const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(22, 0, 0, 0);
+      endOfDay.setHours(23, 59, 59, 999);
 
       if (newEndTime > endOfDay) {
-        setErrorMessage(`Duration of ${newDuration}h would exceed business hours. Please select a shorter duration or earlier start time.`);
+        setErrorMessage(`Duration of ${newDuration}h would extend past midnight. Please select a shorter duration or earlier start time.`);
         setSelectedStartTime(null);
         setSelectedEndTime(null);
         return;
@@ -414,7 +414,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         if (newEndTime.getTime() - selectedStartTime.getTime() > maxDuration) return;
 
         const endOfDay = new Date(selectedDate);
-        endOfDay.setHours(22, 0, 0, 0);
+        endOfDay.setHours(23, 59, 59, 999);
         if (newEndTime > endOfDay) return;
 
         setSelectedEndTime(newEndTime);
@@ -478,7 +478,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       if (newStartTime < minTime) return;
 
       const endOfDay = new Date(selectedDate);
-      endOfDay.setHours(22, 0, 0, 0);
+      endOfDay.setHours(23, 59, 59, 999);
       if (newEndTime > endOfDay) return;
 
       setSelectedStartTime(newStartTime);
