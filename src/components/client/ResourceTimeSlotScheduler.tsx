@@ -136,6 +136,21 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     loadBookings();
   }, [selectedDate]);
 
+  // Auto-scroll to "Now" position when opening scheduler for today's date
+  useEffect(() => {
+    if (loading) return; // Wait until loading completes
+
+    const now = new Date();
+    const isToday = selectedDate.toDateString() === now.toDateString();
+
+    if (isToday) {
+      // Small delay to ensure DOM is ready
+      setTimeout(() => {
+        scrollToNow();
+      }, 150);
+    }
+  }, [loading, selectedDate]);
+
   // Check if a time slot is blocked
   const checkIfSlotBlocked = (slotTime: Date, durationHours: number = selectedDuration): { isBlocked: boolean; reason?: string } => {
     const slotEnd = new Date(slotTime.getTime() + (durationHours * 60 * 60 * 1000));
