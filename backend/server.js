@@ -42,6 +42,7 @@ import {
   generalLimiter,
   adminLimiter,
   authLimiter,
+  heartbeatLimiter,
   speedLimiter,
   adminIPWhitelist,
   securityHeaders
@@ -328,8 +329,16 @@ app.get('/health/db', async (req, res) => {
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
 
+// Conditional rate limiter for auth routes: heartbeat gets special treatment
+const authRateLimiter = (req, res, next) => {
+  if (req.path === '/heartbeat') {
+    return heartbeatLimiter(req, res, next);
+  }
+  return authLimiter(req, res, next);
+};
+
 // API Routes with security middleware
-app.use('/api/auth', authLimiter, conditionalCsrfProtection, authRoutes); // Strict auth rate limiting + conditional CSRF (skips pre-auth endpoints)
+app.use('/api/auth', authRateLimiter, conditionalCsrfProtection, authRoutes); // Conditional rate limiting (heartbeat vs auth) + conditional CSRF
 app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRoutes); // Admin rate limiting + IP whitelist + CSRF
 app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET

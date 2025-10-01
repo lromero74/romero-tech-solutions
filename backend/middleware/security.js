@@ -43,6 +43,19 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Heartbeat endpoint rate limiting (more lenient for session keep-alive)
+export const heartbeatLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: isDevelopment ? 1000 : 30, // dev: 1000 requests, production: 30 requests (allows ~1 per 30s)
+  message: {
+    success: false,
+    message: 'Too many heartbeat requests, please slow down.',
+    code: 'HEARTBEAT_RATE_LIMIT_EXCEEDED'
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Slow down repeated requests
 export const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000, // 15 minutes
