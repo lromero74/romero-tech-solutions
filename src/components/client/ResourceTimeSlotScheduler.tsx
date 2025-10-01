@@ -483,10 +483,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     if (now.toDateString() !== selectedDate.toDateString()) return null;
 
     const hours = now.getHours();
-    if (hours < 6 || hours >= 22) return null; // Outside business hours
-
     const minutes = now.getMinutes();
-    const slotIndex = (hours - 6) * 2 + Math.floor(minutes / 30);
+    const slotIndex = hours * 2 + Math.floor(minutes / 30);
     return slotIndex * 64;
   };
 
@@ -535,14 +533,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               <label className="text-sm font-medium">Duration:</label>
               <select
                 value={selectedDuration}
-                onChange={(e) => handleDurationChange(parseInt(e.target.value))}
+                onChange={(e) => handleDurationChange(parseFloat(e.target.value))}
                 className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-white'
                     : 'bg-white border-gray-300 text-gray-900'
                 }`}
               >
-                {[1, 2, 3, 4, 5, 6].map(hours => (
+                {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map(hours => (
                   <option key={hours} value={hours}>
                     {hours} {hours === 1 ? 'hour' : 'hours'}
                   </option>
@@ -707,7 +705,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                         <div
                           className="absolute top-0 h-20 bg-blue-600/80 border-2 border-blue-700 rounded pointer-events-none"
                           style={{
-                            left: `${((selectedStartTime.getHours() - 6) * 2 + selectedStartTime.getMinutes() / 30) * 64}px`,
+                            left: `${(selectedStartTime.getHours() * 2 + selectedStartTime.getMinutes() / 30) * 64}px`,
                             width: `${((selectedEndTime.getTime() - selectedStartTime.getTime()) / (30 * 60 * 1000)) * 64}px`
                           }}
                         >
@@ -752,10 +750,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                         const endHour = booking.endTime.getHours();
                         const endMinute = booking.endTime.getMinutes();
 
-                        if (startHour < 6 || startHour >= 22) return null;
-
-                        const startSlotIndex = (startHour - 6) * 2 + startMinute / 30;
-                        const endSlotIndex = (endHour - 6) * 2 + endMinute / 30;
+                        const startSlotIndex = startHour * 2 + startMinute / 30;
+                        const endSlotIndex = endHour * 2 + endMinute / 30;
                         const width = (endSlotIndex - startSlotIndex) * 64;
 
                         return (
