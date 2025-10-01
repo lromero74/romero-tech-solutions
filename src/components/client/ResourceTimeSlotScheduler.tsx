@@ -570,7 +570,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 <div className="w-32 p-3 border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
                   <span className="font-medium text-sm">Time</span>
                 </div>
-                <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-750">
+                <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
                   <span className="text-sm font-medium">Available Slots</span>
                 </div>
               </div>
@@ -588,7 +588,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   </div>
 
                   {/* Selection grid row */}
-                  <div className="relative h-20">
+                  <div className="relative h-20 bg-gray-50 dark:bg-gray-900">
                     <div className="flex h-20 relative">
                       {/* Current time indicator */}
                       {currentTimePosition !== null && (
@@ -721,7 +721,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-750">
+        <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6 text-sm text-gray-700 dark:text-gray-300">
               <div className="flex items-center space-x-2">
