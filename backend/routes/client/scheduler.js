@@ -552,9 +552,46 @@ router.post('/suggest-available-slot', async (req, res) => {
     const endOfDay = new Date(selectedDate);
     endOfDay.setHours(22, 0, 0, 0);
 
-    // Try each 30-minute slot
-    while (currentSlot < endOfDay) {
-      const slotEnd = new Date(currentSlot.getTime() + (requestedDuration * 60 * 60 * 1000));
+    // Helper function to get rate tier for a time slot
+    const getRateTier = async (slotTime) => {
+      const dayOfWeek = slotTime.getDay();
+      const timeString = `${String(slotTime.getHours()).padStart(2, '0')}:${String(slotTime.getMinutes()).padStart(2, '0')}:00`;
+
+      const tierQuery = `
+        SELECT tier_name, tier_level, rate_multiplier
+        FROM service_hour_rate_tiers
+        WHERE is_active = true
+          AND day_of_week = $1
+          AND time_start <= $2
+          AND time_end > $2
+        ORDER BY tier_level ASC
+        LIMIT 1
+      `;
+
+      try {
+        const tierResult = await pool.query(tierQuery, [dayOfWeek, timeString]);
+        if (tierResult.rows.length > 0) {
+          return {
+            tierName: tierResult.rows[0].tier_name,
+            tierLevel: tierResult.rows[0].tier_level,
+            rateMultiplier: parseFloat(tierResult.rows[0].rate_multiplier)
+          };
+        }
+      } catch (err) {
+        console.error('Error fetching rate tier:', err);
+      }
+      return null;
+    };
+
+    // First pass: Try to find a Standard rate slot (tier_level = 1)
+    let trySlot = new Date(selectedDate);
+    trySlot.setHours(6, 0, 0, 0);
+
+    let standardSlot = null;
+    let fallbackSlot = null;
+
+    while (trySlot < endOfDay) {
+      const slotEnd = new Date(trySlot.getTime() + (requestedDuration * 60 * 60 * 1000));
 
       // Check if slot end exceeds business hours
       if (slotEnd > endOfDay) {
@@ -562,63 +599,67 @@ router.post('/suggest-available-slot', async (req, res) => {
       }
 
       // Check if slot is at least 1 hour in the future
-      if (currentSlot < minimumStartTime) {
-        currentSlot = new Date(currentSlot.getTime() + (30 * 60 * 1000)); // Move to next 30-min slot
+      if (trySlot < minimumStartTime) {
+        trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
         continue;
       }
 
       // Check if this slot conflicts with any blocked ranges
       let hasConflict = false;
       for (const blocked of blockedRanges) {
-        if (currentSlot < blocked.end && slotEnd > blocked.start) {
+        if (trySlot < blocked.end && slotEnd > blocked.start) {
           hasConflict = true;
           break;
         }
       }
 
       if (!hasConflict) {
-        // Found an available slot! Determine rate tier
-        const dayOfWeek = currentSlot.getDay();
-        const timeString = `${String(currentSlot.getHours()).padStart(2, '0')}:${String(currentSlot.getMinutes()).padStart(2, '0')}:00`;
+        const rateTier = await getRateTier(trySlot);
 
-        // Query rate tier for this time
-        const tierQuery = `
-          SELECT tier_name, rate_multiplier
-          FROM service_hour_rate_tiers
-          WHERE is_active = true
-            AND day_of_week = $1
-            AND time_start <= $2
-            AND time_end > $2
-          ORDER BY tier_level DESC
-          LIMIT 1
-        `;
-
-        let rateTier = null;
-        try {
-          const tierResult = await pool.query(tierQuery, [dayOfWeek, timeString]);
-          if (tierResult.rows.length > 0) {
-            rateTier = {
-              tierName: tierResult.rows[0].tier_name,
-              rateMultiplier: parseFloat(tierResult.rows[0].rate_multiplier)
-            };
-          }
-        } catch (err) {
-          console.error('Error fetching rate tier:', err);
-        }
-
-        return res.json({
-          success: true,
-          data: {
-            startTime: currentSlot.toISOString(),
+        // Prioritize Standard rate slots (tier_level = 1)
+        if (rateTier && rateTier.tierLevel === 1) {
+          standardSlot = {
+            startTime: trySlot.toISOString(),
             endTime: slotEnd.toISOString(),
             duration: requestedDuration,
-            rateTier
-          }
-        });
+            rateTier: {
+              tierName: rateTier.tierName,
+              rateMultiplier: rateTier.rateMultiplier
+            }
+          };
+          break; // Found a Standard slot, stop searching
+        }
+
+        // Keep first non-Standard slot as fallback
+        if (!fallbackSlot) {
+          fallbackSlot = {
+            startTime: trySlot.toISOString(),
+            endTime: slotEnd.toISOString(),
+            duration: requestedDuration,
+            rateTier: rateTier ? {
+              tierName: rateTier.tierName,
+              rateMultiplier: rateTier.rateMultiplier
+            } : null
+          };
+        }
       }
 
       // Move to next 30-minute slot
-      currentSlot = new Date(currentSlot.getTime() + (30 * 60 * 1000));
+      trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
+    }
+
+    // Return Standard slot if found, otherwise return fallback (Premium/Emergency)
+    if (standardSlot) {
+      return res.json({
+        success: true,
+        data: standardSlot
+      });
+    } else if (fallbackSlot) {
+      return res.json({
+        success: true,
+        data: fallbackSlot,
+        message: 'No Standard rate slots available. Suggesting next available Premium/Emergency slot.'
+      });
     }
 
     // No available slots found
