@@ -255,6 +255,13 @@ export class AuthService {
         console.warn('⚠️ No session token in response data!');
       }
 
+      // CRITICAL: Refresh CSRF token after authentication (non-MFA flow)
+      // The token generated before login used a different session identifier
+      // Now that we're authenticated, we need a new token with the session_token cookie as identifier
+      console.log('🔄 Refreshing CSRF token after successful login...');
+      await apiService.refreshCsrfToken();
+      console.log('✅ CSRF token refreshed with authenticated session');
+
       return authUser;
     } catch (error) {
       console.error('Error signing in:', error);
@@ -339,6 +346,13 @@ export class AuthService {
         this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
       }
 
+      // CRITICAL: Refresh CSRF token after authentication
+      // The token generated before login used a different session identifier
+      // Now that we're authenticated, we need a new token with the session_token cookie as identifier
+      console.log('🔄 Refreshing CSRF token after successful admin MFA verification...');
+      await apiService.refreshCsrfToken();
+      console.log('✅ CSRF token refreshed with authenticated session');
+
       return authUser;
     } catch (error) {
       console.error('Error verifying MFA code:', error);
@@ -413,6 +427,13 @@ export class AuthService {
       if (data.session && data.session.sessionToken) {
         this.setStorageItem('sessionToken', data.session.sessionToken, authUser.role);
       }
+
+      // CRITICAL: Refresh CSRF token after authentication
+      // The token generated before login used a different session identifier
+      // Now that we're authenticated, we need a new token with the session_token cookie as identifier
+      console.log('🔄 Refreshing CSRF token after successful client MFA verification...');
+      await apiService.refreshCsrfToken();
+      console.log('✅ CSRF token refreshed with authenticated session');
 
       return authUser;
     } catch (error) {
