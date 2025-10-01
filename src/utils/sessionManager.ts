@@ -125,6 +125,19 @@ class SessionManager {
   private debouncedServerSync() {
     const now = Date.now();
 
+    // Check if we're close to session expiration (less than 2 minutes left)
+    const timeUntilExpirySeconds = this.getTimeUntilExpiryInSeconds();
+    if (timeUntilExpirySeconds < 120) { // Less than 2 minutes
+      console.log('🔄 Close to session expiration - forcing immediate server sync');
+      this.firstDebouncedCall = 0;
+      if (this.debounceTimeoutId) {
+        clearTimeout(this.debounceTimeoutId);
+        this.debounceTimeoutId = null;
+      }
+      this.syncWithServer();
+      return;
+    }
+
     // Track the first call to implement max wait
     if (!this.firstDebouncedCall) {
       this.firstDebouncedCall = now;
@@ -396,9 +409,21 @@ class SessionManager {
     // Clear any existing heartbeat
     this.stopHeartbeat();
 
-    // Start periodic heartbeat
+    // Start periodic heartbeat with adaptive interval
     this.heartbeatIntervalId = setInterval(() => {
-      this.syncWithServer();
+      const timeLeft = this.getTimeUntilExpiryInSeconds();
+
+      // If less than 3 minutes left, sync immediately and more frequently
+      if (timeLeft < 180) {
+        this.syncWithServer();
+        // Restart heartbeat with shorter interval when approaching expiration
+        this.stopHeartbeat();
+        this.heartbeatIntervalId = setInterval(() => {
+          this.syncWithServer();
+        }, 30000); // 30 seconds when close to expiration
+      } else {
+        this.syncWithServer();
+      }
     }, this.SYNC_INTERVAL);
 
   }
