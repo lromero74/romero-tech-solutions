@@ -173,6 +173,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
 // CSRF Protection Configuration
+// Define cookie name once for consistency
+const CSRF_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-csrf' : 'csrf-token';
+
 const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
@@ -184,11 +187,11 @@ const csrfOptions = {
       return sessionToken;
     }
 
-    // For pre-authentication, use csrf-token cookie itself as the session identifier
+    // For pre-authentication, use CSRF cookie itself as the session identifier
     // This ensures the same session identifier is used for the entire pre-auth flow
-    if (req.cookies && req.cookies['csrf-token']) {
-      console.log(`🔐 CSRF session identifier: Using csrf-token cookie (pre-auth request)`);
-      return req.cookies['csrf-token'];
+    if (req.cookies && req.cookies[CSRF_COOKIE_NAME]) {
+      console.log(`🔐 CSRF session identifier: Using ${CSRF_COOKIE_NAME} cookie (pre-auth request)`);
+      return req.cookies[CSRF_COOKIE_NAME];
     }
 
     // Ultimate fallback for very first request (when no cookies exist yet)
@@ -197,7 +200,7 @@ const csrfOptions = {
     return identifier;
   },
   // Use __Host- prefix only in production (requires HTTPS)
-  cookieName: process.env.NODE_ENV === 'production' ? '__Host-csrf' : 'csrf-token',
+  cookieName: CSRF_COOKIE_NAME,
   cookieOptions: {
     httpOnly: true,
     sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // lax for development
@@ -208,9 +211,9 @@ const csrfOptions = {
   ignoredMethods: ['GET', 'HEAD', 'OPTIONS'],
   getTokenFromRequest: (req) => {
     const token = req.headers['x-csrf-token'];
-    const cookie = req.cookies['csrf-token'];
+    const cookie = req.cookies[CSRF_COOKIE_NAME];
     const sessionToken = req.cookies['sessionToken'];
-    console.log(`🔐 CSRF validation - Token header: ${token ? token.substring(0, 20) + '...' : 'MISSING'}, Cookie: ${cookie ? cookie.substring(0, 20) + '...' : 'MISSING'}, Session: ${sessionToken ? sessionToken.substring(0, 20) + '...' : 'MISSING'}`);
+    console.log(`🔐 CSRF validation - Token header: ${token ? token.substring(0, 20) + '...' : 'MISSING'}, Cookie (${CSRF_COOKIE_NAME}): ${cookie ? cookie.substring(0, 20) + '...' : 'MISSING'}, Session: ${sessionToken ? sessionToken.substring(0, 20) + '...' : 'MISSING'}`);
     return token;
   },
 };
