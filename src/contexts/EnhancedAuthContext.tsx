@@ -71,12 +71,16 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const requiresMfa = async (user: AuthUser | unknown): Promise<boolean> => {
     if (!user) return false;
 
+    // Clients are not subject to MFA (they have separate authentication flow)
+    if (user.role === 'client') {
+      return false;
+    }
+
     try {
       // Check if MFA is required based on system settings
       const mfaRequired = await systemSettingsService.getMfaRequired();
 
       // MFA applies to all employees when enabled in system settings
-      // Clients are not subject to MFA (they have separate authentication flow)
       if (mfaRequired && (user.role === 'admin' || user.role === 'technician' || user.role === 'sales')) {
         return true;
       }
@@ -254,21 +258,27 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
               sessionConfig = defaultConfig;
             }
           } else {
-            // Only load from database if no cache exists
-            try {
-              console.log('🔍 Loading session config from database...');
-              const dbConfig = await systemSettingsService.getSessionConfig();
-              if (dbConfig) {
-                sessionConfig = dbConfig;
-                // Cache in localStorage for next time
-                RoleBasedStorage.setItem('sessionConfig', JSON.stringify(dbConfig));
-                console.log('📥 Loaded and cached session config from database');
-              } else {
+            // Only load from database if no cache exists AND user is not a client
+            // Clients use default config - admin system settings don't apply to client sessions
+            if (currentUser.role === 'client') {
+              console.log('👤 Client user detected, using default session config');
+              sessionConfig = defaultConfig;
+            } else {
+              try {
+                console.log('🔍 Loading session config from database...');
+                const dbConfig = await systemSettingsService.getSessionConfig();
+                if (dbConfig) {
+                  sessionConfig = dbConfig;
+                  // Cache in localStorage for next time
+                  RoleBasedStorage.setItem('sessionConfig', JSON.stringify(dbConfig));
+                  console.log('📥 Loaded and cached session config from database');
+                } else {
+                  sessionConfig = defaultConfig;
+                }
+              } catch (error) {
+                console.warn('⚠️ Failed to load database config, using default:', error);
                 sessionConfig = defaultConfig;
               }
-            } catch (error) {
-              console.warn('⚠️ Failed to load database config, using default:', error);
-              sessionConfig = defaultConfig;
             }
           }
         }
