@@ -66,12 +66,43 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     }
   };
 
-  // Build tree when location data is available (only once)
-  useEffect(() => {
-    if (locations.length > 0) {
-      buildLocationTree(locations);
-    }
-  }, [locations]);
+  // Update tree with selections and propagate changes (preserves expansion state)
+  const updateTreeWithSelections = useCallback((tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
+    return tree.map(node => {
+      const nodeKey = `${node.location_type}:${node.id}`;
+      const hasChildren = node.children && node.children.length > 0;
+
+      const updatedNode = { ...node };
+      // Preserve the expanded state from the original node
+      updatedNode.expanded = node.expanded;
+
+      if (hasChildren) {
+        // Recursively update children
+        updatedNode.children = updateTreeWithSelections(node.children!, selectionSet);
+
+        // Calculate parent state based on children
+        const selectedChildren = updatedNode.children.filter(child => child.selected);
+        const indeterminateChildren = updatedNode.children.filter(child => child.indeterminate);
+
+        if (selectedChildren.length === updatedNode.children.length) {
+          updatedNode.selected = true;
+          updatedNode.indeterminate = false;
+        } else if (selectedChildren.length > 0 || indeterminateChildren.length > 0) {
+          updatedNode.selected = false;
+          updatedNode.indeterminate = true;
+        } else {
+          updatedNode.selected = false;
+          updatedNode.indeterminate = false;
+        }
+      } else {
+        // Leaf node - check if directly selected
+        updatedNode.selected = selectionSet.has(nodeKey);
+        updatedNode.indeterminate = false;
+      }
+
+      return updatedNode;
+    });
+  }, []);
 
   const buildLocationTree = useCallback((locationData: LocationItem[]) => {
     // Group by type and build hierarchy
@@ -130,45 +161,14 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
 
 
     setLocationTree(finalTree);
-  }, [initialSelections]);
+  }, [initialSelections, updateTreeWithSelections]);
 
-  // Update tree with selections and propagate changes (preserves expansion state)
-  const updateTreeWithSelections = useCallback((tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
-    return tree.map(node => {
-      const nodeKey = `${node.location_type}:${node.id}`;
-      const hasChildren = node.children && node.children.length > 0;
-
-      const updatedNode = { ...node };
-      // Preserve the expanded state from the original node
-      updatedNode.expanded = node.expanded;
-
-      if (hasChildren) {
-        // Recursively update children
-        updatedNode.children = updateTreeWithSelections(node.children!, selectionSet);
-
-        // Calculate parent state based on children
-        const selectedChildren = updatedNode.children.filter(child => child.selected);
-        const indeterminateChildren = updatedNode.children.filter(child => child.indeterminate);
-
-        if (selectedChildren.length === updatedNode.children.length) {
-          updatedNode.selected = true;
-          updatedNode.indeterminate = false;
-        } else if (selectedChildren.length > 0 || indeterminateChildren.length > 0) {
-          updatedNode.selected = false;
-          updatedNode.indeterminate = true;
-        } else {
-          updatedNode.selected = false;
-          updatedNode.indeterminate = false;
-        }
-      } else {
-        // Leaf node - check if directly selected
-        updatedNode.selected = selectionSet.has(nodeKey);
-        updatedNode.indeterminate = false;
-      }
-
-      return updatedNode;
-    });
-  }, []);
+  // Build tree when location data is available (only once)
+  useEffect(() => {
+    if (locations.length > 0) {
+      buildLocationTree(locations);
+    }
+  }, [locations, buildLocationTree]);
 
   // Get all descendant node keys
   const getAllDescendantKeys = (node: LocationNode): string[] => {
@@ -233,7 +233,7 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     if (locationTree.length > 0) { // Only update if tree is built
       setLocationTree(currentTree => updateTreeWithSelections(currentTree, selections));
     }
-  }, [selections]);
+  }, [selections, updateTreeWithSelections]);
 
 
   // Calculate expanded nodes count
