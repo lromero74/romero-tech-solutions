@@ -120,22 +120,40 @@ export const requireRole = (requiredRoles) => {
         });
       }
 
-      // Fetch user role from database
       const pool = (await import('../config/database.js')).default;
-      const userResult = await pool.query(
-        'SELECT role FROM users WHERE id = $1',
+
+      // First try to find user in employees table
+      const employeeResult = await pool.query(
+        `SELECT r.name as role
+         FROM employees e
+         JOIN employee_roles er ON e.id = er.employee_id
+         JOIN roles r ON er.role_id = r.id
+         WHERE e.id = $1 AND e.is_active = true`,
         [req.user.id]
       );
 
-      if (userResult.rows.length === 0) {
-        return res.status(403).json({
-          success: false,
-          message: 'User not found',
-          code: 'USER_NOT_FOUND'
-        });
-      }
+      let userRole;
 
-      const userRole = userResult.rows[0].role;
+      if (employeeResult.rows.length > 0) {
+        // Found in employees table
+        userRole = employeeResult.rows[0].role;
+      } else {
+        // Fall back to users table for clients
+        const userResult = await pool.query(
+          'SELECT role FROM users WHERE id = $1',
+          [req.user.id]
+        );
+
+        if (userResult.rows.length === 0) {
+          return res.status(403).json({
+            success: false,
+            message: 'User not found',
+            code: 'USER_NOT_FOUND'
+          });
+        }
+
+        userRole = userResult.rows[0].role;
+      }
 
       // Check if user has one of the required roles
       if (!requiredRoles.includes(userRole)) {
@@ -169,7 +187,7 @@ export const requireRole = (requiredRoles) => {
 /**
  * Admin role requirement middleware
  */
-export const requireAdmin = requireRole(['admin']);
+export const requireAdmin = requireRole(['admin', 'executive']);
 
 /**
  * Executive role requirement middleware

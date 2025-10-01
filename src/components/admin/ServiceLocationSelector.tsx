@@ -132,13 +132,15 @@ const ServiceLocationSelector: React.FC<ServiceLocationSelectorProps> = ({
     setLocationTree(finalTree);
   }, [initialSelections]);
 
-  // Update tree with selections and propagate changes
+  // Update tree with selections and propagate changes (preserves expansion state)
   const updateTreeWithSelections = useCallback((tree: LocationNode[], selectionSet: Set<string>): LocationNode[] => {
     return tree.map(node => {
       const nodeKey = `${node.location_type}:${node.id}`;
       const hasChildren = node.children && node.children.length > 0;
 
       const updatedNode = { ...node };
+      // Preserve the expanded state from the original node
+      updatedNode.expanded = node.expanded;
 
       if (hasChildren) {
         // Recursively update children
