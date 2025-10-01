@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Shield, ChevronDown, User, Lock, Globe, Bell, Moon, Sun, Smartphone, LogOut } from 'lucide-react';
+import { Shield, ChevronDown, User, Lock, Globe, Bell, Moon, Sun, Smartphone, LogOut, Menu, X } from 'lucide-react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { ThemeProvider, useTheme } from '../contexts/ThemeContext';
 import { AdminDataProvider, useAdminData } from '../contexts/AdminDataContext';
@@ -42,6 +42,10 @@ const AdminDashboardContent: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]); // Only depend on user, not sessionConfig or updateSessionConfig (stable context function)
 
+  // Mobile sidebar state
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const mobileSidebarRef = useRef<HTMLDivElement>(null);
+
   // User dropdown state
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -61,6 +65,26 @@ const AdminDashboardContent: React.FC = () => {
       };
     }
   }, [isUserMenuOpen]);
+
+  // Close mobile sidebar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileSidebarRef.current && !mobileSidebarRef.current.contains(event.target as Node)) {
+        // Check if click is on hamburger button (contains 'Menu' class or is a menu icon)
+        const target = event.target as HTMLElement;
+        if (!target.closest('[data-mobile-menu-button]')) {
+          setIsMobileSidebarOpen(false);
+        }
+      }
+    };
+
+    if (isMobileSidebarOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isMobileSidebarOpen]);
 
   // Handle account dropdown actions
   const handleAccountAction = async (action: string) => {
@@ -302,22 +326,40 @@ const AdminDashboardContent: React.FC = () => {
         <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
           <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex justify-between items-center h-16">
-              {/* Logo and Title */}
-              <div className="flex items-center">
-                <div className="flex-shrink-0 h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-white" />
-                </div>
-                <div className="ml-3">
-                  <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
-                    Romero Tech Solutions
-                  </h1>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Admin Dashboard</p>
+              {/* Mobile Menu Button & Logo */}
+              <div className="flex items-center space-x-3">
+                {/* Mobile hamburger menu */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
+                  className="lg:hidden p-2 rounded-md text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                  data-mobile-menu-button
+                  aria-label="Toggle menu"
+                >
+                  {isMobileSidebarOpen ? (
+                    <X className="h-6 w-6" />
+                  ) : (
+                    <Menu className="h-6 w-6" />
+                  )}
+                </button>
+
+                {/* Logo and Title */}
+                <div className="flex items-center">
+                  <div className="flex-shrink-0 h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                    <Shield className="h-5 w-5 text-white" />
+                  </div>
+                  <div className="ml-3 hidden sm:block">
+                    <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
+                      Romero Tech Solutions
+                    </h1>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Admin Dashboard</p>
+                  </div>
                 </div>
               </div>
 
-              {/* Session Countdown Timer - Only show after config is loaded */}
+              {/* Session Countdown Timer - Only show on desktop after config is loaded */}
               {sessionConfig && (
-                <div className="flex items-center space-x-4">
+                <div className="hidden lg:flex items-center space-x-4">
                   <SessionCountdownTimer
                     sessionTimeoutMs={sessionConfig.timeout * 60 * 1000}
                     warningThresholdMs={sessionConfig.warningTime * 60 * 1000}
@@ -334,9 +376,9 @@ const AdminDashboardContent: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                      className="flex items-center space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-3 py-2 transition-colors"
+                      className="flex items-center space-x-2 lg:space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-2 lg:px-3 py-2 transition-colors"
                     >
-                      <div className="text-right">
+                      <div className="text-right hidden md:block">
                         <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
                       </div>
@@ -346,7 +388,7 @@ const AdminDashboardContent: React.FC = () => {
                         </span>
                       </div>
                       <ChevronDown
-                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform ${
+                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform hidden sm:block ${
                           isUserMenuOpen ? 'rotate-180' : ''
                         }`}
                       />
@@ -355,6 +397,18 @@ const AdminDashboardContent: React.FC = () => {
                     {/* Dropdown Menu */}
                     {isUserMenuOpen && (
                       <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-2 z-50">
+                        {/* Mobile Session Timer - Only show on mobile if config is loaded */}
+                        {sessionConfig && (
+                          <div className="lg:hidden px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                            <SessionCountdownTimer
+                              sessionTimeoutMs={sessionConfig.timeout * 60 * 1000}
+                              warningThresholdMs={sessionConfig.warningTime * 60 * 1000}
+                              onSessionExpired={handleSessionExpired}
+                              onWarningReached={handleSessionWarning}
+                            />
+                          </div>
+                        )}
+
                         <button
                           onClick={() => handleAccountAction('profile')}
                           className="w-full px-4 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center space-x-3"
@@ -433,16 +487,41 @@ const AdminDashboardContent: React.FC = () => {
 
         {/* Main Container */}
         <div className="flex flex-1 overflow-hidden">
-          {/* Sidebar */}
-          <AdminSidebar
-            currentView={currentView}
-            setCurrentView={handleViewChange}
-            user={user}
-          />
+          {/* Desktop Sidebar - hidden on mobile */}
+          <div className="hidden lg:block">
+            <AdminSidebar
+              currentView={currentView}
+              setCurrentView={handleViewChange}
+              user={user}
+            />
+          </div>
+
+          {/* Mobile Sidebar - overlay on mobile */}
+          {isMobileSidebarOpen && (
+            <>
+              {/* Backdrop */}
+              <div className="fixed inset-0 bg-black bg-opacity-50 z-40 lg:hidden" />
+
+              {/* Sidebar */}
+              <div
+                ref={mobileSidebarRef}
+                className="fixed inset-y-0 left-0 z-50 lg:hidden"
+              >
+                <AdminSidebar
+                  currentView={currentView}
+                  setCurrentView={(view) => {
+                    handleViewChange(view);
+                    setIsMobileSidebarOpen(false);
+                  }}
+                  user={user}
+                />
+              </div>
+            </>
+          )}
 
           {/* Main Content */}
           <div className="flex-1 flex flex-col overflow-hidden">
-            <main className="flex-1 overflow-x-hidden overflow-y-auto pr-6 mt-2">
+            <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 sm:pr-6 mt-2">
             <AdminViewRouter
               currentView={currentView}
               onLocationCountClick={handleLocationCountClick}
