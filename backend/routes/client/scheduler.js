@@ -485,8 +485,10 @@ router.post('/suggest-available-slot', async (req, res) => {
       blockedRanges.push({ start: bufferStart, end: bufferEnd });
     }
 
-    // Generate time slots in 30-minute increments from 6 AM to 10 PM
-    const selectedDate = new Date(date);
+    // Parse date string as local date (not UTC)
+    const [year, month, day] = date.split('-').map(Number);
+    const selectedDate = new Date(year, month - 1, day); // month is 0-indexed
+
     const now = new Date();
     const minimumStartTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // 1 hour from now
 
