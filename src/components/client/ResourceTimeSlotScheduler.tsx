@@ -13,8 +13,19 @@ interface TimeSlot {
   isPast: boolean;
   isBlocked: boolean;
   blockReason?: string;
-  isPremium: boolean;
-  isStandard: boolean;
+  rateTier?: RateTier;
+}
+
+interface RateTier {
+  id: string;
+  tierName: string;
+  tierLevel: number;
+  dayOfWeek: number;
+  timeStart: string;
+  timeEnd: string;
+  rateMultiplier: number;
+  colorCode: string;
+  description: string;
 }
 
 interface ExistingBooking {
@@ -53,6 +64,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [dragStartTime, setDragStartTime] = useState<Date | null>(null);
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
+  const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
 
   const BUFFER_HOURS = 1;
 
@@ -73,24 +85,42 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   };
 
 
-  // Generate time slots for the day (30-minute intervals from 6 AM to 10 PM)
+  // Helper function to find rate tier for a given time
+  const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
+    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+
+    // Find matching tier for this day and time
+    const matchingTier = rateTiers.find(tier => {
+      if (tier.dayOfWeek !== dayOfWeek) return false;
+
+      // Compare time strings
+      return timeString >= tier.timeStart && timeString < tier.timeEnd;
+    });
+
+    // If no exact match, find the highest priority tier (Emergency > Premium > Standard)
+    if (!matchingTier && rateTiers.length > 0) {
+      const tiersForDay = rateTiers.filter(t => t.dayOfWeek === dayOfWeek);
+      return tiersForDay.sort((a, b) => b.tierLevel - a.tierLevel)[0];
+    }
+
+    return matchingTier;
+  };
+
+  // Generate time slots for the day (30-minute intervals, 24 hours)
   const timeSlots = useMemo(() => {
     const slots: TimeSlot[] = [];
     const currentTime = new Date();
     const minimumTime = new Date(currentTime.getTime() + (1 * 60 * 60 * 1000)); // 1 hour from now
+    const dayOfWeek = selectedDate.getDay(); // 0 = Sunday, 6 = Saturday
 
-    // Generate slots from 6 AM (6) to 10 PM (22)
-    for (let hour = 6; hour <= 22; hour++) {
+    // Generate slots for full 24 hours (0-23)
+    for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        // Don't create slot at 22:30 (beyond 10 PM)
-        if (hour === 22 && minute === 30) continue;
-
         const slotTime = new Date(selectedDate);
         slotTime.setHours(hour, minute, 0, 0);
 
         const isPast = slotTime < minimumTime;
-        const isPremium = hour < 8 || hour >= 17; // Before 8 AM or after 5 PM
-        const isStandard = hour >= 8 && hour < 17; // 8 AM to 5 PM
+        const rateTier = findRateTierForTime(hour, minute, dayOfWeek);
 
         slots.push({
           time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
@@ -99,27 +129,34 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           isAvailable: !isPast,
           isPast,
           isBlocked: false,
-          isPremium,
-          isStandard
+          rateTier
         });
       }
     }
 
     return slots;
-  }, [selectedDate]);
+  }, [selectedDate, rateTiers]);
 
-  // Load existing bookings
+  // Load rate tiers and existing bookings
   useEffect(() => {
-    const loadBookings = async () => {
+    const loadData = async () => {
       try {
         setLoading(true);
 
-        const result = await apiService.get<{ success: boolean; data: any[] }>(
+        // Load rate tiers
+        const tiersResult = await apiService.get<{ success: boolean; data: RateTier[] }>(
+          '/client/rate-tiers'
+        );
+        if (tiersResult.success) {
+          setRateTiers(tiersResult.data);
+        }
+
+        // Load bookings
+        const bookingsResult = await apiService.get<{ success: boolean; data: any[] }>(
           `/client/bookings?date=${selectedDate.toISOString().split('T')[0]}`
         );
-
-        if (result.success) {
-          const bookings = result.data.map((b: any) => ({
+        if (bookingsResult.success) {
+          const bookings = bookingsResult.data.map((b: any) => ({
             ...b,
             startTime: new Date(b.startTime),
             endTime: new Date(b.endTime)
@@ -127,13 +164,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           setExistingBookings(bookings);
         }
       } catch (error) {
-        console.error('Error loading bookings:', error);
+        console.error('Error loading scheduler data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    loadBookings();
+    loadData();
   }, [selectedDate]);
 
   // Auto-scroll to "Now" position when opening scheduler for today's date
@@ -610,32 +647,55 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                           slotTime >= selectedStartTime && slotTime < selectedEndTime;
 
                         let bgColor = '';
+                        let tierLabel = '';
+
                         if (slot.isPast) {
                           bgColor = 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed';
+                          tierLabel = 'Past time slot';
                         } else if (blockCheck.isBlocked) {
                           bgColor = 'bg-red-100 dark:bg-red-900/30 cursor-not-allowed';
+                          tierLabel = blockCheck.reason || 'Unavailable';
                         } else if (isInSelectedRange) {
                           bgColor = 'bg-blue-500 text-white';
-                        } else if (slot.isPremium) {
-                          bgColor = 'bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-200 dark:hover:bg-yellow-800/40 cursor-pointer';
-                        } else if (slot.isStandard) {
-                          bgColor = 'bg-green-100 dark:bg-green-900/30 hover:bg-green-200 dark:hover:bg-green-800/40 cursor-pointer';
+                          tierLabel = 'Selected';
+                        } else if (slot.rateTier) {
+                          // Use color from database
+                          const lightenedColor = slot.rateTier.colorCode + '1A'; // Add transparency
+                          const hoverColor = slot.rateTier.colorCode + '33';
+                          bgColor = `cursor-pointer`;
+                          tierLabel = `${slot.rateTier.tierName} hours (${slot.rateTier.rateMultiplier}x rate)`;
+                        } else {
+                          bgColor = 'bg-gray-100 dark:bg-gray-800 cursor-pointer';
+                          tierLabel = 'Available';
                         }
 
                         return (
                           <div
                             key={i}
                             className={`flex-shrink-0 w-16 h-20 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs transition-colors ${bgColor}`}
-                            onClick={() => handleSlotClick(slot)}
-                            title={
-                              slot.isPast
-                                ? 'Past time slot'
-                                : blockCheck.isBlocked
-                                  ? blockCheck.reason
-                                  : slot.isPremium
-                                    ? 'Premium hours'
-                                    : 'Standard hours'
+                            style={
+                              slot.rateTier && !slot.isPast && !blockCheck.isBlocked && !isInSelectedRange
+                                ? {
+                                    backgroundColor: isDarkMode ? slot.rateTier.colorCode + '30' : slot.rateTier.colorCode + '1A',
+                                  }
+                                : undefined
                             }
+                            onMouseEnter={(e) => {
+                              if (slot.rateTier && !slot.isPast && !blockCheck.isBlocked && !isInSelectedRange) {
+                                e.currentTarget.style.backgroundColor = isDarkMode
+                                  ? slot.rateTier.colorCode + '50'
+                                  : slot.rateTier.colorCode + '33';
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (slot.rateTier && !slot.isPast && !blockCheck.isBlocked && !isInSelectedRange) {
+                                e.currentTarget.style.backgroundColor = isDarkMode
+                                  ? slot.rateTier.colorCode + '30'
+                                  : slot.rateTier.colorCode + '1A';
+                              }
+                            }}
+                            onClick={() => handleSlotClick(slot)}
+                            title={tierLabel}
                           >
                             {isInSelectedRange && <span className="font-medium">✓</span>}
                           </div>
@@ -724,14 +784,20 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         <div className="p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-6 text-sm text-gray-700 dark:text-gray-300">
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-green-100 dark:bg-green-900/30 border border-gray-300 dark:border-gray-600"></div>
-                <span>Standard Hours (8am-5pm)</span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-yellow-100 dark:bg-yellow-900/30 border border-gray-300 dark:border-gray-600"></div>
-                <span>Premium Hours (6am-8am, 5pm-10pm)</span>
-              </div>
+              {/* Show unique rate tiers */}
+              {Array.from(new Set(rateTiers.map(t => t.tierName))).map(tierName => {
+                const tier = rateTiers.find(t => t.tierName === tierName);
+                if (!tier) return null;
+                return (
+                  <div key={tierName} className="flex items-center space-x-2">
+                    <div
+                      className="w-4 h-4 border border-gray-300 dark:border-gray-600"
+                      style={{ backgroundColor: isDarkMode ? tier.colorCode + '30' : tier.colorCode + '1A' }}
+                    ></div>
+                    <span>{tierName} ({tier.rateMultiplier}x)</span>
+                  </div>
+                );
+              })}
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-red-100 dark:bg-red-900/30 border border-gray-300 dark:border-gray-600"></div>
                 <span>Unavailable</span>

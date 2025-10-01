@@ -46,6 +46,58 @@ router.get('/scheduler-config', clientContextMiddleware, requireClientAccess(['b
 });
 
 /**
+ * GET /api/client/rate-tiers
+ * Get service hour rate tiers for time slot coloring
+ */
+router.get('/rate-tiers', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    const query = `
+      SELECT
+        id,
+        tier_name,
+        tier_level,
+        day_of_week,
+        time_start,
+        time_end,
+        rate_multiplier,
+        color_code,
+        description
+      FROM service_hour_rate_tiers
+      WHERE is_active = true
+      ORDER BY day_of_week, tier_level, time_start
+    `;
+
+    const result = await pool.query(query);
+
+    const rateTiers = result.rows.map(row => ({
+      id: row.id,
+      tierName: row.tier_name,
+      tierLevel: row.tier_level,
+      dayOfWeek: row.day_of_week,
+      timeStart: row.time_start,
+      timeEnd: row.time_end,
+      rateMultiplier: parseFloat(row.rate_multiplier),
+      colorCode: row.color_code,
+      description: row.description
+    }));
+
+    res.json({
+      success: true,
+      data: rateTiers
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching rate tiers:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch rate tiers'
+    });
+  }
+});
+
+/**
  * GET /api/client/resources
  * Get available resources (service locations) for scheduling
  */
@@ -525,14 +577,42 @@ router.post('/suggest-available-slot', async (req, res) => {
       }
 
       if (!hasConflict) {
-        // Found an available slot!
+        // Found an available slot! Determine rate tier
+        const dayOfWeek = currentSlot.getDay();
+        const timeString = `${String(currentSlot.getHours()).padStart(2, '0')}:${String(currentSlot.getMinutes()).padStart(2, '0')}:00`;
+
+        // Query rate tier for this time
+        const tierQuery = `
+          SELECT tier_name, rate_multiplier
+          FROM service_hour_rate_tiers
+          WHERE is_active = true
+            AND day_of_week = $1
+            AND time_start <= $2
+            AND time_end > $2
+          ORDER BY tier_level DESC
+          LIMIT 1
+        `;
+
+        let rateTier = null;
+        try {
+          const tierResult = await pool.query(tierQuery, [dayOfWeek, timeString]);
+          if (tierResult.rows.length > 0) {
+            rateTier = {
+              tierName: tierResult.rows[0].tier_name,
+              rateMultiplier: parseFloat(tierResult.rows[0].rate_multiplier)
+            };
+          }
+        } catch (err) {
+          console.error('Error fetching rate tier:', err);
+        }
+
         return res.json({
           success: true,
           data: {
             startTime: currentSlot.toISOString(),
             endTime: slotEnd.toISOString(),
             duration: requestedDuration,
-            isPremium: currentSlot.getHours() < 8 || currentSlot.getHours() >= 17
+            rateTier
           }
         });
       }
