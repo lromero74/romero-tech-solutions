@@ -1,10 +1,18 @@
 import pg from 'pg';
 import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import secretsManager from '../utils/secrets.js';
 
 dotenv.config();
 
 const { Pool } = pg;
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load RDS CA certificate bundle for SSL validation
+const rdsCaCert = fs.readFileSync(path.join(__dirname, '../certs/rds-ca-bundle.pem'));
 
 // Database configuration factory
 const createDbConfig = async () => {
@@ -22,7 +30,8 @@ const createDbConfig = async () => {
         user: credentials.user,
         password: credentials.password,
         ssl: process.env.DB_SSL === 'true' ? {
-          rejectUnauthorized: false // For RDS SSL connections
+          ca: rdsCaCert,
+          rejectUnauthorized: true // Validate RDS SSL certificate
         } : false,
         max: 25, // Maximum number of connections in the pool (increased from 20)
         min: 2, // Minimum number of connections to maintain
@@ -47,7 +56,8 @@ const createDbConfig = async () => {
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
     ssl: process.env.DB_SSL === 'true' ? {
-      rejectUnauthorized: false // For RDS SSL connections
+      ca: rdsCaCert,
+      rejectUnauthorized: true // Validate RDS SSL certificate
     } : false,
     max: 25, // Maximum number of connections in the pool (increased from 20)
     min: 2, // Minimum number of connections to maintain
