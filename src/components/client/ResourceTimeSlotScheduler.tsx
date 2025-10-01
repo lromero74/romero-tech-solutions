@@ -66,11 +66,45 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const currentSlotIndex = hours * 2 + Math.floor(minutes / 30);
     const scrollPosition = currentSlotIndex * 64; // 64px per slot
 
-    const container = document.getElementById('timeline-scroll');
-    if (container) {
-      container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+    // Scroll both containers together
+    const headerContainer = document.getElementById('timeline-scroll');
+    const contentContainer = document.getElementById('timeline-scroll-content');
+
+    if (headerContainer) {
+      headerContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+    }
+    if (contentContainer) {
+      contentContainer.scrollTo({ left: scrollPosition, behavior: 'smooth' });
     }
   };
+
+  // Synchronize scroll between header and content
+  useEffect(() => {
+    const headerContainer = document.getElementById('timeline-scroll');
+    const contentContainer = document.getElementById('timeline-scroll-content');
+
+    if (!headerContainer || !contentContainer) return;
+
+    const handleHeaderScroll = () => {
+      if (contentContainer.scrollLeft !== headerContainer.scrollLeft) {
+        contentContainer.scrollLeft = headerContainer.scrollLeft;
+      }
+    };
+
+    const handleContentScroll = () => {
+      if (headerContainer.scrollLeft !== contentContainer.scrollLeft) {
+        headerContainer.scrollLeft = contentContainer.scrollLeft;
+      }
+    };
+
+    headerContainer.addEventListener('scroll', handleHeaderScroll);
+    contentContainer.addEventListener('scroll', handleContentScroll);
+
+    return () => {
+      headerContainer.removeEventListener('scroll', handleHeaderScroll);
+      contentContainer.removeEventListener('scroll', handleContentScroll);
+    };
+  }, [loading]); // Re-attach when loading completes
 
   // Generate time slots for the day (30-minute intervals from 6 AM to 10 PM)
   const timeSlots = useMemo(() => {
