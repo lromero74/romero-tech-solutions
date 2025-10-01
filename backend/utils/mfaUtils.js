@@ -303,13 +303,51 @@ export async function storeClientMfaCode(userId, code, expiresAt, codeType = 'cl
 }
 
 /**
+ * Get MFA validation error translations from database
+ * @param {string} language - Language code ('en' or 'es')
+ * @returns {Promise<Object>} Translations object
+ */
+async function getMfaValidationTranslations(language = 'en') {
+  try {
+    const result = await query(`
+      SELECT tk.key_path, t.value
+      FROM t_translation_keys tk
+      JOIN t_translations t ON tk.id = t.key_id
+      JOIN t_languages l ON t.language_id = l.id
+      WHERE l.code = $1 AND tk.key_path LIKE 'mfa.validation.%'
+    `, [language]);
+
+    const translations = {};
+    result.rows.forEach(row => {
+      translations[row.key_path] = row.value;
+    });
+
+    // Return translations or fallback to English
+    return {
+      invalid: translations['mfa.validation.invalid'] || 'Invalid verification code. Please check the code and try again.',
+      used: translations['mfa.validation.used'] || 'This verification code has already been used. Please request a new code.',
+      expired: translations['mfa.validation.expired'] || 'Verification code has expired. Please request a new code.'
+    };
+  } catch (error) {
+    console.error('Failed to fetch MFA validation translations:', error);
+    // Fallback to hardcoded English
+    return {
+      invalid: 'Invalid verification code. Please check the code and try again.',
+      used: 'This verification code has already been used. Please request a new code.',
+      expired: 'Verification code has expired. Please request a new code.'
+    };
+  }
+}
+
+/**
  * Validate MFA code for client authentication
  * @param {string} userId - The client user ID
  * @param {string} code - The MFA code to validate
  * @param {string} codeType - Type of MFA code
- * @returns {Promise<boolean>} True if code is valid and not expired
+ * @param {string} language - User's language preference ('en' or 'es')
+ * @returns {Promise<Object>} Object with valid flag and message
  */
-export async function validateClientMfaCode(userId, code, codeType = 'client_mfa_setup') {
+export async function validateClientMfaCode(userId, code, codeType = 'client_mfa_setup', language = 'en') {
   try {
     const result = await query(`
       SELECT id, code, expires_at, used_at
@@ -319,23 +357,35 @@ export async function validateClientMfaCode(userId, code, codeType = 'client_mfa
       LIMIT 1
     `, [userId, codeType, code]);
 
+    // Get translated error messages
+    const messages = await getMfaValidationTranslations(language);
+
     if (result.rows.length === 0) {
-      return false; // Code not found
+      return {
+        valid: false,
+        message: messages.invalid
+      };
     }
 
     const storedCode = result.rows[0];
 
     // Check if code has already been used
     if (storedCode.used_at) {
-      return false; // Code already used
+      return {
+        valid: false,
+        message: messages.used
+      };
     }
 
     // Check if code has expired
     if (new Date() > new Date(storedCode.expires_at)) {
-      return false; // Code expired
+      return {
+        valid: false,
+        message: messages.expired
+      };
     }
 
-    return true; // Code is valid
+    return { valid: true }; // Code is valid
   } catch (error) {
     console.error('Error validating client MFA code:', error);
     throw new Error('Failed to validate MFA code');

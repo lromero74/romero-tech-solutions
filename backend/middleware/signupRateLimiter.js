@@ -76,9 +76,17 @@ function resetGlobalCounterIfNeeded() {
  */
 export const ipSignupLimiter = async (req, res, next) => {
   try {
+    const clientIp = req.ip || req.connection.remoteAddress;
+
+    // Skip rate limiting for localhost (development/testing)
+    const localhostIPs = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+    if (localhostIPs.includes(clientIp)) {
+      console.log(`🏠 Skipping rate limit for localhost IP: ${clientIp}`);
+      return next();
+    }
+
     const settings = await getRateLimitSettings();
     const today = new Date().toISOString().split('T')[0];
-    const clientIp = req.ip || req.connection.remoteAddress;
 
     // Check current IP's attempts today
     const result = await query(`

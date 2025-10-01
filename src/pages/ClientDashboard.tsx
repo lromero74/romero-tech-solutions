@@ -36,6 +36,7 @@ interface User {
   lastName: string;
   phone: string;
   role: string;
+  createdAt?: string;
   business: {
     id: string;
     name: string;
@@ -189,6 +190,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     lastName: profileData.lastName,
                     phone: profileData.phone,
                     role: authUser.role,
+                    createdAt: profileData.createdAt,
                     business: businessData.data.business,
                     accessibleLocations: businessData.data.accessibleLocations
                   },
@@ -503,7 +505,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                 {/* Welcome Section */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
                   <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
-                    {t('dashboard.welcome')}, {user.firstName}!
+                    {(() => {
+                      // Check if account was created within last 10 minutes (first-time user)
+                      const isNewUser = user.createdAt &&
+                        (new Date().getTime() - new Date(user.createdAt).getTime()) < 10 * 60 * 1000;
+
+                      return isNewUser
+                        ? `${t('dashboard.welcomeNew')}, ${user.firstName}!`
+                        : `${t('dashboard.welcome')}, ${user.firstName}!`;
+                    })()}
                   </h2>
                   <p className="text-gray-600 dark:text-gray-400">
                     {t('dashboard.description')}

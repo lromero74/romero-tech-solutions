@@ -3,6 +3,7 @@ import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import AlertModal from '../shared/AlertModal';
 import TrustedDeviceManagement from '../shared/TrustedDeviceManagement';
+import { apiService } from '../../services/apiService';
 import {
   User,
   Lock,
@@ -18,8 +19,6 @@ import {
   RefreshCw,
   Smartphone
 } from 'lucide-react';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 interface ContactInfo {
   firstName: string;
@@ -132,48 +131,25 @@ const ClientSettings: React.FC = () => {
     setLoading(true);
     try {
       const authUser = JSON.parse(localStorage.getItem('authUser') || '{}');
-      const sessionToken = localStorage.getItem('sessionToken');
 
       // Load contact info
-      const contactResponse = await fetch(`${API_BASE_URL}/client/profile`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      if (contactResponse.ok) {
-        const contactData = await contactResponse.json();
-        const info = {
-          firstName: contactData.data.firstName || '',
-          lastName: contactData.data.lastName || '',
-          email: contactData.data.email || authUser.email || '',
-          phone: contactData.data.phone || ''
-        };
-        setContactInfo(info);
-        setOriginalContactInfo(info);
-      }
+      const contactData = await apiService.get('/client/profile');
+      const info = {
+        firstName: contactData.data.firstName || '',
+        lastName: contactData.data.lastName || '',
+        email: contactData.data.email || authUser.email || '',
+        phone: contactData.data.phone || ''
+      };
+      setContactInfo(info);
+      setOriginalContactInfo(info);
 
       // Load MFA settings
-      const mfaResponse = await fetch(`${API_BASE_URL}/client/mfa/settings`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
+      const mfaData = await apiService.get('/client/mfa/settings');
+      setMfaSettings({
+        isEnabled: mfaData.data.isEnabled || false,
+        email: mfaData.data.email || contactInfo.email,
+        backupCodes: mfaData.data.backupCodes || []
       });
-
-      if (mfaResponse.ok) {
-        const mfaData = await mfaResponse.json();
-        setMfaSettings({
-          isEnabled: mfaData.data.isEnabled || false,
-          email: mfaData.data.email || contactInfo.email,
-          backupCodes: mfaData.data.backupCodes || []
-        });
-      }
     } catch (error) {
       console.error('Failed to load user data:', error);
       setMessage({ type: 'error', text: t('settings.errors.loadFailed') });
@@ -199,27 +175,12 @@ const ClientSettings: React.FC = () => {
   const handleContactInfoSave = async () => {
     setLoading(true);
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch(`${API_BASE_URL}/client/profile`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify(contactInfo)
-      });
-
-      if (response.ok) {
-        setOriginalContactInfo(contactInfo);
-        setMessage({ type: 'success', text: t('settings.profile.updateSuccess') });
-      } else {
-        const errorData = await response.json();
-        setMessage({ type: 'error', text: errorData.message || t('settings.profile.updateFailed') });
-      }
-    } catch (error) {
+      await apiService.put('/client/profile', contactInfo);
+      setOriginalContactInfo(contactInfo);
+      setMessage({ type: 'success', text: t('settings.profile.updateSuccess') });
+    } catch (error: any) {
       console.error('Failed to update contact info:', error);
-      setMessage({ type: 'error', text: t('settings.profile.updateFailed') });
+      setMessage({ type: 'error', text: error.message || t('settings.profile.updateFailed') });
     } finally {
       setLoading(false);
     }
@@ -238,30 +199,15 @@ const ClientSettings: React.FC = () => {
 
     setLoading(true);
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch(`${API_BASE_URL}/client/change-password`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          currentPassword: passwordData.currentPassword,
-          newPassword: passwordData.newPassword
-        })
+      await apiService.post('/client/change-password', {
+        currentPassword: passwordData.currentPassword,
+        newPassword: passwordData.newPassword
       });
-
-      if (response.ok) {
-        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-        setMessage({ type: 'success', text: t('settings.password.changeSuccess') });
-      } else {
-        const errorData = await response.json();
-        setMessage({ type: 'error', text: errorData.message || t('settings.password.changeFailed') });
-      }
-    } catch (error) {
+      setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+      setMessage({ type: 'success', text: t('settings.password.changeSuccess') });
+    } catch (error: any) {
       console.error('Failed to change password:', error);
-      setMessage({ type: 'error', text: t('settings.password.changeFailed') });
+      setMessage({ type: 'error', text: error.message || t('settings.password.changeFailed') });
     } finally {
       setLoading(false);
     }
@@ -272,26 +218,12 @@ const ClientSettings: React.FC = () => {
       // Disable MFA
       setLoading(true);
       try {
-        const sessionToken = localStorage.getItem('sessionToken');
-        const response = await fetch(`${API_BASE_URL}/client/mfa/disable`, {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${sessionToken}`,
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        });
-
-        if (response.ok) {
-          setMfaSettings(prev => ({ ...prev, isEnabled: false, backupCodes: [] }));
-          setMessage({ type: 'success', text: t('settings.security.mfaDisabled') });
-        } else {
-          const errorData = await response.json();
-          setMessage({ type: 'error', text: errorData.message || t('settings.security.mfaDisableFailed') });
-        }
-      } catch (error) {
+        await apiService.post('/client/mfa/disable');
+        setMfaSettings(prev => ({ ...prev, isEnabled: false, backupCodes: [] }));
+        setMessage({ type: 'success', text: t('settings.security.mfaDisabled') });
+      } catch (error: any) {
         console.error('Failed to disable MFA:', error);
-        setMessage({ type: 'error', text: t('settings.security.mfaDisableFailed') });
+        setMessage({ type: 'error', text: error.message || t('settings.security.mfaDisableFailed') });
       } finally {
         setLoading(false);
       }
@@ -305,29 +237,14 @@ const ClientSettings: React.FC = () => {
   const sendMfaCode = async () => {
     setLoading(true);
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch(`${API_BASE_URL}/client/mfa/send-code`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          email: contactInfo.email
-        })
+      await apiService.post('/client/mfa/send-code', {
+        email: contactInfo.email
       });
-
-      if (response.ok) {
-        setMessage({ type: 'info', text: t('settings.mfaSection.codeSent', { email: contactInfo.email }) });
-        setShowSpamFolderAlert(true);
-      } else {
-        const errorData = await response.json();
-        setMessage({ type: 'error', text: errorData.message || t('settings.security.sendCodeFailed') });
-      }
-    } catch (error) {
+      setMessage({ type: 'info', text: t('settings.mfaSection.codeSent', { email: contactInfo.email }) });
+      setShowSpamFolderAlert(true);
+    } catch (error: any) {
       console.error('Failed to send MFA code:', error);
-      setMessage({ type: 'error', text: t('settings.security.sendCodeFailed') });
+      setMessage({ type: 'error', text: error.message || t('settings.security.sendCodeFailed') });
     } finally {
       setLoading(false);
     }
@@ -336,38 +253,22 @@ const ClientSettings: React.FC = () => {
   const verifyMfaCode = async () => {
     setLoading(true);
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
-      const response = await fetch(`${API_BASE_URL}/client/mfa/verify-setup`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          code: mfaVerificationCode,
-          email: contactInfo.email
-        })
+      const data = await apiService.post('/client/mfa/verify-setup', {
+        code: mfaVerificationCode,
+        email: contactInfo.email
       });
-
-      if (response.ok) {
-        const data = await response.json();
-        setMfaSettings({
-          isEnabled: true,
-          email: contactInfo.email,
-          backupCodes: data.data.backupCodes || []
-        });
-        setShowMfaSetup(false);
-        setShowBackupCodes(true);
-        setMfaVerificationCode('');
-        setMessage({ type: 'success', text: t('settings.security.mfaEnabled') });
-      } else {
-        const errorData = await response.json();
-        setMessage({ type: 'error', text: errorData.message || t('settings.security.invalidCode') });
-      }
-    } catch (error) {
+      setMfaSettings({
+        isEnabled: true,
+        email: contactInfo.email,
+        backupCodes: data.data.backupCodes || []
+      });
+      setShowMfaSetup(false);
+      setShowBackupCodes(true);
+      setMfaVerificationCode('');
+      setMessage({ type: 'success', text: t('settings.security.mfaEnabled') });
+    } catch (error: any) {
       console.error('Failed to verify MFA code:', error);
-      setMessage({ type: 'error', text: t('settings.security.verifyFailed') });
+      setMessage({ type: 'error', text: error.message || t('settings.security.verifyFailed') });
     } finally {
       setLoading(false);
     }
@@ -425,7 +326,7 @@ const ClientSettings: React.FC = () => {
               { id: 'profile', label: t('settings.tabs.profile'), icon: User },
               { id: 'password', label: t('settings.tabs.password'), icon: Lock },
               { id: 'security', label: t('settings.tabs.security'), icon: Shield },
-              { id: 'devices', label: 'Trusted Devices', icon: Smartphone }
+              { id: 'devices', label: t('settings.tabs.trustedDevices'), icon: Smartphone }
             ].map(tab => (
               <button
                 key={tab.id}
@@ -673,7 +574,7 @@ const ClientSettings: React.FC = () => {
                 <button
                   onClick={handleMfaToggle}
                   disabled={loading}
-                  className={`px-4 py-2 rounded-md ${
+                  className={`px-4 py-2 rounded-md flex items-center ${
                     mfaSettings.isEnabled
                       ? 'bg-red-600 hover:bg-red-700 text-white'
                       : themeClasses.button
@@ -683,7 +584,7 @@ const ClientSettings: React.FC = () => {
                     <RefreshCw className="h-4 w-4 animate-spin" />
                   ) : (
                     <>
-                      <Shield className="h-4 w-4 mr-2 inline" />
+                      <Shield className="h-4 w-4 mr-2" />
                       {mfaSettings.isEnabled ? t('settings.security.disableMfa') : t('settings.security.enableMfa')}
                     </>
                   )}

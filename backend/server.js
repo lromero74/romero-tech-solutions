@@ -179,6 +179,9 @@ const CSRF_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-csrf' :
 const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
+    // Debug: Log all available cookies
+    console.log(`🍪 All cookies available:`, req.cookies ? Object.keys(req.cookies) : 'NO COOKIES');
+
     // Use session token if available (post-authentication)
     // Check both session_token (snake_case) and sessionToken (camelCase)
     const sessionToken = req.cookies?.session_token || req.cookies?.sessionToken;
@@ -237,8 +240,12 @@ const conditionalCsrfProtection = (req, res, next) => {
     '/verify-client-mfa',
     '/login',
     '/signin',
+    '/client-login',
     '/check-admin',
-    '/trusted-device-login'
+    '/trusted-device-login',
+    '/send-verification',
+    '/register-client',
+    '/client-password-requirements'
   ];
 
   // Check if this is a pre-auth endpoint
@@ -249,6 +256,19 @@ const conditionalCsrfProtection = (req, res, next) => {
 
   // Apply CSRF protection for all other endpoints
   console.log(`🔒 Applying CSRF protection for endpoint: ${req.path}`);
+  return doubleCsrfProtection(req, res, next);
+};
+
+// Create method-based CSRF protection that skips GET requests
+const methodBasedCsrfProtection = (req, res, next) => {
+  // Skip CSRF for GET requests (read-only operations)
+  if (req.method === 'GET') {
+    console.log(`🔓 Skipping CSRF protection for GET request: ${req.path}`);
+    return next();
+  }
+
+  // Apply CSRF protection for POST, PUT, DELETE, PATCH (state-changing operations)
+  console.log(`🔒 Applying CSRF protection for ${req.method} request: ${req.path}`);
   return doubleCsrfProtection(req, res, next);
 };
 
@@ -319,7 +339,7 @@ app.use('/api/client/files', generalLimiter, doubleCsrfProtection, clientFilesRo
 app.use('/api/client/service-requests', generalLimiter, doubleCsrfProtection, clientServiceRequestRoutes); // Client service request + CSRF
 app.use('/api/client', generalLimiter, doubleCsrfProtection, clientSchedulerRoutes); // Client scheduler + CSRF
 app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfileRoutes); // Client profile + CSRF
-app.use('/api/client/mfa', generalLimiter, doubleCsrfProtection, clientMfaRoutes); // Client MFA + CSRF
+app.use('/api/client/mfa', generalLimiter, methodBasedCsrfProtection, clientMfaRoutes); // Client MFA (CSRF skipped for GET)
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
 app.use('/api/service-request-workflow', generalLimiter, doubleCsrfProtection, serviceRequestWorkflowRoutes); // Service request workflow + CSRF

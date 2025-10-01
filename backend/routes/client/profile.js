@@ -20,7 +20,8 @@ router.get('/', authenticateClient, async (req, res) => {
         first_name as "firstName",
         last_name as "lastName",
         email,
-        phone
+        phone,
+        created_at as "createdAt"
       FROM users
       WHERE id = $1 AND role = 'client' AND soft_delete = false
     `, [clientId]);

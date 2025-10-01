@@ -1,6 +1,7 @@
 # Logs
 .plans
 .plan
+.understanding
 logs
 *.log
 npm-debug.log*

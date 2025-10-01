@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { validateEmailDomain } from '../utils/domainValidation';
+import { apiService } from '../services/apiService';
 
 interface SimplifiedClientRegistrationProps {
   onSuccess: (credentials?: { email: string; password: string }) => void;
@@ -309,10 +310,13 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
   useEffect(() => {
     const fetchPasswordRequirements = async () => {
       try {
-        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/client-password-requirements`);
-        const data = await response.json();
+        const data = await apiService.get<{
+          success: boolean;
+          requirements?: PasswordRequirements;
+          error?: string;
+        }>('/auth/client-password-requirements');
 
-        if (data.success) {
+        if (data.success && data.requirements) {
           setPasswordRequirements(data.requirements);
         } else {
           console.error('Failed to fetch password requirements:', data.error);
@@ -362,24 +366,24 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     }
 
     try {
-      // TODO: Replace with actual service area validation API call
-      // For now, simulate validation against supported areas
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/service-areas/validate-zip`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ zipCode })
-      });
-
-      const data = await response.json();
+      const data = await apiService.post<{
+        success: boolean;
+        data: {
+          isServiced: boolean;
+          city?: string;
+          state?: string;
+          zipCode?: string;
+        };
+      }>('/service-areas/validate-zip', { zipCode });
 
       if (data.success && data.data.isServiced) {
         // Auto-fill city and state
-        updateFormData('city', data.data.city);
-        updateFormData('state', data.data.state);
+        updateFormData('city', data.data.city || '');
+        updateFormData('state', data.data.state || '');
 
         setZipCodeValidation({
           valid: true,
-          message: t('registration.business.zipServiceAvailable').replace('{city}', data.data.city).replace('{state}', data.data.state),
+          message: t('registration.business.zipServiceAvailable').replace('{city}', data.data.city || '').replace('{state}', data.data.state || ''),
           city: data.data.city,
           state: data.data.state
         });
@@ -410,11 +414,6 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
       });
     } finally {
       setZipValidating(false);
-      // Remove focus from the ZIP code field after validation completes
-      const activeElement = document.activeElement as HTMLElement;
-      if (activeElement && activeElement.tagName === 'INPUT') {
-        activeElement.blur();
-      }
     }
   };
 
@@ -423,17 +422,16 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     setError('');
 
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/send-verification`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: formData.email,
-          businessName: formData.businessName,
-          language: language
-        })
+      const data = await apiService.post<{
+        success: boolean;
+        code?: string;
+        data?: any;
+        error?: string;
+      }>('/auth/send-verification', {
+        email: formData.email,
+        businessName: formData.businessName,
+        language: language
       });
-
-      const data = await response.json();
 
       if (data.success) {
         setVerificationCodeSent(true);
@@ -486,13 +484,10 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         country: 'United States'
       };
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/auth/register-client`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(registrationData)
-      });
-
-      const data = await response.json();
+      const data = await apiService.post<{
+        success: boolean;
+        error?: string;
+      }>('/auth/register-client', registrationData);
 
       if (data.success) {
         setCurrentStep('success');
@@ -717,7 +712,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
                   : 'bg-white/10 border-white/20 focus:ring-blue-400'
               }`}
               placeholder="Escondido"
-              tabIndex={zipValidated ? -1 : 5}
+              tabIndex={-1}
               disabled={zipValidated}
               required
             />
@@ -745,7 +740,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
                   : 'bg-white/10 border-white/20 focus:ring-blue-400'
               }`}
               placeholder="CA"
-              tabIndex={zipValidated ? -1 : 6}
+              tabIndex={-1}
               disabled={zipValidated}
               required
             />

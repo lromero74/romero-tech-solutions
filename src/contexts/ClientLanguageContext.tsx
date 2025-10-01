@@ -11,7 +11,7 @@ interface LanguageContextType {
   clearTranslationCache: () => void;
 }
 
-const ClientLanguageContext = createContext<LanguageContextType | undefined>(undefined);
+export const ClientLanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 interface ClientLanguageProviderProps {
   children: React.ReactNode;

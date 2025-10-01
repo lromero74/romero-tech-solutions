@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { trustedDeviceService } from '../../services/trustedDeviceService';
 import AlertModal from './AlertModal';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 
 interface TrustedDevice {
   id: string;
@@ -45,6 +46,7 @@ interface TrustedDeviceManagementProps {
 }
 
 const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDarkMode = false }) => {
+  const { t } = useClientLanguage();
   const [devices, setDevices] = useState<TrustedDevice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,10 +77,10 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
       if (response.success && response.data) {
         setDevices(response.data);
       } else {
-        setError(response.message || 'Failed to load trusted devices');
+        setError(response.message || t('trustedDevices.errorLoad'));
       }
     } catch (err) {
-      setError('Failed to load trusted devices');
+      setError(t('trustedDevices.errorLoad'));
       console.error('Error loading trusted devices:', err);
     } finally {
       setLoading(false);
@@ -93,10 +95,10 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
         await loadDevices(); // Reload devices
         setShowRevokeConfirm(null);
       } else {
-        setError(response.message || 'Failed to revoke device');
+        setError(response.message || t('trustedDevices.errorRevoke'));
       }
     } catch (err) {
-      setError('Failed to revoke device');
+      setError(t('trustedDevices.errorRevoke'));
       console.error('Error revoking device:', err);
     } finally {
       setRevoking(null);
@@ -128,9 +130,9 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
   };
 
   const getLocationString = (geolocation?: TrustedDevice['deviceInfo']['geolocation']) => {
-    if (!geolocation) return 'Location unknown';
+    if (!geolocation) return t('trustedDevices.locationUnknown');
     const parts = [geolocation.city, geolocation.region, geolocation.country].filter(Boolean);
-    return parts.length > 0 ? parts.join(', ') : 'Location unknown';
+    return parts.length > 0 ? parts.join(', ') : t('trustedDevices.locationUnknown');
   };
 
   const isExpiringSoon = (expiresAt: string) => {
@@ -143,7 +145,7 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
       <div className={`rounded-lg border p-6 ${themeClasses.container}`}>
         <div className="text-center py-8">
           <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-gray-400" />
-          <p className={themeClasses.textSecondary}>Loading trusted devices...</p>
+          <p className={themeClasses.textSecondary}>{t('trustedDevices.loading')}</p>
         </div>
       </div>
     );
@@ -155,14 +157,14 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
       <div className="flex items-center justify-between">
         <div className="flex items-center">
           <Shield className={`h-6 w-6 mr-2 ${themeClasses.text}`} />
-          <h2 className={`text-xl font-semibold ${themeClasses.text}`}>Trusted Devices</h2>
+          <h2 className={`text-xl font-semibold ${themeClasses.text}`}>{t('trustedDevices.title')}</h2>
         </div>
         <button
           onClick={loadDevices}
           className={`flex items-center px-3 py-2 rounded-md ${themeClasses.button}`}
         >
           <RefreshCw className="h-4 w-4 mr-2" />
-          Refresh
+          {t('trustedDevices.refresh')}
         </button>
       </div>
 
@@ -180,8 +182,7 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
       <div className={`p-4 rounded-md border ${themeClasses.card}`}>
         <p className={`text-sm ${themeClasses.textSecondary}`}>
           <Shield className="h-4 w-4 inline mr-1" />
-          Trusted devices allow you to skip MFA verification for routine actions. Devices are trusted for 30 days
-          and can be revoked at any time. Only register devices you personally own and use regularly.
+          {t('trustedDevices.description')}
         </p>
       </div>
 
@@ -189,9 +190,9 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
       {devices.length === 0 ? (
         <div className={`rounded-lg border p-8 text-center ${themeClasses.container}`}>
           <Shield className={`h-12 w-12 mx-auto mb-4 ${themeClasses.textMuted}`} />
-          <p className={`text-lg font-medium mb-2 ${themeClasses.text}`}>No Trusted Devices</p>
+          <p className={`text-lg font-medium mb-2 ${themeClasses.text}`}>{t('trustedDevices.noDevices')}</p>
           <p className={themeClasses.textSecondary}>
-            You haven't registered any trusted devices yet. You'll be prompted to register your device after logging in.
+            {t('trustedDevices.noDevicesDescription')}
           </p>
         </div>
       ) : (
@@ -220,14 +221,14 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
                         <div className="flex items-center">
                           <Monitor className="h-4 w-4 mr-1.5" />
                           <span>
-                            {device.deviceInfo.platform || 'Unknown platform'}
+                            {device.deviceInfo.platform || t('trustedDevices.unknownPlatform')}
                             {device.deviceInfo.screenResolution && ` • ${device.deviceInfo.screenResolution}`}
                           </span>
                         </div>
                       ) : (
                         <div className="flex items-center">
                           <Monitor className="h-4 w-4 mr-1.5" />
-                          <span>Device information not available</span>
+                          <span>{t('trustedDevices.deviceInfoNotAvailable')}</span>
                         </div>
                       )}
 
@@ -240,12 +241,12 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
 
                       <div className="flex items-center">
                         <Calendar className="h-4 w-4 mr-1.5" />
-                        <span>Registered: {formatDate(device.createdAt)}</span>
+                        <span>{t('trustedDevices.registered')}: {formatDate(device.createdAt)}</span>
                       </div>
 
                       <div className="flex items-center">
                         <Clock className="h-4 w-4 mr-1.5" />
-                        <span>Last used: {formatDate(device.lastUsed)}</span>
+                        <span>{t('trustedDevices.lastUsed')}: {formatDate(device.lastUsed)}</span>
                       </div>
                     </div>
 
@@ -254,19 +255,19 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
                       {isExpiringSoon(device.expiresAt) ? (
                         <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          Expires {formatDate(device.expiresAt)}
+                          {t('trustedDevices.expires')} {formatDate(device.expiresAt)}
                         </span>
                       ) : (
                         <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-800">
                           <CheckCircle className="h-3 w-3 mr-1" />
-                          Active until {formatDate(device.expiresAt)}
+                          {t('trustedDevices.activeUntil')} {formatDate(device.expiresAt)}
                         </span>
                       )}
 
                       {device.isSharedDevice && (
                         <span className="inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-orange-100 text-orange-800">
                           <AlertTriangle className="h-3 w-3 mr-1" />
-                          Shared Device
+                          {t('trustedDevices.sharedDevice')}
                         </span>
                       )}
                     </div>
@@ -284,7 +285,7 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
                   ) : (
                     <>
                       <Trash2 className="h-4 w-4 mr-2" />
-                      Revoke
+                      {t('trustedDevices.revoke')}
                     </>
                   )}
                 </button>
@@ -301,10 +302,10 @@ const TrustedDeviceManagement: React.FC<TrustedDeviceManagementProps> = ({ isDar
           onClose={() => setShowRevokeConfirm(null)}
           onConfirm={() => handleRevokeDevice(showRevokeConfirm.deviceId)}
           type="warning"
-          title="Revoke Trusted Device"
-          message={`Are you sure you want to revoke trust for "${showRevokeConfirm.deviceName}"? You will need to complete MFA verification the next time you log in from this device.`}
-          confirmText="Revoke Device"
-          cancelText="Cancel"
+          title={t('trustedDevices.revokeTitle')}
+          message={t('trustedDevices.revokeMessage').replace('{deviceName}', showRevokeConfirm.deviceName)}
+          confirmText={t('trustedDevices.revokeButton')}
+          cancelText={t('trustedDevices.cancel')}
         />
       )}
     </div>

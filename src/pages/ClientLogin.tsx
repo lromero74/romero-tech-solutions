@@ -244,16 +244,49 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     if (credentials) {
       // Auto-login after successful registration since account is already verified
       console.log('🚀 Auto-login after registration for:', credentials.email);
+
+      // Set credentials in state for display
       setEmail(credentials.email);
       setPassword(credentials.password);
 
-      // Automatically trigger login
+      // Automatically trigger login using credentials directly (not state)
+      setIsLoading(true);
+      setError('');
+
       try {
-        await handleLogin({ preventDefault: () => {} } as React.FormEvent);
-      } catch (error) {
+        // Check if device is trusted before attempting login
+        console.log('🔍 [Client] Checking if device is trusted for user:', credentials.email);
+        const deviceTrustResult = await trustedDeviceService.checkPreAuthDeviceTrust(credentials.email);
+
+        if (deviceTrustResult.success && deviceTrustResult.trusted) {
+          console.log('✅ [Client] Device is trusted, attempting direct login...');
+
+          // Device is trusted, try trusted device login
+          const trustedLoginResult = await trustedDeviceService.loginWithTrustedDevice(credentials.email, credentials.password);
+
+          if (trustedLoginResult.success && trustedLoginResult.user) {
+            console.log('✅ [Client] Trusted device authentication completed successfully');
+            const sessionToken = trustedLoginResult.session?.sessionToken;
+            await setUserFromTrustedDevice(trustedLoginResult.user, sessionToken);
+            onSuccess();
+            return;
+          }
+        }
+
+        // Normal login flow
+        await signIn(credentials.email, credentials.password);
+
+        // Show trusted device prompt after successful login (if device is not already trusted)
+        if (!deviceTrustResult.trusted) {
+          console.log('🔐 [Client] Showing trusted device prompt after successful login');
+          setShowTrustedDevicePrompt(true);
+        } else {
+          onSuccess();
+        }
+      } catch (error: unknown) {
         console.error('Auto-login after registration failed:', error);
-        setSuccess('Registration successful! Please log in with your credentials.');
-        setError('');
+        setError('Registration successful! Please log in with your credentials.');
+        setIsLoading(false);
       }
     }
   };

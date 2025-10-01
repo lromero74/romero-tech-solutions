@@ -153,12 +153,21 @@ router.post('/verify-setup', authenticateClient, async (req, res) => {
       });
     }
 
-    // Verify the code
-    const isValidCode = await validateClientMfaCode(clientId, code, 'client_mfa_setup');
-    if (!isValidCode) {
+    // Get client's language preference
+    const clientResult = await pool.query(`
+      SELECT COALESCE(language_preference, 'en') as language_preference
+      FROM users
+      WHERE id = $1
+    `, [clientId]);
+
+    const language = clientResult.rows[0]?.language_preference || 'en';
+
+    // Verify the code with language support
+    const validationResult = await validateClientMfaCode(clientId, code, 'client_mfa_setup', language);
+    if (!validationResult.valid) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification code'
+        message: validationResult.message || 'Invalid or expired verification code'
       });
     }
 
@@ -304,9 +313,9 @@ router.post('/verify-login', async (req, res) => {
 
     const pool = await getPool();
 
-    // Find client by email
+    // Find client by email and get language preference
     const clientResult = await pool.query(`
-      SELECT client_id, mfa_backup_codes
+      SELECT client_id, mfa_backup_codes, COALESCE(language_preference, 'en') as language_preference
       FROM users
       WHERE email = $1 AND soft_delete = false AND mfa_enabled = true
     `, [email]);
@@ -319,35 +328,44 @@ router.post('/verify-login', async (req, res) => {
     }
 
     const client = clientResult.rows[0];
+    const language = client.language_preference || 'en';
     let isValidCode = false;
     let usedBackupCode = false;
+    let errorMessage = 'Invalid or expired verification code';
 
-    // First try to verify as regular MFA code
-    isValidCode = await validateClientMfaCode(client.client_id, code, 'client_mfa_login');
+    // First try to verify as regular MFA code with language support
+    const validationResult = await validateClientMfaCode(client.client_id, code, 'client_mfa_login', language);
 
-    // If regular code failed, try backup codes
-    if (!isValidCode && client.mfa_backup_codes) {
-      const backupCodes = JSON.parse(client.mfa_backup_codes);
-      const codeIndex = backupCodes.indexOf(code);
+    if (validationResult.valid) {
+      isValidCode = true;
+    } else {
+      // Store the specific error message from validation
+      errorMessage = validationResult.message;
 
-      if (codeIndex !== -1) {
-        // Remove the used backup code
-        backupCodes.splice(codeIndex, 1);
-        await pool.query(`
-          UPDATE users
-          SET mfa_backup_codes = $1
-          WHERE id = $2 AND role = 'client'
-        `, [JSON.stringify(backupCodes), client.client_id]);
+      // If regular code failed, try backup codes
+      if (client.mfa_backup_codes) {
+        const backupCodes = JSON.parse(client.mfa_backup_codes);
+        const codeIndex = backupCodes.indexOf(code);
 
-        isValidCode = true;
-        usedBackupCode = true;
+        if (codeIndex !== -1) {
+          // Remove the used backup code
+          backupCodes.splice(codeIndex, 1);
+          await pool.query(`
+            UPDATE users
+            SET mfa_backup_codes = $1
+            WHERE id = $2 AND role = 'client'
+          `, [JSON.stringify(backupCodes), client.client_id]);
+
+          isValidCode = true;
+          usedBackupCode = true;
+        }
       }
     }
 
     if (!isValidCode) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid or expired verification code'
+        message: errorMessage
       });
     }
 
