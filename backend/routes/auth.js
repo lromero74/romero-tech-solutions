@@ -17,6 +17,14 @@ import {
   getPasswordExpirationInfo
 } from '../utils/passwordUtils.js';
 import {
+  validateEmail,
+  validatePassword,
+  validateMfaCode as validateMfaCodeFormat,
+  validateDeviceFingerprint,
+  sanitizeString,
+  validateLoginInputs
+} from '../utils/inputValidation.js';
+import {
   generateMfaCode,
   generateResetToken,
   storeMfaCode,
@@ -566,11 +574,26 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     const { email, password, deviceFingerprint } = req.body;
     console.log('🔍 ADMIN-LOGIN-MFA REQUEST:', { email, hasPassword: !!password, deviceFingerprint: deviceFingerprint ? `${deviceFingerprint.substring(0, 16)}...` : 'MISSING' });
 
-    if (!email || !password) {
+    // Validate and sanitize inputs
+    const validation = validateLoginInputs({ email, password });
+    if (!validation.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: Object.values(validation.errors)[0] || 'Invalid input'
       });
+    }
+
+    const sanitizedEmail = validation.sanitized.email;
+
+    // Validate device fingerprint if provided
+    if (deviceFingerprint) {
+      const fingerprintValidation = validateDeviceFingerprint(deviceFingerprint);
+      if (!fingerprintValidation.isValid) {
+        return res.status(400).json({
+          success: false,
+          message: fingerprintValidation.error || 'Invalid device fingerprint'
+        });
+      }
     }
 
     // Check employees table for any active employee with any role (unified employee login)
@@ -582,7 +605,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
       JOIN roles r ON er.role_id = r.id
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
       WHERE e.email = $1 AND r.is_active = true
-    `, [email]);
+    `, [sanitizedEmail]);
 
     if (userResult.rows.length === 0) {
       // Record failed attempt for non-existent employee account
@@ -771,15 +794,29 @@ router.post('/verify-admin-mfa', async (req, res) => {
   try {
     const { email, mfaCode } = req.body;
 
-    if (!email || !mfaCode) {
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Email and verification code are required'
+        message: emailValidation.error || 'Invalid email'
       });
     }
 
-    // Validate MFA code
-    const mfaData = await validateMfaCode(email, mfaCode);
+    // Validate MFA code format
+    const mfaValidation = validateMfaCodeFormat(mfaCode);
+    if (!mfaValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: mfaValidation.error || 'Invalid MFA code'
+      });
+    }
+
+    const sanitizedEmail = emailValidation.sanitized;
+    const sanitizedMfaCode = mfaValidation.sanitized;
+
+    // Validate MFA code against database
+    const mfaData = await validateMfaCode(sanitizedEmail, sanitizedMfaCode);
 
     if (!mfaData) {
       return res.status(400).json({
@@ -796,7 +833,7 @@ router.post('/verify-admin-mfa', async (req, res) => {
     }
 
     // Mark MFA code as used
-    await markMfaCodeAsUsed(email, mfaCode);
+    await markMfaCodeAsUsed(sanitizedEmail, sanitizedMfaCode);
 
     // Get user data with roles
     const userResult = await query(`
@@ -886,15 +923,30 @@ router.post('/verify-admin-mfa', async (req, res) => {
 router.post('/verify-client-mfa', async (req, res) => {
   try {
     const { email, mfaCode } = req.body;
-    if (!email || !mfaCode) {
+
+    // Validate email
+    const emailValidation = validateEmail(email);
+    if (!emailValidation.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Email and verification code are required'
+        message: emailValidation.error || 'Invalid email'
       });
     }
 
-    // Validate MFA code
-    const mfaData = await validateMfaCode(email, mfaCode);
+    // Validate MFA code format
+    const mfaValidation = validateMfaCodeFormat(mfaCode);
+    if (!mfaValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: mfaValidation.error || 'Invalid MFA code'
+      });
+    }
+
+    const sanitizedEmail = emailValidation.sanitized;
+    const sanitizedMfaCode = mfaValidation.sanitized;
+
+    // Validate MFA code against database
+    const mfaData = await validateMfaCode(sanitizedEmail, sanitizedMfaCode);
     if (!mfaData) {
       return res.status(400).json({
         success: false,
@@ -909,7 +961,7 @@ router.post('/verify-client-mfa', async (req, res) => {
     }
 
     // Mark MFA code as used
-    await markMfaCodeAsUsed(email, mfaCode);
+    await markMfaCodeAsUsed(sanitizedEmail, sanitizedMfaCode);
 
     // Get client user data
     const userResult = await query(`
@@ -1852,10 +1904,23 @@ router.post('/trusted-device-login', async (req, res) => {
   try {
     const { email, password, deviceFingerprint } = req.body;
 
-    if (!email || !password || !deviceFingerprint) {
+    // Validate and sanitize inputs
+    const validation = validateLoginInputs({ email, password });
+    if (!validation.isValid) {
       return res.status(400).json({
         success: false,
-        message: 'Email, password, and device fingerprint are required'
+        message: Object.values(validation.errors)[0] || 'Invalid input'
+      });
+    }
+
+    const sanitizedEmail = validation.sanitized.email;
+
+    // Validate device fingerprint
+    const fingerprintValidation = validateDeviceFingerprint(deviceFingerprint);
+    if (!fingerprintValidation.isValid) {
+      return res.status(400).json({
+        success: false,
+        message: fingerprintValidation.error || 'Invalid device fingerprint'
       });
     }
 
@@ -1877,7 +1942,7 @@ router.post('/trusted-device-login', async (req, res) => {
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
       WHERE e.email = $1
       GROUP BY e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified, es.status_name
-    `, [email]);
+    `, [sanitizedEmail]);
 
     // If not found in employees, check users table for clients
     if (userResult.rows.length === 0) {
@@ -1888,7 +1953,7 @@ router.post('/trusted-device-login', async (req, res) => {
         FROM users u
         LEFT JOIN businesses b ON u.business_id = b.id
         WHERE u.email = $1
-      `, [email]);
+      `, [sanitizedEmail]);
     }
 
     if (userResult.rows.length === 0) {
@@ -2023,13 +2088,18 @@ router.post('/client-login', async (req, res) => {
   try {
     const { email, password } = req.body;
 
-    if (!email || !password) {
+    // Validate and sanitize inputs
+    const validation = validateLoginInputs({ email, password });
+    if (!validation.isValid) {
       recordFailedAttempt(clientIP);
       return res.status(400).json({
         success: false,
-        message: 'Email and password are required'
+        message: Object.values(validation.errors)[0] || 'Invalid input'
       });
     }
+
+    // Use sanitized email for database queries
+    const sanitizedEmail = validation.sanitized.email;
 
     // Only check users table for clients
     const userResult = await query(`
@@ -2038,7 +2108,7 @@ router.post('/client-login', async (req, res) => {
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.email = $1
-    `, [email]);
+    `, [sanitizedEmail]);
 
     if (userResult.rows.length === 0) {
       recordFailedAttempt(clientIP);

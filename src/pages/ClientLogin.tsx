@@ -27,6 +27,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const [mfaPassword, setMfaPassword] = useState('');
   const [showTrustedDevicePrompt, setShowTrustedDevicePrompt] = useState(false);
   const [rememberDevice, setRememberDevice] = useState(false);
+  const [emailError, setEmailError] = useState('');
   const { signIn, sendAdminMfaCode, verifyAdminMfaCode, verifyClientMfaCode, setUserFromTrustedDevice } = useEnhancedAuth();
   const { t } = useLanguage();
   const backgroundImageUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&ixid=M3wxMJA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2344&q=80';
@@ -64,6 +65,32 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       }
       formClearTimerRef.current = null;
     }, 60000); // 1 minute
+  };
+
+  // Validate email format
+  const validateEmailFormat = (emailValue: string): boolean => {
+    if (!emailValue) {
+      setEmailError('');
+      return true; // Don't show error for empty field (required attribute handles this)
+    }
+
+    // Basic email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const isValid = emailRegex.test(emailValue);
+
+    // Check length (RFC 5321 max is 254 characters)
+    if (emailValue.length > 254) {
+      setEmailError('Email is too long (max 254 characters)');
+      return false;
+    }
+
+    if (!isValid) {
+      setEmailError('Please enter a valid email address');
+      return false;
+    }
+
+    setEmailError('');
+    return true;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -340,10 +367,16 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       id="mfaCode"
                       name="mfaCode"
                       type="text"
+                      inputMode="numeric"
+                      pattern="\d{6}"
                       autoComplete="one-time-code"
                       required
                       value={mfaCode}
-                      onChange={(e) => setMfaCode(e.target.value)}
+                      onChange={(e) => {
+                        // Only allow numeric input, max 6 digits
+                        const value = e.target.value.replace(/\D/g, '').slice(0, 6);
+                        setMfaCode(value);
+                      }}
                       className="appearance-none relative block w-full px-3 py-2 pl-10 border border-white/20 placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm text-center text-lg tracking-widest"
                       placeholder={t('login.mfa.codePlaceholder')}
                       maxLength={6}
@@ -437,12 +470,25 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
                       onChange={(e) => {
                         setEmail(e.target.value);
                         startFormClearTimer();
+                        // Clear error when user starts typing
+                        if (emailError) {
+                          setEmailError('');
+                        }
                       }}
-                      className="appearance-none relative block w-full px-3 py-2 pl-10 border border-white/20 placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+                      onBlur={(e) => validateEmailFormat(e.target.value)}
+                      className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
+                        emailError ? 'border-red-400 ring-1 ring-red-400' : 'border-white/20'
+                      } placeholder-gray-400 text-white bg-white/10 backdrop-blur-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
                       placeholder={t('login.emailPlaceholder')}
+                      maxLength={254}
                     />
                     <Mail className="h-5 w-5 text-gray-300 absolute left-3 top-2.5" />
                   </div>
+                  {emailError && (
+                    <p className="mt-1 text-xs text-red-300">
+                      {emailError}
+                    </p>
+                  )}
                 </div>
 
                 <div>
