@@ -329,11 +329,17 @@ app.get('/health/db', async (req, res) => {
 // Serve static files from uploads directory
 app.use('/uploads', express.static('uploads'));
 
-// Conditional rate limiter for auth routes: heartbeat gets special treatment
+// Conditional rate limiter for auth routes: different limits for different endpoint types
 const authRateLimiter = (req, res, next) => {
-  if (req.path === '/heartbeat') {
+  // Session management endpoints need more frequent access
+  if (req.path === '/heartbeat' || req.path === '/validate-session') {
     return heartbeatLimiter(req, res, next);
   }
+  // Public check endpoints (pre-authentication)
+  if (req.path === '/check-admin') {
+    return generalLimiter(req, res, next);
+  }
+  // Login and MFA endpoints use strict auth limiting
   return authLimiter(req, res, next);
 };
 
