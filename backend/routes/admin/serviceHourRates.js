@@ -1,6 +1,5 @@
 import express from 'express';
-import { authMiddleware } from '../../middleware/authMiddleware.js';
-import { requireRole } from '../../middleware/permissionMiddleware.js';
+import { authMiddleware, requireRole } from '../../middleware/authMiddleware.js';
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 
