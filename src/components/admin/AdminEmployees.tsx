@@ -669,7 +669,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
 
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Filtered Results</div>
           <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{getFilteredAndSortedEmployees().length}</div>
@@ -740,7 +740,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
       {/* Employee Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
         <h3 className={`text-lg font-medium ${themeClasses.text.primary} mb-4`}>Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-7 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-4">
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Search</label>
             <div className="relative">
@@ -861,8 +861,8 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
         </div>
       </div>
 
-      {/* Employees Table */}
-      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden relative border ${themeClasses.border.primary}`}>
+      {/* Employees Table - Desktop */}
+      <div className={`hidden lg:block ${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden relative border ${themeClasses.border.primary}`}>
         <div className="flex flex-col relative" style={{ height: 'calc(100vh - 370px)' }}> {/* Dynamic height container */}
 
           {/* Top fade gradient - positioned exactly at the bottom edge of sticky header */}
@@ -1311,6 +1311,266 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
             </table>
           </div>
         </div>
+      </div>
+
+      {/* Employees Cards - Mobile */}
+      <div className="lg:hidden space-y-4">
+        {getFilteredAndSortedEmployees().map((user) => (
+          <div
+            key={user.id}
+            className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg border ${themeClasses.border.primary} p-4 ${
+              user.softDelete ? 'opacity-60 bg-gray-50 dark:bg-gray-800' : ''
+            }`}
+          >
+            {/* Header with photo and name */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                <div className="h-12 w-12 flex-shrink-0">
+                  {user.photo && !imageLoadErrors.has(user.id) ? (
+                    <div
+                      className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-gray-300 cursor-pointer hover:border-blue-400 transition-colors"
+                      style={{ backgroundColor: user.photoBackgroundColor || 'transparent' }}
+                      onClick={() => handlePhotoClick(user.photo!, `${user.firstName} ${user.lastName}`, user)}
+                    >
+                      <img
+                        src={user.photo}
+                        alt={`${user.firstName} ${user.lastName}`}
+                        className="w-full h-full object-cover"
+                        style={{
+                          transform: `scale(${(user.photoScale || 100) / 100})`,
+                          transformOrigin: `${user.photoPositionX || 50}% ${user.photoPositionY || 50}%`
+                        }}
+                        onError={() => {
+                          setImageLoadErrors(prev => new Set([...prev, user.id]));
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className={`h-12 w-12 rounded-full ${themeClasses.bg.secondary} flex items-center justify-center`}>
+                      <span className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                        {user.firstName?.charAt(0).toUpperCase() || 'U'}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className={`text-base font-semibold ${themeClasses.text.primary} truncate`}>
+                    {formatEmployeeDisplayName(user)}
+                  </h3>
+                  {user.pronouns && (
+                    <p className={`text-xs ${themeClasses.text.muted}`}>({user.pronouns})</p>
+                  )}
+                  <p className={`text-sm ${themeClasses.text.secondary} truncate`}>{user.email}</p>
+                  {user.jobTitle && (
+                    <p className={`text-xs ${themeClasses.text.muted} truncate`}>{user.jobTitle}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Status badge */}
+              <span
+                className="inline-flex px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ml-2"
+                style={getEmployeeStatusStyles(user, theme === 'dark')}
+              >
+                {!user.isActive ? 'Inactive' :
+                 user.isOutSick ? 'Out Sick' :
+                 user.isOnVacation ? 'On Vacation' :
+                 user.isOnOtherLeave ? 'Other Leave' :
+                 'Active'}
+              </span>
+            </div>
+
+            {/* Employee details grid */}
+            <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+              <div>
+                <span className={`text-xs ${themeClasses.text.muted}`}>Emp#</span>
+                <p className={`font-mono ${themeClasses.text.primary}`}>
+                  {user.employeeNumber || '-'}
+                </p>
+              </div>
+              <div>
+                <span className={`text-xs ${themeClasses.text.muted}`}>Department</span>
+                <p className={`${themeClasses.text.primary} truncate`}>
+                  {user.department ? getDepartmentDisplayName(user.department) : '-'}
+                </p>
+              </div>
+              <div className="col-span-2">
+                <span className={`text-xs ${themeClasses.text.muted}`}>Role(s)</span>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {user.roles && user.roles.length > 0 ? (
+                    user.roles.map(role => {
+                      const styles = getRoleStyles(role, availableRoles, theme === 'dark');
+                      return (
+                        <span
+                          key={role}
+                          className="inline-flex px-2 py-1 text-xs font-semibold rounded-full"
+                          style={styles}
+                        >
+                          {role}
+                        </span>
+                      );
+                    })
+                  ) : (
+                    <span className={`text-xs ${themeClasses.text.muted}`}>No roles assigned</span>
+                  )}
+                </div>
+              </div>
+              {(user.hireDate || user.employeeStatus) && (
+                <div className="col-span-2">
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Employment</span>
+                  <div className="space-y-1 mt-1">
+                    {user.hireDate && (
+                      <div className="flex items-center">
+                        <Calendar className={`w-3 h-3 mr-1 ${themeClasses.text.muted}`} />
+                        <span className={`text-xs ${themeClasses.text.secondary}`}>
+                          Hired {user.hireDate}
+                        </span>
+                      </div>
+                    )}
+                    {user.employeeStatus && (
+                      <div className="flex items-center">
+                        <User className={`w-3 h-3 mr-1 ${themeClasses.text.muted}`} />
+                        <span
+                          className="text-xs font-medium"
+                          style={{ color: getEmployeeStatusTextColor(user.employeeStatus, theme === 'dark') }}
+                        >
+                          {user.employeeStatus.replace('_', ' ').toUpperCase()}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div>
+                <span className={`text-xs ${themeClasses.text.muted}`}>Online Status</span>
+                <div className="flex items-center mt-1">
+                  <div
+                    className="w-3 h-3 rounded-full"
+                    style={{
+                      backgroundColor: user.isLoggedIn ?
+                        applyDarkModeMuting('#10b981', theme === 'dark') :
+                        applyDarkModeMuting('#ef4444', theme === 'dark')
+                    }}
+                  ></div>
+                  <span className={`text-xs ${themeClasses.text.secondary} ml-1`}>
+                    {user.isLoggedIn ? (user.isRecentlyActive ? 'Online' : 'Logged In') : 'Offline'}
+                  </span>
+                  {user.isLoggedIn && user.activeSessions && user.activeSessions > 1 && (
+                    <span className={`text-xs ${themeClasses.text.accent} ml-1`}>
+                      ({user.activeSessions} sessions)
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Control buttons */}
+            {user.userType === 'employee' && user.isActive && (
+              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
+                <span className={`text-xs ${themeClasses.text.muted}`}>Quick Actions:</span>
+                <button
+                  onClick={() => toggleUserStatus(user.id, 'vacation')}
+                  className={`p-2 rounded ${user.isOnVacation ? '' : `${themeClasses.text.muted}`}`}
+                  style={{
+                    color: user.isOnVacation ?
+                      applyDarkModeMuting('#ea580c', theme === 'dark') :
+                      undefined
+                  }}
+                  title={user.isOnVacation ? 'Return from Vacation' : 'Set On Vacation'}
+                >
+                  <Plane className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => toggleUserStatus(user.id, 'sick')}
+                  className={`p-2 rounded ${user.isOutSick ? '' : `${themeClasses.text.muted}`}`}
+                  style={{
+                    color: user.isOutSick ?
+                      applyDarkModeMuting('#dc2626', theme === 'dark') :
+                      undefined
+                  }}
+                  title={user.isOutSick ? 'Return from Sick Leave' : 'Set Out Sick'}
+                >
+                  <Heart className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => toggleUserStatus(user.id, 'other')}
+                  className={`p-2 rounded ${user.isOnOtherLeave ? '' : `${themeClasses.text.muted}`}`}
+                  style={{
+                    color: user.isOnOtherLeave ?
+                      applyDarkModeMuting('#9333ea', theme === 'dark') :
+                      undefined
+                  }}
+                  title={user.isOnOtherLeave ? 'Return from Other Leave' : 'Set Other Leave'}
+                >
+                  <Calendar className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => toggleUserStatus(user.id, 'active')}
+                  className={`px-3 py-2 rounded-md text-sm font-medium ${
+                    user.isActive
+                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                  }`}
+                >
+                  {user.isActive ? (
+                    <><ToggleRight className="w-4 h-4 inline mr-1" /> Active</>
+                  ) : (
+                    <><ToggleLeft className="w-4 h-4 inline mr-1" /> Inactive</>
+                  )}
+                </button>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => handleViewEmployee(user)}
+                  className="p-2 text-green-600 hover:text-green-900 dark:text-green-400"
+                  title="View employee"
+                >
+                  <Eye className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handleEditEmployee(user)}
+                  className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
+                  title="Edit employee"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+                {currentUser && currentUser.id !== user.id && (
+                  <>
+                    <button
+                      onClick={() => {
+                        onSoftDeleteEmployee?.(user);
+                      }}
+                      disabled={loadingEmployeeOperations?.[user.id]}
+                      className={`p-2 ${user.softDelete ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'} disabled:opacity-50`}
+                      title={user.softDelete ? "Restore employee" : "Soft delete employee"}
+                    >
+                      {loadingEmployeeOperations?.[user.id] ? (
+                        <Loader className="w-5 h-5 animate-spin" />
+                      ) : user.softDelete ? (
+                        <Undo2 className="w-5 h-5" />
+                      ) : (
+                        <Trash2 className="w-5 h-5" />
+                      )}
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Empty state */}
+        {getFilteredAndSortedEmployees().length === 0 && (
+          <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
+            <p className={`${themeClasses.text.secondary}`}>No employees found matching your filters.</p>
+          </div>
+        )}
       </div>
     </div>
   );

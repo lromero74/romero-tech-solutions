@@ -199,7 +199,7 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Businesses</div>
           <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{filteredBusinesses.filter(b => !b.softDelete).length}</div>
@@ -236,7 +236,7 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
       {/* Business Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
         <h3 className={`text-lg font-medium ${themeClasses.text.primary} mb-4`}>Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Search</label>
             <input
@@ -289,8 +289,8 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
         </div>
       </div>
 
-      {/* Business Table */}
-      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden`}>
+      {/* Business Table - Desktop */}
+      <div className={`hidden lg:block ${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden`}>
         <div className="overflow-x-auto">
           <table className={`min-w-full divide-y divide-gray-200 dark:divide-gray-700 border-b border-gray-200 dark:border-gray-700`}>
             <thead className={themeClasses.bg.secondary}>
@@ -686,6 +686,263 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
           </div>
         </div>
       )}
+
+      {/* Business Cards - Mobile */}
+      <div className="lg:hidden space-y-4">
+        {filteredBusinesses.map((business, index) => {
+          const businessClients = getClientsForBusiness(business.businessName);
+          return (
+            <div
+              key={`${business.id}-${index}`}
+              className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg border ${themeClasses.border.primary} p-4`}
+            >
+              {/* Header with logo and name */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex items-center space-x-3 flex-1 min-w-0">
+                  <div className="h-12 w-12 flex-shrink-0">
+                    {business.logo ? (
+                      <div
+                        className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-gray-300 cursor-pointer hover:border-blue-400 transition-colors"
+                        style={{ backgroundColor: business.logoBackgroundColor || 'transparent' }}
+                        onClick={() => handleLogoClick(business)}
+                      >
+                        <img
+                          src={business.logo}
+                          alt={`${business.businessName || 'Business'} logo`}
+                          className="w-full h-full object-cover"
+                          style={{
+                            transform: `scale(${(business.logoScale || 100) / 100})`,
+                            transformOrigin: `${business.logoPositionX || 50}% ${business.logoPositionY || 50}%`
+                          }}
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.parentElement?.nextElementSibling as HTMLElement;
+                            if (fallback) fallback.style.display = 'flex';
+                          }}
+                        />
+                        <div className="hidden h-12 w-12 rounded-full bg-purple-500 items-center justify-center">
+                          <Building className="h-6 w-6 text-white" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
+                        <Building className="h-6 w-6 text-white" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <h3 className={`text-base font-semibold ${themeClasses.text.primary} truncate`}>
+                      {business.businessName}
+                    </h3>
+                  </div>
+                </div>
+
+                {/* Status badge */}
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ml-2 ${
+                  business.isActive
+                    ? 'bg-green-100 text-green-800 dark:bg-green-100/75 dark:text-green-800/75'
+                    : 'bg-red-100 text-red-800 dark:bg-red-100/75 dark:text-red-800/75'
+                }`}>
+                  {business.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+
+              {/* Business details grid */}
+              <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+                <div className="col-span-2">
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Domain Emails</span>
+                  <div className={`text-sm ${themeClasses.text.primary} mt-1`}>
+                    {business.domainEmails ? (
+                      business.domainEmails.split(', ').map((domain, index) => (
+                        <div key={index} className="leading-tight">
+                          {domain.trim()}
+                        </div>
+                      ))
+                    ) : (
+                      <span className={themeClasses.text.muted}>No domains</span>
+                    )}
+                  </div>
+                </div>
+                <div className="col-span-2">
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Address</span>
+                  <button
+                    onClick={() => openInMaps(business.address)}
+                    className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left w-full mt-1`}
+                    title="Click to open in maps"
+                  >
+                    <div className="flex items-start">
+                      <MapPin className={`w-4 h-4 ${themeClasses.text.muted} mr-1 mt-0.5 flex-shrink-0`} />
+                      <div>
+                        <div>{business.address?.street || 'No street'}</div>
+                        <div>{business.address?.city || 'N/A'}, {business.address?.state || 'N/A'} {business.address?.zipCode || 'No zip'}</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                <div>
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Locations</span>
+                  <div className="flex items-center mt-1">
+                    <Building className={`w-4 h-4 ${themeClasses.text.muted} mr-1`} />
+                    <button
+                      onClick={() => onLocationCountClick?.(business.businessName)}
+                      className={`text-blue-600 hover:text-blue-800 underline transition-colors`}
+                      title={`View service locations for ${business.businessName}`}
+                    >
+                      {business.locationCount || 0}
+                    </button>
+                  </div>
+                </div>
+                <div>
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Clients</span>
+                  <div className="flex items-center mt-1">
+                    <Users className={`w-4 h-4 ${themeClasses.text.muted} mr-1`} />
+                    <button
+                      onClick={() => {
+                        const domains = business.domainEmails ? business.domainEmails.split(', ') : [];
+                        onClientCountClick?.(business.id, business.businessName, businessClients.length, domains);
+                      }}
+                      className={`${businessClients.length === 0 ? 'text-green-600 hover:text-green-800' : 'text-blue-600 hover:text-blue-800'} underline transition-colors`}
+                      title={businessClients.length === 0 ? `Add client for ${business.businessName}` : `View clients for ${business.businessName}`}
+                    >
+                      {businessClients.length}
+                    </button>
+                  </div>
+                  {businessClients.length > 0 && (
+                    <div className={`text-xs ${themeClasses.text.secondary} mt-1`}>
+                      {businessClients.filter(c => c.isActive).length} active
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                {/* Edit Button */}
+                {canModify ? (
+                  <button
+                    onClick={() => onEditBusiness?.(business)}
+                    className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
+                    title="Edit business"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setPermissionDenied({
+                      show: true,
+                      action: 'Edit Business',
+                      requiredPermission: 'modify.businesses.enable',
+                      message: 'You do not have permission to modify businesses'
+                    })}
+                    disabled
+                    className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                    title="Sales, Admin, or Executive role required"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
+                )}
+
+                {/* Toggle Active/Inactive Button */}
+                {canModify ? (
+                  <button
+                    onClick={() => toggleBusinessStatus?.(business.id, business.isActive ? 'inactive' : 'active')}
+                    disabled={loadingBusinessOperations[business.id]}
+                    className={`p-2 ${business.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={loadingBusinessOperations[business.id] ? "Processing..." : business.isActive ? "Deactivate business" : "Activate business"}
+                  >
+                    {loadingBusinessOperations[business.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Power className="w-5 h-5" />
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    disabled
+                    className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                    title="Sales, Admin, or Executive role required"
+                  >
+                    <Power className="w-5 h-5" />
+                  </button>
+                )}
+
+                {/* Soft Delete/Restore Button */}
+                {canSoftDelete ? (
+                  <button
+                    onClick={() => onSoftDeleteBusiness?.(business)}
+                    disabled={loadingBusinessOperations[business.id]}
+                    className={`p-2 ${business.softDelete ? 'text-blue-600 dark:text-blue-400' : 'text-orange-600 dark:text-orange-400'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={loadingBusinessOperations[business.id] ? "Processing..." : business.softDelete ? "Restore business" : "Soft delete business"}
+                  >
+                    {loadingBusinessOperations[business.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : business.softDelete ? (
+                      <Undo2 className="w-5 h-5" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setPermissionDenied({
+                      show: true,
+                      action: business.softDelete ? 'Restore Business' : 'Soft Delete Business',
+                      requiredPermission: 'softDelete.businesses.enable',
+                      message: 'You do not have permission to soft delete businesses'
+                    })}
+                    disabled
+                    className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                    title="Admin or Executive role required"
+                  >
+                    {business.softDelete ? (
+                      <Undo2 className="w-5 h-5" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
+
+                {/* Hard Delete Button */}
+                {canHardDelete ? (
+                  <button
+                    onClick={() => onDeleteBusiness?.(business)}
+                    disabled={loadingBusinessOperations[business.id]}
+                    className={`p-2 text-red-600 hover:text-red-900 dark:text-red-400 ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={loadingBusinessOperations[business.id] ? "Processing..." : "Permanently delete business"}
+                  >
+                    {loadingBusinessOperations[business.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setPermissionDenied({
+                      show: true,
+                      action: 'Permanently Delete Business',
+                      requiredPermission: 'hardDelete.businesses.enable',
+                      message: 'You do not have permission to permanently delete businesses'
+                    })}
+                    disabled
+                    className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                    title="Executive role required"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Empty state */}
+        {filteredBusinesses.length === 0 && (
+          <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
+            <p className={`${themeClasses.text.secondary}`}>No businesses found matching your filters.</p>
+          </div>
+        )}
+      </div>
 
       {/* Permission Denied Modal */}
       <PermissionDeniedModal

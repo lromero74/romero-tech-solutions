@@ -8,7 +8,8 @@ import {
   Undo2,
   Loader2,
   ChevronUp,
-  ChevronDown
+  ChevronDown,
+  MapPin
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
@@ -257,7 +258,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Clients</div>
           <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{filteredClients.filter(c => !c.softDelete).length}</div>
@@ -292,7 +293,7 @@ const AdminClients: React.FC<AdminClientsProps> = ({
       {/* Client Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
         <h3 className={`text-lg font-medium ${themeClasses.text.primary} mb-4`}>Filters</h3>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Search</label>
             <input
@@ -345,8 +346,8 @@ const AdminClients: React.FC<AdminClientsProps> = ({
         </div>
       </div>
 
-      {/* Client Table */}
-      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden relative border ${themeClasses.border.primary}`}>
+      {/* Client Table - Desktop */}
+      <div className={`hidden lg:block ${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden relative border ${themeClasses.border.primary}`}>
         <div className="flex flex-col relative" style={{ height: 'calc(100vh - 370px)' }}> {/* Dynamic height container */}
 
           {/* Top fade gradient - positioned exactly at the bottom edge of sticky header */}
@@ -754,6 +755,251 @@ const AdminClients: React.FC<AdminClientsProps> = ({
           </div>
         </div>
       )}
+
+      {/* Client Cards - Mobile */}
+      <div className="lg:hidden space-y-4">
+        {filteredClients.map((client) => (
+          <div
+            key={client.id}
+            className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg border ${themeClasses.border.primary} p-4`}
+          >
+            {/* Header with photo and name */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center space-x-3 flex-1 min-w-0">
+                <div className="h-12 w-12 flex-shrink-0">
+                  {client.photo ? (
+                    <div
+                      className="relative h-12 w-12 rounded-full overflow-hidden border-2 border-gray-300 cursor-pointer hover:border-blue-400 transition-colors"
+                      style={{ backgroundColor: client.photoBackgroundColor || 'transparent' }}
+                      onClick={() => handlePhotoClick(client)}
+                    >
+                      <img
+                        src={client.photo}
+                        alt={`${client.name || 'Client'} profile`}
+                        className="w-full h-full object-cover"
+                        style={{
+                          transform: `scale(${(client.photoScale || 100) / 100})`,
+                          transformOrigin: `${client.photoPositionX || 50}% ${client.photoPositionY || 50}%`
+                        }}
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                          const fallback = e.currentTarget.parentElement?.nextElementSibling as HTMLElement;
+                          if (fallback) fallback.style.display = 'flex';
+                        }}
+                      />
+                    </div>
+                  ) : null}
+                  <div className={`h-12 w-12 rounded-full bg-blue-500 flex items-center justify-center ${client.photo ? 'hidden' : ''}`}>
+                    <span className="text-lg font-medium text-white">
+                      {client.name ? client.name.charAt(0).toUpperCase() : 'C'}
+                    </span>
+                  </div>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className={`text-base font-semibold ${themeClasses.text.primary} truncate`}>
+                    {client.name}
+                  </h3>
+                  <p className={`text-sm ${themeClasses.text.secondary} truncate`}>{client.email}</p>
+                </div>
+              </div>
+
+              {/* Status badge */}
+              <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full whitespace-nowrap ml-2 ${
+                client.isActive
+                  ? 'bg-green-100 text-green-800 dark:bg-green-100/75 dark:text-green-800/75'
+                  : 'bg-red-100 text-red-800 dark:bg-red-100/75 dark:text-red-800/75'
+              }`}>
+                {client.isActive ? 'Active' : 'Inactive'}
+              </span>
+            </div>
+
+            {/* Client details grid */}
+            <div className="grid grid-cols-2 gap-3 mb-3 text-sm">
+              <div className="col-span-2">
+                <span className={`text-xs ${themeClasses.text.muted}`}>Business</span>
+                {client.businessName ? (
+                  <button
+                    onClick={() => onBusinessNameClick?.(client.businessName)}
+                    className={`text-sm font-medium cursor-pointer transition-colors duration-200 text-left ${themeClasses.text.primary} hover:text-blue-600 mt-1 block`}
+                    title="Click to view this business"
+                  >
+                    {client.businessName}
+                  </button>
+                ) : (
+                  <div className={`text-sm font-medium ${themeClasses.text.primary} mt-1`}>N/A</div>
+                )}
+              </div>
+              {client.serviceLocationAddress && (
+                <div className="col-span-2">
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Service Location</span>
+                  <button
+                    onClick={() => openInMaps(client.serviceLocationAddress!)}
+                    className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left w-full mt-1`}
+                    title="Click to open in maps"
+                  >
+                    <div className="flex items-start">
+                      <MapPin className={`w-4 h-4 ${themeClasses.text.muted} mr-1 mt-0.5 flex-shrink-0`} />
+                      <div>
+                        <div>{client.serviceLocationAddress.street}</div>
+                        <div>{client.serviceLocationAddress.city}, {client.serviceLocationAddress.state} {client.serviceLocationAddress.zipCode}</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+              )}
+              <div>
+                <span className={`text-xs ${themeClasses.text.muted}`}>Email Status</span>
+                <p className={`text-sm ${themeClasses.text.primary} mt-1`}>
+                  {client.emailVerified ? 'Verified' : 'Unverified'}
+                </p>
+              </div>
+              <div>
+                <span className={`text-xs ${themeClasses.text.muted}`}>Created</span>
+                <p className={`text-sm ${themeClasses.text.primary} mt-1`}>
+                  {new Date(client.createdAt).toLocaleDateString()}
+                </p>
+              </div>
+            </div>
+
+            {/* Action buttons */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+              {/* Edit Button */}
+              {canModify ? (
+                <button
+                  onClick={() => onEditClient?.(client)}
+                  className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
+                  title="Edit client"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+              ) : (
+                <button
+                  onClick={() => setPermissionDenied({
+                    show: true,
+                    action: 'Edit Client',
+                    requiredPermission: 'modify.users.enable',
+                    message: 'You do not have permission to modify clients'
+                  })}
+                  disabled
+                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                  title="Technician, Admin, or Executive role required"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Toggle Active/Inactive Button */}
+              {canModify ? (
+                <button
+                  onClick={() => toggleUserStatus(client.id, client.isActive ? 'inactive' : 'active')}
+                  disabled={loadingClientOperations[client.id]}
+                  className={`p-2 ${client.isActive ? 'text-green-600 dark:text-green-400' : 'text-gray-400'} ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={client.isActive ? "Deactivate client" : "Activate client"}
+                >
+                  {loadingClientOperations[client.id] ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <Power className="w-5 h-5" />
+                  )}
+                </button>
+              ) : (
+                <button
+                  disabled
+                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                  title="Technician, Admin, or Executive role required"
+                >
+                  <Power className="w-5 h-5" />
+                </button>
+              )}
+
+              {/* Soft Delete/Restore Button */}
+              {canSoftDelete ? (
+                <button
+                  onClick={() => onSoftDeleteClient?.(client)}
+                  disabled={loadingClientOperations[client.id]}
+                  className={`p-2 ${
+                    client.softDelete && !canClientBeRestored(client)
+                      ? 'text-gray-400'
+                      : client.softDelete
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : 'text-orange-600 dark:text-orange-400'
+                  } ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={
+                    client.softDelete && !canClientBeRestored(client)
+                      ? "Cannot restore: parent business is soft deleted"
+                      : client.softDelete
+                        ? "Restore client"
+                        : "Soft delete client"
+                  }
+                >
+                  {loadingClientOperations[client.id] ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : client.softDelete ? (
+                    <Undo2 className="w-5 h-5" />
+                  ) : (
+                    <Trash2 className="w-5 h-5" />
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setPermissionDenied({
+                    show: true,
+                    action: client.softDelete ? 'Restore Client' : 'Soft Delete Client',
+                    requiredPermission: 'softDelete.users.enable',
+                    message: 'You do not have permission to soft delete clients'
+                  })}
+                  disabled
+                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                  title="Admin or Executive role required"
+                >
+                  {client.softDelete ? (
+                    <Undo2 className="w-5 h-5" />
+                  ) : (
+                    <Trash2 className="w-5 h-5" />
+                  )}
+                </button>
+              )}
+
+              {/* Hard Delete Button */}
+              {canHardDelete ? (
+                <button
+                  onClick={() => onDeleteClient?.(client)}
+                  disabled={loadingClientOperations[client.id]}
+                  className={`p-2 text-red-600 hover:text-red-900 dark:text-red-400 ${loadingClientOperations[client.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title="Permanently delete client"
+                >
+                  {loadingClientOperations[client.id] ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <X className="w-5 h-5" />
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => setPermissionDenied({
+                    show: true,
+                    action: 'Permanently Delete Client',
+                    requiredPermission: 'hardDelete.users.enable',
+                    message: 'You do not have permission to permanently delete clients'
+                  })}
+                  disabled
+                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
+                  title="Executive role required"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {/* Empty state */}
+        {filteredClients.length === 0 && (
+          <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
+            <p className={`${themeClasses.text.secondary}`}>No clients found matching your filters.</p>
+          </div>
+        )}
+      </div>
 
       {/* Permission Denied Modal */}
       <PermissionDeniedModal
