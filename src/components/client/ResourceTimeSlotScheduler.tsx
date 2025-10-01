@@ -68,6 +68,46 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
   const BUFFER_HOURS = 1;
 
+  // Check if selected time range includes emergency hours
+  const getSelectedTimeRateInfo = () => {
+    if (!selectedStartTime || !selectedEndTime) return null;
+
+    const dayOfWeek = selectedStartTime.getDay();
+    let hasEmergency = false;
+    let hasPremium = false;
+    let hasStandard = false;
+    let maxMultiplier = 1.0;
+
+    // Check each 30-minute slot in the selected range
+    let currentTime = new Date(selectedStartTime);
+    while (currentTime < selectedEndTime) {
+      const tier = findRateTierForTime(
+        currentTime.getHours(),
+        currentTime.getMinutes(),
+        dayOfWeek
+      );
+
+      if (tier) {
+        maxMultiplier = Math.max(maxMultiplier, tier.rateMultiplier);
+        if (tier.tierLevel === 3) hasEmergency = true;
+        else if (tier.tierLevel === 2) hasPremium = true;
+        else if (tier.tierLevel === 1) hasStandard = true;
+      }
+
+      currentTime = new Date(currentTime.getTime() + 30 * 60 * 1000); // Add 30 minutes
+    }
+
+    return {
+      hasEmergency,
+      hasPremium,
+      hasStandard,
+      maxMultiplier,
+      tierName: hasEmergency ? 'Emergency' : hasPremium ? 'Premium' : 'Standard'
+    };
+  };
+
+  const selectedRateInfo = getSelectedTimeRateInfo();
+
   // Scroll to current time
   const scrollToNow = () => {
     const now = new Date();
@@ -572,6 +612,37 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-600 rounded-lg flex items-start gap-2">
               <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <p className="text-sm text-red-700 dark:text-red-300">{errorMessage}</p>
+            </div>
+          )}
+
+          {/* Emergency Hours Warning */}
+          {selectedRateInfo?.hasEmergency && !errorMessage && (
+            <div className="mt-4 p-3 bg-orange-100 dark:bg-orange-900/20 border border-orange-400 dark:border-orange-600 rounded-lg flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-orange-800 dark:text-orange-300 font-medium">
+                  ⚠️ Emergency Hours Selected
+                </p>
+                <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
+                  Your selected time includes Emergency rate hours ({selectedRateInfo.maxMultiplier}x rate).
+                  This appointment will be charged at a higher rate than standard hours.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Premium Hours Info */}
+          {selectedRateInfo?.hasPremium && !selectedRateInfo?.hasEmergency && !errorMessage && (
+            <div className="mt-4 p-3 bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-300 dark:border-yellow-600 rounded-lg flex items-start gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
+                  Premium Hours Selected
+                </p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                  Your selected time includes Premium rate hours ({selectedRateInfo.maxMultiplier}x rate).
+                </p>
+              </div>
             </div>
           )}
 
