@@ -9,6 +9,7 @@ import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
 import LanguageSelector from '../components/client/LanguageSelector';
 import AddServiceLocationForm from '../components/client/AddServiceLocationForm';
+import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
 import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
 import {
   Building2,
@@ -28,7 +29,9 @@ import {
   Building,
   Plus,
   Menu,
-  X
+  X,
+  Edit,
+  Trash2
 } from 'lucide-react';
 
 interface User {
@@ -108,6 +111,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   // State for AddServiceLocationForm modal
   const [showAddLocationForm, setShowAddLocationForm] = useState(false);
 
+  // State for EditServiceLocationForm modal
+  const [showEditLocationForm, setShowEditLocationForm] = useState(false);
+  const [editingLocation, setEditingLocation] = useState<any>(null);
+
+  // State for delete confirmation modal
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [deletingLocation, setDeletingLocation] = useState<any>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // State for mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -124,6 +136,87 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
       }));
     }
     setShowAddLocationForm(false);
+  };
+
+  // Function to handle edit location
+  const handleEditLocation = (location: any) => {
+    setEditingLocation(location);
+    setShowEditLocationForm(true);
+  };
+
+  // Function to handle successful service location update
+  const handleServiceLocationUpdated = (updatedLocation: any) => {
+    if (clientData?.user?.accessibleLocations) {
+      setClientData(prev => ({
+        ...prev!,
+        user: {
+          ...prev!.user,
+          accessibleLocations: prev!.user.accessibleLocations.map(loc =>
+            loc.id === updatedLocation.id ? updatedLocation : loc
+          )
+        }
+      }));
+    }
+    setShowEditLocationForm(false);
+    setEditingLocation(null);
+  };
+
+  // Function to handle delete location
+  const handleDeleteLocation = (location: any) => {
+    setDeletingLocation(location);
+    setShowDeleteConfirmation(true);
+  };
+
+  // Function to confirm delete
+  const confirmDeleteLocation = async () => {
+    if (!deletingLocation) return;
+
+    setIsDeleting(true);
+    try {
+      const result = await fetch(
+        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile/delete-service-location/${deletingLocation.id}`,
+        {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken')}`,
+            'Content-Type': 'application/json'
+          },
+          credentials: 'include'
+        }
+      );
+
+      const data = await result.json();
+
+      if (data.success) {
+        // Remove location from state
+        if (clientData?.user?.accessibleLocations) {
+          setClientData(prev => ({
+            ...prev!,
+            user: {
+              ...prev!.user,
+              accessibleLocations: prev!.user.accessibleLocations.filter(
+                loc => loc.id !== deletingLocation.id
+              )
+            }
+          }));
+        }
+        setShowDeleteConfirmation(false);
+        setDeletingLocation(null);
+      } else {
+        alert(data.message || 'Failed to delete service location');
+      }
+    } catch (error) {
+      console.error('Error deleting service location:', error);
+      alert('An error occurred while deleting the service location');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  // Function to cancel delete
+  const cancelDeleteLocation = () => {
+    setShowDeleteConfirmation(false);
+    setDeletingLocation(null);
   };
 
   // Load client data from existing auth system or sessionStorage
@@ -804,15 +897,31 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                               </div>
                             )}
                           </div>
-                          <a
-                            href={getMapUrl(location.address)}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer"
-                            title="Open in Maps"
-                          >
-                            <MapPin className="h-5 w-5 flex-shrink-0 ml-2" />
-                          </a>
+                          <div className="flex flex-col gap-2 ml-2">
+                            <a
+                              href={getMapUrl(location.address)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 cursor-pointer"
+                              title={t('locations.openInMaps')}
+                            >
+                              <MapPin className="h-5 w-5 flex-shrink-0" />
+                            </a>
+                            <button
+                              onClick={() => handleEditLocation(location)}
+                              className="text-gray-600 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400"
+                              title={t('locations.editLocation')}
+                            >
+                              <Edit className="h-5 w-5 flex-shrink-0" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteLocation(location)}
+                              className="text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400"
+                              title={t('locations.deleteLocation')}
+                            >
+                              <Trash2 className="h-5 w-5 flex-shrink-0" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -868,6 +977,62 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
         onClose={() => setShowAddLocationForm(false)}
         onSuccess={handleServiceLocationAdded}
       />
+
+      {/* Edit Service Location Form Modal */}
+      {editingLocation && (
+        <EditServiceLocationForm
+          isOpen={showEditLocationForm}
+          onClose={() => {
+            setShowEditLocationForm(false);
+            setEditingLocation(null);
+          }}
+          onSuccess={handleServiceLocationUpdated}
+          location={editingLocation}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirmation && deletingLocation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center space-x-3 mb-4">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {t('locations.deleteConfirmation.title')}
+              </h3>
+            </div>
+            <p className="text-gray-600 dark:text-gray-400 mb-6">
+              {t('locations.deleteConfirmation.message', { locationName: deletingLocation.name })}
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelDeleteLocation}
+                disabled={isDeleting}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 disabled:opacity-50"
+              >
+                {t('general.cancel')}
+              </button>
+              <button
+                onClick={confirmDeleteLocation}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+              >
+                {isDeleting ? (
+                  <>
+                    <Clock className="h-4 w-4 mr-2 animate-spin" />
+                    {t('locations.deleteConfirmation.deleting')}
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {t('locations.deleteConfirmation.confirm')}
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -531,4 +531,231 @@ router.post('/add-service-location', authenticateClient, async (req, res) => {
   }
 });
 
+// Update an existing service location
+router.put('/update-service-location/:locationId', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const clientId = req.user.clientId;
+    const { locationId } = req.params;
+    const {
+      locationName,
+      streetAddress,
+      streetAddress2,
+      city,
+      state,
+      zipCode,
+      country = 'United States',
+      contactPerson,
+      contactPhone,
+      contactEmail
+    } = req.body;
+
+    // Validate required fields
+    if (!locationName || !streetAddress || !city || !state || !zipCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Location name, street address, city, state, and ZIP code are required'
+      });
+    }
+
+    // Validate ZIP code format (5 digits)
+    const zipRegex = /^\d{5}$/;
+    if (!zipRegex.test(zipCode)) {
+      return res.status(400).json({
+        success: false,
+        message: 'ZIP code must be exactly 5 digits'
+      });
+    }
+
+    // Validate email format if provided
+    if (contactEmail) {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(contactEmail)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid email format'
+        });
+      }
+    }
+
+    // Verify the location belongs to the client's business
+    const verifyResult = await pool.query(`
+      SELECT sl.id, sl.is_headquarters
+      FROM service_locations sl
+      JOIN users u ON sl.business_id = u.business_id
+      WHERE sl.id = $1 AND u.id = $2 AND u.role = 'client' AND sl.soft_delete = false AND u.soft_delete = false
+    `, [locationId, clientId]);
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service location not found or you do not have permission to update it'
+      });
+    }
+
+    // Check if headquarters - prevent editing headquarters location
+    if (verifyResult.rows[0].is_headquarters) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot edit headquarters location'
+      });
+    }
+
+    // Check if location name already exists for this business (excluding current location)
+    const existingLocation = await pool.query(`
+      SELECT sl.id
+      FROM service_locations sl
+      JOIN users u ON sl.business_id = u.business_id
+      WHERE u.id = $1 AND sl.location_name = $2 AND sl.id != $3 AND sl.soft_delete = false
+    `, [clientId, locationName, locationId]);
+
+    if (existingLocation.rows.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'A service location with this name already exists for your business'
+      });
+    }
+
+    // Update service location
+    const updateResult = await pool.query(`
+      UPDATE service_locations
+      SET
+        location_name = $1,
+        street_address_1 = $2,
+        street_address_2 = $3,
+        city = $4,
+        state = $5,
+        zip_code = $6,
+        country = $7,
+        contact_person = $8,
+        contact_phone = $9,
+        contact_email = $10,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $11
+      RETURNING
+        id,
+        location_name as name,
+        street_address_1 as street,
+        city,
+        state,
+        zip_code as "zipCode",
+        country,
+        contact_person as "contactPerson",
+        contact_phone as "contactPhone",
+        contact_email as "contactEmail"
+    `, [
+      locationName,
+      streetAddress,
+      streetAddress2 || null,
+      city,
+      state,
+      zipCode,
+      country,
+      contactPerson || null,
+      contactPhone || null,
+      contactEmail || null,
+      locationId
+    ]);
+
+    const updatedLocation = updateResult.rows[0];
+
+    res.json({
+      success: true,
+      message: 'Service location updated successfully',
+      data: {
+        id: updatedLocation.id,
+        name: updatedLocation.name,
+        address: {
+          street: updatedLocation.street,
+          city: updatedLocation.city,
+          state: updatedLocation.state,
+          zipCode: updatedLocation.zipCode,
+          country: updatedLocation.country
+        },
+        contact: {
+          person: updatedLocation.contactPerson,
+          phone: updatedLocation.contactPhone,
+          email: updatedLocation.contactEmail
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating service location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update service location'
+    });
+  }
+});
+
+// Delete a service location (soft delete)
+router.delete('/delete-service-location/:locationId', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const clientId = req.user.clientId;
+    const { locationId } = req.params;
+
+    // Verify the location belongs to the client's business and is not headquarters
+    const verifyResult = await pool.query(`
+      SELECT sl.id, sl.is_headquarters, sl.location_name
+      FROM service_locations sl
+      JOIN users u ON sl.business_id = u.business_id
+      WHERE sl.id = $1 AND u.id = $2 AND u.role = 'client' AND sl.soft_delete = false AND u.soft_delete = false
+    `, [locationId, clientId]);
+
+    if (verifyResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service location not found or you do not have permission to delete it'
+      });
+    }
+
+    // Prevent deletion of headquarters
+    if (verifyResult.rows[0].is_headquarters) {
+      return res.status(403).json({
+        success: false,
+        message: 'Cannot delete headquarters location'
+      });
+    }
+
+    // Check if there are any active service requests for this location
+    const activeRequestsResult = await pool.query(`
+      SELECT COUNT(*) as count
+      FROM service_requests
+      WHERE service_location_id = $1
+        AND status NOT IN ('completed', 'cancelled')
+        AND soft_delete = false
+    `, [locationId]);
+
+    if (parseInt(activeRequestsResult.rows[0].count) > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot delete location with active service requests. Please complete or cancel all requests first.'
+      });
+    }
+
+    // Soft delete the service location
+    await pool.query(`
+      UPDATE service_locations
+      SET
+        soft_delete = true,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $1
+    `, [locationId]);
+
+    res.json({
+      success: true,
+      message: 'Service location deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting service location:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete service location'
+    });
+  }
+});
+
 export default router;
