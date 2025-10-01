@@ -27,7 +27,7 @@ const ServiceAreaValidator: React.FC<ServiceAreaValidatorProps> = ({
 }) => {
   // Safely use client language context with fallback for admin context
   const clientLanguageContext = useContext(ClientLanguageContext);
-  const t = clientLanguageContext?.t || ((_key: string, _params?: Record<string, unknown>, defaultText?: string) => defaultText || '');
+  const t = clientLanguageContext?.t || ((_key: string, _variables?: { [key: string]: string }, fallback?: string) => fallback || '');
 
   const [validationState, setValidationState] = useState<{
     isValidating: boolean;
