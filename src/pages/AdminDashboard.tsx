@@ -16,7 +16,7 @@ type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services
 
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();
-  const { refreshAllData, serviceLocations } = useAdminData();
+  const { refreshAllData, serviceLocations, employees } = useAdminData();
   const { toggleTheme, isDark } = useTheme();
 
   // Load session config when dashboard mounts (same time as other dashboard data)
@@ -370,29 +370,53 @@ const AdminDashboardContent: React.FC = () => {
               )}
 
               {/* User Info & Dropdown */}
-              {user && (
-                <div className="flex items-center space-x-3">
-                  <div className="relative" ref={userMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                      className="flex items-center space-x-2 lg:space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-2 lg:px-3 py-2 transition-colors"
-                    >
-                      <div className="text-right hidden md:block">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
-                      </div>
-                      <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
-                        <span className="text-white font-medium text-sm">
-                          {user.name?.charAt(0).toUpperCase() || 'A'}
-                        </span>
-                      </div>
-                      <ChevronDown
-                        className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform hidden sm:block ${
-                          isUserMenuOpen ? 'rotate-180' : ''
-                        }`}
-                      />
-                    </button>
+              {user && (() => {
+                // Find the current employee in the employees array to get photo data
+                const currentEmployee = employees.find(emp => emp.email === user.email);
+
+                return (
+                  <div className="flex items-center space-x-3">
+                    <div className="relative" ref={userMenuRef}>
+                      <button
+                        type="button"
+                        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                        className="flex items-center space-x-2 lg:space-x-3 hover:bg-gray-50 dark:hover:bg-gray-700 rounded-lg px-2 lg:px-3 py-2 transition-colors"
+                      >
+                        <div className="text-right">
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
+                        </div>
+                        {currentEmployee?.photo ? (
+                          <div
+                            className="relative h-8 w-8 rounded-full overflow-hidden border-2 border-blue-600"
+                            style={{ backgroundColor: currentEmployee.photoBackgroundColor || 'transparent' }}
+                          >
+                            <img
+                              src={currentEmployee.photo}
+                              alt={user.name}
+                              className="w-full h-full object-cover"
+                              style={{
+                                transform: `scale(${(currentEmployee.photoScale || 100) / 100})`,
+                                transformOrigin: `${currentEmployee.photoPositionX || 50}% ${currentEmployee.photoPositionY || 50}%`
+                              }}
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="h-8 w-8 bg-blue-600 rounded-full flex items-center justify-center">
+                            <span className="text-white font-medium text-sm">
+                              {user.name?.charAt(0).toUpperCase() || 'A'}
+                            </span>
+                          </div>
+                        )}
+                        <ChevronDown
+                          className={`h-4 w-4 text-gray-500 dark:text-gray-400 transition-transform hidden sm:block ${
+                            isUserMenuOpen ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
 
                     {/* Dropdown Menu */}
                     {isUserMenuOpen && (
@@ -478,9 +502,10 @@ const AdminDashboardContent: React.FC = () => {
                         </button>
                       </div>
                     )}
+                    </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           </div>
         </header>
