@@ -40,6 +40,17 @@ interface ServiceRequest {
   priority: string;
   serviceType: string;
   location: string;
+  locationDetails?: {
+    name: string;
+    streetAddress1: string;
+    streetAddress2: string | null;
+    city: string;
+    state: string;
+    zipCode: string;
+    contactPhone: string | null;
+    contactPerson: string | null;
+    contactEmail: string | null;
+  } | null;
   fileCount: number;
   createdAt: string;
   updatedAt: string;
@@ -282,15 +293,52 @@ const ServiceRequests: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  // Format full address
+  const formatFullAddress = (locationDetails: ServiceRequest['locationDetails']) => {
+    if (!locationDetails) return '';
+
+    const parts = [];
+    if (locationDetails.streetAddress1) parts.push(locationDetails.streetAddress1);
+    if (locationDetails.streetAddress2) parts.push(locationDetails.streetAddress2);
+    if (locationDetails.city) parts.push(locationDetails.city);
+    if (locationDetails.state) parts.push(locationDetails.state);
+    if (locationDetails.zipCode) parts.push(locationDetails.zipCode);
+
+    return parts.join(', ');
+  };
+
+  // Generate Google Maps URL
+  const getMapUrl = (locationDetails: ServiceRequest['locationDetails']) => {
+    if (!locationDetails) return '';
+    const address = formatFullAddress(locationDetails);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  };
+
+  // Format phone number as (###) ###-####
+  const formatPhone = (phone: string | null | undefined) => {
+    if (!phone) return '';
+
+    // Remove all non-digit characters
+    const cleaned = phone.replace(/\D/g, '');
+
+    // Check if we have a valid 10-digit US phone number
+    if (cleaned.length === 10) {
+      return `(${cleaned.substring(0, 3)}) ${cleaned.substring(3, 6)}-${cleaned.substring(6)}`;
+    }
+
+    // If not 10 digits, return as-is
+    return phone;
+  };
+
   // Format date and time
   const formatDateTime = (date: string | null, time: string | null) => {
-    if (!date) return 'Not scheduled';
+    if (!date) return t('serviceRequests.notScheduled', 'Not scheduled');
 
     const dateObj = new Date(date);
     const formattedDate = dateObj.toLocaleDateString();
 
     if (time) {
-      return `${formattedDate} at ${time}`;
+      return `${formattedDate} ${t('serviceRequests.at', undefined, 'at')} ${time}`;
     }
     return formattedDate;
   };
@@ -328,7 +376,7 @@ const ServiceRequests: React.FC = () => {
         <div className="flex items-center justify-center py-12">
           <RefreshCw className={`h-8 w-8 ${themeClasses.textSecondary} animate-spin`} />
           <span className={`ml-3 ${themeClasses.textSecondary}`}>
-            {t('serviceRequests.loading', 'Loading service requests...')}
+            {t('serviceRequests.loading', undefined, 'Loading service requests...')}
           </span>
         </div>
       </div>
@@ -342,14 +390,14 @@ const ServiceRequests: React.FC = () => {
           <AlertCircle className="h-8 w-8 text-red-500" />
           <div className="ml-3">
             <p className="text-red-600 dark:text-red-400 font-medium">
-              {t('serviceRequests.error', 'Error loading service requests')}
+              {t('serviceRequests.error', undefined, 'Error loading service requests')}
             </p>
             <p className={`text-sm ${themeClasses.textSecondary} mt-1`}>{error}</p>
             <button
               onClick={() => fetchServiceRequests()}
               className="mt-3 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
             >
-              {t('general.retry', 'Try Again')}
+              {t('general.retry', undefined, 'Try Again')}
             </button>
           </div>
         </div>
@@ -363,7 +411,7 @@ const ServiceRequests: React.FC = () => {
       <div className="px-6 py-4 border-b dark:border-gray-700">
         <div className="flex items-center justify-between">
           <h2 className={`text-xl font-semibold ${themeClasses.text}`}>
-            {t('serviceRequests.title', 'Service Requests')}
+            {t('serviceRequests.title', undefined, 'Service Requests')}
           </h2>
           <button
             onClick={() => fetchServiceRequests(pagination.page)}
@@ -383,7 +431,7 @@ const ServiceRequests: React.FC = () => {
               <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 ${themeClasses.textSecondary}`} />
               <input
                 type="text"
-                placeholder={t('serviceRequests.searchPlaceholder', 'Search requests...')}
+                placeholder={t('serviceRequests.searchPlaceholder', undefined, 'Search requests...')}
                 value={filters.search}
                 onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                 className={`pl-10 pr-4 py-2 w-full border ${themeClasses.border} rounded-md ${themeClasses.background} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-blue-500`}
@@ -396,10 +444,10 @@ const ServiceRequests: React.FC = () => {
               onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
               className={`w-full px-3 py-2 border ${themeClasses.border} rounded-md ${themeClasses.background} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-blue-500`}
             >
-              <option value="all">{t('serviceRequests.allStatuses', 'All Statuses')}</option>
-              <option value="pending">{t('serviceRequests.pending', 'Pending')}</option>
-              <option value="progress">{t('serviceRequests.inProgress', 'In Progress')}</option>
-              <option value="completed">{t('serviceRequests.completed', 'Completed')}</option>
+              <option value="all">{t('serviceRequests.allStatuses', undefined, 'All Statuses')}</option>
+              <option value="pending">{t('serviceRequests.pending', undefined, 'Pending')}</option>
+              <option value="progress">{t('serviceRequests.inProgress', undefined, 'In Progress')}</option>
+              <option value="completed">{t('serviceRequests.completed', undefined, 'Completed')}</option>
             </select>
           </div>
         </div>
@@ -412,8 +460,8 @@ const ServiceRequests: React.FC = () => {
             <FileText className={`h-12 w-12 ${themeClasses.textSecondary} mx-auto mb-4`} />
             <p className={`${themeClasses.textSecondary}`}>
               {filters.search || filters.status !== 'all'
-                ? t('serviceRequests.noFilteredResults', 'No service requests match your filters')
-                : t('serviceRequests.noRequests', 'No service requests found')
+                ? t('serviceRequests.noFilteredResults', undefined, 'No service requests match your filters')
+                : t('serviceRequests.noRequests', undefined, 'No service requests found')
               }
             </p>
           </div>
@@ -427,11 +475,11 @@ const ServiceRequests: React.FC = () => {
                       {request.title}
                     </h3>
                     <span className={`px-2 py-1 text-xs font-medium rounded-full ${getStatusColor(request.status)}`}>
-                      {request.status}
+                      {t(`status.${request.status}`, undefined, request.status)}
                     </span>
                     {request.priority && (
                       <span className={`px-2 py-1 text-xs font-medium rounded-full ${getPriorityColor(request.priority)}`}>
-                        {request.priority}
+                        {t(`priority.${request.priority}`, undefined, request.priority)}
                       </span>
                     )}
                   </div>
@@ -457,13 +505,16 @@ const ServiceRequests: React.FC = () => {
                       </div>
                       <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
                         <div className="text-xs text-blue-700 dark:text-blue-300">
-                          {t('serviceRequests.baseRate', 'Base Rate')}: ${request.cost.baseRate}/hr
+                          {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
                         </div>
                         <div className="text-xs text-blue-700 dark:text-blue-300">
-                          {request.cost.durationHours}h Standard @ 1x = ${request.cost.total.toFixed(2)}
+                          {t('serviceRequests.standardRate', {
+                            hours: String(request.cost.durationHours),
+                            total: request.cost.total.toFixed(2)
+                          }, '{{hours}}h Standard @ 1x = ${{total}}')}
                         </div>
                         <div className="mt-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
-                          {t('serviceRequests.total', 'Total')}: ${request.cost.total.toFixed(2)}
+                          {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
                         </div>
                       </div>
                     </div>
@@ -489,7 +540,7 @@ const ServiceRequests: React.FC = () => {
                     {request.fileCount > 0 && (
                       <div className="flex items-center gap-1">
                         <FileText className="h-3 w-3" />
-                        <span>{request.fileCount} file{request.fileCount !== 1 ? 's' : ''}</span>
+                        <span>{request.fileCount} {request.fileCount === 1 ? t('serviceRequests.file', 'file') : t('serviceRequests.files', 'files')}</span>
                       </div>
                     )}
                   </div>
@@ -511,7 +562,11 @@ const ServiceRequests: React.FC = () => {
       {pagination.totalPages > 1 && (
         <div className="px-6 py-4 border-t dark:border-gray-700 flex items-center justify-between">
           <div className={`text-sm ${themeClasses.textSecondary}`}>
-            Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalCount)} of {pagination.totalCount} requests
+            {t('serviceRequests.showingRequests', {
+              start: String(((pagination.page - 1) * pagination.limit) + 1),
+              end: String(Math.min(pagination.page * pagination.limit, pagination.totalCount)),
+              total: String(pagination.totalCount)
+            }, 'Showing {{start}} to {{end}} of {{total}} requests')}
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -522,7 +577,10 @@ const ServiceRequests: React.FC = () => {
               <ChevronLeft className={`h-4 w-4 ${themeClasses.textSecondary}`} />
             </button>
             <span className={`px-3 py-2 text-sm ${themeClasses.text}`}>
-              {pagination.page} of {pagination.totalPages}
+              {t('serviceRequests.pageOfPages', {
+                page: String(pagination.page),
+                totalPages: String(pagination.totalPages)
+              }, '{{page}} of {{totalPages}}')}
             </span>
             <button
               onClick={() => fetchServiceRequests(pagination.page + 1)}
@@ -558,75 +616,152 @@ const ServiceRequests: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 text-sm font-medium rounded-full ${getStatusColor(selectedRequest.status)}`}>
-                      {selectedRequest.status}
+                      {t(`status.${selectedRequest.status}`, undefined, selectedRequest.status)}
                     </span>
                     {selectedRequest.priority && (
                       <span className={`px-3 py-1 text-sm font-medium rounded-full ${getPriorityColor(selectedRequest.priority)}`}>
-                        {selectedRequest.priority} Priority
+                        {t(`priority.${selectedRequest.priority}`, undefined, selectedRequest.priority)} {t('serviceRequests.priority', undefined, 'Priority')}
                       </span>
                     )}
                   </div>
 
-                  {/* Cost Summary in Modal */}
-                  {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
-                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Selected Date & Time</h4>
-                      <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        {new Date(selectedRequest.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                      </div>
-                      <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
-                        {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
-                      </div>
-                      <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
-                        <div className="text-sm text-blue-700 dark:text-blue-300">
-                          Base Rate: ${selectedRequest.cost.baseRate}/hr
-                        </div>
-                        <div className="text-sm text-blue-700 dark:text-blue-300">
-                          {selectedRequest.cost.durationHours}h Standard @ 1x = ${selectedRequest.cost.total.toFixed(2)}
-                        </div>
-                        <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
-                          Total*: ${selectedRequest.cost.total.toFixed(2)}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                  {/* Request Metadata */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm pb-4 border-b border-gray-200 dark:border-gray-700">
                     <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Request #:</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.requestNumber', undefined, 'Request #')}:</span>
                       <p className="text-gray-900 dark:text-white">{selectedRequest.requestNumber}</p>
                     </div>
-                    {selectedRequest.location && (
-                      <div>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">Location:</span>
-                        <p className="text-gray-900 dark:text-white">{selectedRequest.location}</p>
-                      </div>
-                    )}
                     {selectedRequest.serviceType && (
                       <div>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">Service Type:</span>
+                        <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.serviceType', undefined, 'Service Type')}:</span>
                         <p className="text-gray-900 dark:text-white">{selectedRequest.serviceType}</p>
                       </div>
                     )}
-                    {selectedRequest.scheduledDate && (
-                      <div>
-                        <span className="font-medium text-gray-700 dark:text-gray-300">Scheduled Date:</span>
-                        <p className="text-gray-900 dark:text-white">
-                          {formatDateTime(selectedRequest.scheduledDate, selectedRequest.scheduledTimeStart)}
-                        </p>
-                      </div>
-                    )}
                     <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Created:</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.created', undefined, 'Created')}:</span>
                       <p className="text-gray-900 dark:text-white">
                         {new Date(selectedRequest.createdAt).toLocaleString()}
                       </p>
                     </div>
                   </div>
 
+                  {/* Cost Summary & Location Side-by-Side on larger screens */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
+                    {/* Cost Summary in Modal */}
+                    {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
+                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                        <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
+                        <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                          {new Date(selectedRequest.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                        </div>
+                        <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
+                          {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                        </div>
+                        <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
+                          <div className="text-sm text-blue-700 dark:text-blue-300">
+                            {t('serviceRequests.baseRatePerHour', { rate: String(selectedRequest.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
+                          </div>
+                          <div className="text-sm text-blue-700 dark:text-blue-300">
+                            {t('serviceRequests.standardRate', {
+                              hours: String(selectedRequest.cost.durationHours),
+                              total: selectedRequest.cost.total.toFixed(2)
+                            }, '{{hours}}h Standard @ 1x = ${{total}}')}
+                          </div>
+                          <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
+                            {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Location & Contact Information */}
+                    {selectedRequest.locationDetails && (
+                      <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('serviceRequests.locationContact', undefined, 'Location & Contact')}</h4>
+
+                        <div className="space-y-3">
+                          {/* Address */}
+                          <div>
+                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.address', undefined, 'Address')}</span>
+                            <a
+                              href={getMapUrl(selectedRequest.locationDetails)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-start gap-2 mt-1 text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                              <div className="text-sm">
+                                <div>{selectedRequest.locationDetails.streetAddress1}</div>
+                                {selectedRequest.locationDetails.streetAddress2 && (
+                                  <div>{selectedRequest.locationDetails.streetAddress2}</div>
+                                )}
+                                <div>
+                                  {selectedRequest.locationDetails.city}, {selectedRequest.locationDetails.state} {selectedRequest.locationDetails.zipCode}
+                                </div>
+                              </div>
+                            </a>
+                          </div>
+
+                          {/* Contact Person */}
+                          {selectedRequest.locationDetails.contactPerson && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.contactPerson', undefined, 'Contact Person')}</span>
+                              <div className="flex items-center gap-2 mt-1 text-sm text-gray-900 dark:text-white">
+                                <User className="h-4 w-4 text-gray-400" />
+                                {selectedRequest.locationDetails.contactPerson}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Phone Number */}
+                          {selectedRequest.locationDetails.contactPhone && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.phone', undefined, 'Phone')}</span>
+                              <a
+                                href={`tel:${selectedRequest.locationDetails.contactPhone}`}
+                                className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                <Phone className="h-4 w-4" />
+                                {formatPhone(selectedRequest.locationDetails.contactPhone)}
+                              </a>
+                            </div>
+                          )}
+
+                          {/* Email */}
+                          {selectedRequest.locationDetails.contactEmail && (
+                            <div>
+                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.email', undefined, 'Email')}</span>
+                              <a
+                                href={`mailto:${selectedRequest.locationDetails.contactEmail}`}
+                                className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                <Mail className="h-4 w-4" />
+                                {selectedRequest.locationDetails.contactEmail}
+                              </a>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Additional Details */}
+                  {(selectedRequest.scheduledDate) && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+                      {selectedRequest.scheduledDate && (
+                        <div>
+                          <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.scheduledDate', undefined, 'Scheduled Date')}:</span>
+                          <p className="text-gray-900 dark:text-white">
+                            {formatDateTime(selectedRequest.scheduledDate, selectedRequest.scheduledTimeStart)}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {selectedRequest.description && (
                     <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Description:</span>
+                      <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.description', undefined, 'Description')}:</span>
                       <p className="text-gray-900 dark:text-white mt-1 whitespace-pre-wrap">
                         {selectedRequest.description}
                       </p>
@@ -637,12 +772,12 @@ const ServiceRequests: React.FC = () => {
                   {selectedRequest.fileCount > 0 && (
                     <div>
                       <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Attachments ({selectedRequest.fileCount})
+                        {t('serviceRequests.attachments', undefined, 'Attachments')} ({selectedRequest.fileCount})
                       </h4>
                       {loadingFiles ? (
                         <div className="flex items-center gap-2 text-gray-500">
                           <RefreshCw className="h-4 w-4 animate-spin" />
-                          <span>Loading files...</span>
+                          <span>{t('serviceRequests.loadingFiles', undefined, 'Loading files...')}</span>
                         </div>
                       ) : requestFiles.length > 0 ? (
                         <div className="space-y-2">
@@ -672,7 +807,7 @@ const ServiceRequests: React.FC = () => {
                           ))}
                         </div>
                       ) : (
-                        <p className="text-gray-500 dark:text-gray-400 text-sm">No files available</p>
+                        <p className="text-gray-500 dark:text-gray-400 text-sm">{t('serviceRequests.noFilesAvailable', undefined, 'No files available')}</p>
                       )}
                     </div>
                   )}
@@ -684,7 +819,7 @@ const ServiceRequests: React.FC = () => {
                   onClick={() => setSelectedRequest(null)}
                   className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
                 >
-                  Close
+                  {t('general.close', undefined, 'Close')}
                 </button>
               </div>
             </div>

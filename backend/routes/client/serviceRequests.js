@@ -354,6 +354,14 @@ router.get('/', async (req, res) => {
         pl.name as priority_name,
         st.name as service_name,
         sl.location_name,
+        sl.street_address_1,
+        sl.street_address_2,
+        sl.city,
+        sl.state,
+        sl.zip_code,
+        sl.contact_phone as location_contact_phone,
+        sl.contact_person as location_contact_person,
+        sl.contact_email as location_contact_email,
         COUNT(cf.id) as file_count,
         COUNT(*) OVER() as total_count
       FROM service_requests sr
@@ -365,7 +373,9 @@ router.get('/', async (req, res) => {
       LEFT JOIN t_client_files cf ON sr.id = cf.service_request_id AND cf.soft_delete = false
       WHERE sr.business_id = $1 AND sr.client_id = $2 AND sr.soft_delete = false
       GROUP BY sr.id, srs.name, srs.description, ul.name,
-               pl.name, st.name, sl.location_name
+               pl.name, st.name, sl.location_name, sl.street_address_1,
+               sl.street_address_2, sl.city, sl.state, sl.zip_code,
+               sl.contact_phone, sl.contact_person, sl.contact_email
       ORDER BY sr.created_at DESC
       LIMIT $3 OFFSET $4
     `;
@@ -432,6 +442,11 @@ router.get('/', async (req, res) => {
             baseHourlyRate
           );
 
+          // Check if we have any location data (address or contact info)
+          const hasLocationData = row.street_address_1 || row.city || row.state ||
+                                 row.location_contact_phone || row.location_contact_person ||
+                                 row.location_contact_email;
+
           return {
             id: row.id,
             requestNumber: row.request_number,
@@ -449,6 +464,17 @@ router.get('/', async (req, res) => {
             priority: row.priority_name,
             serviceType: row.service_name,
             location: row.location_name,
+            locationDetails: hasLocationData ? {
+              name: row.location_name || 'Service Location',
+              streetAddress1: row.street_address_1,
+              streetAddress2: row.street_address_2,
+              city: row.city,
+              state: row.state,
+              zipCode: row.zip_code,
+              contactPhone: row.location_contact_phone,
+              contactPerson: row.location_contact_person,
+              contactEmail: row.location_contact_email
+            } : null,
             fileCount: parseInt(row.file_count),
             createdAt: row.created_at,
             updatedAt: row.updated_at,
