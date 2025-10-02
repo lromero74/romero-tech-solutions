@@ -45,8 +45,8 @@ router.post('/', async (req, res) => {
     const pool = await getPool();
     const statusQuery = `
       SELECT id FROM service_request_statuses
-      WHERE name = 'Pending'
-      ORDER BY is_default DESC, created_at ASC
+      WHERE name = 'Pending' AND is_active = true
+      ORDER BY display_order ASC, created_at ASC
       LIMIT 1
     `;
     const statusResult = await pool.query(statusQuery);
@@ -59,6 +59,27 @@ router.post('/', async (req, res) => {
     }
 
     const defaultStatusId = statusResult.rows[0].id;
+
+    // Get default priority level if not provided or invalid UUID
+    let finalPriorityLevelId = priorityLevelId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!finalPriorityLevelId || !uuidRegex.test(finalPriorityLevelId)) {
+      const priorityQuery = `
+        SELECT id FROM priority_levels
+        WHERE name = 'Medium'
+        ORDER BY created_at ASC
+        LIMIT 1
+      `;
+      const priorityResult = await pool.query(priorityQuery);
+      if (priorityResult.rows.length > 0) {
+        finalPriorityLevelId = priorityResult.rows[0].id;
+      } else {
+        return res.status(500).json({
+          success: false,
+          message: 'No default priority level found. Please contact administrator.'
+        });
+      }
+    }
 
     // Create service request
     const insertQuery = `
@@ -95,7 +116,7 @@ router.post('/', async (req, res) => {
       requestedDate,
       requestedTime,
       urgencyLevelId,
-      priorityLevelId,
+      finalPriorityLevelId,
       defaultStatusId,
       primaryContactName,
       primaryContactPhone,
