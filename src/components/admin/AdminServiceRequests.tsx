@@ -12,10 +12,16 @@ import {
   Pause,
   FileText,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  MapPin,
+  Phone,
+  Mail,
+  Download,
+  RefreshCw
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
+import apiService from '../../services/apiService';
 
 interface ServiceRequest {
   id: string;
@@ -37,13 +43,32 @@ interface ServiceRequest {
   technician_name: string | null;
   requested_date: string;
   requested_time_start: string | null;
+  requested_time_end: string | null;
   scheduled_date: string | null;
   scheduled_time_start: string | null;
+  scheduled_time_end: string | null;
   created_at: string;
   updated_at: string;
   acknowledged_at: string | null;
   started_at: string | null;
   total_work_duration_minutes: number | null;
+  file_count?: number;
+  locationDetails?: {
+    name: string;
+    street_address_1: string;
+    street_address_2: string | null;
+    city: string;
+    state: string;
+    zip_code: string;
+    contact_phone: string | null;
+    contact_person: string | null;
+    contact_email: string | null;
+  } | null;
+  cost?: {
+    baseRate: number;
+    durationHours: number;
+    total: number;
+  } | null;
 }
 
 interface Filters {
@@ -84,6 +109,25 @@ interface ClosureReason {
   is_active: boolean;
 }
 
+interface ServiceRequestFile {
+  id: string;
+  original_filename: string;
+  stored_filename: string;
+  file_size_bytes: number;
+  content_type: string;
+  description: string;
+  created_at: string;
+}
+
+interface ServiceRequestNote {
+  id: string;
+  note_text: string;
+  note_type: string;
+  created_by_type: string;
+  created_by_name: string;
+  created_at: string;
+}
+
 const AdminServiceRequests: React.FC = () => {
   const { isDark } = useTheme();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -110,6 +154,14 @@ const AdminServiceRequests: React.FC = () => {
   const [equipmentUsed, setEquipmentUsed] = useState<string>('');
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Files and Notes state
+  const [requestFiles, setRequestFiles] = useState<ServiceRequestFile[]>([]);
+  const [loadingFiles, setLoadingFiles] = useState(false);
+  const [requestNotes, setRequestNotes] = useState<ServiceRequestNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [submittingNote, setSubmittingNote] = useState(false);
 
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -497,6 +549,137 @@ const AdminServiceRequests: React.FC = () => {
     }
   };
 
+  // Fetch files for a service request
+  const fetchRequestFiles = async (requestId: string) => {
+    try {
+      setLoadingFiles(true);
+
+      const response = await apiService.get(`/admin/service-requests/${requestId}/files`);
+
+      if (response.success) {
+        setRequestFiles(response.data.files);
+      } else {
+        throw new Error(response.message || 'Failed to fetch request files');
+      }
+    } catch (err) {
+      console.error('Error fetching request files:', err);
+      setRequestFiles([]);
+    } finally {
+      setLoadingFiles(false);
+    }
+  };
+
+  // Fetch notes for a service request
+  const fetchRequestNotes = async (requestId: string) => {
+    try {
+      setLoadingNotes(true);
+
+      const response = await apiService.get(`/admin/service-requests/${requestId}/notes`);
+
+      if (response.success) {
+        setRequestNotes(response.data.notes);
+      } else {
+        throw new Error(response.message || 'Failed to fetch request notes');
+      }
+    } catch (err) {
+      console.error('Error fetching request notes:', err);
+      setRequestNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  // Submit a new note
+  const submitNote = async () => {
+    if (!selectedRequest || !newNoteText.trim()) return;
+
+    try {
+      setSubmittingNote(true);
+
+      // Use apiService to handle CSRF properly
+      const response = await apiService.post(
+        `/admin/service-requests/${selectedRequest.id}/notes`,
+        { noteText: newNoteText.trim() }
+      );
+
+      if (response.success) {
+        // Add the new note to the list
+        setRequestNotes(prev => [response.data.note, ...prev]);
+        setNewNoteText('');
+      } else {
+        throw new Error(response.message || 'Failed to submit note');
+      }
+    } catch (err) {
+      console.error('Error submitting note:', err);
+      alert('Failed to submit note. Please try again.');
+    } finally {
+      setSubmittingNote(false);
+    }
+  };
+
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
+  // Format full address
+  const formatFullAddress = (locationDetails: ServiceRequest['locationDetails']) => {
+    if (!locationDetails) return '';
+
+    const parts = [];
+    if (locationDetails.street_address_1) parts.push(locationDetails.street_address_1);
+    if (locationDetails.street_address_2) parts.push(locationDetails.street_address_2);
+    if (locationDetails.city) parts.push(locationDetails.city);
+    if (locationDetails.state) parts.push(locationDetails.state);
+    if (locationDetails.zip_code) parts.push(locationDetails.zip_code);
+
+    return parts.join(', ');
+  };
+
+  // Generate Google Maps URL
+  const getMapUrl = (locationDetails: ServiceRequest['locationDetails']) => {
+    if (!locationDetails) return '';
+    const address = formatFullAddress(locationDetails);
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+  };
+
+  // Format phone number as (###) ###-####
+  const formatPhone = (phone: string | null | undefined) => {
+    if (!phone) return '';
+
+    // Remove all non-digit characters
+    const cleaned = phone.replace(/\D/g, '');
+
+    // Check if we have a valid 10-digit US phone number
+    if (cleaned.length === 10) {
+      return `(${cleaned.substring(0, 3)}) ${cleaned.substring(3, 6)}-${cleaned.substring(6)}`;
+    }
+
+    // If not 10 digits, return as-is
+    return phone;
+  };
+
+  // Handle view request details
+  const handleViewRequest = (request: ServiceRequest) => {
+    setSelectedRequest(request);
+    setNewNoteText('');
+    setActionError(null);
+
+    // Fetch files if there are any
+    if (request.file_count && request.file_count > 0) {
+      fetchRequestFiles(request.id);
+    } else {
+      setRequestFiles([]);
+    }
+
+    // Always fetch notes
+    fetchRequestNotes(request.id);
+  };
+
   // Get status icon
   const getStatusIcon = (status: string) => {
     const statusLower = status.toLowerCase();
@@ -744,7 +927,7 @@ const AdminServiceRequests: React.FC = () => {
                     <tr
                       key={request.id}
                       className={`${themeClasses.bg.hover} transition-colors cursor-pointer`}
-                      onClick={() => setSelectedRequest(request)}
+                      onClick={() => handleViewRequest(request)}
                     >
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className={`font-mono text-sm ${themeClasses.text.primary}`}>
@@ -804,7 +987,7 @@ const AdminServiceRequests: React.FC = () => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setSelectedRequest(request);
+                            handleViewRequest(request);
                           }}
                           className="text-blue-600 dark:text-blue-400 hover:underline"
                         >
@@ -890,30 +1073,283 @@ const AdminServiceRequests: React.FC = () => {
                 </span>
               </div>
 
-              {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-6">
+              {/* Request Metadata */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm pb-4 border-b border-gray-200 dark:border-gray-700">
                 <div>
-                  <h3 className={`text-sm font-medium ${themeClasses.text.muted} mb-2`}>Description</h3>
-                  <p className={`${themeClasses.text.primary}`}>{selectedRequest.description}</p>
+                  <span className={`font-medium ${themeClasses.text.secondary}`}>Service Type:</span>
+                  <p className={`${themeClasses.text.primary}`}>{selectedRequest.service_type}</p>
                 </div>
                 <div>
-                  <h3 className={`text-sm font-medium ${themeClasses.text.muted} mb-2`}>Client Information</h3>
-                  <p className={`${themeClasses.text.primary}`}>{selectedRequest.client_name}</p>
-                  <p className={`text-sm ${themeClasses.text.secondary}`}>{selectedRequest.client_email}</p>
-                  <p className={`text-sm ${themeClasses.text.secondary}`}>{selectedRequest.client_phone}</p>
-                </div>
-                <div>
-                  <h3 className={`text-sm font-medium ${themeClasses.text.muted} mb-2`}>Location</h3>
-                  <p className={`${themeClasses.text.primary}`}>{selectedRequest.business_name}</p>
-                  <p className={`text-sm ${themeClasses.text.secondary}`}>{selectedRequest.location_name}</p>
-                </div>
-                <div>
-                  <h3 className={`text-sm font-medium ${themeClasses.text.muted} mb-2`}>Technician</h3>
+                  <span className={`font-medium ${themeClasses.text.secondary}`}>Technician:</span>
                   <p className={`${themeClasses.text.primary}`}>
                     {selectedRequest.technician_name || 'Unassigned'}
                   </p>
                 </div>
+                <div>
+                  <span className={`font-medium ${themeClasses.text.secondary}`}>Created:</span>
+                  <p className={`${themeClasses.text.primary}`}>
+                    {new Date(selectedRequest.created_at).toLocaleString()}
+                  </p>
+                </div>
               </div>
+
+              {/* Cost Summary & Location Side-by-Side */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
+                {/* Cost Summary */}
+                {selectedRequest.cost && selectedRequest.requested_date && selectedRequest.requested_time_start && selectedRequest.requested_time_end && (
+                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Selected Date & Time</h4>
+                    <div className={`text-lg font-semibold ${themeClasses.text.primary} mb-1`}>
+                      {new Date(selectedRequest.requested_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                    </div>
+                    <div className={`text-base ${themeClasses.text.secondary} mb-3`}>
+                      {selectedRequest.requested_time_start.substring(0, 5)} - {selectedRequest.requested_time_end.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                    </div>
+                    <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
+                      <div className={`text-sm ${themeClasses.text.secondary}`}>
+                        Base Rate: ${selectedRequest.cost.baseRate}/hr
+                      </div>
+                      <div className={`text-sm ${themeClasses.text.secondary}`}>
+                        {selectedRequest.cost.durationHours}h Standard @ 1x = ${selectedRequest.cost.total.toFixed(2)}
+                      </div>
+                      <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2`}>
+                        Total*: ${selectedRequest.cost.total.toFixed(2)}
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
+                        * Actual cost may vary based on time required to complete the service
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Location & Contact Information */}
+                {selectedRequest.locationDetails && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Location & Contact</h4>
+
+                    <div className="space-y-3">
+                      {/* Address */}
+                      <div>
+                        <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Address</span>
+                        <a
+                          href={getMapUrl(selectedRequest.locationDetails)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-start gap-2 mt-1 text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                          <div className="text-sm">
+                            <div>{selectedRequest.locationDetails.street_address_1}</div>
+                            {selectedRequest.locationDetails.street_address_2 && (
+                              <div>{selectedRequest.locationDetails.street_address_2}</div>
+                            )}
+                            <div>
+                              {selectedRequest.locationDetails.city}, {selectedRequest.locationDetails.state} {selectedRequest.locationDetails.zip_code}
+                            </div>
+                          </div>
+                        </a>
+                      </div>
+
+                      {/* Contact Person */}
+                      {selectedRequest.locationDetails.contact_person && (
+                        <div>
+                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Contact Person</span>
+                          <div className={`flex items-center gap-2 mt-1 text-sm ${themeClasses.text.primary}`}>
+                            <User className="h-4 w-4 text-gray-400" />
+                            {selectedRequest.locationDetails.contact_person}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Phone Number */}
+                      {selectedRequest.locationDetails.contact_phone && (
+                        <div>
+                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Phone</span>
+                          <a
+                            href={`tel:${selectedRequest.locationDetails.contact_phone}`}
+                            className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            <Phone className="h-4 w-4" />
+                            {formatPhone(selectedRequest.locationDetails.contact_phone)}
+                          </a>
+                        </div>
+                      )}
+
+                      {/* Email */}
+                      {selectedRequest.locationDetails.contact_email && (
+                        <div>
+                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Email</span>
+                          <a
+                            href={`mailto:${selectedRequest.locationDetails.contact_email}`}
+                            className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            <Mail className="h-4 w-4" />
+                            {selectedRequest.locationDetails.contact_email}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Client Information */}
+              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Client Information</h4>
+                <div className="space-y-2">
+                  <div className={`flex items-center gap-2 text-sm ${themeClasses.text.primary}`}>
+                    <User className="h-4 w-4 text-gray-400" />
+                    {selectedRequest.client_name}
+                  </div>
+                  <a
+                    href={`mailto:${selectedRequest.client_email}`}
+                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    <Mail className="h-4 w-4" />
+                    {selectedRequest.client_email}
+                  </a>
+                  {selectedRequest.client_phone && (
+                    <a
+                      href={`tel:${selectedRequest.client_phone}`}
+                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                    >
+                      <Phone className="h-4 w-4" />
+                      {formatPhone(selectedRequest.client_phone)}
+                    </a>
+                  )}
+                </div>
+              </div>
+
+              {/* Additional Details */}
+              {selectedRequest.scheduled_date && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
+                  <div>
+                    <span className={`font-medium ${themeClasses.text.secondary}`}>Scheduled Date:</span>
+                    <p className={`${themeClasses.text.primary}`}>
+                      {formatDate(selectedRequest.scheduled_date)}
+                      {selectedRequest.scheduled_time_start && ` at ${formatTime(selectedRequest.scheduled_time_start)}`}
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Description */}
+              {selectedRequest.description && (
+                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                  <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Description</h4>
+                  <p className={`${themeClasses.text.primary} whitespace-pre-wrap text-sm`}>
+                    {selectedRequest.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Notes Section */}
+              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Notes</h4>
+
+                {/* Add Note Form */}
+                <div className="mb-4">
+                  <textarea
+                    value={newNoteText}
+                    onChange={(e) => setNewNoteText(e.target.value)}
+                    placeholder="Add a note..."
+                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} resize-none`}
+                    rows={3}
+                    disabled={submittingNote}
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      onClick={submitNote}
+                      disabled={!newNoteText.trim() || submittingNote}
+                      className={`px-4 py-2 rounded-md text-white ${
+                        !newNoteText.trim() || submittingNote
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      } transition-colors text-sm`}
+                    >
+                      {submittingNote ? (
+                        <span className="flex items-center gap-2">
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          Submitting...
+                        </span>
+                      ) : (
+                        'Add Note'
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Notes List */}
+                {loadingNotes ? (
+                  <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Loading notes...</span>
+                  </div>
+                ) : requestNotes.length > 0 ? (
+                  <div className="space-y-3">
+                    {requestNotes.map((note, index) => (
+                      <div key={note.id}>
+                        {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
+                        <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
+                          <span className="font-medium">{note.created_by_name}</span>
+                          {' • '}
+                          <span>{new Date(note.created_at).toLocaleString()}</span>
+                        </div>
+                        <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
+                          {note.note_text}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className={`text-sm ${themeClasses.text.muted}`}>No notes yet</p>
+                )}
+              </div>
+
+              {/* Files Section */}
+              {selectedRequest.file_count && selectedRequest.file_count > 0 && (
+                <div className="mb-4">
+                  <h4 className={`font-medium ${themeClasses.text.secondary} mb-2`}>
+                    Attachments ({selectedRequest.file_count})
+                  </h4>
+                  {loadingFiles ? (
+                    <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                      <span>Loading files...</span>
+                    </div>
+                  ) : requestFiles.length > 0 ? (
+                    <div className="space-y-2">
+                      {requestFiles.map((file) => (
+                        <div key={file.id} className={`flex items-center justify-between p-3 ${themeClasses.bg.secondary} rounded-md`}>
+                          <div className="flex items-center gap-3">
+                            <FileText className="h-5 w-5 text-gray-400" />
+                            <div>
+                              <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                {file.original_filename}
+                              </p>
+                              <p className={`text-xs ${themeClasses.text.muted}`}>
+                                {formatFileSize(file.file_size_bytes)} • {new Date(file.created_at).toLocaleDateString()}
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              // Handle file download
+                              window.open(`${API_BASE_URL}/admin/files/${file.id}/download`, '_blank');
+                            }}
+                            className={`p-2 ${themeClasses.text.muted} hover:text-gray-600 dark:hover:text-gray-300`}
+                            title="Download file"
+                          >
+                            <Download className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className={`${themeClasses.text.muted} text-sm`}>No files available</p>
+                  )}
+                </div>
+              )}
 
               {/* Display error if any */}
               {actionError && (
@@ -1037,7 +1473,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={selectedTechnicianId}
                 onChange={(e) => setSelectedTechnicianId(e.target.value)}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="">-- Select Technician --</option>
                 {technicians.map((tech) => (
@@ -1097,7 +1533,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={selectedStatusId}
                 onChange={(e) => setSelectedStatusId(e.target.value)}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="">-- Select Status --</option>
                 {statuses.map((status) => (
@@ -1117,7 +1553,7 @@ const AdminServiceRequests: React.FC = () => {
                 onChange={(e) => setStatusNotes(e.target.value)}
                 placeholder="Add notes about this status change..."
                 rows={3}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
               />
             </div>
 
@@ -1172,7 +1608,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={selectedClosureReasonId}
                 onChange={(e) => setSelectedClosureReasonId(e.target.value)}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="">-- Select Closure Reason --</option>
                 {closureReasons.map((reason) => (
@@ -1193,7 +1629,7 @@ const AdminServiceRequests: React.FC = () => {
                 onChange={(e) => setResolutionSummary(e.target.value)}
                 placeholder="Describe what was done to resolve this service request..."
                 rows={4}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
               />
             </div>
 
@@ -1208,7 +1644,7 @@ const AdminServiceRequests: React.FC = () => {
                 onChange={(e) => setActualDurationMinutes(e.target.value)}
                 placeholder="Enter actual time spent"
                 min="0"
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               />
               {selectedRequest.total_work_duration_minutes && (
                 <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
@@ -1227,7 +1663,7 @@ const AdminServiceRequests: React.FC = () => {
                 onChange={(e) => setEquipmentUsed(e.target.value)}
                 placeholder="List any equipment or materials used..."
                 rows={3}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
               />
             </div>
 

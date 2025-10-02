@@ -1,5 +1,5 @@
 import express from 'express';
-import { authMiddleware, requireAdmin } from '../middleware/authMiddleware.js';
+import { authMiddleware, requireAdmin, requireEmployee } from '../middleware/authMiddleware.js';
 
 // Import modular route handlers
 import dashboardRoutes from './admin/dashboard.js';
@@ -28,6 +28,11 @@ const router = express.Router();
 
 // Apply authentication middleware to all admin routes
 router.use(authMiddleware);
+
+// Service requests routes - accessible by all employees
+router.use('/', requireEmployee, serviceRequestsRoutes);
+
+// All other admin routes - require admin/executive role
 router.use(requireAdmin);
 
 // Mount modular routes
@@ -45,7 +50,6 @@ router.use('/', serviceAreasRoutes);
 router.use('/', locationTypesRoutes);
 router.use('/closure-reasons', closureReasonsRoutes);
 router.use('/', employeeCalendarRoutes);
-router.use('/', serviceRequestsRoutes);
 router.use('/', permissionsRoutes);
 router.use('/permission-audit-log', permissionAuditLogRoutes);
 router.use('/service-hour-rates', serviceHourRatesRoutes);

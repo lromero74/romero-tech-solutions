@@ -1717,6 +1717,155 @@ Email: info@romerotechsolutions.com
       throw new Error(`Failed to send email: ${error.message}`);
     }
   }
+
+  /**
+   * Send notification to client when an employee adds a note to their service request
+   * @param {Object} params - Notification parameters
+   * @param {Object} params.serviceRequest - Service request details
+   * @param {Object} params.note - Note details
+   * @param {Object} params.employee - Employee who added the note
+   * @param {Object} params.client - Client who created the service request
+   * @returns {Promise<Object>} Email sending result
+   */
+  async sendEmployeeNoteNotificationToClient({ serviceRequest, note, employee, client }) {
+    try {
+      console.log('📧 Sending employee note notification to client...');
+
+      const subject = `Update on Your Service Request: ${serviceRequest.requestNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+              .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+              .tagline { font-size: 14px; opacity: 0.9; }
+              .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+              .request-number { background: #3b82f6; color: white; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; font-size: 18px; font-weight: bold; }
+              .note-box { background: #dcfce7; border-left: 4px solid #22c55e; padding: 20px; margin: 20px 0; border-radius: 4px; }
+              .note-header { font-size: 12px; color: #166534; margin-bottom: 10px; }
+              .note-text { color: #14532d; white-space: pre-wrap; }
+              .contact-box { background: #e0f2fe; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div style="text-align: center; margin-bottom: 10px;">
+                  <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                </div>
+                <div class="logo">Romero Tech Solutions</div>
+                <div class="tagline">Service Request Update</div>
+              </div>
+
+              <div class="content">
+                <h2 style="color: #1e293b; margin-bottom: 15px;">We've Added a Note to Your Service Request</h2>
+
+                <p style="color: #475569;">Hi ${client.firstName},</p>
+
+                <p style="color: #475569;">One of our technicians has added a note to your service request. Please see the details below:</p>
+
+                <div class="request-number">
+                  ${serviceRequest.requestNumber}: ${serviceRequest.title}
+                </div>
+
+                <div class="note-box">
+                  <div class="note-header">
+                    <strong>${employee.name}</strong> • ${employee.email} • ${new Date(note.createdAt).toLocaleString()}
+                  </div>
+                  <div class="note-text">${note.noteText}</div>
+                </div>
+
+                <div class="contact-box">
+                  <p style="margin: 0; font-weight: bold; color: #0c4a6e;">📞 You can reply directly to this email to reach:</p>
+                  <p style="margin: 10px 0 0 0; color: #0c4a6e;">
+                    <strong>${employee.name}</strong><br>
+                    📧 <a href="mailto:${employee.email}" style="color: #0ea5e9;">${employee.email}</a><br>
+                    ${employee.phone ? `📱 <a href="tel:${employee.phone}" style="color: #0ea5e9;">${formatPhone(employee.phone)}</a>` : ''}
+                  </p>
+                </div>
+
+                <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
+                  <strong>Service Request:</strong> ${serviceRequest.requestNumber}<br>
+                  <strong>Location:</strong> ${serviceRequest.locationName || 'Not specified'}<br>
+                  ${serviceRequest.locationAddress ? `<strong>Address:</strong> <a href="https://maps.google.com/?q=${formatAddressForMaps(serviceRequest.locationAddress)}" style="color: #0ea5e9;" target="_blank">${formatAddressDisplay(serviceRequest.locationAddress)}</a><br>` : ''}
+                  <strong>Status:</strong> ${serviceRequest.status}
+                </p>
+              </div>
+
+              <div class="footer">
+                <p><strong>Questions? Contact us:</strong></p>
+                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p style="margin-top: 15px;">
+                  © 2025 Romero Tech Solutions. All rights reserved.<br>
+                  Serving Escondido, CA and surrounding areas.
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const text = `
+Service Request Update: ${serviceRequest.requestNumber}
+
+Hi ${client.firstName},
+
+One of our technicians has added a note to your service request. Please see the details below:
+
+Service Request: ${serviceRequest.requestNumber}: ${serviceRequest.title}
+
+NOTE:
+${employee.name} • ${employee.email} • ${new Date(note.createdAt).toLocaleString()}
+${note.noteText}
+
+You can reply directly to this email to reach:
+${employee.name}
+Email: ${employee.email}
+${employee.phone ? `Phone: ${formatPhone(employee.phone)}` : ''}
+
+Service Request Details:
+Request Number: ${serviceRequest.requestNumber}
+Location: ${serviceRequest.locationName || 'Not specified'}
+${serviceRequest.locationAddress ? `Address: ${[serviceRequest.locationAddress.street1, serviceRequest.locationAddress.street2, serviceRequest.locationAddress.city, serviceRequest.locationAddress.state, serviceRequest.locationAddress.zip].filter(Boolean).join(', ')}` : ''}
+Status: ${serviceRequest.status}
+
+Questions? Contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+      `;
+
+      // Send to client with reply-to set to the employee who added the note
+      const result = await transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: client.email,
+        replyTo: `"${employee.name}" <${employee.email}>`,
+        subject: subject,
+        text: text,
+        html: html
+      });
+
+      console.log(`✅ Employee note notification sent to client: ${client.email}`);
+
+      return {
+        success: true,
+        messageId: result.messageId
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending employee note notification to client:', error);
+      throw error;
+    }
+  }
 }
 
 export const emailService = new EmailService();
@@ -1729,5 +1878,6 @@ export const sendServiceRequestNotificationToTechnicians = (params) => emailServ
 export const sendServiceRequestConfirmationToClient = (params) => emailService.sendServiceRequestConfirmationToClient(params);
 export const sendServiceRequestCreationNotification = (params) => emailService.sendServiceRequestCreationNotification(params);
 export const sendNoteAdditionNotification = (params) => emailService.sendNoteAdditionNotification(params);
+export const sendEmployeeNoteNotificationToClient = (params) => emailService.sendEmployeeNoteNotificationToClient(params);
 
 export default emailService;
