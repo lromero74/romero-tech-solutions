@@ -549,7 +549,19 @@ router.delete('/users/:id',
           console.log(`Deleted ${fileAccessDeleted.rows.length} file access log(s) for user ${id}`);
         }
 
-        // 3. Hard delete client from database
+        // 3. Delete or nullify storage quota admin references
+        const storageQuotasUpdated = await query(`
+          UPDATE t_client_storage_quotas
+          SET set_by_admin_id = NULL
+          WHERE set_by_admin_id = $1
+          RETURNING id
+        `, [id]);
+
+        if (storageQuotasUpdated.rows.length > 0) {
+          console.log(`Nullified set_by_admin_id in ${storageQuotasUpdated.rows.length} storage quota(s)`);
+        }
+
+        // 4. Hard delete client from database
         deleteResult = await query(`
           DELETE FROM users
           WHERE id = $1
