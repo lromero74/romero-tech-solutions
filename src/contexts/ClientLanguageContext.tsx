@@ -182,7 +182,15 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
 
     // If no translation found, return fallback or key
     if (fallback) {
-      return fallback;
+      // Apply variable interpolation to fallback string too
+      let interpolatedFallback = fallback;
+      if (variables) {
+        Object.keys(variables).forEach(varKey => {
+          const placeholder = `{{${varKey}}}`;
+          interpolatedFallback = interpolatedFallback.replace(new RegExp(placeholder, 'g'), variables[varKey]);
+        });
+      }
+      return interpolatedFallback;
     }
 
     // Return a readable version of the key as last resort
