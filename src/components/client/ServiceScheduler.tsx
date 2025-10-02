@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
+import { apiService } from '../../services/apiService';
 import FileUpload from './FileUpload';
 import ResourceTimeSlotScheduler from './ResourceTimeSlotScheduler';
 import { useUrgencyLevels } from './ServiceScheduler/useUrgencyLevels';
@@ -437,12 +438,8 @@ const ServiceScheduler: React.FC = () => {
   // Handle time slot selection from advanced scheduler
   const handleTimeSlotSelect = async (resourceId: string, startTime: Date, endTime: Date) => {
     try {
-      const response = await fetch('/api/client/schedule-appointment', {
+      const result = await apiService.request('/client/schedule-appointment', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken') || ''}`
-        },
         body: JSON.stringify({
           resourceId,
           startTime: startTime.toISOString(),
@@ -452,13 +449,6 @@ const ServiceScheduler: React.FC = () => {
           urgencyLevelId: selectedUrgency
         })
       });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || t('schedule.messages.error'));
-      }
-
-      const result = await response.json();
 
       // Update the selected time and location to reflect the booking
       setSelectedLocation(resourceId);
