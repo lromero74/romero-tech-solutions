@@ -704,6 +704,11 @@ router.post('/:id/notes', async (req, res) => {
         sr.title,
         COALESCE(srs.name, 'Unknown') as status,
         sl.location_name,
+        sl.street_address_1,
+        sl.street_address_2,
+        sl.city,
+        sl.state,
+        sl.zip_code,
         u.id as client_id,
         u.email as client_email,
         u.first_name as client_first_name,
@@ -726,7 +731,14 @@ router.post('/:id/notes', async (req, res) => {
           requestNumber: serviceRequest.request_number,
           title: serviceRequest.title,
           status: serviceRequest.status,
-          locationName: serviceRequest.location_name
+          locationName: serviceRequest.location_name,
+          locationAddress: {
+            street1: serviceRequest.street_address_1,
+            street2: serviceRequest.street_address_2,
+            city: serviceRequest.city,
+            state: serviceRequest.state,
+            zip: serviceRequest.zip_code
+          }
         },
         note: {
           noteText: newNote.note_text,

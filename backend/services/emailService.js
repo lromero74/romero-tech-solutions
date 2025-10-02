@@ -5,6 +5,38 @@ import { query, getPool } from '../config/database.js';
 
 dotenv.config();
 
+// Helper function to format phone numbers as (###) ###-####
+const formatPhone = (phone) => {
+  if (!phone) return '';
+  const cleaned = phone.replace(/\D/g, '');
+  if (cleaned.length === 10) {
+    return `(${cleaned.slice(0, 3)}) ${cleaned.slice(3, 6)}-${cleaned.slice(6)}`;
+  }
+  return phone; // Return original if not 10 digits
+};
+
+// Helper function to format address for Google Maps
+const formatAddressForMaps = (address) => {
+  if (!address || !address.street1) return '';
+  const parts = [
+    address.street1,
+    address.street2,
+    address.city,
+    address.state,
+    address.zip
+  ].filter(Boolean);
+  return encodeURIComponent(parts.join(', '));
+};
+
+// Helper function to format address display
+const formatAddressDisplay = (address) => {
+  if (!address || !address.street1) return 'Not specified';
+  const line1 = address.street1;
+  const line2 = address.street2 ? `${address.street2}<br>` : '';
+  const cityStateZip = [address.city, address.state, address.zip].filter(Boolean).join(', ');
+  return `${line1}<br>${line2}${cityStateZip}`;
+};
+
 // Create nodemailer transporter using AWS SES SMTP interface
 // This approach is compatible and doesn't require AWS SDK v2/v3
 console.log('📧 Email service initialization:', {
@@ -1551,14 +1583,15 @@ Email: info@romerotechsolutions.com
                   <p style="margin: 10px 0 0 0; color: #0c4a6e;">
                     <strong>${noteCreator.name}</strong><br>
                     📧 <a href="mailto:${noteCreator.email}" style="color: #0ea5e9;">${noteCreator.email}</a><br>
-                    ${noteCreator.phone ? `📱 <a href="tel:${noteCreator.phone}" style="color: #0ea5e9;">${noteCreator.phone}</a>` : ''}
+                    ${noteCreator.phone ? `📱 <a href="tel:${noteCreator.phone}" style="color: #0ea5e9;">${formatPhone(noteCreator.phone)}</a>` : ''}
                   </p>
                 </div>
 
                 <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
-                  Service Request: ${serviceRequest.requestNumber}<br>
-                  Location: ${serviceRequest.locationName || 'Not specified'}<br>
-                  Status: ${serviceRequest.status}
+                  <strong>Service Request:</strong> ${serviceRequest.requestNumber}<br>
+                  <strong>Location:</strong> ${serviceRequest.locationName || 'Not specified'}<br>
+                  ${serviceRequest.locationAddress ? `<strong>Address:</strong> <a href="https://maps.google.com/?q=${formatAddressForMaps(serviceRequest.locationAddress)}" style="color: #0ea5e9;" target="_blank">${formatAddressDisplay(serviceRequest.locationAddress)}</a><br>` : ''}
+                  <strong>Status:</strong> ${serviceRequest.status}
                 </p>
               </div>
 
@@ -1587,11 +1620,12 @@ ${note.noteText}
 Note Added By:
 ${noteCreator.name}
 Email: ${noteCreator.email}
-${noteCreator.phone ? `Phone: ${noteCreator.phone}` : ''}
+${noteCreator.phone ? `Phone: ${formatPhone(noteCreator.phone)}` : ''}
 
 Service Request Details:
 Request Number: ${serviceRequest.requestNumber}
 Location: ${serviceRequest.locationName || 'Not specified'}
+${serviceRequest.locationAddress ? `Address: ${[serviceRequest.locationAddress.street1, serviceRequest.locationAddress.street2, serviceRequest.locationAddress.city, serviceRequest.locationAddress.state, serviceRequest.locationAddress.zip].filter(Boolean).join(', ')}` : ''}
 Status: ${serviceRequest.status}
 
 Questions? Contact us:
