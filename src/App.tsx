@@ -21,6 +21,7 @@ import ConfirmEmail from './pages/ConfirmEmail';
 import ComingSoon from './pages/ComingSoon';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
+import { useVersionCheck } from './hooks/useVersionCheck';
 import './config/aws-config';
 // Development utility for clearing auth state
 import './utils/clearAuthState';
@@ -31,6 +32,9 @@ function AppContent() {
   );
 
   const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut } = useEnhancedAuth();
+
+  // Automatically check for new versions and reload when deployed
+  useVersionCheck();
 
   // Get theme preference for loading states (before context is available)
   const getThemeClasses = () => {
