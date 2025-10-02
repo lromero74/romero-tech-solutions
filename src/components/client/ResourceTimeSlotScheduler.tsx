@@ -322,13 +322,21 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         const bookingsResult = await apiService.get<{ success: boolean; data: any[] }>(
           `/client/bookings?date=${selectedDate.toISOString().split('T')[0]}`
         );
+        console.log('📅 Bookings API response:', bookingsResult);
+        console.log('📅 Raw booking data:', JSON.stringify(bookingsResult.data, null, 2));
         if (bookingsResult.success) {
-          const bookings = bookingsResult.data.map((b: any) => ({
-            ...b,
-            startTime: new Date(b.startTime),
-            endTime: new Date(b.endTime)
-          }));
+          const bookings = bookingsResult.data.map((b: any) => {
+            console.log('📅 Processing booking:', b);
+            return {
+              ...b,
+              startTime: new Date(b.startTime),
+              endTime: new Date(b.endTime)
+            };
+          });
+          console.log('📅 Processed bookings:', bookings);
           setExistingBookings(bookings);
+        } else {
+          console.error('❌ Failed to load bookings:', bookingsResult);
         }
       } catch (error) {
         console.error('Error loading scheduler data:', error);
@@ -371,9 +379,29 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const checkIfSlotBlocked = (slotTime: Date, durationHours: number = selectedDuration): { isBlocked: boolean; reason?: string } => {
     const slotEnd = new Date(slotTime.getTime() + (durationHours * 60 * 60 * 1000));
 
+    // Debug logging for first few checks
+    if (slotTime.getHours() >= 12 && slotTime.getHours() <= 17 && slotTime.getMinutes() === 0) {
+      console.log(`🔍 Checking slot ${slotTime.toLocaleTimeString()} (duration: ${durationHours}h) against ${existingBookings.length} bookings`);
+      existingBookings.forEach(booking => {
+        console.log(`   📌 Booking: ${booking.startTime.toLocaleTimeString()} - ${booking.endTime.toLocaleTimeString()}`);
+      });
+    }
+
     for (const booking of existingBookings) {
       // Check for direct overlap (Rule 8)
-      if (slotTime < booking.endTime && slotEnd > booking.startTime) {
+      const hasOverlap = slotTime < booking.endTime && slotEnd > booking.startTime;
+      if (slotTime.getHours() === 13 && slotTime.getMinutes() === 0) {
+        console.log(`🔍 Slot 13:00 overlap check:`, {
+          slotTime: slotTime.toISOString(),
+          slotEnd: slotEnd.toISOString(),
+          bookingStart: booking.startTime.toISOString(),
+          bookingEnd: booking.endTime.toISOString(),
+          slotTimeBeforeBookingEnd: slotTime < booking.endTime,
+          slotEndAfterBookingStart: slotEnd > booking.startTime,
+          hasOverlap
+        });
+      }
+      if (hasOverlap) {
         return {
           isBlocked: true,
           reason: `Overlaps with existing appointment (${booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
@@ -382,7 +410,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
       // Check 1-hour buffer after existing appointment (Rule 7)
       const oneHourAfter = new Date(booking.endTime.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
-      if (slotTime > booking.endTime && slotTime < oneHourAfter) {
+      if (slotTime >= booking.endTime && slotTime < oneHourAfter) {
         return {
           isBlocked: true,
           reason: `Must wait 1 hour after appointment ending at ${booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
@@ -391,6 +419,23 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
       // Check 1-hour buffer before existing appointment (Rule 9)
       const oneHourBefore = new Date(booking.startTime.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
+
+      // Debug logging for 12:00-13:00 slots
+      if (slotTime.getHours() === 12 && slotTime.getMinutes() === 0) {
+        console.log('🔍 12:00 buffer check:', {
+          slotTime: slotTime.toISOString(),
+          slotEnd: slotEnd.toISOString(),
+          bookingStart: booking.startTime.toISOString(),
+          oneHourBefore: oneHourBefore.toISOString(),
+          slotEndMs: slotEnd.getTime(),
+          oneHourBeforeMs: oneHourBefore.getTime(),
+          bookingStartMs: booking.startTime.getTime(),
+          slotEndAfterOneHourBefore: slotEnd > oneHourBefore,
+          slotEndBeforeBookingStart: slotEnd <= booking.startTime,
+          wouldBlock: slotEnd > oneHourBefore && slotEnd <= booking.startTime
+        });
+      }
+
       if (slotEnd > oneHourBefore && slotEnd <= booking.startTime) {
         return {
           isBlocked: true,
@@ -946,7 +991,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                       {timeSlots.map((slot, i) => {
                         const slotTime = new Date(selectedDate);
                         slotTime.setHours(slot.hour, slot.minute, 0, 0);
-                        const blockCheck = checkIfSlotBlocked(slotTime);
+                        // Check the individual 30-minute slot (0.5 hours), not the selected duration
+                        const blockCheck = checkIfSlotBlocked(slotTime, 0.5);
 
                         const isInSelectedRange = selectedStartTime && selectedEndTime &&
                           slotTime >= selectedStartTime && slotTime < selectedEndTime;
@@ -958,8 +1004,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                           bgColor = 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed';
                           tierLabel = t('scheduler.pastTimeSlot', 'Past time slot');
                         } else if (blockCheck.isBlocked) {
-                          bgColor = 'bg-red-100 dark:bg-red-900/30 cursor-not-allowed';
-                          tierLabel = blockCheck.reason || t('scheduler.unavailable', 'Unavailable');
+                          bgColor = 'cursor-not-allowed';
+                          tierLabel = blockCheck.reason || t('scheduler.buffer', 'Buffer');
                         } else if (isInSelectedRange) {
                           bgColor = 'bg-blue-500 text-white';
                           tierLabel = t('scheduler.selected', 'Selected');
@@ -985,7 +1031,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             key={i}
                             className={`flex-shrink-0 w-16 h-20 border-r border-gray-200 dark:border-gray-700 flex items-center justify-center text-xs transition-colors ${bgColor}`}
                             style={
-                              slot.rateTier && !slot.isPast && !blockCheck.isBlocked && !isInSelectedRange
+                              blockCheck.isBlocked
+                                ? {
+                                    backgroundImage: isDarkMode
+                                      ? 'repeating-linear-gradient(45deg, #4B5563 0px, #4B5563 10px, #6B7280 10px, #6B7280 20px)'
+                                      : 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 10px, #E5E7EB 10px, #E5E7EB 20px)'
+                                  }
+                                : slot.rateTier && !slot.isPast && !isInSelectedRange
                                 ? {
                                     backgroundColor: isDarkMode ? slot.rateTier.colorCode + '30' : slot.rateTier.colorCode + '1A',
                                   }
@@ -1073,14 +1125,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                         return (
                           <div
                             key={idx}
-                            className="absolute top-0 h-8 bg-red-500/60 border border-red-600 rounded text-white text-xs flex items-center justify-center px-1 pointer-events-none mt-1"
+                            className="absolute top-0 h-20 bg-gray-500 border-2 border-white rounded text-white text-sm font-semibold flex items-center justify-center px-2 pointer-events-none"
                             style={{
                               left: `${startSlotIndex * 64}px`,
                               width: `${width}px`
                             }}
                             title={`${booking.clientName} - ${booking.serviceType}`}
                           >
-                            <span className="truncate">{booking.isOwnBooking ? 'Your' : 'Booked'}</span>
+                            <span className="truncate">Unavailable</span>
                           </div>
                         );
                       })}
@@ -1129,8 +1181,15 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 );
               })}
               <div className="flex items-center space-x-2">
-                <div className="w-4 h-4 bg-red-100 dark:bg-red-900/30 border border-gray-300 dark:border-gray-600"></div>
-                <span>{t('scheduler.unavailable', 'Unavailable')}</span>
+                <div
+                  className="w-4 h-4 border border-gray-300 dark:border-gray-600"
+                  style={{
+                    backgroundImage: isDarkMode
+                      ? 'repeating-linear-gradient(45deg, #4B5563 0px, #4B5563 2px, #6B7280 2px, #6B7280 4px)'
+                      : 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 2px, #E5E7EB 2px, #E5E7EB 4px)'
+                  }}
+                ></div>
+                <span>{t('scheduler.buffer', 'Buffer')}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-blue-500"></div>

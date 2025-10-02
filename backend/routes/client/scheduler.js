@@ -202,11 +202,23 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
       const startTime = row.scheduled_time_start || row.requested_time_start;
       const endTime = row.scheduled_time_end || row.requested_time_end;
 
-      const startDateTime = new Date(`${useDate}T${startTime}`);
+      // Convert date to YYYY-MM-DD format if it's a Date object
+      let dateString;
+      if (useDate instanceof Date) {
+        dateString = useDate.toISOString().split('T')[0];
+      } else if (typeof useDate === 'string') {
+        // If it's already a string, try to extract YYYY-MM-DD
+        const match = useDate.match(/\d{4}-\d{2}-\d{2}/);
+        dateString = match ? match[0] : useDate;
+      } else {
+        dateString = useDate;
+      }
+
+      const startDateTime = new Date(`${dateString}T${startTime}`);
       let endDateTime;
 
       if (endTime) {
-        endDateTime = new Date(`${useDate}T${endTime}`);
+        endDateTime = new Date(`${dateString}T${endTime}`);
       } else {
         // Default to 1 hour if no end time specified (changed from 2 hours)
         endDateTime = new Date(startDateTime.getTime() + (1 * 60 * 60 * 1000));
