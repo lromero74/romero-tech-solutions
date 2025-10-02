@@ -185,7 +185,7 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
         AND sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
-          WHERE name IN ('Cancelled', 'Completed', 'Rejected')
+          WHERE name IN ('Closed') AND is_final_status = true
         )
       ORDER BY
         COALESCE(sr.scheduled_time_start, sr.requested_time_start),
@@ -315,7 +315,7 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
         AND sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
-          WHERE name IN ('Cancelled', 'Completed', 'Rejected')
+          WHERE name IN ('Closed') AND is_final_status = true
         )
       ORDER BY
         COALESCE(sr.scheduled_time_start, sr.requested_time_start)
@@ -389,7 +389,7 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
     // Get default status and priority/urgency if not provided
     const defaultsQuery = `
       SELECT
-        (SELECT id FROM service_request_statuses WHERE name = 'Pending' ORDER BY display_order ASC LIMIT 1) as status_id,
+        (SELECT id FROM service_request_statuses WHERE name = 'Submitted' ORDER BY display_order ASC LIMIT 1) as status_id,
         (SELECT id FROM urgency_levels WHERE urgency_name = 'Normal' OR urgency_name = 'Medium' ORDER BY urgency_level ASC LIMIT 1) as urgency_id,
         (SELECT id FROM priority_levels WHERE priority_name = 'Normal' OR priority_name = 'Medium' ORDER BY priority_level ASC LIMIT 1) as priority_id
     `;

@@ -24,8 +24,9 @@ router.post('/', async (req, res) => {
       title,
       description,
       service_location_id: serviceLocationId,
-      scheduled_date: requestedDate,
-      scheduled_time: requestedTime,
+      requested_date: requestedDate,
+      requested_time_start: requestedTimeStart,
+      requested_time_end: requestedTimeEnd,
       urgency_level_id: urgencyLevelId,
       priority_level_id: priorityLevelId,
       contact_name: primaryContactName,
@@ -45,7 +46,7 @@ router.post('/', async (req, res) => {
     const pool = await getPool();
     const statusQuery = `
       SELECT id FROM service_request_statuses
-      WHERE name = 'Pending' AND is_active = true
+      WHERE name = 'Submitted' AND is_active = true
       ORDER BY display_order ASC, created_at ASC
       LIMIT 1
     `;
@@ -93,6 +94,7 @@ router.post('/', async (req, res) => {
         created_by_user_id,
         requested_date,
         requested_time_start,
+        requested_time_end,
         urgency_level_id,
         priority_level_id,
         status_id,
@@ -101,7 +103,7 @@ router.post('/', async (req, res) => {
         primary_contact_email,
         service_type_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
       ) RETURNING id, request_number, created_at
     `;
 
@@ -114,7 +116,8 @@ router.post('/', async (req, res) => {
       serviceLocationId,
       clientId,
       requestedDate,
-      requestedTime,
+      requestedTimeStart,
+      requestedTimeEnd,
       urgencyLevelId,
       finalPriorityLevelId,
       defaultStatusId,
@@ -171,8 +174,7 @@ router.post('/', async (req, res) => {
         const techniciansQuery = `
           SELECT e.id, e.first_name as "firstName", e.email
           FROM employees e
-          WHERE e.role = 'technician'
-            AND e.active = true
+          WHERE e.is_active = true
             AND e.soft_delete = false
             AND e.employee_status_id IN (
               SELECT id FROM employee_statuses

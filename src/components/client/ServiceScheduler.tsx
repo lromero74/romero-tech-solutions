@@ -358,8 +358,9 @@ const ServiceScheduler: React.FC = () => {
         service_location_id: selectedLocation,
         urgency_level_id: selectedUrgency,
         priority_level_id: 'standard', // Default priority level
-        scheduled_date: selectedDate.toISOString().split('T')[0],
-        scheduled_time: selectedTime,
+        requested_date: selectedDate.toISOString().split('T')[0],
+        requested_time_start: selectedTime,
+        requested_time_end: selectedEndTime || selectedTime, // Include end time from time slot picker
         description,
         contact_name: contactName,
         contact_phone: contactPhone,
