@@ -290,12 +290,15 @@ router.post('/login', async (req, res) => {
       ipAddress
     );
 
+    // Get session timeout from database (or fallback to config)
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
     // Set HttpOnly session cookie for enhanced security
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      maxAge: sessionTimeoutMs, // Use database timeout setting
       path: '/'
     };
 
@@ -677,12 +680,15 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
 
           const roles = rolesResult.rows.map(row => row.name);
 
+          // Get session timeout from database (or fallback to config)
+          const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
           // Set session token cookie (camelCase to match authMiddleware)
           res.cookie('sessionToken', sessionData.sessionToken, {
             httpOnly: true,
             secure: process.env.NODE_ENV === 'production',
             sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-            maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS,
+            maxAge: sessionTimeoutMs,
             path: '/'
           });
 
@@ -886,12 +892,15 @@ router.post('/verify-admin-mfa', async (req, res) => {
       isFirstAdmin: true
     };
 
+    // Get session timeout from database (or fallback to config)
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
     // Set HttpOnly session cookie for enhanced security
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      maxAge: sessionTimeoutMs, // Use database timeout setting
       path: '/'
     };
 
@@ -993,12 +1002,15 @@ router.post('/verify-client-mfa', async (req, res) => {
       ipAddress
     );
 
+    // Get session timeout from database (or fallback to config)
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
     // Set HttpOnly session cookie for enhanced security
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      maxAge: sessionTimeoutMs, // Use database timeout setting
       path: '/'
     };
 
@@ -2006,12 +2018,15 @@ router.post('/trusted-device-login', async (req, res) => {
     console.log('🔐 Creating new session for user:', user.email);
     const sessionData = await sessionService.createSession(user.id, user.email, req.headers['user-agent'], req.ip);
 
+    // Get session timeout from database (or fallback to config)
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
     // Set HttpOnly session cookie
     res.cookie('sessionToken', sessionData.sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // lax for development
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      maxAge: sessionTimeoutMs, // Use database timeout setting
       path: '/'
     });
 
@@ -2185,12 +2200,15 @@ router.post('/client-login', async (req, res) => {
       ipAddress
     );
 
+    // Get session timeout from database (or fallback to config)
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
     // Set HttpOnly session cookie for enhanced security
     const cookieOptions = {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production', // HTTPS only in production
       sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
-      maxAge: SECURITY_CONFIG.SESSION_TIMEOUT_MS, // Use centralized timeout
+      maxAge: sessionTimeoutMs, // Use database timeout setting
       path: '/'
     };
 

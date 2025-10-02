@@ -135,7 +135,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
     { id: 'services', label: t('header.services') },
     { id: 'about', label: t('header.about') },
     { id: 'contact', label: t('header.contact') },
-    { id: 'coming-soon', label: t('header.login') },
+    { id: 'clogin', label: t('header.login') },
   ];
 
   return (

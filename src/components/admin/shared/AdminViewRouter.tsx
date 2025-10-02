@@ -16,6 +16,7 @@ import {
   AdminReports,
   AdminPasswordComplexity
 } from '..';
+import WorkflowConfiguration from '../WorkflowConfiguration';
 import AdminPricingSettings from '../AdminPricingSettings';
 import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
 import AdminRoleHierarchy from '../AdminRoleHierarchy';
@@ -39,7 +40,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1536,6 +1537,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onRefresh={refreshAllData}
           />
         );
+
+      case 'workflow-configuration':
+        return <WorkflowConfiguration />;
 
       default:
         return (

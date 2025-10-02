@@ -1,5 +1,5 @@
 import React from 'react';
-import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight } from 'lucide-react';
+import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight, LogIn } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
 import StructuredData from '../components/seo/StructuredData';
@@ -72,22 +72,32 @@ const Home: React.FC = () => {
                 {t('home.hero.subtitle')}
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
+              <div className="flex flex-col gap-4 items-center mb-16">
                 <a
-                  href="tel:+16199405550"
-                  className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
+                  href="/clogin"
+                  className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
                 >
-                  <Phone className="h-5 w-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
-                  {t('home.hero.callButton')}
+                  <LogIn className="h-5 w-5 mr-2 group-hover:translate-x-1 transition-transform duration-300" />
+                  Login/Signup
                 </a>
-                <a
-                  href="mailto:info@romerotechsolutions.com"
-                  className="group inline-flex items-center justify-center px-8 py-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-semibold rounded-xl border border-white/30 transition-all duration-300 hover:scale-105"
-                >
-                  <Mail className="h-5 w-5 mr-2" />
-                  {t('home.hero.quoteButton')}
-                  <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
-                </a>
+
+                <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
+                  <a
+                    href="tel:+16199405550"
+                    className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
+                  >
+                    <Phone className="h-5 w-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
+                    {t('home.hero.callButton')}
+                  </a>
+                  <a
+                    href="mailto:info@romerotechsolutions.com"
+                    className="group inline-flex items-center justify-center px-8 py-4 bg-white/10 backdrop-blur-sm hover:bg-white/20 text-white font-semibold rounded-xl border border-white/30 transition-all duration-300 hover:scale-105"
+                  >
+                    <Mail className="h-5 w-5 mr-2" />
+                    {t('home.hero.quoteButton')}
+                    <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform duration-300" />
+                  </a>
+                </div>
               </div>
             </div>
 
