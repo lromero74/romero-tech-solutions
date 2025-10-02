@@ -318,7 +318,9 @@ const AdminServiceHourRates: React.FC = () => {
                                 style={{
                                   backgroundColor: isUnassigned ? undefined : `${bgColor}40`,
                                   borderColor: tier ? bgColor : undefined,
-                                  borderWidth: tier ? '2px' : undefined
+                                  borderWidth: tier ? '2px' : undefined,
+                                  outline: 'none',
+                                  boxShadow: 'none'
                                 }}
                                 title={tier ? `${tier.tierName} (${tier.rateMultiplier}x)` : 'Unassigned'}
                               >
