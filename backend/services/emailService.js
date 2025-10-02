@@ -1474,11 +1474,12 @@ Email: info@romerotechsolutions.com
         html: html
       });
 
-      // Send to all employees
+      // Send to all employees with reply-to set to service request creator
       const employeePromises = employees.map(employee =>
         transporter.sendMail({
           from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
           to: employee.email,
+          replyTo: `"${clientData.firstName} ${clientData.lastName}" <${clientData.email}>`,
           subject: subject,
           text: text,
           html: html
@@ -1644,11 +1645,12 @@ Email: info@romerotechsolutions.com
         html: html
       });
 
-      // Send to all employees
+      // Send to all employees with reply-to set to service request creator
       const employeePromises = employees.map(employee =>
         transporter.sendMail({
           from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
           to: employee.email,
+          replyTo: `"${clientData.firstName} ${clientData.lastName}" <${clientData.email}>`,
           subject: subject,
           text: text,
           html: html
