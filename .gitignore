@@ -66,3 +66,6 @@ CLAUDE.md
 
 # Runtime log files
 nohup*.out
+
+# Registration logs
+backend/logs/registration-attempts.log
