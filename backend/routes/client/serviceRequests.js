@@ -4,7 +4,7 @@ import { clientContextMiddleware, requireClientAccess } from '../../middleware/c
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
-import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient } from '../../services/emailService.js';
+import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
 
 const router = express.Router();
 
@@ -563,6 +563,210 @@ router.get('/:id/files', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch service request files'
+    });
+  }
+});
+
+/**
+ * GET /api/client/service-requests/:id/notes
+ * Get notes for a specific service request
+ */
+router.get('/:id/notes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const businessId = req.user.businessId;
+    const clientId = req.user.id;
+
+    // Verify service request belongs to this client
+    const serviceRequestQuery = `
+      SELECT id FROM service_requests
+      WHERE id = $1 AND business_id = $2 AND client_id = $3 AND soft_delete = false
+    `;
+
+    const pool = await getPool();
+    const serviceRequestResult = await pool.query(serviceRequestQuery, [id, businessId, clientId]);
+
+    if (serviceRequestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    // Get notes visible to client
+    const notesQuery = `
+      SELECT
+        id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_name,
+        created_at
+      FROM service_request_notes
+      WHERE service_request_id = $1 AND is_visible_to_client = true
+      ORDER BY created_at DESC
+    `;
+
+    const notesResult = await pool.query(notesQuery, [id]);
+
+    res.json({
+      success: true,
+      data: {
+        serviceRequestId: id,
+        notes: notesResult.rows.map(row => ({
+          id: row.id,
+          noteText: row.note_text,
+          noteType: row.note_type,
+          createdByType: row.created_by_type,
+          createdByName: row.created_by_name,
+          createdAt: row.created_at
+        }))
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching service request notes:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch service request notes'
+    });
+  }
+});
+
+/**
+ * POST /api/client/service-requests/:id/notes
+ * Add a note to a service request
+ */
+router.post('/:id/notes', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { noteText } = req.body;
+    const businessId = req.user.businessId;
+    const clientId = req.user.id;
+    const clientEmail = req.user.email;
+
+    if (!noteText || noteText.trim().length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Note text is required'
+      });
+    }
+
+    // Verify service request belongs to this client
+    const serviceRequestQuery = `
+      SELECT id FROM service_requests
+      WHERE id = $1 AND business_id = $2 AND client_id = $3 AND soft_delete = false
+    `;
+
+    const pool = await getPool();
+    const serviceRequestResult = await pool.query(serviceRequestQuery, [id, businessId, clientId]);
+
+    if (serviceRequestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    // Insert note
+    const insertQuery = `
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at
+    `;
+
+    const insertResult = await pool.query(insertQuery, [
+      id,
+      noteText.trim(),
+      'client_note',
+      'client',
+      clientId,
+      clientEmail,
+      true
+    ]);
+
+    const newNote = insertResult.rows[0];
+
+    console.log(`📝 Note added to service request ${id} by client ${clientEmail}`);
+
+    // Get service request details for email notification
+    const srDetailsQuery = `
+      SELECT
+        sr.id,
+        sr.request_number,
+        sr.title,
+        sr.status,
+        sl.name as location_name,
+        u.id as client_id,
+        u.email as client_email,
+        u.first_name as client_first_name,
+        u.last_name as client_last_name,
+        u.phone as client_phone
+      FROM service_requests sr
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
+      LEFT JOIN users u ON sr.client_id = u.id
+      WHERE sr.id = $1
+    `;
+
+    const srDetails = await pool.query(srDetailsQuery, [id]);
+    const serviceRequest = srDetails.rows[0];
+
+    // Send email notifications (non-blocking)
+    if (serviceRequest) {
+      sendNoteAdditionNotification({
+        serviceRequest: {
+          requestNumber: serviceRequest.request_number,
+          title: serviceRequest.title,
+          status: serviceRequest.status,
+          locationName: serviceRequest.location_name
+        },
+        note: {
+          noteText: newNote.note_text,
+          createdAt: newNote.created_at
+        },
+        noteCreator: {
+          name: clientEmail,
+          email: clientEmail,
+          phone: serviceRequest.client_phone
+        },
+        clientData: {
+          email: serviceRequest.client_email,
+          firstName: serviceRequest.client_first_name,
+          lastName: serviceRequest.client_last_name,
+          phone: serviceRequest.client_phone
+        }
+      }).catch(err => {
+        console.error('❌ Failed to send note addition email notifications:', err);
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Note added successfully',
+      data: {
+        note: {
+          id: newNote.id,
+          noteText: newNote.note_text,
+          noteType: newNote.note_type,
+          createdByType: newNote.created_by_type,
+          createdByName: newNote.created_by_name,
+          createdAt: newNote.created_at
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error adding service request note:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to add note'
     });
   }
 });

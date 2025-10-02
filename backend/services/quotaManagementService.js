@@ -70,12 +70,12 @@ class QuotaManagementService {
           q.*,
           COALESCE(u.total_used_bytes, 0) as current_usage_bytes,
           CASE
-            WHEN q.hard_limit_bytes > 0 THEN
-              ROUND((COALESCE(u.total_used_bytes, 0)::numeric / q.hard_limit_bytes::numeric) * 100, 2)
+            WHEN q.storage_limit_bytes > 0 THEN
+              ROUND((COALESCE(u.total_used_bytes, 0)::numeric / q.storage_limit_bytes::numeric) * 100, 2)
             ELSE 0
           END as usage_percentage,
           CASE
-            WHEN q.hard_limit_bytes > 0 THEN (q.hard_limit_bytes - COALESCE(u.total_used_bytes, 0))
+            WHEN q.storage_limit_bytes > 0 THEN (q.storage_limit_bytes - COALESCE(u.total_used_bytes, 0))
             ELSE -1
           END as available_bytes
         FROM t_client_storage_quotas q
@@ -103,13 +103,12 @@ class QuotaManagementService {
       return {
         businessId: quota.business_id,
         quotaType: quota.quota_type,
-        softLimitBytes: parseInt(quota.soft_limit_bytes),
-        hardLimitBytes: parseInt(quota.hard_limit_bytes),
+        softLimitBytes: parseInt(quota.storage_soft_limit_bytes || 0),
+        hardLimitBytes: parseInt(quota.storage_limit_bytes),
         currentUsageBytes: parseInt(quota.current_usage_bytes),
         availableBytes: parseInt(quota.available_bytes),
         usagePercentage: parseFloat(quota.usage_percentage),
         warningLevel: this.getWarningLevel(parseFloat(quota.usage_percentage)),
-        isActive: quota.is_active,
         createdAt: quota.created_at,
         updatedAt: quota.updated_at
       };
@@ -146,13 +145,12 @@ class QuotaManagementService {
       return {
         businessId: quota.business_id,
         quotaType: quota.quota_type,
-        softLimitBytes: parseInt(quota.soft_limit_bytes),
-        hardLimitBytes: parseInt(quota.hard_limit_bytes),
+        softLimitBytes: parseInt(quota.storage_soft_limit_bytes || 0),
+        hardLimitBytes: parseInt(quota.storage_limit_bytes),
         currentUsageBytes: 0,
-        availableBytes: parseInt(quota.hard_limit_bytes),
+        availableBytes: parseInt(quota.storage_limit_bytes),
         usagePercentage: 0,
         warningLevel: 'none',
-        isActive: quota.is_active,
         createdAt: quota.created_at,
         updatedAt: quota.updated_at
       };
@@ -219,11 +217,11 @@ class QuotaManagementService {
       // Insert file record
       const fileQuery = `
         INSERT INTO t_client_files (
-          business_id, service_location_id, user_id, file_name, original_name,
-          file_size_bytes, mime_type, file_path, category_id, description,
-          is_public, metadata
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-        RETURNING file_id, created_at
+          business_id, service_location_id, uploaded_by_user_id, stored_filename, original_filename,
+          file_size_bytes, content_type, file_path, file_category_id, file_description,
+          is_public_to_business
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        RETURNING id, created_at
       `;
 
       const fileValues = [
@@ -237,18 +235,17 @@ class QuotaManagementService {
         fileData.filePath,
         fileData.categoryId || null,
         fileData.description || null,
-        fileData.isPublic || false,
-        fileData.metadata || {}
+        fileData.isPublic || false
       ];
 
       const fileResult = await client.query(fileQuery, fileValues);
-      const fileId = fileResult.rows[0].file_id;
+      const fileId = fileResult.rows[0].id;
 
       // Log file access
       const accessQuery = `
         INSERT INTO t_client_file_access_log (
-          file_id, user_id, action_type, ip_address, user_agent
-        ) VALUES ($1, $2, 'upload', $3, $4)
+          client_file_id, accessed_by_user_id, access_type, access_granted, ip_address, user_agent
+        ) VALUES ($1, $2, 'upload', true, $3, $4)
       `;
 
       await client.query(accessQuery, [

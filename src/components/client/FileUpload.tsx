@@ -35,8 +35,14 @@ interface QuotaInfo {
   warningLevel: string;
 }
 
+export interface UploadedFileInfo {
+  fileId: string;
+  file: File;
+  scanId?: string;
+}
+
 interface FileUploadProps {
-  onUploadComplete?: (files: File[]) => void;
+  onUploadComplete?: (files: UploadedFileInfo[]) => void;
   onQuotaUpdate?: (quota: QuotaInfo) => void;
   serviceLocationId?: string;
   categoryId?: string;
@@ -236,6 +242,15 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 // Update quota info
                 setQuotaInfo(result.data.quotaInfo);
                 onQuotaUpdate?.(result.data.quotaInfo);
+
+                // Notify parent of successful upload
+                if (uploadedFile.fileId) {
+                  onUploadComplete?.([{
+                    fileId: uploadedFile.fileId,
+                    file: upload.file,
+                    scanId: uploadedFile.scanId
+                  }]);
+                }
 
               } else if (result.data.failedFiles.length > 0) {
                 const failedFile = result.data.failedFiles[0];

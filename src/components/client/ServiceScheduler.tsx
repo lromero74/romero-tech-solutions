@@ -3,7 +3,7 @@ import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { apiService } from '../../services/apiService';
-import FileUpload from './FileUpload';
+import FileUpload, { UploadedFileInfo } from './FileUpload';
 import ResourceTimeSlotScheduler from './ResourceTimeSlotScheduler';
 import { useUrgencyLevels } from './ServiceScheduler/useUrgencyLevels';
 import { generateCalendar, navigateMonth, isToday, isSameMonth, getMonthTranslationKey, getMonthShortTranslationKey, getDayTranslationKey } from './ServiceScheduler/calendarUtils';
@@ -43,7 +43,7 @@ const ServiceScheduler: React.FC = () => {
   const [contactEmail, setContactEmail] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFileInfo[]>([]);
   const [calendarView, setCalendarView] = useState<'year' | 'month' | 'week' | 'today'>('month');
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
   const [costBreakdown, setCostBreakdown] = useState<{
@@ -58,7 +58,7 @@ const ServiceScheduler: React.FC = () => {
   const { urgencyLevels } = useUrgencyLevels();
 
   // Handle file upload completion
-  const handleFileUploadComplete = (files: File[]) => {
+  const handleFileUploadComplete = (files: UploadedFileInfo[]) => {
     setUploadedFiles(prev => [...prev, ...files]);
   };
 

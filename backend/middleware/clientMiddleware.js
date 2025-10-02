@@ -27,10 +27,10 @@ export const clientContextMiddleware = async (req, res, next) => {
         'Business Location' as location_name,
         true as is_headquarters
       FROM users u
-      WHERE u.email = $1 AND u.role = 'client'
+      WHERE u.id = $1
     `;
 
-    const result = await pool.query(clientQuery, [req.user.email]);
+    const result = await pool.query(clientQuery, [req.user.id]);
 
     if (result.rows.length === 0) {
       return res.status(403).json({

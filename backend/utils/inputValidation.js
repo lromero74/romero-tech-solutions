@@ -22,6 +22,28 @@ export const FILE_VALIDATION = {
     allowedTypes: ['image/jpeg', 'image/jpg', 'image/png'],
     maxSize: 2 * 1024 * 1024, // 2MB
     allowedExtensions: ['.jpg', '.jpeg', '.png']
+  },
+  attachments: {
+    allowedTypes: [
+      // Documents
+      'application/pdf',
+      'text/plain',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      // Images
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      // Archives
+      'application/zip',
+      'application/x-zip-compressed',
+      'application/gzip'
+    ],
+    maxSize: 50 * 1024 * 1024, // 50MB (matches multer config in files.js)
+    allowedExtensions: ['.pdf', '.txt', '.doc', '.docx', '.xls', '.xlsx', '.jpg', '.jpeg', '.png', '.gif', '.webp', '.zip', '.gz']
   }
 };
 

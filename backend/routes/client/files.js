@@ -3,6 +3,7 @@ import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import crypto from 'crypto';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware, requireClientAccess } from '../../middleware/clientMiddleware.js';
@@ -77,7 +78,7 @@ const clientFileFilter = (req, file, cb) => {
 
   console.log(`🔍 File upload attempt: ${file.originalname}, MIME type: ${file.mimetype}`);
 
-  const validation = validateFileUpload(file, 'documents');
+  const validation = validateFileUpload(file, 'attachments');
 
   if (!allowedTypes.includes(file.mimetype)) {
     console.log(`❌ File type rejected: ${file.mimetype}`);
@@ -143,7 +144,7 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
       businessId,
       totalSizeBytes,
       serviceLocationId,
-      req.user.userId
+      req.user.id
     );
 
     if (!quotaCheck.canUpload) {
@@ -173,7 +174,7 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
         const scanResult = await virusScanService.scanFile(file.path, {
           originalName: file.originalname,
           size: file.size,
-          userId: req.user.userId,
+          userId: req.user.id,
           businessId: businessId,
           serviceLocationId: serviceLocationId
         });
@@ -210,7 +211,7 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
         const fileData = {
           businessId: businessId,
           serviceLocationId: serviceLocationId,
-          userId: req.user.userId,
+          userId: req.user.id,
           fileName: file.filename,
           originalName: file.originalname,
           fileSizeBytes: file.size,
@@ -413,6 +414,89 @@ router.get('/quota', async (req, res) => {
 });
 
 /**
+ * GET /api/client/files/:fileId/download
+ * Download a file
+ */
+router.get('/:fileId/download', async (req, res) => {
+  try {
+    const { fileId } = req.params;
+    const businessId = req.user.businessId;
+
+    // Verify file belongs to this business and get file details
+    const query = `
+      SELECT id, file_path, original_filename, content_type
+      FROM t_client_files
+      WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
+    `;
+
+    const pool = await getPool();
+    const result = await pool.query(query, [fileId, businessId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    const fileRecord = result.rows[0];
+
+    // Check if file exists on disk
+    try {
+      await fs.access(fileRecord.file_path);
+    } catch {
+      console.error(`❌ File not found on disk: ${fileRecord.file_path}`);
+      return res.status(404).json({
+        success: false,
+        message: 'File not found on server'
+      });
+    }
+
+    // Log file access
+    const logQuery = `
+      INSERT INTO t_client_file_access_log (
+        client_file_id, accessed_by_user_id, access_type, access_granted, ip_address, user_agent
+      ) VALUES ($1, $2, 'download', true, $3, $4)
+    `;
+
+    await pool.query(logQuery, [
+      fileId,
+      req.user.id,
+      req.ip,
+      req.get('User-Agent')
+    ]);
+
+    // Update download count
+    const updateQuery = `
+      UPDATE t_client_files
+      SET download_count = COALESCE(download_count, 0) + 1,
+          last_downloaded_at = CURRENT_TIMESTAMP,
+          last_downloaded_by_user_id = $2
+      WHERE id = $1
+    `;
+
+    await pool.query(updateQuery, [fileId, req.user.id]);
+
+    console.log(`📥 File downloaded: ${fileRecord.original_filename} by user ${req.user.email}`);
+
+    // Set headers for download
+    res.setHeader('Content-Type', fileRecord.content_type);
+    res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_filename}"`);
+
+    // Stream file to response
+    const fileStream = createReadStream(fileRecord.file_path);
+    fileStream.pipe(res);
+
+  } catch (error) {
+    console.error('❌ Error downloading file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to download file'
+    });
+  }
+});
+
+/**
  * DELETE /api/client/files/:fileId
  * Delete a file (soft delete)
  */
@@ -448,18 +532,18 @@ router.delete('/:fileId', async (req, res) => {
       WHERE file_id = $1 AND business_id = $2
     `;
 
-    await pool.query(deleteQuery, [fileId, businessId, req.user.userId]);
+    await pool.query(deleteQuery, [fileId, businessId, req.user.id]);
 
     // Log deletion
     const logQuery = `
       INSERT INTO t_client_file_access_log (
-        file_id, user_id, action_type, ip_address, user_agent
-      ) VALUES ($1, $2, 'delete', $3, $4)
+        client_file_id, accessed_by_user_id, access_type, access_granted, ip_address, user_agent
+      ) VALUES ($1, $2, 'delete', true, $3, $4)
     `;
 
     await pool.query(logQuery, [
       fileId,
-      req.user.userId,
+      req.user.id,
       req.ip,
       req.get('User-Agent')
     ]);

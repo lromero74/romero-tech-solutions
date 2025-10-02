@@ -1299,6 +1299,343 @@ Serving Escondido, CA and surrounding areas.
   }
 
   /**
+   * Send service request creation notification
+   * Sends to: creator (client) and all employees with admin, executive, or technician roles
+   */
+  async sendServiceRequestCreationNotification({ serviceRequest, clientData }) {
+    try {
+      console.log('📧 Sending service request creation notifications...');
+
+      const pool = await getPool();
+
+      // Get employees with admin, executive, or technician roles
+      const employeesQuery = `
+        SELECT id, email, first_name, last_name, role
+        FROM employees
+        WHERE role IN ('admin', 'executive', 'technician')
+        AND is_active = true
+      `;
+      const employeesResult = await pool.query(employeesQuery);
+      const employees = employeesResult.rows;
+
+      console.log(`📬 Found ${employees.length} employees to notify`);
+
+      const subject = `New Service Request Created: ${serviceRequest.requestNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+              .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+              .tagline { font-size: 14px; opacity: 0.9; }
+              .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+              .request-number { background: #3b82f6; color: white; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; font-size: 20px; font-weight: bold; }
+              .details-grid { display: grid; grid-template-columns: 150px 1fr; gap: 10px; margin: 15px 0; }
+              .detail-label { font-weight: bold; color: #374151; }
+              .detail-value { color: #111827; }
+              .contact-box { background: #e0f2fe; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div style="text-align: center; margin-bottom: 10px;">
+                  <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                </div>
+                <div class="logo">Romero Tech Solutions</div>
+                <div class="tagline">New Service Request</div>
+              </div>
+
+              <div class="content">
+                <h2 style="color: #1e293b; margin-bottom: 15px;">Service Request Created</h2>
+
+                <div class="request-number">
+                  ${serviceRequest.requestNumber}
+                </div>
+
+                <div class="details-grid">
+                  <div class="detail-label">Title:</div>
+                  <div class="detail-value"><strong>${serviceRequest.title}</strong></div>
+
+                  <div class="detail-label">Description:</div>
+                  <div class="detail-value">${serviceRequest.description}</div>
+
+                  <div class="detail-label">Service Location:</div>
+                  <div class="detail-value">${serviceRequest.locationName || 'Not specified'}</div>
+
+                  ${serviceRequest.requestedDate ? `
+                    <div class="detail-label">Requested Date:</div>
+                    <div class="detail-value">${new Date(serviceRequest.requestedDate).toLocaleDateString()}</div>
+                  ` : ''}
+
+                  ${serviceRequest.requestedTimeStart ? `
+                    <div class="detail-label">Requested Time:</div>
+                    <div class="detail-value">${serviceRequest.requestedTimeStart} - ${serviceRequest.requestedTimeEnd || ''}</div>
+                  ` : ''}
+
+                  <div class="detail-label">Status:</div>
+                  <div class="detail-value">${serviceRequest.status}</div>
+                </div>
+
+                <div class="contact-box">
+                  <p style="margin: 0; font-weight: bold; color: #0c4a6e;">📞 Created By:</p>
+                  <p style="margin: 10px 0 0 0; color: #0c4a6e;">
+                    <strong>${clientData.firstName} ${clientData.lastName}</strong><br>
+                    📧 <a href="mailto:${clientData.email}" style="color: #0ea5e9;">${clientData.email}</a><br>
+                    ${clientData.phone ? `📱 <a href="tel:${clientData.phone}" style="color: #0ea5e9;">${clientData.phone}</a>` : ''}
+                  </p>
+                </div>
+              </div>
+
+              <div class="footer">
+                <p><strong>Questions? Contact us:</strong></p>
+                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p style="margin-top: 15px;">
+                  © 2025 Romero Tech Solutions. All rights reserved.<br>
+                  Serving Escondido, CA and surrounding areas.
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const text = `
+New Service Request Created: ${serviceRequest.requestNumber}
+
+Title: ${serviceRequest.title}
+Description: ${serviceRequest.description}
+Service Location: ${serviceRequest.locationName || 'Not specified'}
+${serviceRequest.requestedDate ? `Requested Date: ${new Date(serviceRequest.requestedDate).toLocaleDateString()}` : ''}
+${serviceRequest.requestedTimeStart ? `Requested Time: ${serviceRequest.requestedTimeStart} - ${serviceRequest.requestedTimeEnd || ''}` : ''}
+Status: ${serviceRequest.status}
+
+Created By:
+${clientData.firstName} ${clientData.lastName}
+Email: ${clientData.email}
+${clientData.phone ? `Phone: ${clientData.phone}` : ''}
+
+Questions? Contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+      `;
+
+      // Send to client (creator)
+      const clientPromise = transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: clientData.email,
+        subject: subject,
+        text: text,
+        html: html
+      });
+
+      // Send to all employees
+      const employeePromises = employees.map(employee =>
+        transporter.sendMail({
+          from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+          to: employee.email,
+          subject: subject,
+          text: text,
+          html: html
+        })
+      );
+
+      const results = await Promise.allSettled([clientPromise, ...employeePromises]);
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failureCount = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`✅ Service request creation notifications: ${successCount} sent, ${failureCount} failed`);
+
+      return {
+        success: true,
+        totalRecipients: results.length,
+        successCount,
+        failureCount
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending service request creation notifications:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send note addition notification
+   * Sends to: service request creator and all employees with admin, executive, or technician roles
+   */
+  async sendNoteAdditionNotification({ serviceRequest, note, noteCreator, clientData }) {
+    try {
+      console.log('📧 Sending note addition notifications...');
+
+      const pool = await getPool();
+
+      // Get employees with admin, executive, or technician roles
+      const employeesQuery = `
+        SELECT id, email, first_name, last_name, role
+        FROM employees
+        WHERE role IN ('admin', 'executive', 'technician')
+        AND is_active = true
+      `;
+      const employeesResult = await pool.query(employeesQuery);
+      const employees = employeesResult.rows;
+
+      console.log(`📬 Found ${employees.length} employees to notify about note`);
+
+      const subject = `New Note Added to Service Request: ${serviceRequest.requestNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+              .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+              .tagline { font-size: 14px; opacity: 0.9; }
+              .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+              .request-number { background: #3b82f6; color: white; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; font-size: 18px; font-weight: bold; }
+              .note-box { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 20px; margin: 20px 0; border-radius: 4px; }
+              .note-header { font-size: 12px; color: #92400e; margin-bottom: 10px; }
+              .note-text { color: #78350f; white-space: pre-wrap; }
+              .contact-box { background: #e0f2fe; border-left: 4px solid #0ea5e9; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div style="text-align: center; margin-bottom: 10px;">
+                  <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                </div>
+                <div class="logo">Romero Tech Solutions</div>
+                <div class="tagline">New Note Added</div>
+              </div>
+
+              <div class="content">
+                <h2 style="color: #1e293b; margin-bottom: 15px;">Note Added to Service Request</h2>
+
+                <div class="request-number">
+                  ${serviceRequest.requestNumber}: ${serviceRequest.title}
+                </div>
+
+                <div class="note-box">
+                  <div class="note-header">
+                    <strong>${noteCreator.name}</strong> • ${noteCreator.email} • ${new Date(note.createdAt).toLocaleString()}
+                  </div>
+                  <div class="note-text">${note.noteText}</div>
+                </div>
+
+                <div class="contact-box">
+                  <p style="margin: 0; font-weight: bold; color: #0c4a6e;">📞 Note Added By:</p>
+                  <p style="margin: 10px 0 0 0; color: #0c4a6e;">
+                    <strong>${noteCreator.name}</strong><br>
+                    📧 <a href="mailto:${noteCreator.email}" style="color: #0ea5e9;">${noteCreator.email}</a><br>
+                    ${noteCreator.phone ? `📱 <a href="tel:${noteCreator.phone}" style="color: #0ea5e9;">${noteCreator.phone}</a>` : ''}
+                  </p>
+                </div>
+
+                <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
+                  Service Request: ${serviceRequest.requestNumber}<br>
+                  Location: ${serviceRequest.locationName || 'Not specified'}<br>
+                  Status: ${serviceRequest.status}
+                </p>
+              </div>
+
+              <div class="footer">
+                <p><strong>Questions? Contact us:</strong></p>
+                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p style="margin-top: 15px;">
+                  © 2025 Romero Tech Solutions. All rights reserved.<br>
+                  Serving Escondido, CA and surrounding areas.
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const text = `
+New Note Added to Service Request: ${serviceRequest.requestNumber}
+
+Service Request: ${serviceRequest.requestNumber}: ${serviceRequest.title}
+
+NOTE:
+${noteCreator.name} • ${noteCreator.email} • ${new Date(note.createdAt).toLocaleString()}
+${note.noteText}
+
+Note Added By:
+${noteCreator.name}
+Email: ${noteCreator.email}
+${noteCreator.phone ? `Phone: ${noteCreator.phone}` : ''}
+
+Service Request Details:
+Request Number: ${serviceRequest.requestNumber}
+Location: ${serviceRequest.locationName || 'Not specified'}
+Status: ${serviceRequest.status}
+
+Questions? Contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+      `;
+
+      // Send to client (service request creator)
+      const clientPromise = transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: clientData.email,
+        subject: subject,
+        text: text,
+        html: html
+      });
+
+      // Send to all employees
+      const employeePromises = employees.map(employee =>
+        transporter.sendMail({
+          from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+          to: employee.email,
+          subject: subject,
+          text: text,
+          html: html
+        })
+      );
+
+      const results = await Promise.allSettled([clientPromise, ...employeePromises]);
+
+      const successCount = results.filter(r => r.status === 'fulfilled').length;
+      const failureCount = results.filter(r => r.status === 'rejected').length;
+
+      console.log(`✅ Note addition notifications: ${successCount} sent, ${failureCount} failed`);
+
+      return {
+        success: true,
+        totalRecipients: results.length,
+        successCount,
+        failureCount
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending note addition notifications:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Generic email sending method for custom emails
    * @param {Object} params - Email parameters
    * @param {string} params.to - Recipient email address
@@ -1348,5 +1685,7 @@ export const sendNotificationEmail = (params) => emailService.sendNotificationEm
 export const sendEmail = (params) => emailService.sendEmail(params);
 export const sendServiceRequestNotificationToTechnicians = (params) => emailService.sendServiceRequestNotificationToTechnicians(params);
 export const sendServiceRequestConfirmationToClient = (params) => emailService.sendServiceRequestConfirmationToClient(params);
+export const sendServiceRequestCreationNotification = (params) => emailService.sendServiceRequestCreationNotification(params);
+export const sendNoteAdditionNotification = (params) => emailService.sendNoteAdditionNotification(params);
 
 export default emailService;

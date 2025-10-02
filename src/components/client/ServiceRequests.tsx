@@ -71,6 +71,15 @@ interface ServiceRequestFile {
   createdAt: string;
 }
 
+interface ServiceRequestNote {
+  id: string;
+  noteText: string;
+  noteType: string;
+  createdByType: string;
+  createdByName: string;
+  createdAt: string;
+}
+
 interface PaginationInfo {
   page: number;
   limit: number;
@@ -116,6 +125,10 @@ const ServiceRequests: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
   const [requestFiles, setRequestFiles] = useState<ServiceRequestFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [requestNotes, setRequestNotes] = useState<ServiceRequestNote[]>([]);
+  const [loadingNotes, setLoadingNotes] = useState(false);
+  const [newNoteText, setNewNoteText] = useState('');
+  const [submittingNote, setSubmittingNote] = useState(false);
 
   // Status color mapping
   const getStatusColor = (status: string) => {
@@ -274,14 +287,95 @@ const ServiceRequests: React.FC = () => {
     }
   };
 
+  // Fetch notes for a service request
+  const fetchRequestNotes = async (requestId: string) => {
+    try {
+      setLoadingNotes(true);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${requestId}/notes`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch request notes: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        setRequestNotes(data.data.notes);
+      } else {
+        throw new Error(data.message || 'Failed to fetch request notes');
+      }
+    } catch (err) {
+      console.error('Error fetching request notes:', err);
+      setRequestNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  // Submit a new note
+  const submitNote = async () => {
+    if (!selectedRequest || !newNoteText.trim()) return;
+
+    try {
+      setSubmittingNote(true);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) {
+        throw new Error('No session token found');
+      }
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/notes`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include',
+        body: JSON.stringify({ noteText: newNoteText.trim() })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to submit note: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        // Add the new note to the list
+        setRequestNotes(prev => [data.data.note, ...prev]);
+        setNewNoteText('');
+      } else {
+        throw new Error(data.message || 'Failed to submit note');
+      }
+    } catch (err) {
+      console.error('Error submitting note:', err);
+      alert(t('serviceRequests.noteSubmitError', undefined, 'Failed to submit note. Please try again.'));
+    } finally {
+      setSubmittingNote(false);
+    }
+  };
+
   // Handle view request details
   const handleViewRequest = (request: ServiceRequest) => {
     setSelectedRequest(request);
+    setNewNoteText('');
     if (request.fileCount > 0) {
       fetchRequestFiles(request.id);
     } else {
       setRequestFiles([]);
     }
+    fetchRequestNotes(request.id);
   };
 
   // Format file size
@@ -779,6 +873,69 @@ const ServiceRequests: React.FC = () => {
                     </div>
                   )}
 
+                  {/* Notes Section */}
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('serviceRequests.notes', undefined, 'Notes')}</h4>
+
+                    {/* Add Note Form */}
+                    <div className="mb-4">
+                      <textarea
+                        value={newNoteText}
+                        onChange={(e) => setNewNoteText(e.target.value)}
+                        placeholder={t('serviceRequests.addNotePlaceholder', undefined, 'Add a note...')}
+                        className={`w-full px-3 py-2 border ${themeClasses.border} rounded-md ${themeClasses.background} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
+                        rows={3}
+                        disabled={submittingNote}
+                      />
+                      <div className="mt-2 flex justify-end">
+                        <button
+                          onClick={submitNote}
+                          disabled={!newNoteText.trim() || submittingNote}
+                          className={`px-4 py-2 rounded-md text-white ${
+                            !newNoteText.trim() || submittingNote
+                              ? 'bg-gray-400 cursor-not-allowed'
+                              : 'bg-blue-600 hover:bg-blue-700'
+                          } transition-colors text-sm`}
+                        >
+                          {submittingNote ? (
+                            <span className="flex items-center gap-2">
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              {t('serviceRequests.submittingNote', undefined, 'Submitting...')}
+                            </span>
+                          ) : (
+                            t('serviceRequests.addNote', undefined, 'Add Note')
+                          )}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Notes List */}
+                    {loadingNotes ? (
+                      <div className="flex items-center gap-2 text-gray-500">
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        <span>{t('serviceRequests.loadingNotes', undefined, 'Loading notes...')}</span>
+                      </div>
+                    ) : requestNotes.length > 0 ? (
+                      <div className="space-y-3">
+                        {requestNotes.map((note, index) => (
+                          <div key={note.id}>
+                            {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                              <span className="font-medium">{note.createdByName}</span>
+                              {' • '}
+                              <span>{new Date(note.createdAt).toLocaleString(getLocale())}</span>
+                            </div>
+                            <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                              {note.noteText}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-gray-500 dark:text-gray-400">{t('serviceRequests.noNotes', undefined, 'No notes yet')}</p>
+                    )}
+                  </div>
+
                   {/* Files Section */}
                   {selectedRequest.fileCount > 0 && (
                     <div>
@@ -808,9 +965,11 @@ const ServiceRequests: React.FC = () => {
                               <button
                                 onClick={() => {
                                   // Handle file download
-                                  window.open(`/api/client/files/${file.id}/download`, '_blank');
+                                  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+                                  window.open(`${apiBaseUrl}/client/files/${file.id}/download`, '_blank');
                                 }}
                                 className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                title={t('serviceRequests.downloadFile', undefined, 'Download file')}
                               >
                                 <Download className="h-4 w-4" />
                               </button>

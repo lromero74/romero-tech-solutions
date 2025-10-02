@@ -171,27 +171,26 @@ class VirusScanService {
     try {
       const query = `
         INSERT INTO t_file_virus_scan_log (
-          scan_id, file_path, file_name, file_size,
-          is_infected, virus_name, scan_time_ms,
-          scan_engine, scan_success, error_message,
-          user_id, business_id, service_location_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          client_file_id, scan_engine, scan_version, scan_started_at,
+          scan_completed_at, scan_duration_ms, scan_status,
+          threats_found, threat_names, scan_raw_output,
+          action_taken, action_reason
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       `;
 
       const values = [
-        scanResult.scanId,
-        scanResult.filePath,
-        scanResult.fileName,
-        scanResult.fileSize,
-        scanResult.isInfected,
-        scanResult.virusName,
-        scanResult.scanTime,
-        scanResult.scanEngine,
-        scanResult.scanSuccess,
-        scanResult.errorMessage,
-        fileInfo.userId || null,
-        fileInfo.businessId || null,
-        fileInfo.serviceLocationId || null
+        fileInfo.fileId || null,
+        scanResult.scanEngine || 'mock',
+        scanResult.scanVersion || '1.0',
+        new Date(),
+        new Date(),
+        scanResult.scanTime || 0,
+        scanResult.scanSuccess ? (scanResult.isInfected ? 'infected' : 'clean') : 'error',
+        scanResult.isInfected ? 1 : 0,
+        scanResult.virusName ? [scanResult.virusName] : null,
+        scanResult.errorMessage || null,
+        scanResult.isInfected ? 'quarantine' : 'none',
+        scanResult.isInfected ? `Virus detected: ${scanResult.virusName}` : null
       ];
 
       const pool = await getPool();
