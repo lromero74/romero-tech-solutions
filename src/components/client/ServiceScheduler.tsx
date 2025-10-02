@@ -441,7 +441,7 @@ const ServiceScheduler: React.FC = () => {
       const result = await apiService.request('/client/schedule-appointment', {
         method: 'POST',
         body: JSON.stringify({
-          resourceId,
+          resourceId: selectedLocation, // Use service location from form, not from scheduler
           startTime: startTime.toISOString(),
           endTime: endTime.toISOString(),
           serviceTypeId: selectedServiceType,
@@ -450,8 +450,7 @@ const ServiceScheduler: React.FC = () => {
         })
       });
 
-      // Update the selected time and location to reflect the booking
-      setSelectedLocation(resourceId);
+      // Update the selected time to reflect the booking
       setSelectedTime(startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
       setSelectedDate(startTime);
 
