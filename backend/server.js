@@ -13,6 +13,7 @@ import clientRegistrationRoutes from './routes/clientRegistration.js';
 import uploadRoutes from './routes/uploads.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
+import adminWorkflowConfigRoutes from './routes/admin/workflowConfiguration.js';
 import locationRoutes from './routes/locations.js';
 import publicRoutes from './routes/public.js';
 import securityRoutes from './routes/security.js';
@@ -26,6 +27,7 @@ import trustedDevicesRoutes from './routes/trustedDevices.js';
 import serviceAreasRoutes from './routes/serviceAreas.js';
 import emailVerificationRoutes from './routes/emailVerification.js';
 import serviceRequestWorkflowRoutes from './routes/serviceRequestWorkflow.js';
+import employeeServiceRequestWorkflowRoutes from './routes/employee/serviceRequestWorkflow.js';
 import serviceTypesRoutes from './routes/serviceTypes.js';
 
 // Import session service for cleanup
@@ -36,6 +38,9 @@ import { verificationCleanupService } from './services/verificationCleanupServic
 
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
+
+// Import workflow scheduler
+import { workflowScheduler } from './services/workflowScheduler.js';
 
 // Import security middleware
 import {
@@ -346,6 +351,7 @@ const authRateLimiter = (req, res, next) => {
 // API Routes with security middleware
 app.use('/api/auth', authRateLimiter, conditionalCsrfProtection, authRoutes); // Conditional rate limiting (heartbeat vs auth) + conditional CSRF
 app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRoutes); // Admin rate limiting + IP whitelist + CSRF
+app.use('/api/admin/workflow-configuration', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminWorkflowConfigRoutes); // Workflow configuration (admin only) + CSRF
 app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET
 app.use('/api/locations', generalLimiter, doubleCsrfProtection, locationRoutes); // General rate limiting + CSRF
@@ -360,6 +366,7 @@ app.use('/api/translations', generalLimiter, translationsRoutes); // Translation
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
 app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD
 app.use('/api/service-request-workflow', generalLimiter, doubleCsrfProtection, serviceRequestWorkflowRoutes); // Service request workflow + CSRF
+app.use('/api/employee/service-requests', generalLimiter, doubleCsrfProtection, employeeServiceRequestWorkflowRoutes); // Employee workflow actions (acknowledge, start, close) + CSRF
 app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 
 // Pre-authentication trusted device check (no auth required)
@@ -499,6 +506,9 @@ const startServer = async () => {
 
     // Initialize WebSocket service
     websocketService.initialize(httpServer);
+
+    // Start workflow scheduler for service request automation
+    workflowScheduler.start();
 
     // Start the server
     httpServer.listen(PORT, () => {

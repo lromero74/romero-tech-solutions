@@ -5,6 +5,7 @@ import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
+import { initializeServiceRequestWorkflow } from '../../services/workflowService.js';
 
 const router = express.Router();
 
@@ -167,140 +168,44 @@ router.post('/', async (req, res) => {
     // Log the creation
     console.log(`📋 Service request created: ${requestNumber} for business ${businessId}`);
 
-    // Send email notifications (async - don't block response)
-    const sendNotifications = async () => {
+    // Initialize automated workflow (async - don't block response)
+    const initializeWorkflow = async () => {
       try {
-        // 1. Fetch active technicians
-        const techniciansQuery = `
-          SELECT e.id, e.first_name as "firstName", e.email
-          FROM employees e
-          WHERE e.is_active = true
-            AND e.soft_delete = false
-            AND e.employee_status_id IN (
-              SELECT id FROM employee_statuses
-              WHERE name IN ('Active', 'Available')
-                AND name NOT IN ('Vacation', 'Sick', 'Unavailable')
-            )
-        `;
-        const techniciansResult = await pool.query(techniciansQuery);
-        const activeTechnicians = techniciansResult.rows;
-
-        // 2. Fetch detailed service request data for notifications
+        // Fetch detailed service request data for workflow initialization
         const serviceRequestDetailsQuery = `
           SELECT
             sr.request_number,
             sr.title,
             sr.description,
-            sr.scheduled_date,
-            sr.scheduled_time_start as scheduled_time,
-            sr.primary_contact_name as contact_name,
-            sr.primary_contact_phone as contact_phone,
-            sr.primary_contact_email as contact_email,
-            b.business_name,
             u.first_name as client_first_name,
-            u.last_name as client_last_name,
-            u.email as client_email,
-            sl.location_name as service_location,
-            sl.street_address_1,
-            sl.street_address_2,
-            sl.street,
-            sl.city,
-            sl.state,
-            sl.zip_code,
-            sl.contact_phone as location_contact_phone,
-            sl.contact_person as location_contact_person,
-            sl.contact_email as location_contact_email,
-            sl.notes as location_notes,
-            ul.name as urgency_level,
-            pl.name as priority_level,
-            st.name as service_type
+            u.last_name as client_last_name
           FROM service_requests sr
-          JOIN businesses b ON sr.business_id = b.id
           JOIN users u ON sr.client_id = u.id
-          LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
-          LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
-          LEFT JOIN priority_levels pl ON sr.priority_level_id = pl.id
-          LEFT JOIN service_types st ON sr.service_type_id = st.id
           WHERE sr.id = $1
         `;
         const detailsResult = await pool.query(serviceRequestDetailsQuery, [serviceRequestId]);
         const srDetails = detailsResult.rows[0];
 
-        // 3. Send notifications to technicians if any are active
-        if (activeTechnicians.length > 0) {
-          const serviceRequestData = {
-            requestNumber: srDetails.request_number,
-            title: srDetails.title,
-            description: srDetails.description,
-            businessName: srDetails.business_name,
-            clientName: `${srDetails.client_first_name} ${srDetails.client_last_name}`,
-            serviceLocation: srDetails.service_location || 'Not specified',
-            serviceLocationDetails: srDetails.service_location ? {
-              location_name: srDetails.service_location,
-              street_address_1: srDetails.street_address_1,
-              street_address_2: srDetails.street_address_2,
-              street: srDetails.street,
-              city: srDetails.city,
-              state: srDetails.state,
-              zip_code: srDetails.zip_code,
-              contact_phone: srDetails.location_contact_phone,
-              contact_person: srDetails.location_contact_person,
-              contact_email: srDetails.location_contact_email,
-              notes: srDetails.location_notes
-            } : null,
-            urgencyLevel: srDetails.urgency_level || 'Normal',
-            priorityLevel: srDetails.priority_level || 'Normal',
-            serviceType: srDetails.service_type || 'General Support',
-            scheduledDate: srDetails.scheduled_date ? new Date(srDetails.scheduled_date).toLocaleDateString() : null,
-            scheduledTime: srDetails.scheduled_time || null,
-            contactName: srDetails.contact_name,
-            contactPhone: srDetails.contact_phone,
-            contactEmail: srDetails.contact_email
-          };
-
-          const techResult = await sendServiceRequestNotificationToTechnicians({
-            serviceRequestData,
-            technicians: activeTechnicians,
-            serviceRequestId: serviceRequestId
-          });
-
-          console.log(`📧 Technician notifications: ${techResult.message}`);
-        } else {
-          console.warn('⚠️ No active technicians found for service request notifications');
-        }
-
-        // 4. Send confirmation email to client
-        const clientData = {
-          firstName: srDetails.client_first_name,
-          email: srDetails.client_email
-        };
-
-        const clientServiceRequestData = {
+        const serviceRequestData = {
           requestNumber: srDetails.request_number,
           title: srDetails.title,
           description: srDetails.description,
-          serviceLocation: srDetails.service_location || 'Not specified',
-          scheduledDate: srDetails.scheduled_date ? new Date(srDetails.scheduled_date).toLocaleDateString() : null,
-          scheduledTime: srDetails.scheduled_time || null,
-          contactName: srDetails.contact_name,
-          contactPhone: srDetails.contact_phone
+          clientName: `${srDetails.client_first_name} ${srDetails.client_last_name}`
         };
 
-        const clientResult = await sendServiceRequestConfirmationToClient({
-          serviceRequestData: clientServiceRequestData,
-          clientData
-        });
+        // Initialize automated workflow (sends emails to executives, admins, technicians)
+        await initializeServiceRequestWorkflow(serviceRequestId, serviceRequestData);
 
-        console.log(`📧 Client confirmation: ${clientResult.message}`);
+        console.log(`✅ Workflow initialized for service request ${requestNumber}`);
 
-      } catch (emailError) {
-        console.error('❌ Error sending service request notifications:', emailError);
-        // Don't throw - notifications are supplementary and shouldn't break the main flow
+      } catch (workflowError) {
+        console.error('❌ Error initializing service request workflow:', workflowError);
+        // Don't throw - workflow is supplementary and shouldn't break the main flow
       }
     };
 
-    // Send notifications asynchronously (don't await - don't block response)
-    sendNotifications();
+    // Initialize workflow asynchronously (don't await - don't block response)
+    initializeWorkflow();
 
     res.status(201).json({
       success: true,
@@ -407,8 +312,17 @@ router.get('/', async (req, res) => {
       console.error('Error fetching base hourly rate, using fallback:', error);
     }
 
-    // Helper function to calculate estimated cost
-    const calculateCost = (date, timeStart, timeEnd, baseRate) => {
+    // Check if this is the client's first service request
+    const firstServiceRequestCheck = await pool.query(`
+      SELECT COUNT(*) as request_count
+      FROM service_requests
+      WHERE client_id = $1 AND soft_delete = false
+    `, [clientId]);
+
+    const isFirstServiceRequest = parseInt(firstServiceRequestCheck.rows[0].request_count) === 1;
+
+    // Helper function to calculate estimated cost with first-hour waiver for new clients
+    const calculateCost = (date, timeStart, timeEnd, baseRate, isFirstRequest) => {
       if (!date || !timeStart || !timeEnd || !baseRate) return null;
 
       // Parse times
@@ -420,13 +334,26 @@ router.get('/', async (req, res) => {
       const endMinutes = endHour * 60 + endMin;
       const durationHours = (endMinutes - startMinutes) / 60;
 
-      // For now, use standard 1x rate (in future, could query rate tiers)
-      const cost = baseRate * durationHours;
+      // Calculate base cost
+      const baseCost = baseRate * durationHours;
+
+      // Apply first-hour waiver for first-time clients
+      let firstHourWaiver = 0;
+      let finalCost = baseCost;
+
+      if (isFirstRequest && durationHours >= 1) {
+        // Waive first hour fee for new clients
+        firstHourWaiver = baseRate;
+        finalCost = baseCost - firstHourWaiver;
+      }
 
       return {
         baseRate,
         durationHours,
-        total: cost
+        total: finalCost,
+        subtotal: baseCost,
+        firstHourWaiver: firstHourWaiver > 0 ? firstHourWaiver : undefined,
+        isFirstRequest
       };
     };
 
@@ -439,7 +366,8 @@ router.get('/', async (req, res) => {
             row.requested_date,
             row.requested_time_start,
             row.requested_time_end,
-            baseHourlyRate
+            baseHourlyRate,
+            isFirstServiceRequest
           );
 
           // Check if we have any location data (address or contact info)

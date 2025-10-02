@@ -7,7 +7,7 @@ export default defineConfig({
   optimizeDeps: {
     // Include lucide-react instead of excluding it to fix Firefox module loading
     include: ['lucide-react'],
-    force: true, // Force pre-bundling to avoid dynamic import issues
+    // force: true, // Temporarily disabled - causing startup issues
   },
   server: {
     host: '0.0.0.0', // Allow access from network devices (mobile testing)
@@ -44,11 +44,10 @@ export default defineConfig({
           ui: ['lucide-react'],
           // AWS services chunk (if using AWS SDK)
           aws: ['@aws-sdk/client-cognito-identity-provider'],
-          // Admin components chunk
-          admin: [
-            './src/pages/AdminDashboard.tsx',
-            './src/components/admin',
-          ],
+          // Admin components chunk (excluding admin folder to avoid build issues)
+          // admin: [
+          //   './src/pages/AdminDashboard.tsx',
+          // ],
         },
         // Optimize chunk file names
         chunkFileNames: (chunkInfo) => {

@@ -59,6 +59,9 @@ interface ServiceRequest {
     baseRate: number;
     durationHours: number;
     total: number;
+    subtotal?: number;
+    firstHourWaiver?: number;
+    isFirstRequest?: boolean;
   } | null;
 }
 
@@ -614,9 +617,14 @@ const ServiceRequests: React.FC = () => {
                         <div className="text-xs text-blue-700 dark:text-blue-300">
                           {t('serviceRequests.standardRate', {
                             hours: String(request.cost.durationHours),
-                            total: request.cost.total.toFixed(2)
+                            total: (request.cost.subtotal || request.cost.total).toFixed(2)
                           }, '{{hours}}h Standard @ 1x = ${{total}}')}
                         </div>
+                        {request.cost.firstHourWaiver && request.cost.firstHourWaiver > 0 && (
+                          <div className="text-xs text-green-700 dark:text-green-300 font-medium">
+                            {t('serviceRequests.newClientFirstHourWaived', { amount: request.cost.firstHourWaiver.toFixed(2) }, 'New Client 1st Hour Waived: -${{amount}}')}
+                          </div>
+                        )}
                         <div className="mt-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
                           {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
                         </div>
@@ -771,9 +779,14 @@ const ServiceRequests: React.FC = () => {
                           <div className="text-sm text-blue-700 dark:text-blue-300">
                             {t('serviceRequests.standardRate', {
                               hours: String(selectedRequest.cost.durationHours),
-                              total: selectedRequest.cost.total.toFixed(2)
+                              total: (selectedRequest.cost.subtotal || selectedRequest.cost.total).toFixed(2)
                             }, '{{hours}}h Standard @ 1x = ${{total}}')}
                           </div>
+                          {selectedRequest.cost.firstHourWaiver && selectedRequest.cost.firstHourWaiver > 0 && (
+                            <div className="text-sm text-green-700 dark:text-green-300 font-medium">
+                              {t('serviceRequests.newClientFirstHourWaived', { amount: selectedRequest.cost.firstHourWaiver.toFixed(2) }, 'New Client 1st Hour Waived: -${{amount}}')}
+                            </div>
+                          )}
                           <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
                             {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
                           </div>
