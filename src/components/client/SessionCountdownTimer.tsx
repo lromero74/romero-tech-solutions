@@ -22,23 +22,45 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
 }) => {
   const { isDarkMode } = useClientTheme();
   const { t } = useClientLanguage();
-  const [timeRemaining, setTimeRemaining] = useState<number>(sessionTimeoutMs);
   const [isWarningActive, setIsWarningActive] = useState(false);
-  const [lastActivity, setLastActivity] = useState<number>(Date.now());
-  const lastActivityRef = useRef<number>(Date.now()); // Use ref for immediate updates
+  const lastActivityRef = useRef<number>(Date.now());
   const [warningTriggered, setWarningTriggered] = useState(false);
+  const [, forceUpdate] = useState(0); // Force re-render trigger
+
+  // Use refs for state that needs to be checked in interval without causing re-runs
+  const isWarningActiveRef = useRef(false);
+  const warningTriggeredRef = useRef(false);
+
+  // Use refs for callbacks to prevent useEffect re-runs when they change
+  const onSessionExpiredRef = useRef(onSessionExpired);
+  const onWarningReachedRef = useRef(onWarningReached);
+
+  // Keep refs updated with latest callbacks
+  useEffect(() => {
+    onSessionExpiredRef.current = onSessionExpired;
+    onWarningReachedRef.current = onWarningReached;
+  }, [onSessionExpired, onWarningReached]);
+
+  // Calculate time remaining on every render
+  const now = Date.now();
+  const timeSinceLastActivity = now - lastActivityRef.current;
+  const timeRemaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
+
+  // Update lastActivity when sessionTimeoutMs changes
+  useEffect(() => {
+    lastActivityRef.current = Date.now();
+  }, [sessionTimeoutMs]);
 
   // Track user activity to reset timer
   useEffect(() => {
     const activityEvents = ['mousedown', 'keypress', 'scroll', 'touchstart', 'click'];
 
     const resetTimer = () => {
-      const now = Date.now();
-      lastActivityRef.current = now;
-      setLastActivity(now);
-      setTimeRemaining(sessionTimeoutMs);
+      lastActivityRef.current = Date.now();
       setIsWarningActive(false);
       setWarningTriggered(false);
+      isWarningActiveRef.current = false;
+      warningTriggeredRef.current = false;
     };
 
     // Throttle activity detection to avoid excessive updates
@@ -51,11 +73,11 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
       // Throttle the state updates to avoid excessive re-renders
       if (!throttleTimeout) {
         throttleTimeout = setTimeout(() => {
-          const now = Date.now();
-          setLastActivity(now);
-          setTimeRemaining(sessionTimeoutMs);
+          // Only update state flags, lastActivityRef already updated above
           setIsWarningActive(false);
           setWarningTriggered(false);
+          isWarningActiveRef.current = false;
+          warningTriggeredRef.current = false;
           throttleTimeout = null;
         }, 1000); // Throttle to once per second
       }
@@ -74,38 +96,44 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
     };
   }, [sessionTimeoutMs]);
 
-  // Main countdown timer
+  // Main countdown timer - just force re-renders, calculation happens above
   useEffect(() => {
     const interval = setInterval(() => {
+      forceUpdate(prev => prev + 1); // Force re-render every second to recalculate timeRemaining
+
+      // Get current time remaining for threshold checks
       const now = Date.now();
-      // Use ref for immediate activity updates, avoiding throttle delay
       const timeSinceLastActivity = now - lastActivityRef.current;
       const remaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
 
-      setTimeRemaining(remaining);
-
       // Check for warning threshold
       if (remaining <= warningThresholdMs && remaining > 0) {
-        if (!isWarningActive) {
+        if (!isWarningActiveRef.current) {
+          isWarningActiveRef.current = true;
           setIsWarningActive(true);
-          if (!warningTriggered && onWarningReached) {
+          if (!warningTriggeredRef.current && onWarningReachedRef.current) {
+            warningTriggeredRef.current = true;
             setWarningTriggered(true);
-            onWarningReached();
+            onWarningReachedRef.current();
           }
         }
       } else if (remaining > warningThresholdMs) {
-        setIsWarningActive(false);
-        setWarningTriggered(false);
+        if (isWarningActiveRef.current || warningTriggeredRef.current) {
+          isWarningActiveRef.current = false;
+          warningTriggeredRef.current = false;
+          setIsWarningActive(false);
+          setWarningTriggered(false);
+        }
       }
 
       // Check for session expiration
-      if (remaining <= 0 && onSessionExpired) {
-        onSessionExpired();
+      if (remaining <= 0 && onSessionExpiredRef.current) {
+        onSessionExpiredRef.current();
       }
     }, 1000);
 
     return () => clearInterval(interval);
-  }, [lastActivity, sessionTimeoutMs, warningThresholdMs, isWarningActive, warningTriggered, onSessionExpired, onWarningReached]);
+  }, [sessionTimeoutMs, warningThresholdMs]);
 
   // Format time for display
   const formatTime = (ms: number): string => {
