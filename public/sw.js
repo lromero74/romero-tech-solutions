@@ -1,6 +1,6 @@
-const CACHE_NAME = 'romero-tech-v1.3.0';
-const STATIC_CACHE_NAME = 'romero-tech-static-v1.3.0';
-const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.3.0';
+const CACHE_NAME = 'romero-tech-v1.3.1';
+const STATIC_CACHE_NAME = 'romero-tech-static-v1.3.1';
+const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.3.1';
 
 // Resources to cache immediately
 const STATIC_ASSETS = [
@@ -82,6 +82,11 @@ async function handleRequest(request) {
   const url = new URL(request.url);
 
   try {
+    // Skip caching for security-sensitive endpoints
+    if (isSecurityEndpoint(url.pathname)) {
+      return await fetch(request);
+    }
+
     // Static assets - Cache First strategy
     if (isStaticAsset(url.pathname)) {
       return await cacheFirst(request, STATIC_CACHE_NAME);
@@ -161,6 +166,22 @@ async function networkFirst(request, cacheName) {
 }
 
 // Helper functions
+function isSecurityEndpoint(pathname) {
+  // Never cache these security-sensitive endpoints
+  const securityEndpoints = [
+    '/api/csrf-token',
+    '/api/auth/',
+    '/api/login',
+    '/api/logout',
+    '/api/signup',
+    '/api/verify-email',
+    '/api/reset-password',
+    '/api/mfa/',
+  ];
+
+  return securityEndpoints.some(endpoint => pathname.includes(endpoint));
+}
+
 function isStaticAsset(pathname) {
   return STATIC_ASSETS.includes(pathname) ||
          pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2)$/);
