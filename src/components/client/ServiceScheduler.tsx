@@ -367,21 +367,13 @@ const ServiceScheduler: React.FC = () => {
         attachment_file_ids: uploadedFiles.map(file => file.fileId).filter(Boolean)
       };
 
-      // Submit to API
-      const response = await fetch('/api/client/service-requests', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken') || ''}`
-        },
-        body: JSON.stringify(request)
-      });
+      // Submit to API using apiService
+      const result = await apiService.post('/client/service-requests', request);
 
-      if (!response.ok) {
-        throw new Error(t('schedule.messages.error'));
+      if (!result.success) {
+        throw new Error(result.message || t('schedule.messages.error'));
       }
 
-      const result = await response.json();
       console.log('Service request submitted:', result);
 
       setShowConfirmation(true);

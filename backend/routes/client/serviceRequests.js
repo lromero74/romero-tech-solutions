@@ -36,7 +36,7 @@ router.post('/', async (req, res) => {
     } = req.body;
 
     const businessId = req.user.businessId;
-    const clientId = req.user.userId;
+    const clientId = req.user.id; // authMiddleware sets req.user.id
 
     // Generate unique request number
     const requestNumber = `SR-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
@@ -306,7 +306,7 @@ router.post('/', async (req, res) => {
 router.get('/', async (req, res) => {
   try {
     const businessId = req.user.businessId;
-    const clientId = req.user.userId;
+    const clientId = req.user.id; // authMiddleware sets req.user.id
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
@@ -401,7 +401,7 @@ router.get('/:id/files', async (req, res) => {
   try {
     const { id } = req.params;
     const businessId = req.user.businessId;
-    const clientId = req.user.userId;
+    const clientId = req.user.id; // authMiddleware sets req.user.id
 
     // Verify service request belongs to this client
     const serviceRequestQuery = `
