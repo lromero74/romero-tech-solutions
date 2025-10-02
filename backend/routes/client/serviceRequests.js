@@ -3,7 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware, requireClientAccess } from '../../middleware/clientMiddleware.js';
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
-import crypto from 'crypto';
+import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient } from '../../services/emailService.js';
 
 const router = express.Router();
@@ -39,11 +39,11 @@ router.post('/', async (req, res) => {
     const businessId = req.user.businessId;
     const clientId = req.user.id; // authMiddleware sets req.user.id
 
-    // Generate unique request number
-    const requestNumber = `SR-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
-
-    // Get default status (should be 'submitted' or similar)
+    // Get database pool
     const pool = await getPool();
+
+    // Generate unique request number (SR-YYYY-NNNNN format)
+    const requestNumber = await generateRequestNumber(pool);
     const statusQuery = `
       SELECT id FROM service_request_statuses
       WHERE name = 'Submitted' AND is_active = true

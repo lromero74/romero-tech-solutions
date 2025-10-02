@@ -3,6 +3,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware, requireClientAccess } from '../../middleware/clientMiddleware.js';
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
+import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { systemSettingsService } from '../../services/systemSettingsService.js';
 import { timezoneService } from '../../utils/timezoneUtils.js';
 
@@ -397,8 +398,8 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
     const defaultsResult = await pool.query(defaultsQuery);
     const defaults = defaultsResult.rows[0];
 
-    // Generate unique request number
-    const requestNumber = `SR-${Date.now()}-${Math.random().toString(36).substr(2, 6).toUpperCase()}`;
+    // Generate unique request number (SR-YYYY-NNNNN format)
+    const requestNumber = await generateRequestNumber(pool);
 
     // Create the service request
     const insertQuery = `

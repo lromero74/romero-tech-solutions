@@ -517,20 +517,25 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   };
 
   // Handle drag resize
-  const handleResizeStart = (e: React.MouseEvent, mode: 'start' | 'end') => {
+  const handleResizeStart = (e: React.MouseEvent | React.TouchEvent, mode: 'start' | 'end') => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
     setDragMode(`resize-${mode}`);
-    setDragStartX(e.clientX);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragStartX(clientX);
     setDragStartTime(mode === 'start' ? selectedStartTime : selectedEndTime);
     setErrorMessage(''); // Clear any previous errors
 
-    const handleMouseMove = (e: MouseEvent) => {
+    // Calculate slot width once at start
+    const timelineContainer = document.querySelector('.flex-shrink-0.w-16');
+    const slotWidth = timelineContainer ? timelineContainer.getBoundingClientRect().width : 64;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!selectedStartTime || !selectedEndTime || !dragStartTime) return;
 
-      const deltaX = e.clientX - dragStartX;
-      const slotWidth = 64;
+      const currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const deltaX = currentX - dragStartX;
       const slotsChanged = Math.round(deltaX / slotWidth);
       const timeChange = slotsChanged * 30 * 60 * 1000; // 30 minutes in ms
 
@@ -573,11 +578,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setIsDragging(false);
       setDragMode(null);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
 
       // Validate final selection
       if (selectedStartTime && selectedEndTime) {
@@ -592,25 +599,32 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
   };
 
   // Handle drag move
-  const handleMoveStart = (e: React.MouseEvent) => {
+  const handleMoveStart = (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
     e.stopPropagation();
     setIsDragging(true);
     setDragMode('move');
-    setDragStartX(e.clientX);
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+    setDragStartX(clientX);
     setDragStartTime(selectedStartTime);
     setErrorMessage(''); // Clear any previous errors
 
-    const handleMouseMove = (e: MouseEvent) => {
+    // Calculate slot width once at start
+    const timelineContainer = document.querySelector('.flex-shrink-0.w-16');
+    const slotWidth = timelineContainer ? timelineContainer.getBoundingClientRect().width : 64;
+
+    const handleMove = (e: MouseEvent | TouchEvent) => {
       if (!selectedStartTime || !selectedEndTime || !dragStartTime) return;
 
-      const deltaX = e.clientX - dragStartX;
-      const slotWidth = 64;
+      const currentX = 'touches' in e ? e.touches[0].clientX : e.clientX;
+      const deltaX = currentX - dragStartX;
       const slotsChanged = Math.round(deltaX / slotWidth);
       const timeChange = slotsChanged * 30 * 60 * 1000;
 
@@ -631,11 +645,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       setSelectedEndTime(newEndTime);
     };
 
-    const handleMouseUp = () => {
+    const handleEnd = () => {
       setIsDragging(false);
       setDragMode(null);
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleEnd);
+      document.removeEventListener('touchmove', handleMove);
+      document.removeEventListener('touchend', handleEnd);
 
       // Validate final selection
       if (selectedStartTime && selectedEndTime) {
@@ -650,8 +666,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }
     };
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+    document.addEventListener('touchmove', handleMove, { passive: false });
+    document.addEventListener('touchend', handleEnd);
   };
 
   // Confirm booking
@@ -998,7 +1016,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                       {/* Selected time block with drag handles */}
                       {selectedStartTime && selectedEndTime && (
                         <div
-                          className="absolute top-0 h-20 bg-blue-600/80 border-2 border-blue-700 rounded pointer-events-none"
+                          className="absolute top-0 h-20 bg-blue-600/80 border-2 border-blue-700 rounded z-20"
                           style={{
                             left: `${(selectedStartTime.getHours() * 2 + selectedStartTime.getMinutes() / 30) * 64}px`,
                             width: `${((selectedEndTime.getTime() - selectedStartTime.getTime()) / (30 * 60 * 1000)) * 64}px`
@@ -1006,9 +1024,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                         >
                           {/* Move handle - center area only, excludes edges */}
                           <div
-                            className="absolute inset-0 cursor-move pointer-events-auto flex items-center justify-center text-white text-xs font-medium"
+                            className="absolute inset-0 cursor-move pointer-events-auto flex items-center justify-center text-white text-xs font-medium touch-none"
                             style={{ left: '12px', right: '12px' }} // Leave space for resize handles
                             onMouseDown={handleMoveStart}
+                            onTouchStart={handleMoveStart}
                             title={t('scheduler.dragToMove', 'Drag to move appointment')}
                           >
                             <div className="text-center pointer-events-none">
@@ -1020,8 +1039,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
                           {/* Start resize handle - higher z-index to be on top */}
                           <div
-                            className="absolute left-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center"
+                            className="absolute left-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center touch-none"
                             onMouseDown={(e) => handleResizeStart(e, 'start')}
+                            onTouchStart={(e) => handleResizeStart(e, 'start')}
                             title={t('scheduler.dragStartTime', 'Drag to adjust start time')}
                           >
                             <div className="text-white text-xs pointer-events-none">⟨</div>
@@ -1029,8 +1049,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
                           {/* End resize handle - higher z-index to be on top */}
                           <div
-                            className="absolute right-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center"
+                            className="absolute right-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center touch-none"
                             onMouseDown={(e) => handleResizeStart(e, 'end')}
+                            onTouchStart={(e) => handleResizeStart(e, 'end')}
                             title={t('scheduler.dragEndTime', 'Drag to adjust end time')}
                           >
                             <div className="text-white text-xs pointer-events-none">⟩</div>
