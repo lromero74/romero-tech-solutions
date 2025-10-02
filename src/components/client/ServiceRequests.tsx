@@ -760,9 +760,9 @@ const ServiceRequests: React.FC = () => {
                   )}
 
                   {selectedRequest.description && (
-                    <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.description', undefined, 'Description')}:</span>
-                      <p className="text-gray-900 dark:text-white mt-1 whitespace-pre-wrap">
+                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('serviceRequests.description', undefined, 'Description')}</h4>
+                      <p className="text-gray-900 dark:text-white whitespace-pre-wrap text-sm">
                         {selectedRequest.description}
                       </p>
                     </div>
