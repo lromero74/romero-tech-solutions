@@ -325,6 +325,17 @@ router.delete('/service-locations/:id',
     console.log('=== DELETE SERVICE LOCATION ===');
     console.log('Service Location ID:', id);
 
+    // Delete related service requests first to avoid foreign key constraint violations
+    const serviceRequestsDeleted = await query(`
+      DELETE FROM service_requests
+      WHERE service_location_id = $1
+      RETURNING id
+    `, [id]);
+
+    if (serviceRequestsDeleted.rows.length > 0) {
+      console.log(`Deleted ${serviceRequestsDeleted.rows.length} service request(s) for service location ${id}`);
+    }
+
     const result = await query(`
       DELETE FROM service_locations
       WHERE id = $1

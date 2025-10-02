@@ -525,7 +525,31 @@ router.delete('/users/:id',
       }
     } else {
       if (hardDelete === 'true') {
-        // Hard delete client from database
+        // Delete related records first to avoid foreign key constraints
+
+        // 1. Delete service requests where user is the client
+        const serviceRequestsDeleted = await query(`
+          DELETE FROM service_requests
+          WHERE client_id = $1
+          RETURNING id
+        `, [id]);
+
+        if (serviceRequestsDeleted.rows.length > 0) {
+          console.log(`Deleted ${serviceRequestsDeleted.rows.length} service request(s) for client ${id}`);
+        }
+
+        // 2. Delete file access log entries
+        const fileAccessDeleted = await query(`
+          DELETE FROM t_client_file_access_log
+          WHERE accessed_by_user_id = $1
+          RETURNING id
+        `, [id]);
+
+        if (fileAccessDeleted.rows.length > 0) {
+          console.log(`Deleted ${fileAccessDeleted.rows.length} file access log(s) for user ${id}`);
+        }
+
+        // 3. Hard delete client from database
         deleteResult = await query(`
           DELETE FROM users
           WHERE id = $1
