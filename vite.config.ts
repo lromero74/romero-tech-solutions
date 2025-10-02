@@ -21,13 +21,15 @@ export default defineConfig({
       // Allow serving files from one level up
       allow: ['..']
     },
-    proxy: {
-      '/api': {
-        target: 'http://localhost:3001',
-        changeOrigin: true,
-        secure: false
-      }
-    }
+    // Proxy disabled - frontend uses VITE_API_BASE_URL for direct backend calls
+    // This prevents CSRF token validation issues with IP address changes
+    // proxy: {
+    //   '/api': {
+    //     target: 'http://localhost:3001',
+    //     changeOrigin: true,
+    //     secure: false
+    //   }
+    // }
   },
   build: {
     // Generate source maps for better debugging
