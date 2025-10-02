@@ -702,8 +702,8 @@ router.post('/:id/notes', async (req, res) => {
         sr.id,
         sr.request_number,
         sr.title,
-        sr.status,
-        sl.name as location_name,
+        COALESCE(srs.name, 'Unknown') as status,
+        sl.location_name,
         u.id as client_id,
         u.email as client_email,
         u.first_name as client_first_name,
@@ -712,6 +712,7 @@ router.post('/:id/notes', async (req, res) => {
       FROM service_requests sr
       LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
       LEFT JOIN users u ON sr.client_id = u.id
+      LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
       WHERE sr.id = $1
     `;
 
