@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Save, Plus, Edit2, Trash2, X } from 'lucide-react';
+import { Clock, Save, X } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import apiService from '../../services/apiService';
@@ -18,46 +18,30 @@ interface ServiceHourRateTier {
   isActive: boolean;
 }
 
-interface RateTierFormData {
-  id?: string;
-  tierName: string;
-  tierLevel: number;
-  dayOfWeek: number;
-  timeStart: string;
-  timeEnd: string;
-  rateMultiplier: number;
-  colorCode: string;
-  description: string;
-  isActive: boolean;
-}
-
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const TIER_LEVELS = [
-  { value: 1, label: 'Standard', defaultColor: '#28a745' },
-  { value: 2, label: 'Premium', defaultColor: '#ffc107' },
-  { value: 3, label: 'Emergency', defaultColor: '#dc3545' }
+  { value: 1, label: 'Standard', defaultColor: '#28a745', multiplier: 1.0 },
+  { value: 2, label: 'Premium', defaultColor: '#ffc107', multiplier: 1.5 },
+  { value: 3, label: 'Emergency', defaultColor: '#dc3545', multiplier: 2.0 }
 ];
+
+// Generate 24 hours (0-23)
+const HOURS = Array.from({ length: 24 }, (_, i) => i);
+
+const formatHour = (hour: number): string => {
+  if (hour === 0) return '12 AM';
+  if (hour === 12) return '12 PM';
+  if (hour < 12) return `${hour} AM`;
+  return `${hour - 12} PM`;
+};
 
 const AdminServiceHourRates: React.FC = () => {
   const { user } = useEnhancedAuth();
   const [rateTiers, setRateTiers] = useState<ServiceHourRateTier[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [editMode, setEditMode] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
-
-  const [formData, setFormData] = useState<RateTierFormData>({
-    tierName: 'Standard',
-    tierLevel: 1,
-    dayOfWeek: 1,
-    timeStart: '08:00',
-    timeEnd: '17:00',
-    rateMultiplier: 1.0,
-    colorCode: '#28a745',
-    description: '',
-    isActive: true
-  });
+  const [activeTierLevel, setActiveTierLevel] = useState<number | null>(null);
 
   // Check if user has executive role
   const isExecutive = user?.role === 'executive';
@@ -80,79 +64,98 @@ const AdminServiceHourRates: React.FC = () => {
     }
   };
 
-  const handleAdd = () => {
-    setEditMode(false);
-    setFormData({
-      tierName: 'Standard',
-      tierLevel: 1,
-      dayOfWeek: 1,
-      timeStart: '08:00',
-      timeEnd: '17:00',
-      rateMultiplier: 1.0,
-      colorCode: '#28a745',
-      description: '',
-      isActive: true
-    });
-    setShowModal(true);
+  // Get the tier for a specific day and hour
+  const getTierForCell = (dayOfWeek: number, hour: number): ServiceHourRateTier | null => {
+    const timeStart = `${String(hour).padStart(2, '0')}:00:00`;
+    const timeEnd = `${String(hour + 1).padStart(2, '0')}:00:00`;
+
+    // First, try to find an exact match (1-hour tier for this specific hour)
+    const exactMatch = rateTiers.find(tier =>
+      tier.dayOfWeek === dayOfWeek &&
+      tier.isActive &&
+      tier.timeStart === timeStart &&
+      tier.timeEnd === timeEnd
+    );
+
+    if (exactMatch) return exactMatch;
+
+    // If no exact match, find any tier that covers this hour
+    return rateTiers.find(tier =>
+      tier.dayOfWeek === dayOfWeek &&
+      tier.isActive &&
+      tier.timeStart <= timeStart &&
+      tier.timeEnd > timeStart
+    ) || null;
   };
 
-  const handleEdit = (tier: ServiceHourRateTier) => {
-    setEditMode(true);
-    setFormData({
-      id: tier.id,
-      tierName: tier.tierName,
-      tierLevel: tier.tierLevel,
-      dayOfWeek: tier.dayOfWeek,
-      timeStart: tier.timeStart.substring(0, 5), // HH:MM format
-      timeEnd: tier.timeEnd.substring(0, 5),
-      rateMultiplier: tier.rateMultiplier,
-      colorCode: tier.colorCode,
-      description: tier.description,
-      isActive: tier.isActive
-    });
-    setShowModal(true);
-  };
+  // Handle cell click
+  const handleCellClick = (day: number, hour: number) => {
+    if (!isExecutive) return;
 
-  const handleDelete = async (id: string) => {
-    if (deleteConfirm !== id) {
-      setDeleteConfirm(id);
-      setTimeout(() => setDeleteConfirm(null), 3000);
-      return;
-    }
-
-    try {
-      const response = await apiService.delete(`/admin/service-hour-rates/${id}`);
-      if (response.success) {
-        await loadRateTiers();
-        setDeleteConfirm(null);
-      }
-    } catch (error) {
-      console.error('Failed to delete rate tier:', error);
+    // If active tier is set, apply it immediately
+    if (activeTierLevel !== null) {
+      applyTierToCell(day, hour, activeTierLevel);
+    } else {
+      // Otherwise, open modal to choose tier
+      setSelectedCell({ day, hour });
     }
   };
 
-  const handleSave = async () => {
+  // Apply tier to a cell directly
+  const applyTierToCell = async (day: number, hour: number, tierLevel: number) => {
     setSaveStatus('saving');
     try {
-      if (editMode && formData.id) {
-        // Update existing
-        const response = await apiService.put(`/admin/service-hour-rates/${formData.id}`, formData);
+      const selectedTier = TIER_LEVELS.find(t => t.value === tierLevel);
+      if (!selectedTier) return;
+
+      const timeStart = `${String(hour).padStart(2, '0')}:00:00`;
+      const timeEnd = `${String(hour + 1).padStart(2, '0')}:00:00`;
+
+      // Find existing tier with EXACT same time range (not just overlapping)
+      const exactMatchTier = rateTiers.find(tier =>
+        tier.dayOfWeek === day &&
+        tier.isActive &&
+        tier.timeStart === timeStart &&
+        tier.timeEnd === timeEnd
+      );
+
+      const tierData = {
+        tierName: selectedTier.label,
+        tierLevel: selectedTier.value,
+        dayOfWeek: day,
+        timeStart: `${String(hour).padStart(2, '0')}:00`,
+        timeEnd: `${String(hour + 1).padStart(2, '0')}:00`,
+        rateMultiplier: selectedTier.multiplier,
+        colorCode: selectedTier.defaultColor,
+        description: '',
+        isActive: true
+      };
+
+      let response;
+      if (exactMatchTier) {
+        // Update existing tier with exact same time range
+        response = await apiService.put(`/admin/service-hour-rates/${exactMatchTier.id}`, tierData);
+
+        // Optimistically update the state
         if (response.success) {
-          await loadRateTiers();
-          setShowModal(false);
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2000);
+          setRateTiers(prev => prev.map(tier =>
+            tier.id === exactMatchTier.id
+              ? { ...tier, ...response.data }
+              : tier
+          ));
         }
       } else {
-        // Create new
-        const response = await apiService.post('/admin/service-hour-rates', formData);
+        // Create new tier for this specific hour
+        response = await apiService.post('/admin/service-hour-rates', tierData);
+
+        // Optimistically add to state
         if (response.success) {
-          await loadRateTiers();
-          setShowModal(false);
-          setSaveStatus('saved');
-          setTimeout(() => setSaveStatus('idle'), 2000);
+          setRateTiers(prev => [...prev, response.data]);
         }
       }
+
+      setSaveStatus('saved');
+      setTimeout(() => setSaveStatus('idle'), 1000);
     } catch (error) {
       console.error('Failed to save rate tier:', error);
       setSaveStatus('error');
@@ -160,33 +163,20 @@ const AdminServiceHourRates: React.FC = () => {
     }
   };
 
-  const handleInputChange = (field: keyof RateTierFormData, value: string | number | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+  // Handle tier selection from modal
+  const handleTierSelect = async (tierLevel: number) => {
+    if (!selectedCell) return;
 
-    // Auto-update color based on tier level
-    if (field === 'tierLevel') {
-      const tierLevel = TIER_LEVELS.find(t => t.value === value);
-      if (tierLevel) {
-        setFormData(prev => ({
-          ...prev,
-          tierLevel: value as number,
-          tierName: tierLevel.label,
-          colorCode: tierLevel.defaultColor
-        }));
-      }
-    }
-  };
+    const { day, hour } = selectedCell;
 
-  // Group tiers by day for display
-  const getTiersForDay = (dayOfWeek: number) => {
-    return rateTiers
-      .filter(tier => tier.dayOfWeek === dayOfWeek && tier.isActive)
-      .sort((a, b) => {
-        // Sort by time start
-        if (a.timeStart < b.timeStart) return -1;
-        if (a.timeStart > b.timeStart) return 1;
-        return 0;
-      });
+    // Set this as the active tier for subsequent clicks
+    setActiveTierLevel(tierLevel);
+
+    // Apply to current cell
+    await applyTierToCell(day, hour, tierLevel);
+
+    // Close modal
+    setSelectedCell(null);
   };
 
   return (
@@ -200,41 +190,81 @@ const AdminServiceHourRates: React.FC = () => {
               <div>
                 <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Service Hour Rate Tiers</h1>
                 <p className={`${themeClasses.text.secondary}`}>
-                  Configure pricing multipliers for Standard, Premium, and Emergency service hours
+                  {isExecutive
+                    ? activeTierLevel !== null
+                      ? `Paint mode: Click cells to apply ${TIER_LEVELS.find(t => t.value === activeTierLevel)?.label} tier`
+                      : 'Select a tier below, then click cells to paint the schedule'
+                    : 'View-only access - showing current rate tier schedule'
+                  }
                 </p>
               </div>
             </div>
-            {isExecutive && (
-              <button
-                onClick={handleAdd}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <Plus className="w-4 h-4 mr-2" />
-                Add Rate Tier
-              </button>
-            )}
           </div>
         </div>
 
         {/* Content */}
         <div className="space-y-6 pr-2">
-          {/* Legend */}
+          {/* Legend / Tier Selector */}
           <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-4`}>
-            <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-3`}>Rate Tier Legend</h3>
-            <div className="flex flex-wrap gap-4">
-              {TIER_LEVELS.map(tier => (
-                <div key={tier.value} className="flex items-center space-x-2">
-                  <div
-                    className="w-6 h-6 rounded"
-                    style={{ backgroundColor: tier.defaultColor }}
-                  ></div>
-                  <span className={`text-sm ${themeClasses.text.secondary}`}>{tier.label}</span>
-                </div>
-              ))}
+            <div className="flex items-center justify-between mb-3">
+              <h3 className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                {isExecutive ? 'Select Rate Tier (Click to Paint)' : 'Rate Tier Legend'}
+              </h3>
+              {isExecutive && activeTierLevel !== null && (
+                <button
+                  onClick={() => setActiveTierLevel(null)}
+                  className="text-xs px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
+                >
+                  Clear Selection
+                </button>
+              )}
             </div>
+            <div className="flex flex-wrap gap-3">
+              {TIER_LEVELS.map(tier => {
+                const isActive = activeTierLevel === tier.value;
+                return (
+                  <button
+                    key={tier.value}
+                    onClick={() => isExecutive && setActiveTierLevel(tier.value)}
+                    disabled={!isExecutive}
+                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${
+                      isExecutive ? 'cursor-pointer hover:scale-105' : 'cursor-default'
+                    } ${
+                      isActive
+                        ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800 shadow-lg'
+                        : 'hover:shadow-md'
+                    }`}
+                    style={{
+                      backgroundColor: isActive ? `${tier.defaultColor}30` : 'transparent',
+                      border: `2px solid ${isActive ? tier.defaultColor : 'transparent'}`
+                    }}
+                  >
+                    <div
+                      className="w-6 h-6 rounded flex-shrink-0"
+                      style={{ backgroundColor: tier.defaultColor }}
+                    ></div>
+                    <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                      {tier.label} ({tier.multiplier}x)
+                    </span>
+                    {isActive && (
+                      <span className="text-xs px-2 py-0.5 rounded bg-blue-500 text-white font-medium">
+                        Active
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+            {isExecutive && (
+              <p className={`text-xs ${themeClasses.text.muted} mt-3`}>
+                {activeTierLevel !== null
+                  ? '✓ Click cells to apply selected tier. Click "Clear Selection" to choose different tiers for each cell.'
+                  : 'Click a tier above to select it, then click cells in the grid to apply that tier quickly.'}
+              </p>
+            )}
           </div>
 
-          {/* Weekly Schedule View */}
+          {/* 24x7 Grid */}
           {loading ? (
             <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-8 text-center`}>
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
@@ -243,86 +273,72 @@ const AdminServiceHourRates: React.FC = () => {
           ) : (
             <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden`}>
               <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
-                <h2 className={`text-lg font-medium ${themeClasses.text.primary}`}>Weekly Rate Schedule</h2>
+                <h2 className={`text-lg font-medium ${themeClasses.text.primary}`}>Weekly Schedule Grid</h2>
                 <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
-                  {isExecutive ? 'Click any tier to edit' : 'View-only access'}
+                  24-hour view across all days of the week
                 </p>
               </div>
 
               <div className="p-6">
-                <div className="space-y-6">
-                  {DAYS_OF_WEEK.map((dayName, dayIndex) => {
-                    const dayTiers = getTiersForDay(dayIndex);
-                    return (
-                      <div key={dayIndex} className={`border ${themeClasses.border.primary} rounded-lg p-4`}>
-                        <h3 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>
-                          {dayName}
-                        </h3>
-                        {dayTiers.length === 0 ? (
-                          <p className={`text-sm ${themeClasses.text.muted} italic`}>No rate tiers configured</p>
-                        ) : (
-                          <div className="space-y-2">
-                            {dayTiers.map(tier => (
-                              <div
-                                key={tier.id}
-                                className={`flex items-center justify-between p-3 rounded-lg border ${themeClasses.border.primary}`}
-                                style={{ backgroundColor: `${tier.colorCode}15` }}
+                <div className="inline-block min-w-full">
+                  <table className="w-full border-collapse">
+                    <thead className="block w-full">
+                      <tr className="flex w-full">
+                        <th className={`sticky left-0 z-20 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-left border ${themeClasses.border.primary} w-[100px] flex-shrink-0`}>
+                          Time
+                        </th>
+                        {DAYS_OF_WEEK.map((day, index) => (
+                          <th
+                            key={index}
+                            className={`${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-center border ${themeClasses.border.primary} flex-1 min-w-[80px]`}
+                          >
+                            {day}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="block w-full overflow-y-auto max-h-[600px]">
+                      {HOURS.map(hour => (
+                        <tr key={hour} className="flex w-full">
+                          <td className={`sticky left-0 z-10 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} border ${themeClasses.border.primary} w-[100px] flex-shrink-0`}>
+                            {formatHour(hour)}
+                          </td>
+                          {DAYS_OF_WEEK.map((_, dayIndex) => {
+                            const tier = getTierForCell(dayIndex, hour);
+                            const bgColor = tier ? tier.colorCode : 'transparent';
+                            const isUnassigned = !tier;
+
+                            return (
+                              <td
+                                key={dayIndex}
+                                onClick={() => handleCellClick(dayIndex, hour)}
+                                className={`p-2 border ${themeClasses.border.primary} text-center transition-all flex-1 min-w-[80px] ${
+                                  isExecutive ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-inset' : ''
+                                } ${isUnassigned ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+                                style={{
+                                  backgroundColor: isUnassigned ? undefined : `${bgColor}40`,
+                                  borderColor: tier ? bgColor : undefined,
+                                  borderWidth: tier ? '2px' : undefined
+                                }}
+                                title={tier ? `${tier.tierName} (${tier.rateMultiplier}x)` : 'Unassigned'}
                               >
-                                <div className="flex items-center space-x-4 flex-1">
-                                  <div
-                                    className="w-4 h-4 rounded"
-                                    style={{ backgroundColor: tier.colorCode }}
-                                  ></div>
-                                  <div className="flex-1">
-                                    <div className="flex items-center space-x-2">
-                                      <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                                        {tier.tierName}
-                                      </span>
-                                      <span className={`text-xs ${themeClasses.text.muted}`}>
-                                        {tier.timeStart} - {tier.timeEnd}
-                                      </span>
-                                      <span className={`text-xs font-medium ${themeClasses.text.secondary}`}>
-                                        {tier.rateMultiplier}x
-                                      </span>
-                                    </div>
-                                    {tier.description && (
-                                      <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
-                                        {tier.description}
-                                      </p>
-                                    )}
-                                  </div>
-                                </div>
-                                {isExecutive && (
-                                  <div className="flex items-center space-x-2">
-                                    <button
-                                      onClick={() => handleEdit(tier)}
-                                      className={`p-2 rounded ${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:text-blue-600`}
-                                    >
-                                      <Edit2 className="w-4 h-4" />
-                                    </button>
-                                    <button
-                                      onClick={() => handleDelete(tier.id)}
-                                      className={`p-2 rounded ${themeClasses.bg.hover} ${
-                                        deleteConfirm === tier.id
-                                          ? 'bg-red-100 dark:bg-red-900/30 text-red-600'
-                                          : `${themeClasses.text.secondary} hover:text-red-600`
-                                      }`}
-                                    >
-                                      {deleteConfirm === tier.id ? (
-                                        <span className="text-xs font-medium px-2">Confirm?</span>
-                                      ) : (
-                                        <Trash2 className="w-4 h-4" />
-                                      )}
-                                    </button>
+                                {tier && (
+                                  <div className="flex flex-col items-center justify-center h-8">
+                                    <span className={`text-xs font-medium ${themeClasses.text.primary}`}>
+                                      {tier.tierName.charAt(0)}
+                                    </span>
+                                    <span className="text-[10px] text-gray-600 dark:text-gray-400">
+                                      {tier.rateMultiplier}x
+                                    </span>
                                   </div>
                                 )}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </div>
@@ -330,205 +346,123 @@ const AdminServiceHourRates: React.FC = () => {
 
           {/* Information Panel */}
           <div className={`${themeClasses.bg.secondary} border ${themeClasses.border.primary} rounded-lg p-4`}>
-            <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>How Rate Tiers Work</h3>
+            <h3 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>How the Grid Works</h3>
             <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
-              <li>• Rate multipliers are applied to the base service rate when scheduling appointments</li>
-              <li>• Standard hours (1.0x) are typically business hours with no premium</li>
-              <li>• Premium hours (1.25x-1.5x) apply during early morning, evening, or weekend hours</li>
-              <li>• Emergency hours (1.75x-2.0x) apply during late night or urgent service requests</li>
-              <li>• Clients see color-coded time slots when scheduling appointments</li>
-              <li>• Multiple tiers can exist for the same day to cover different time periods</li>
-              {isExecutive && <li>• Only executives can modify rate tier configurations</li>}
+              <li>• Each cell represents one hour on a specific day of the week</li>
+              <li>• Color-coded cells show which rate tier applies to that time slot</li>
+              <li>• S = Standard (1.0x), P = Premium (1.5x), E = Emergency (2.0x)</li>
+              {isExecutive && <li>• Click any cell to change the rate tier for that hour</li>}
+              <li>• Gray cells are unassigned (default to standard rate)</li>
+              <li>• Rate multipliers are applied when clients schedule appointments</li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* Modal for Add/Edit */}
-      {showModal && isExecutive && (
+      {/* Tier Selection Modal */}
+      {selectedCell && isExecutive && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             {/* Background overlay */}
             <div
               className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-              onClick={() => setShowModal(false)}
+              onClick={() => setSelectedCell(null)}
             ></div>
 
             {/* Modal panel */}
-            <div className={`inline-block align-bottom ${themeClasses.bg.card} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full`}>
+            <div className={`inline-block align-bottom ${themeClasses.bg.card} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full`}>
               {/* Header */}
               <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
                 <div className="flex items-center justify-between">
                   <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
-                    {editMode ? 'Edit Rate Tier' : 'Add Rate Tier'}
+                    Select Rate Tier
                   </h3>
                   <button
-                    onClick={() => setShowModal(false)}
+                    onClick={() => setSelectedCell(null)}
                     className={`${themeClasses.text.secondary} hover:text-gray-700`}
                   >
                     <X className="w-5 h-5" />
                   </button>
                 </div>
+                <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+                  {DAYS_OF_WEEK[selectedCell.day]} at {formatHour(selectedCell.hour)}
+                </p>
               </div>
 
-              {/* Form */}
-              <div className="px-6 py-4 space-y-4">
-                {/* Tier Level */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Tier Level
-                  </label>
-                  <select
-                    value={formData.tierLevel}
-                    onChange={(e) => handleInputChange('tierLevel', parseInt(e.target.value))}
-                    className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                  >
-                    {TIER_LEVELS.map(tier => (
-                      <option key={tier.value} value={tier.value}>{tier.label}</option>
-                    ))}
-                  </select>
-                </div>
+              {/* Tier Options */}
+              <div className="px-6 py-4 space-y-3">
+                {TIER_LEVELS.map(tier => {
+                  const currentTier = getTierForCell(selectedCell.day, selectedCell.hour);
+                  const isActive = currentTier?.tierLevel === tier.value;
 
-                {/* Day of Week */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Day of Week
-                  </label>
-                  <select
-                    value={formData.dayOfWeek}
-                    onChange={(e) => handleInputChange('dayOfWeek', parseInt(e.target.value))}
-                    className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                  >
-                    {DAYS_OF_WEEK.map((day, index) => (
-                      <option key={index} value={index}>{day}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Time Range */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                      Start Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.timeStart}
-                      onChange={(e) => handleInputChange('timeStart', e.target.value)}
-                      className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                    />
-                  </div>
-                  <div>
-                    <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                      End Time
-                    </label>
-                    <input
-                      type="time"
-                      value={formData.timeEnd}
-                      onChange={(e) => handleInputChange('timeEnd', e.target.value)}
-                      className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                    />
-                  </div>
-                </div>
-
-                {/* Rate Multiplier */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Rate Multiplier
-                  </label>
-                  <input
-                    type="number"
-                    step="0.25"
-                    min="0.5"
-                    max="5.0"
-                    value={formData.rateMultiplier}
-                    onChange={(e) => handleInputChange('rateMultiplier', parseFloat(e.target.value))}
-                    className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                  />
-                  <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
-                    1.0 = base rate, 1.5 = 50% premium, 2.0 = double rate
-                  </p>
-                </div>
-
-                {/* Color Code */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Color Code
-                  </label>
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="color"
-                      value={formData.colorCode}
-                      onChange={(e) => handleInputChange('colorCode', e.target.value)}
-                      className="h-10 w-16 rounded border border-gray-300 cursor-pointer"
-                    />
-                    <input
-                      type="text"
-                      value={formData.colorCode}
-                      onChange={(e) => handleInputChange('colorCode', e.target.value)}
-                      className={`flex-1 rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                    />
-                  </div>
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Description (Optional)
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) => handleInputChange('description', e.target.value)}
-                    rows={2}
-                    className={`block w-full rounded-md shadow-sm ${themeClasses.bg.primary} ${themeClasses.text.primary} border ${themeClasses.border.primary}`}
-                  />
-                </div>
-
-                {/* Active Status */}
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="isActive"
-                    checked={formData.isActive}
-                    onChange={(e) => handleInputChange('isActive', e.target.checked)}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="isActive" className={`ml-2 text-sm ${themeClasses.text.secondary}`}>
-                    Active (visible to clients)
-                  </label>
-                </div>
+                  return (
+                    <button
+                      key={tier.value}
+                      onClick={() => handleTierSelect(tier.value)}
+                      disabled={saveStatus === 'saving'}
+                      className={`w-full flex items-center justify-between p-4 rounded-lg border-2 transition-all ${
+                        isActive
+                          ? 'border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+                          : `border-gray-300 dark:border-gray-600 ${themeClasses.bg.hover}`
+                      } ${saveStatus === 'saving' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-blue-400'}`}
+                      style={{
+                        backgroundColor: `${tier.defaultColor}15`
+                      }}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <div
+                          className="w-8 h-8 rounded flex-shrink-0"
+                          style={{ backgroundColor: tier.defaultColor }}
+                        ></div>
+                        <div className="text-left">
+                          <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                            {tier.label}
+                          </div>
+                          <div className={`text-xs ${themeClasses.text.muted}`}>
+                            {tier.multiplier}x multiplier
+                          </div>
+                        </div>
+                      </div>
+                      {isActive && (
+                        <div className="flex items-center">
+                          <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                            Current
+                          </span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Footer */}
-              <div className={`px-6 py-4 border-t ${themeClasses.border.primary} flex justify-end space-x-3`}>
+              <div className={`px-6 py-4 border-t ${themeClasses.border.primary} flex justify-end`}>
                 <button
-                  onClick={() => setShowModal(false)}
+                  onClick={() => setSelectedCell(null)}
                   className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.hover}`}
                 >
                   Cancel
                 </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saveStatus === 'saving'}
-                  className={`inline-flex items-center px-4 py-2 border border-transparent rounded-md text-white ${
-                    saveStatus === 'saving'
-                      ? 'bg-gray-400 cursor-not-allowed'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                  }`}
-                >
-                  {saveStatus === 'saving' ? (
-                    <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                      Saving...
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-4 h-4 mr-2" />
-                      {editMode ? 'Update' : 'Create'}
-                    </>
-                  )}
-                </button>
               </div>
+
+              {/* Save Status */}
+              {saveStatus !== 'idle' && (
+                <div className={`px-6 py-3 ${
+                  saveStatus === 'saved' ? 'bg-green-50 dark:bg-green-900/20' :
+                  saveStatus === 'error' ? 'bg-red-50 dark:bg-red-900/20' :
+                  'bg-blue-50 dark:bg-blue-900/20'
+                }`}>
+                  <p className={`text-sm text-center ${
+                    saveStatus === 'saved' ? 'text-green-600 dark:text-green-400' :
+                    saveStatus === 'error' ? 'text-red-600 dark:text-red-400' :
+                    'text-blue-600 dark:text-blue-400'
+                  }`}>
+                    {saveStatus === 'saving' && 'Saving...'}
+                    {saveStatus === 'saved' && '✓ Saved successfully'}
+                    {saveStatus === 'error' && '✗ Failed to save'}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </div>

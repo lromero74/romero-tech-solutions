@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, X, Sparkles } from 'lucide-react';
+import { AlertCircle, X, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
@@ -40,6 +40,7 @@ interface ExistingBooking {
 interface ResourceTimeSlotSchedulerProps {
   selectedDate: Date;
   onSlotSelect: (resourceId: string, startTime: Date, endTime: Date) => void;
+  onDateChange: (date: Date) => void;
   onClose: () => void;
   businessId: string;
 }
@@ -47,11 +48,36 @@ interface ResourceTimeSlotSchedulerProps {
 const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   selectedDate,
   onSlotSelect,
+  onDateChange,
   onClose,
   businessId
 }) => {
   const { isDarkMode } = useClientTheme();
-  const { t } = useClientLanguage();
+  const { t, language } = useClientLanguage();
+
+  // Helper function to capitalize Spanish date strings
+  const formatDateString = (date: Date, locale: string, options: Intl.DateTimeFormatOptions): string => {
+    const formatted = date.toLocaleDateString(locale, options);
+
+    // Capitalize first letter for Spanish dates
+    if (locale === 'es-ES') {
+      // Split by spaces and capitalize weekday and month names
+      const words = formatted.split(' ');
+      return words.map((word, index) => {
+        // First word (weekday) - always capitalize
+        if (index === 0) {
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        }
+        // Words that are month names (not numbers, "de", or years)
+        if (!word.match(/^\d/) && word !== 'de') {
+          return word.charAt(0).toUpperCase() + word.slice(1);
+        }
+        return word;
+      }).join(' ');
+    }
+
+    return formatted;
+  };
 
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
   const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
@@ -65,6 +91,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [errorMessage, setErrorMessage] = useState<string>('');
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
   const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
+  const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
+  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('any');
 
   const BUFFER_HOURS = 1;
 
@@ -129,6 +157,37 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
   const selectedRateInfo = getSelectedTimeRateInfo();
 
+  // Calculate estimated cost based on selected time and rate tiers
+  const calculateEstimatedCost = () => {
+    if (!selectedStartTime || !selectedEndTime) return null;
+
+    const dayOfWeek = selectedStartTime.getDay();
+    let totalCost = 0;
+
+    // Calculate cost for each 30-minute increment
+    let currentTime = new Date(selectedStartTime);
+    while (currentTime < selectedEndTime) {
+      const tier = findRateTierForTime(
+        currentTime.getHours(),
+        currentTime.getMinutes(),
+        dayOfWeek
+      );
+
+      const multiplier = tier?.rateMultiplier || 1.0;
+      const incrementCost = (baseHourlyRate * multiplier) / 2; // Half-hour rate
+      totalCost += incrementCost;
+
+      currentTime = new Date(currentTime.getTime() + 30 * 60 * 1000); // Add 30 minutes
+    }
+
+    return {
+      total: totalCost,
+      hourly: totalCost / ((selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60))
+    };
+  };
+
+  const estimatedCost = calculateEstimatedCost();
+
   // Scroll to current time
   const scrollToNow = () => {
     const now = new Date();
@@ -182,6 +241,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       try {
         setLoading(true);
 
+        // Load base hourly rate
+        try {
+          const rateResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/public/base-hourly-rate`);
+          if (rateResponse.ok) {
+            const rateData = await rateResponse.json();
+            if (rateData.success && rateData.data.baseHourlyRate) {
+              setBaseHourlyRate(rateData.data.baseHourlyRate);
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load base hourly rate, using default:', error);
+        }
+
         // Load rate tiers
         const tiersResult = await apiService.get<{ success: boolean; data: RateTier[] }>(
           '/client/rate-tiers'
@@ -226,6 +298,31 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }, 150);
     }
   }, [loading, selectedDate]);
+
+  // Auto-scroll to selected time slot (for auto-suggest feature)
+  useEffect(() => {
+    if (loading || !selectedStartTime) return;
+
+    // Check if the selected time is on the currently displayed date
+    const selectedDay = new Date(selectedStartTime);
+    selectedDay.setHours(0, 0, 0, 0);
+    const currentDay = new Date(selectedDate);
+    currentDay.setHours(0, 0, 0, 0);
+
+    if (selectedDay.getTime() === currentDay.getTime()) {
+      setTimeout(() => {
+        const hours = selectedStartTime.getHours();
+        const minutes = selectedStartTime.getMinutes();
+        const slotIndex = (hours - 6) * 2 + (minutes / 30);
+        const scrollPosition = slotIndex * 64;
+
+        const container = document.getElementById('timeline-scroll');
+        if (container) {
+          container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
+        }
+      }, 200);
+    }
+  }, [loading, selectedStartTime, selectedDate]);
 
   // Check if a time slot is blocked
   const checkIfSlotBlocked = (slotTime: Date, durationHours: number = selectedDuration): { isBlocked: boolean; reason?: string } => {
@@ -278,7 +375,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     endOfDay.setHours(23, 59, 59, 999);
 
     if (slotEnd > endOfDay) {
-      setErrorMessage(t('scheduler.error.pastMidnight', 'Selected duration ({duration}h) would extend past midnight. Please select an earlier time or shorter duration.').replace('{duration}', selectedDuration.toString()));
+      setErrorMessage(t('scheduler.error.pastMidnight', { duration: selectedDuration.toString() }, 'Selected duration ({{duration}}h) would extend past midnight. Please select an earlier time or shorter duration.'));
       return;
     }
 
@@ -305,7 +402,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       endOfDay.setHours(23, 59, 59, 999);
 
       if (newEndTime > endOfDay) {
-        setErrorMessage(t('scheduler.error.pastMidnightDuration', 'Duration of {duration}h would extend past midnight. Please select a shorter duration or earlier start time.').replace('{duration}', newDuration.toString()));
+        setErrorMessage(t('scheduler.error.pastMidnightDuration', { duration: newDuration.toString() }, 'Duration of {{duration}}h would extend past midnight. Please select a shorter duration or earlier start time.'));
         setSelectedStartTime(null);
         setSelectedEndTime(null);
         return;
@@ -334,7 +431,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         '/client/suggest-available-slot',
         {
           date: selectedDate.toISOString().split('T')[0],
-          durationHours: selectedDuration
+          durationHours: selectedDuration,
+          tierPreference: tierPreference
         }
       );
 
@@ -343,11 +441,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         const startTime = new Date(suggested.startTime);
         const endTime = new Date(suggested.endTime);
 
+        // Update selected date to match the suggested slot's date
+        const suggestedDate = new Date(startTime);
+        suggestedDate.setHours(0, 0, 0, 0);
+        onDateChange(suggestedDate);
+
         setSelectedStartTime(startTime);
         setSelectedEndTime(endTime);
         setErrorMessage('');
 
-        // Scroll to the suggested time
+        // Scroll to the suggested time (longer delay for date change and re-render)
         setTimeout(() => {
           const hours = startTime.getHours();
           const minutes = startTime.getMinutes();
@@ -358,7 +461,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           if (container) {
             container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
           }
-        }, 100); // Small delay to ensure state update has rendered
+        }, 500); // Longer delay to allow for date change and timeline re-render
       } else {
         setErrorMessage(result.message || 'No available slots found');
       }
@@ -550,7 +653,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             <div>
               <h2 className="text-2xl font-bold">{t('scheduler.title', 'Schedule Appointment')}</h2>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {selectedDate.toLocaleDateString('en-US', {
+                {formatDateString(selectedDate, language === 'es' ? 'es-ES' : 'en-US', {
                   weekday: 'long',
                   year: 'numeric',
                   month: 'long',
@@ -584,6 +687,24 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                     {hours} {hours === 1 ? t('scheduler.hour', 'hour') : t('scheduler.hours', 'hours')}
                   </option>
                 ))}
+              </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium">{t('scheduler.tierPreference', 'Prefer:')}</label>
+              <select
+                value={tierPreference}
+                onChange={(e) => setTierPreference(e.target.value as 'any' | 'standard' | 'premium' | 'emergency')}
+                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white'
+                    : 'bg-white border-gray-300 text-gray-900'
+                }`}
+              >
+                <option value="any">{t('scheduler.tierAny', 'Any Rate')}</option>
+                <option value="standard">{t('scheduler.tierStandard', 'Standard')}</option>
+                <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
+                <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
               </select>
             </div>
 
@@ -623,7 +744,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   {t('scheduler.emergencyHoursTitle', '⚠️ Emergency Hours Selected')}
                 </p>
                 <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
-                  {t('scheduler.emergencyHoursMessage', 'Your selected time includes Emergency rate hours ({multiplier}x rate). This appointment will be charged at a higher rate than standard hours.').replace('{multiplier}', selectedRateInfo.maxMultiplier.toString())}
+                  {t('scheduler.emergencyHoursMessage', { multiplier: selectedRateInfo.maxMultiplier.toString() }, 'Your selected time includes Emergency rate hours ({{multiplier}}x rate). This appointment will be charged at a higher rate than standard hours.')}
                 </p>
               </div>
             </div>
@@ -638,7 +759,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   {t('scheduler.premiumHoursTitle', 'Premium Hours Selected')}
                 </p>
                 <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                  {t('scheduler.premiumHoursMessage', 'Your selected time includes Premium rate hours ({multiplier}x rate).').replace('{multiplier}', selectedRateInfo.maxMultiplier.toString())}
+                  {t('scheduler.premiumHoursMessage', { multiplier: selectedRateInfo.maxMultiplier.toString() }, 'Your selected time includes Premium rate hours ({{multiplier}}x rate).')}
                 </p>
               </div>
             </div>
@@ -651,6 +772,55 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </p>
             </div>
           )}
+        </div>
+
+        {/* Day Navigation */}
+        <div className="flex items-center justify-center gap-4 py-3 border-t border-b border-gray-200 dark:border-gray-700">
+          <button
+            onClick={() => {
+              const prevDay = new Date(selectedDate);
+              prevDay.setDate(selectedDate.getDate() - 1);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              if (prevDay >= today) {
+                onDateChange(prevDay);
+              }
+            }}
+            disabled={(() => {
+              const prevDay = new Date(selectedDate);
+              prevDay.setDate(selectedDate.getDate() - 1);
+              const today = new Date();
+              today.setHours(0, 0, 0, 0);
+              return prevDay < today;
+            })()}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {t('scheduler.previousDay', 'Previous Day')}
+          </button>
+
+          <div className="text-center">
+            <p className="text-sm font-semibold text-gray-900 dark:text-white">
+              {formatDateString(selectedDate, language === 'es' ? 'es-ES' : 'en-US', {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric'
+              })}
+            </p>
+          </div>
+
+          <button
+            onClick={() => {
+              const nextDay = new Date(selectedDate);
+              nextDay.setDate(selectedDate.getDate() + 1);
+              onDateChange(nextDay);
+            }}
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          >
+            {t('scheduler.nextDay', 'Next Day')}
+            <ChevronRight className="h-4 w-4" />
+          </button>
         </div>
 
         {/* Timeline */}
@@ -674,8 +844,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 <div className="w-32 h-[26px] border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
                   <span className="font-medium text-xs">{t('scheduler.time', 'Time')}</span>
                 </div>
-                <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900">
-                  <span className="text-sm font-medium">{t('scheduler.availableSlots', 'Available Slots')}</span>
+                <div className="w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-2">
+                  <span className="text-sm font-medium text-center">{t('scheduler.availableSlots', 'Available Slots')}</span>
                 </div>
               </div>
 
@@ -730,16 +900,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                           const lightenedColor = slot.rateTier.colorCode + '1A'; // Add transparency
                           const hoverColor = slot.rateTier.colorCode + '33';
                           bgColor = `cursor-pointer`;
-                          // Map tier level to translation key
-                          const tierKey = slot.rateTier.tierLevel === 3 ? 'scheduler.emergencyHours'
-                            : slot.rateTier.tierLevel === 2 ? 'scheduler.premiumHours'
-                            : 'scheduler.standardHours';
-                          const tierTemplate = slot.rateTier.tierLevel === 3
-                            ? t('scheduler.emergencyHours', 'Emergency hours ({multiplier}x rate)')
+                          // Map tier level to translation key with variable
+                          const multiplier = { multiplier: slot.rateTier.rateMultiplier.toString() };
+                          tierLabel = slot.rateTier.tierLevel === 3
+                            ? t('scheduler.emergencyHours', multiplier, 'Emergency hours ({{multiplier}}x rate)')
                             : slot.rateTier.tierLevel === 2
-                            ? t('scheduler.premiumHours', 'Premium hours ({multiplier}x rate)')
-                            : t('scheduler.standardHours', 'Standard hours ({multiplier}x rate)');
-                          tierLabel = tierTemplate.replace('{multiplier}', slot.rateTier.rateMultiplier.toString());
+                            ? t('scheduler.premiumHours', multiplier, 'Premium hours ({{multiplier}}x rate)')
+                            : t('scheduler.standardHours', multiplier, 'Standard hours ({{multiplier}}x rate)');
                         } else {
                           bgColor = 'bg-gray-100 dark:bg-gray-800 cursor-pointer';
                           tierLabel = t('scheduler.unavailable', 'Unavailable');
@@ -795,9 +962,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             title={t('scheduler.dragToMove', 'Drag to move appointment')}
                           >
                             <div className="text-center pointer-events-none">
-                              <div>{selectedStartTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
-                              <div className="text-[10px]">to</div>
-                              <div>{selectedEndTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                              <div>{selectedStartTime.toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                              <div className="text-[10px]">{t('scheduler.to', 'to')}</div>
+                              <div>{selectedEndTime.toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
                             </div>
                           </div>
 
@@ -862,13 +1029,31 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               {Array.from(new Set(rateTiers.map(t => t.tierName))).map(tierName => {
                 const tier = rateTiers.find(t => t.tierName === tierName);
                 if (!tier) return null;
+
+                // Translate tier name
+                const tierKey = tierName.toLowerCase();
+                const translationKey = `scheduler.tier.${tierKey}`;
+                const translatedName = t(translationKey, tierName);
+
+                // Debug logging - check if translation key exists
+                // Get all translations to see what's available
+                const debugTranslations = Object.keys(window.localStorage).filter(k => k.includes('translation'));
+                console.log('Tier translation:', {
+                  tierName,
+                  tierKey,
+                  translationKey,
+                  translatedName,
+                  language,
+                  cachedKeys: debugTranslations
+                });
+
                 return (
                   <div key={tierName} className="flex items-center space-x-2">
                     <div
                       className="w-4 h-4 border border-gray-300 dark:border-gray-600"
                       style={{ backgroundColor: isDarkMode ? tier.colorCode + '30' : tier.colorCode + '1A' }}
                     ></div>
-                    <span>{tierName} ({tier.rateMultiplier}x)</span>
+                    <span>{translatedName} ({tier.rateMultiplier}x)</span>
                   </div>
                 );
               })}
@@ -883,19 +1068,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             </div>
 
             {selectedStartTime && selectedEndTime && !isSelectedDateInPast && (
-              <div className="flex items-center space-x-4">
-                <div className="text-sm text-gray-900 dark:text-white">
-                  <span className="font-medium">{t('scheduler.selectedLabel', 'Selected:')} </span>
-                  {selectedStartTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })} - {selectedEndTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-                  <span className="ml-2 text-gray-600 dark:text-gray-400">
-                    ({((selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60)).toFixed(1)}h)
-                  </span>
-                </div>
+              <div className="flex items-center justify-end space-x-4">
+                {estimatedCost && (
+                  <div className="flex items-center px-3 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
+                    <span className="text-sm font-semibold text-green-800 dark:text-green-300">
+                      {t('scheduler.estimatedCost', 'Est. Cost:')} ${estimatedCost.total.toFixed(2)}
+                    </span>
+                  </div>
+                )}
                 <button
                   onClick={handleConfirmBooking}
                   className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium"
                 >
-                  {t('scheduler.confirmBooking', 'Confirm Booking')}
+                  {t('scheduler.selectTimeslot', 'Select Timeslot')}
                 </button>
               </div>
             )}

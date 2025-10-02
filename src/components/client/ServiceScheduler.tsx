@@ -26,7 +26,7 @@ import {
 
 const ServiceScheduler: React.FC = () => {
   const { isDarkMode } = useClientTheme();
-  const { t } = useClientLanguage();
+  const { t, language } = useClientLanguage();
 
   // State management
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -35,7 +35,7 @@ const ServiceScheduler: React.FC = () => {
   const [selectedEndTime, setSelectedEndTime] = useState<string>('');
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [selectedLocation, setSelectedLocation] = useState<string>('');
-  const [selectedUrgency, setSelectedUrgency] = useState<string>('');
+  const [selectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   const [description, setDescription] = useState('');
   const [contactName, setContactName] = useState('');
@@ -254,41 +254,17 @@ const ServiceScheduler: React.FC = () => {
     }
   };
 
-  // Date validation based on urgency level
+  // Date validation
   const isDateValid = (date: Date) => {
-    if (!selectedUrgency) return true;
-
-    const urgency = urgencyLevels.find(u => u.id === selectedUrgency);
-    if (!urgency) return true;
-
     const now = new Date();
-
-    // For same-day scheduling, we need to check if there's enough time left in the day
-    // Set the date to start of day and compare
     const dateStart = new Date(date);
     dateStart.setHours(0, 0, 0, 0);
 
     const todayStart = new Date(now);
     todayStart.setHours(0, 0, 0, 0);
 
-    // If it's a future date, it's always valid
-    if (dateStart > todayStart) {
-      return true;
-    }
-
-    // If it's today, check if we have enough lead time for the latest possible appointment
-    if (dateStart.getTime() === todayStart.getTime()) {
-      // Latest appointment is 10:00 PM (22:00) for extended hours
-      const latestToday = new Date(date);
-      latestToday.setHours(22, 0, 0, 0);
-
-      // Check if latest appointment time meets lead time requirement
-      const minDateTime = new Date(now.getTime() + urgency.lead_time_hours * 60 * 60 * 1000);
-      return latestToday >= minDateTime;
-    }
-
-    // Past dates are not valid
-    return false;
+    // Allow today and all future dates
+    return dateStart >= todayStart;
   };
 
   // Time slots generation - hourly blocks for timeline interface
@@ -332,16 +308,11 @@ const ServiceScheduler: React.FC = () => {
     return Array.from({ length: maxDuration }, (_, i) => i + 1);
   };
 
-  // Filter time slots based on urgency level and selected date
+  // Filter time slots based on selected date
   const getAvailableTimeSlots = () => {
     const allSlots = generateTimeSlots();
 
-    if (!selectedDate || !selectedUrgency) {
-      return allSlots;
-    }
-
-    const urgency = urgencyLevels.find(u => u.id === selectedUrgency);
-    if (!urgency) {
+    if (!selectedDate) {
       return allSlots;
     }
 
@@ -357,21 +328,20 @@ const ServiceScheduler: React.FC = () => {
       return allSlots;
     }
 
-    // For today, filter out slots that don't meet lead time requirement
+    // For today, filter out past time slots
     return allSlots.filter(timeSlot => {
       const [hour, minute] = timeSlot.split(':').map(Number);
       const slotDateTime = new Date(selectedDate);
       slotDateTime.setHours(hour, minute, 0, 0);
 
-      const minDateTime = new Date(now.getTime() + urgency.lead_time_hours * 60 * 60 * 1000);
-      return slotDateTime >= minDateTime;
+      return slotDateTime >= now;
     });
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedTime || !selectedLocation || !selectedUrgency || !selectedServiceType) {
+    if (!selectedDate || !selectedTime || !selectedLocation || !selectedServiceType) {
       return;
     }
 
@@ -409,11 +379,6 @@ const ServiceScheduler: React.FC = () => {
       const result = await response.json();
       console.log('Service request submitted:', result);
 
-      // If this was an emergency request, show additional confirmation
-      if (selectedUrgency === 'emergency') {
-        console.log('🚨 EMERGENCY SERVICE REQUEST SUBMITTED - Admin alerts triggered!');
-      }
-
       setShowConfirmation(true);
     } catch (error) {
       console.error('Failed to submit service request:', error);
@@ -436,32 +401,19 @@ const ServiceScheduler: React.FC = () => {
   };
 
   // Handle time slot selection from advanced scheduler
-  const handleTimeSlotSelect = async (resourceId: string, startTime: Date, endTime: Date) => {
-    try {
-      const result = await apiService.request('/client/schedule-appointment', {
-        method: 'POST',
-        body: JSON.stringify({
-          resourceId: selectedLocation, // Use service location from form, not from scheduler
-          startTime: startTime.toISOString(),
-          endTime: endTime.toISOString(),
-          serviceTypeId: selectedServiceType,
-          description: description || 'Appointment scheduled via time slot picker',
-          urgencyLevelId: selectedUrgency
-        })
-      });
+  const handleTimeSlotSelect = (resourceId: string, startTime: Date, endTime: Date) => {
+    // Update form state with selected date and time
+    setSelectedDate(startTime);
+    setSelectedTime(startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+    setSelectedEndTime(endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
 
-      // Update the selected time to reflect the booking
-      setSelectedTime(startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-      setSelectedDate(startTime);
+    // Calculate duration in hours
+    const durationMs = endTime.getTime() - startTime.getTime();
+    const durationHours = durationMs / (1000 * 60 * 60);
+    setSelectedDuration(durationHours);
 
-      // Show success confirmation
-      setShowConfirmation(true);
-
-      console.log('✅ Appointment scheduled:', result.data);
-    } catch (error) {
-      console.error('❌ Failed to schedule appointment:', error);
-      alert(`Failed to schedule appointment: ${error.message}`);
-    }
+    // Close the scheduler modal
+    setShowTimeSlotScheduler(false);
   };
 
   // Handle opening time slot scheduler
@@ -520,47 +472,6 @@ const ServiceScheduler: React.FC = () => {
       <form onSubmit={handleSubmit} className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         {/* Left Column - Calendar & Time */}
         <div className="space-y-6">
-          {/* Urgency Level Selection */}
-          <div>
-            <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              {t('schedule.urgency.title')}
-            </label>
-            <div className="grid grid-cols-1 gap-3">
-              {urgencyLevels.map((urgency) => (
-                <div
-                  key={urgency.id}
-                  className={`relative rounded-lg border p-4 cursor-pointer ${
-                    selectedUrgency === urgency.id
-                      ? `border-${urgency.color}-500 bg-${urgency.color}-50 dark:bg-${urgency.color}-900/20`
-                      : isDarkMode
-                        ? 'border-gray-600 hover:border-gray-500'
-                        : 'border-gray-300 hover:border-gray-400'
-                  }`}
-                  onClick={() => setSelectedUrgency(urgency.id)}
-                >
-                  <div className="flex items-start">
-                    <div className={`flex-shrink-0 ${urgency.color === 'blue' ? 'text-blue-500' : urgency.color === 'yellow' ? 'text-yellow-500' : 'text-red-500'}`}>
-                      {urgency.icon}
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <p className={`text-sm font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                        {urgency.level_name}
-                      </p>
-                      <p className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
-                        {urgency.description}
-                      </p>
-                    </div>
-                    {selectedUrgency === urgency.id && (
-                      <div className={`flex-shrink-0 text-${urgency.color}-500`}>
-                        <Check className="h-4 w-4" />
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
           {/* Calendar */}
           <div>
             <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -714,6 +625,30 @@ const ServiceScheduler: React.FC = () => {
 
         {/* Right Column - Service Details */}
         <div className="space-y-6">
+          {/* Selected Date & Time Display */}
+          {selectedDate && selectedTime && (
+            <div className={`p-4 rounded-lg border ${
+              isDarkMode
+                ? 'bg-blue-900/20 border-blue-600'
+                : 'bg-blue-50 border-blue-300'
+            }`}>
+              <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>
+                {t('schedule.selectedDateTime', 'Selected Date & Time')}
+              </h4>
+              <div className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                {selectedDate.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </div>
+              <div className={`text-md mt-1 ${isDarkMode ? 'text-blue-200' : 'text-blue-700'}`}>
+                {selectedTime} {selectedEndTime && `- ${selectedEndTime}`} ({selectedDuration}h)
+              </div>
+            </div>
+          )}
+
           {/* Service Location */}
           <div>
             <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -864,7 +799,7 @@ const ServiceScheduler: React.FC = () => {
           <div className="pt-4">
             <button
               type="submit"
-              disabled={isSubmitting || !selectedDate || !selectedTime || !selectedLocation || !selectedUrgency || !selectedServiceType}
+              disabled={isSubmitting || !selectedDate || !selectedTime || !selectedLocation || !selectedServiceType}
               className="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? (
@@ -885,6 +820,7 @@ const ServiceScheduler: React.FC = () => {
         <ResourceTimeSlotScheduler
           selectedDate={selectedDate!}
           onSlotSelect={handleTimeSlotSelect}
+          onDateChange={setSelectedDate}
           onClose={() => setShowTimeSlotScheduler(false)}
           businessId={''} // This will be populated from user context
         />

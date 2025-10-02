@@ -106,4 +106,40 @@ router.post('/service-areas/validate', async (req, res) => {
   }
 });
 
+// Public endpoint to get base hourly rate (no auth required)
+// Needed for clients to see pricing in scheduler
+router.get('/base-hourly-rate', async (req, res) => {
+  try {
+    const result = await query(`
+      SELECT setting_value
+      FROM system_settings
+      WHERE setting_key = 'base_hourly_rate'
+    `);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Base hourly rate not configured'
+      });
+    }
+
+    const baseRate = result.rows[0].setting_value;
+
+    res.status(200).json({
+      success: true,
+      data: {
+        baseHourlyRate: parseFloat(baseRate)
+      }
+    });
+
+  } catch (error) {
+    console.error('Get base hourly rate error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get base hourly rate',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;

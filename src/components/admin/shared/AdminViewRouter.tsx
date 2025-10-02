@@ -16,6 +16,7 @@ import {
   AdminReports,
   AdminPasswordComplexity
 } from '..';
+import AdminPricingSettings from '../AdminPricingSettings';
 import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
 import AdminRoleHierarchy from '../AdminRoleHierarchy';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
@@ -38,7 +39,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'password-complexity';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1523,6 +1524,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'service-hour-rates':
         return <AdminServiceHourRates />;
+
+      case 'pricing-settings':
+        return <AdminPricingSettings />;
 
       case 'password-complexity':
         return (

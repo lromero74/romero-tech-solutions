@@ -201,8 +201,23 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
       isActive
     } = req.body;
 
+    console.log(`🔧 Service hour rate update request from ${req.user.email}:`, {
+      id,
+      tierName,
+      tierLevel,
+      dayOfWeek,
+      timeStart,
+      timeEnd,
+      rateMultiplier,
+      colorCode,
+      description,
+      displayOrder,
+      isActive
+    });
+
     // Validation
     if (dayOfWeek !== undefined && (dayOfWeek < 0 || dayOfWeek > 6)) {
+      console.log(`❌ Validation failed: dayOfWeek ${dayOfWeek} out of range`);
       return res.status(400).json({
         success: false,
         message: 'dayOfWeek must be between 0 (Sunday) and 6 (Saturday)'
@@ -210,6 +225,7 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
     }
 
     if (tierLevel !== undefined && (tierLevel < 1 || tierLevel > 3)) {
+      console.log(`❌ Validation failed: tierLevel ${tierLevel} out of range`);
       return res.status(400).json({
         success: false,
         message: 'tierLevel must be between 1 (Standard) and 3 (Emergency)'
@@ -217,6 +233,7 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
     }
 
     if (rateMultiplier !== undefined && rateMultiplier <= 0) {
+      console.log(`❌ Validation failed: rateMultiplier ${rateMultiplier} must be > 0`);
       return res.status(400).json({
         success: false,
         message: 'rateMultiplier must be greater than 0'
@@ -272,6 +289,7 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
     }
 
     if (updates.length === 0) {
+      console.log(`❌ No fields to update`);
       return res.status(400).json({
         success: false,
         message: 'No fields to update'
@@ -287,9 +305,12 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
       RETURNING *
     `;
 
+    console.log(`📝 Executing SQL update:`, { query, values });
+
     const result = await pool.query(query, values);
 
     if (result.rows.length === 0) {
+      console.log(`❌ Service hour rate tier not found: ${id}`);
       return res.status(404).json({
         success: false,
         message: 'Service hour rate tier not found'
@@ -318,9 +339,18 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error updating service hour rate:', error);
+    console.error('❌ Error stack:', error.stack);
+    console.error('❌ Error details:', {
+      name: error.name,
+      message: error.message,
+      code: error.code,
+      detail: error.detail,
+      constraint: error.constraint
+    });
     res.status(500).json({
       success: false,
-      message: 'Failed to update service hour rate'
+      message: 'Failed to update service hour rate',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

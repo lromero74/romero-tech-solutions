@@ -4,6 +4,7 @@ import { clientContextMiddleware, requireClientAccess } from '../../middleware/c
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 import { systemSettingsService } from '../../services/systemSettingsService.js';
+import { timezoneService } from '../../utils/timezoneUtils.js';
 
 const router = express.Router();
 
@@ -470,7 +471,7 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
  */
 router.post('/suggest-available-slot', async (req, res) => {
   try {
-    const { date, durationHours } = req.body;
+    const { date, durationHours, tierPreference } = req.body;
 
     if (!date) {
       return res.status(400).json({
@@ -480,6 +481,7 @@ router.post('/suggest-available-slot', async (req, res) => {
     }
 
     const requestedDuration = durationHours || 1; // Default to 1 hour
+    const tierPref = tierPreference || 'any'; // Default to 'any'
 
     // Validate duration
     if (requestedDuration < 1 || requestedDuration > 6) {
@@ -489,183 +491,188 @@ router.post('/suggest-available-slot', async (req, res) => {
       });
     }
 
-    // Get all existing bookings for the requested date
-    const query = `
-      SELECT
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
-        sr.scheduled_date,
-        sr.scheduled_time_start,
-        sr.scheduled_time_end
-      FROM service_requests sr
-      WHERE (sr.requested_date = $1 OR sr.scheduled_date = $1)
-        AND sr.soft_delete = false
-        AND sr.status_id NOT IN (
-          SELECT id FROM service_request_statuses
-          WHERE name IN ('Cancelled', 'Completed', 'Rejected')
-        )
-      ORDER BY
-        COALESCE(sr.scheduled_time_start, sr.requested_time_start)
-    `;
+    // Map tier preference to tier levels
+    const tierLevelMap = {
+      'standard': 1,
+      'premium': 2,
+      'emergency': 3,
+      'any': null // No filtering
+    };
+
+    const preferredTierLevel = tierLevelMap[tierPref];
 
     const pool = await getPool();
-    const result = await pool.query(query, [date]);
 
-    // Build list of blocked time ranges (appointments + 1-hour buffer before/after)
-    const blockedRanges = [];
-    const BUFFER_HOURS = 1;
-
-    for (const booking of result.rows) {
-      const useDate = booking.scheduled_date || booking.requested_date;
-      const startTime = booking.scheduled_time_start || booking.requested_time_start;
-      const endTime = booking.scheduled_time_end || booking.requested_time_end;
-
-      const start = new Date(`${useDate}T${startTime}`);
-      let end;
-
-      if (endTime) {
-        end = new Date(`${useDate}T${endTime}`);
-      } else {
-        end = new Date(start.getTime() + (1 * 60 * 60 * 1000));
-      }
-
-      // Add buffer before and after
-      const bufferStart = new Date(start.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
-      const bufferEnd = new Date(end.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
-
-      blockedRanges.push({ start: bufferStart, end: bufferEnd });
-    }
-
-    // Parse date string as local date (not UTC)
-    const [year, month, day] = date.split('-').map(Number);
-    const selectedDate = new Date(year, month - 1, day); // month is 0-indexed
+    // Initialize timezone service
+    await timezoneService.init();
 
     const now = new Date();
     const minimumStartTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // 1 hour from now
 
-    // Start at 6 AM
-    let currentSlot = new Date(selectedDate);
-    currentSlot.setHours(6, 0, 0, 0);
-
-    // End at 10 PM (22:00)
-    const endOfDay = new Date(selectedDate);
-    endOfDay.setHours(22, 0, 0, 0);
-
-    // Helper function to get rate tier for a time slot
-    const getRateTier = async (slotTime) => {
-      const dayOfWeek = slotTime.getDay();
-      const timeString = `${String(slotTime.getHours()).padStart(2, '0')}:${String(slotTime.getMinutes()).padStart(2, '0')}:00`;
-
-      const tierQuery = `
-        SELECT tier_name, tier_level, rate_multiplier
-        FROM service_hour_rate_tiers
-        WHERE is_active = true
-          AND day_of_week = $1
-          AND time_start <= $2
-          AND time_end > $2
-        ORDER BY tier_level ASC
-        LIMIT 1
+    // Helper function to get blocked ranges for a specific date
+    const getBlockedRangesForDate = async (searchDate) => {
+      const query = `
+        SELECT
+          sr.requested_date,
+          sr.requested_time_start,
+          sr.requested_time_end,
+          sr.scheduled_date,
+          sr.scheduled_time_start,
+          sr.scheduled_time_end
+        FROM service_requests sr
+        WHERE (sr.requested_date = $1 OR sr.scheduled_date = $1)
+          AND sr.soft_delete = false
+          AND sr.status_id NOT IN (
+            SELECT id FROM service_request_statuses
+            WHERE name IN ('Cancelled', 'Completed', 'Rejected')
+          )
+        ORDER BY
+          COALESCE(sr.scheduled_time_start, sr.requested_time_start)
       `;
 
-      try {
-        const tierResult = await pool.query(tierQuery, [dayOfWeek, timeString]);
-        if (tierResult.rows.length > 0) {
-          return {
-            tierName: tierResult.rows[0].tier_name,
-            tierLevel: tierResult.rows[0].tier_level,
-            rateMultiplier: parseFloat(tierResult.rows[0].rate_multiplier)
-          };
+      const result = await pool.query(query, [searchDate]);
+      const blockedRanges = [];
+      const BUFFER_HOURS = 1;
+
+      for (const booking of result.rows) {
+        const useDate = booking.scheduled_date || booking.requested_date;
+        const startTime = booking.scheduled_time_start || booking.requested_time_start;
+        const endTime = booking.scheduled_time_end || booking.requested_time_end;
+
+        const start = new Date(`${useDate}T${startTime}`);
+        let end;
+
+        if (endTime) {
+          end = new Date(`${useDate}T${endTime}`);
+        } else {
+          end = new Date(start.getTime() + (1 * 60 * 60 * 1000));
         }
-      } catch (err) {
-        console.error('Error fetching rate tier:', err);
+
+        // Add buffer before and after
+        const bufferStart = new Date(start.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
+        const bufferEnd = new Date(end.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
+
+        blockedRanges.push({ start: bufferStart, end: bufferEnd });
       }
-      return null;
+
+      return blockedRanges;
     };
 
-    // First pass: Try to find a Standard rate slot (tier_level = 1)
-    let trySlot = new Date(selectedDate);
-    trySlot.setHours(6, 0, 0, 0);
+    // Helper function to search for slot on a specific date (in UTC)
+    const searchDateForSlot = async (searchDateString, blockedRanges) => {
+      // Business hours: 24/7 (all day, every day)
+      // Convert to UTC for the search
+      const startOfBusinessDay = timezoneService.businessTimeToUTC(searchDateString, '00:00:00');
+      const endOfBusinessDay = timezoneService.businessTimeToUTC(searchDateString, '23:59:59');
 
-    let standardSlot = null;
-    let fallbackSlot = null;
+      let trySlot = new Date(startOfBusinessDay);
+      let fallbackSlot = null;
 
-    while (trySlot < endOfDay) {
-      const slotEnd = new Date(trySlot.getTime() + (requestedDuration * 60 * 60 * 1000));
+      while (trySlot < endOfBusinessDay) {
+        const slotEnd = new Date(trySlot.getTime() + (requestedDuration * 60 * 60 * 1000));
 
-      // Check if slot end exceeds business hours
-      if (slotEnd > endOfDay) {
-        break;
-      }
-
-      // Check if slot is at least 1 hour in the future
-      if (trySlot < minimumStartTime) {
-        trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
-        continue;
-      }
-
-      // Check if this slot conflicts with any blocked ranges
-      let hasConflict = false;
-      for (const blocked of blockedRanges) {
-        if (trySlot < blocked.end && slotEnd > blocked.start) {
-          hasConflict = true;
+        // Check if slot end exceeds business hours
+        if (slotEnd > endOfBusinessDay) {
           break;
         }
-      }
 
-      if (!hasConflict) {
-        const rateTier = await getRateTier(trySlot);
-
-        // Prioritize Standard rate slots (tier_level = 1)
-        if (rateTier && rateTier.tierLevel === 1) {
-          standardSlot = {
-            startTime: trySlot.toISOString(),
-            endTime: slotEnd.toISOString(),
-            duration: requestedDuration,
-            rateTier: {
-              tierName: rateTier.tierName,
-              rateMultiplier: rateTier.rateMultiplier
-            }
-          };
-          break; // Found a Standard slot, stop searching
+        // Check if slot is at least 1 hour in the future
+        if (trySlot < minimumStartTime) {
+          trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
+          continue;
         }
 
-        // Keep first non-Standard slot as fallback
-        if (!fallbackSlot) {
-          fallbackSlot = {
-            startTime: trySlot.toISOString(),
-            endTime: slotEnd.toISOString(),
-            duration: requestedDuration,
-            rateTier: rateTier ? {
-              tierName: rateTier.tierName,
-              rateMultiplier: rateTier.rateMultiplier
-            } : null
-          };
+        // Check if this slot conflicts with any blocked ranges
+        let hasConflict = false;
+        for (const blocked of blockedRanges) {
+          if (trySlot < blocked.end && slotEnd > blocked.start) {
+            hasConflict = true;
+            break;
+          }
         }
+
+        if (!hasConflict) {
+          // Get rate tier based on business timezone
+          const rateTier = await timezoneService.getRateTierForUTC(trySlot);
+
+          // Check if slot matches tier preference
+          // If user selected "any" tier, accept all slots
+          // If user selected specific tier, prioritize exact matches but accept others as fallback
+          const isExactMatch = preferredTierLevel === null ||
+                              (rateTier && rateTier.tierLevel === preferredTierLevel);
+
+          const isFallbackMatch = preferredTierLevel !== null &&
+                                 rateTier &&
+                                 rateTier.tierLevel !== preferredTierLevel;
+
+          // Store first fallback slot in case no exact match is found
+          if (isFallbackMatch && !fallbackSlot) {
+            fallbackSlot = {
+              startTime: trySlot.toISOString(),
+              endTime: slotEnd.toISOString(),
+              duration: requestedDuration,
+              rateTier: rateTier ? {
+                tierName: rateTier.tierName,
+                rateMultiplier: rateTier.rateMultiplier
+              } : null
+            };
+          }
+
+          // If exact match found, return immediately
+          if (isExactMatch) {
+            return {
+              startTime: trySlot.toISOString(),
+              endTime: slotEnd.toISOString(),
+              duration: requestedDuration,
+              rateTier: rateTier ? {
+                tierName: rateTier.tierName,
+                rateMultiplier: rateTier.rateMultiplier
+              } : null
+            };
+          }
+        }
+
+        // Move to next 30-minute slot
+        trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
       }
 
-      // Move to next 30-minute slot
-      trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
+      // If no exact match found but we have a fallback, return it
+      return fallbackSlot;
+    };
+
+    // Parse starting date string
+    const startDate = new Date(date + 'T00:00:00');
+
+    // Search forward up to 30 days
+    const MAX_DAYS_TO_SEARCH = 30;
+    let foundSlot = null;
+
+    for (let dayOffset = 0; dayOffset < MAX_DAYS_TO_SEARCH; dayOffset++) {
+      const currentSearchDate = new Date(startDate);
+      currentSearchDate.setDate(startDate.getDate() + dayOffset);
+
+      const dateString = currentSearchDate.toISOString().split('T')[0];
+      const blockedRanges = await getBlockedRangesForDate(dateString);
+
+      foundSlot = await searchDateForSlot(dateString, blockedRanges);
+
+      if (foundSlot) {
+        // Found a matching slot
+        return res.json({
+          success: true,
+          data: foundSlot
+        });
+      }
     }
 
-    // Return Standard slot if found, otherwise return fallback (Premium/Emergency)
-    if (standardSlot) {
-      return res.json({
-        success: true,
-        data: standardSlot
-      });
-    } else if (fallbackSlot) {
-      return res.json({
-        success: true,
-        data: fallbackSlot,
-        message: 'No Standard rate slots available. Suggesting next available Premium/Emergency slot.'
-      });
-    }
+    // No available slots found within 30 days
+    const tierMessage = preferredTierLevel !== null
+      ? `No available ${tierPref} rate ${requestedDuration}-hour time slots found within the next 30 days.`
+      : `No available ${requestedDuration}-hour time slots found within the next 30 days.`;
 
-    // No available slots found
     res.status(404).json({
       success: false,
-      message: `No available ${requestedDuration}-hour time slots found for ${date}. Please try a different date or duration.`
+      message: `${tierMessage} Please try a different duration or rate preference.`
     });
 
   } catch (error) {
