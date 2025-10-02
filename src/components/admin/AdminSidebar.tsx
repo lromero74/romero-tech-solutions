@@ -18,11 +18,12 @@ import {
   ChevronRight,
   Clock,
   DollarSign,
-  Workflow
+  Workflow,
+  Receipt
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -62,6 +63,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       items: [
         { id: 'services', label: 'Services', icon: Settings },
         { id: 'service-requests', label: 'Service Requests', icon: ClipboardList },
+        { id: 'invoices', label: 'Invoices', icon: Receipt },
         { id: 'workflow-configuration', label: 'Workflow Configuration', icon: Workflow },
         { id: 'closure-reasons', label: 'Closure Reasons', icon: XCircle }
       ]

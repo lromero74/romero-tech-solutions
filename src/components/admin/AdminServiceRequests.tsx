@@ -20,6 +20,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
 
@@ -53,6 +54,10 @@ interface ServiceRequest {
   started_at: string | null;
   total_work_duration_minutes: number | null;
   file_count?: number;
+  invoice_id?: string | null;
+  invoice_number?: string | null;
+  invoice_total?: number | null;
+  invoice_payment_status?: string | null;
   locationDetails?: {
     name: string;
     street_address_1: string;
@@ -128,8 +133,60 @@ interface ServiceRequestNote {
   created_at: string;
 }
 
+interface Invoice {
+  id: string;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  payment_date: string | null;
+  payment_status: string;
+  base_hourly_rate: number;
+  standard_hours: number;
+  standard_rate: number;
+  standard_cost: number;
+  premium_hours: number;
+  premium_rate: number;
+  premium_cost: number;
+  emergency_hours: number;
+  emergency_rate: number;
+  emergency_cost: number;
+  waived_hours: number;
+  is_first_service_request: boolean;
+  subtotal: number;
+  tax_rate: number;
+  tax_amount: number;
+  total_amount: number;
+  work_description: string | null;
+  notes: string | null;
+  business_name: string;
+  primary_contact_name: string;
+  primary_contact_email: string;
+  primary_contact_phone: string;
+  street_address: string;
+  city: string;
+  state: string;
+  zip_code: string;
+  request_number: string;
+  service_title: string;
+  service_created_at: string;
+  service_completed_at: string;
+}
+
+interface CompanyInfo {
+  company_name: string;
+  company_address_line1: string;
+  company_address_line2: string;
+  company_city: string;
+  company_state: string;
+  company_zip: string;
+  company_phone: string;
+  company_email: string;
+}
+
 const AdminServiceRequests: React.FC = () => {
   const { isDark } = useTheme();
+  const { user } = useEnhancedAuth();
+  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
@@ -145,15 +202,31 @@ const AdminServiceRequests: React.FC = () => {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
+  const [showUncancelModal, setShowUncancelModal] = useState(false);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('');
   const [selectedStatusId, setSelectedStatusId] = useState<string>('');
   const [statusNotes, setStatusNotes] = useState<string>('');
+  const [uncancelReason, setUncancelReason] = useState<string>('');
   const [selectedClosureReasonId, setSelectedClosureReasonId] = useState<string>('');
   const [resolutionSummary, setResolutionSummary] = useState<string>('');
   const [actualDurationMinutes, setActualDurationMinutes] = useState<string>('');
   const [equipmentUsed, setEquipmentUsed] = useState<string>('');
+  const [timeBreakdown, setTimeBreakdown] = useState<{
+    isFirstServiceRequest: boolean;
+    waivedHours: string;
+    standardBillableHours: number;
+    premiumBillableHours: number;
+    emergencyBillableHours: number;
+    totalBillableHours: number;
+  } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Invoice state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceData, setInvoiceData] = useState<{ invoice: Invoice; companyInfo: CompanyInfo } | null>(null);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
 
   // Files and Notes state
   const [requestFiles, setRequestFiles] = useState<ServiceRequestFile[]>([]);
@@ -239,6 +312,16 @@ const AdminServiceRequests: React.FC = () => {
     fetchServiceRequests();
   }, [pagination.page, sortBy, sortOrder, filters]);
 
+  // Update selected request when service requests are refreshed
+  useEffect(() => {
+    if (selectedRequest) {
+      const updatedRequest = serviceRequests.find(r => r.id === selectedRequest.id);
+      if (updatedRequest && JSON.stringify(updatedRequest) !== JSON.stringify(selectedRequest)) {
+        setSelectedRequest(updatedRequest);
+      }
+    }
+  }, [serviceRequests]);
+
   // Fetch technicians, statuses, and closure reasons on mount
   useEffect(() => {
     fetchTechnicians();
@@ -297,24 +380,38 @@ const AdminServiceRequests: React.FC = () => {
   // Fetch closure reasons
   const fetchClosureReasons = async () => {
     try {
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) return;
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/closure-reasons`, {
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setClosureReasons(data.data);
-        }
+      console.log('🔍 Fetching closure reasons...');
+      const response = await apiService.get('/admin/service-requests/closure-reasons');
+      console.log('📋 Closure reasons response:', response);
+      if (response.success && response.data) {
+        console.log('✅ Setting closure reasons:', response.data);
+        setClosureReasons(response.data);
+      } else {
+        console.warn('⚠️ No data in response:', response);
       }
     } catch (err) {
-      console.error('Error fetching closure reasons:', err);
+      console.error('❌ Error fetching closure reasons:', err);
+    }
+  };
+
+  // Fetch time breakdown by rate tier
+  const fetchTimeBreakdown = async (requestId: string) => {
+    try {
+      const response = await apiService.get(`/admin/service-requests/${requestId}/time-breakdown`);
+      if (response.success && response.data) {
+        setTimeBreakdown({
+          isFirstServiceRequest: response.data.isFirstServiceRequest,
+          waivedHours: response.data.waivedHours,
+          standardBillableHours: response.data.standardBillableHours,
+          premiumBillableHours: response.data.premiumBillableHours,
+          emergencyBillableHours: response.data.emergencyBillableHours,
+          totalBillableHours: response.data.totalBillableHours
+        });
+        // Auto-populate actual duration field with total billable minutes
+        setActualDurationMinutes(response.data.totalBillableMinutes.toString());
+      }
+    } catch (err) {
+      console.error('Error fetching time breakdown:', err);
     }
   };
 
@@ -326,34 +423,18 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) {
-        throw new Error('No session token available');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/assign`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ technicianId: selectedTechnicianId })
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/assign`, {
+        technicianId: selectedTechnicianId
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
+      if (response.success) {
         // Refresh service requests list
         await fetchServiceRequests();
         setShowAssignModal(false);
         setSelectedTechnicianId('');
         setSelectedRequest(null);
       } else {
-        throw new Error(data.message || 'Failed to assign technician');
+        throw new Error(response.message || 'Failed to assign technician');
       }
     } catch (err) {
       console.error('Error assigning technician:', err);
@@ -371,38 +452,21 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) {
-        throw new Error('No session token available');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/status`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          statusId: selectedStatusId,
-          notes: statusNotes || undefined
-        })
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/status`, {
+        statusId: selectedStatusId,
+        notes: statusNotes || undefined
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
-        // Refresh service requests list
+      if (response.success) {
+        // Refresh service requests list (will trigger useEffect to update selectedRequest)
         await fetchServiceRequests();
+
+        // Close the status modal
         setShowStatusModal(false);
         setSelectedStatusId('');
         setStatusNotes('');
-        setSelectedRequest(null);
       } else {
-        throw new Error(data.message || 'Failed to change status');
+        throw new Error(response.message || 'Failed to change status');
       }
     } catch (err) {
       console.error('Error changing status:', err);
@@ -420,31 +484,14 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) {
-        throw new Error('No session token available');
-      }
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/acknowledge`, {});
 
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/acknowledge`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
+      if (response.success) {
         // Refresh service requests list
         await fetchServiceRequests();
         setSelectedRequest(null);
       } else {
-        throw new Error(data.message || 'Failed to acknowledge service request');
+        throw new Error(response.message || 'Failed to acknowledge service request');
       }
     } catch (err) {
       console.error('Error acknowledging service request:', err);
@@ -462,31 +509,15 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) {
-        throw new Error('No session token available');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/time-entry`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ action })
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/time-entry`, {
+        action
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
+      if (response.success) {
         // Refresh service requests list
         await fetchServiceRequests();
       } else {
-        throw new Error(data.message || `Failed to ${action} time tracking`);
+        throw new Error(response.message || `Failed to ${action} time tracking`);
       }
     } catch (err) {
       console.error(`Error ${action}ing time tracking:`, err);
@@ -504,32 +535,14 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      if (!sessionToken) {
-        throw new Error('No session token available');
-      }
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/close`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          closureReasonId: selectedClosureReasonId,
-          resolutionSummary,
-          actualDurationMinutes: actualDurationMinutes ? parseInt(actualDurationMinutes) : undefined,
-          equipmentUsed: equipmentUsed || undefined
-        })
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/close`, {
+        closureReasonId: selectedClosureReasonId,
+        resolutionSummary,
+        actualDurationMinutes: actualDurationMinutes ? parseInt(actualDurationMinutes) : undefined,
+        equipmentUsed: equipmentUsed || undefined
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
-
-      if (data.success) {
+      if (response.success) {
         // Refresh service requests list
         await fetchServiceRequests();
         setShowCloseModal(false);
@@ -539,11 +552,40 @@ const AdminServiceRequests: React.FC = () => {
         setEquipmentUsed('');
         setSelectedRequest(null);
       } else {
-        throw new Error(data.message || 'Failed to close service request');
+        throw new Error(response.message || 'Failed to close service request');
       }
     } catch (err) {
       console.error('Error closing service request:', err);
       setActionError(err instanceof Error ? err.message : 'Failed to close service request');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Uncancel a service request
+  const handleUncancelRequest = async () => {
+    if (!selectedRequest) return;
+
+    try {
+      setActionLoading(true);
+      setActionError(null);
+
+      const response = await apiService.post(`/admin/service-requests/${selectedRequest.id}/uncancel`, {
+        reason: uncancelReason || undefined
+      });
+
+      if (response.success) {
+        // Refresh service requests list
+        await fetchServiceRequests();
+        setShowUncancelModal(false);
+        setUncancelReason('');
+        setSelectedRequest(null);
+      } else {
+        throw new Error(response.message || 'Failed to uncancel service request');
+      }
+    } catch (err) {
+      console.error('Error uncancelling service request:', err);
+      setActionError(err instanceof Error ? err.message : 'Failed to uncancel service request');
     } finally {
       setActionLoading(false);
     }
@@ -678,6 +720,33 @@ const AdminServiceRequests: React.FC = () => {
 
     // Always fetch notes
     fetchRequestNotes(request.id);
+  };
+
+  // Fetch invoice data
+  const fetchInvoice = async (invoiceId: string) => {
+    try {
+      setLoadingInvoice(true);
+      const response = await apiService.get(`/admin/invoices/${invoiceId}`);
+
+      if (response.success && response.data) {
+        setInvoiceData(response.data);
+      } else {
+        throw new Error(response.message || 'Failed to fetch invoice');
+      }
+    } catch (err) {
+      console.error('Error fetching invoice:', err);
+      alert('Failed to load invoice. Please try again.');
+      setShowInvoiceModal(false);
+    } finally {
+      setLoadingInvoice(false);
+    }
+  };
+
+  // Handle view invoice
+  const handleViewInvoice = (invoiceId: string) => {
+    setSelectedInvoiceId(invoiceId);
+    setShowInvoiceModal(true);
+    fetchInvoice(invoiceId);
   };
 
   // Get status icon
@@ -944,8 +1013,22 @@ const AdminServiceRequests: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                          style={{ backgroundColor: `${request.status_color}20`, color: request.status_color }}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                            request.status.toLowerCase() === 'cancelled'
+                              ? 'bg-gray-500 text-white'
+                              : request.status.toLowerCase() === 'submitted'
+                              ? 'bg-blue-600 text-white'
+                              : request.status.toLowerCase() === 'acknowledged'
+                              ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
+                              : themeClasses.text.primary
+                          }`}
+                          style={
+                            request.status.toLowerCase() === 'cancelled' ||
+                            request.status.toLowerCase() === 'submitted' ||
+                            request.status.toLowerCase() === 'acknowledged'
+                              ? {}
+                              : { backgroundColor: `${request.status_color}20` }
+                          }
                         >
                           {getStatusIcon(request.status)}
                           <span className="ml-1">{request.status}</span>
@@ -953,8 +1036,8 @@ const AdminServiceRequests: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span
-                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium"
-                          style={{ backgroundColor: `${request.urgency_color}20`, color: request.urgency_color }}
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${themeClasses.text.primary}`}
+                          style={{ backgroundColor: `${request.urgency_color}20` }}
                         >
                           {request.urgency}
                         </span>
@@ -984,15 +1067,29 @@ const AdminServiceRequests: React.FC = () => {
                         )}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleViewRequest(request);
-                          }}
-                          className="text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          View Details
-                        </button>
+                        <div className="flex items-center space-x-3">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleViewRequest(request);
+                            }}
+                            className="text-blue-600 dark:text-blue-400 hover:underline"
+                          >
+                            View Details
+                          </button>
+                          {request.invoice_id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleViewInvoice(request.invoice_id!);
+                              }}
+                              className="text-green-600 dark:text-green-400 hover:underline flex items-center"
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              View Invoice
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -1036,10 +1133,10 @@ const AdminServiceRequests: React.FC = () => {
               <div className="flex justify-between items-start mb-6">
                 <div>
                   <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>
-                    {selectedRequest.request_number}
-                  </h2>
-                  <p className={`text-lg ${themeClasses.text.secondary} mt-1`}>
                     {selectedRequest.title}
+                  </h2>
+                  <p className={`text-lg ${themeClasses.text.secondary} mt-1 font-mono`}>
+                    {selectedRequest.request_number}
                   </p>
                 </div>
                 <button
@@ -1053,21 +1150,35 @@ const AdminServiceRequests: React.FC = () => {
               {/* Status Badges */}
               <div className="flex flex-wrap gap-2 mb-6">
                 <span
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                  style={{ backgroundColor: `${selectedRequest.status_color}20`, color: selectedRequest.status_color }}
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
+                    selectedRequest.status.toLowerCase() === 'cancelled'
+                      ? 'bg-gray-500 text-white'
+                      : selectedRequest.status.toLowerCase() === 'submitted'
+                      ? 'bg-blue-600 text-white'
+                      : selectedRequest.status.toLowerCase() === 'acknowledged'
+                      ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
+                      : themeClasses.text.primary
+                  }`}
+                  style={
+                    selectedRequest.status.toLowerCase() === 'cancelled' ||
+                    selectedRequest.status.toLowerCase() === 'submitted' ||
+                    selectedRequest.status.toLowerCase() === 'acknowledged'
+                      ? {}
+                      : { backgroundColor: `${selectedRequest.status_color}20` }
+                  }
                 >
                   {getStatusIcon(selectedRequest.status)}
                   <span className="ml-1">{selectedRequest.status}</span>
                 </span>
                 <span
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                  style={{ backgroundColor: `${selectedRequest.urgency_color}20`, color: selectedRequest.urgency_color }}
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${themeClasses.text.primary}`}
+                  style={{ backgroundColor: `${selectedRequest.urgency_color}20` }}
                 >
                   {selectedRequest.urgency}
                 </span>
                 <span
-                  className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium"
-                  style={{ backgroundColor: `${selectedRequest.priority_color}20`, color: selectedRequest.priority_color }}
+                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${themeClasses.text.primary}`}
+                  style={{ backgroundColor: `${selectedRequest.priority_color}20` }}
                 >
                   {selectedRequest.priority} Priority
                 </span>
@@ -1093,32 +1204,37 @@ const AdminServiceRequests: React.FC = () => {
                 </div>
               </div>
 
-              {/* Cost Summary & Location Side-by-Side */}
+              {/* Date/Time & Cost Summary & Location Side-by-Side */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
-                {/* Cost Summary */}
-                {selectedRequest.cost && selectedRequest.requested_date && selectedRequest.requested_time_start && selectedRequest.requested_time_end && (
+                {/* Date/Time & Cost Summary */}
+                {selectedRequest.requested_date && selectedRequest.requested_time_start && selectedRequest.requested_time_end && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Selected Date & Time</h4>
                     <div className={`text-lg font-semibold ${themeClasses.text.primary} mb-1`}>
                       {new Date(selectedRequest.requested_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                     </div>
                     <div className={`text-base ${themeClasses.text.secondary} mb-3`}>
-                      {selectedRequest.requested_time_start.substring(0, 5)} - {selectedRequest.requested_time_end.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                      {selectedRequest.requested_time_start.substring(0, 5)} - {selectedRequest.requested_time_end.substring(0, 5)}
+                      {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
                     </div>
-                    <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
-                      <div className={`text-sm ${themeClasses.text.secondary}`}>
-                        Base Rate: ${selectedRequest.cost.baseRate}/hr
+
+                    {/* Cost Information - Only for Admin/Executive */}
+                    {isExecutiveOrAdmin && selectedRequest.cost && (
+                      <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
+                        <div className={`text-sm ${themeClasses.text.secondary}`}>
+                          Base Rate: ${selectedRequest.cost.baseRate}/hr
+                        </div>
+                        <div className={`text-sm ${themeClasses.text.secondary}`}>
+                          {selectedRequest.cost.durationHours}h Standard @ 1x = ${selectedRequest.cost.total.toFixed(2)}
+                        </div>
+                        <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2`}>
+                          Total*: ${selectedRequest.cost.total.toFixed(2)}
+                        </div>
+                        <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
+                          * Actual cost may vary based on time required to complete the service
+                        </div>
                       </div>
-                      <div className={`text-sm ${themeClasses.text.secondary}`}>
-                        {selectedRequest.cost.durationHours}h Standard @ 1x = ${selectedRequest.cost.total.toFixed(2)}
-                      </div>
-                      <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2`}>
-                        Total*: ${selectedRequest.cost.total.toFixed(2)}
-                      </div>
-                      <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
-                        * Actual cost may vary based on time required to complete the service
-                      </div>
-                    </div>
+                    )}
                   </div>
                 )}
 
@@ -1384,6 +1500,27 @@ const AdminServiceRequests: React.FC = () => {
                   >
                     Change Status
                   </button>
+                  {selectedRequest.status.toLowerCase() === 'cancelled' && (() => {
+                    // Check if request hasn't started yet
+                    const now = new Date();
+                    const requestedDate = new Date(selectedRequest.requested_date);
+                    const year = requestedDate.getFullYear();
+                    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
+                    const day = String(requestedDate.getDate()).padStart(2, '0');
+                    const requestedDateTime = new Date(`${year}-${month}-${day}T${selectedRequest.requested_time_start}`);
+                    return requestedDateTime > now;
+                  })() && (
+                    <button
+                      onClick={() => {
+                        setShowUncancelModal(true);
+                        setActionError(null);
+                      }}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+                    >
+                      Restore Request
+                    </button>
+                  )}
                 </div>
 
                 {/* Row 2: Acknowledgment and Time Tracking */}
@@ -1399,26 +1536,45 @@ const AdminServiceRequests: React.FC = () => {
                         {actionLoading ? 'Acknowledging...' : 'Acknowledge'}
                       </button>
                     )}
-                    <button
-                      onClick={() => handleTimeTracking('start')}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
-                    >
-                      <Clock className="h-4 w-4 mr-2" />
-                      Start Work
-                    </button>
-                    <button
-                      onClick={() => handleTimeTracking('stop')}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center"
-                    >
-                      <Pause className="h-4 w-4 mr-2" />
-                      Stop Work
-                    </button>
+
+                    {/* Time tracking toggle button - changes based on status */}
+                    {selectedRequest.status === 'Started' ? (
+                      <button
+                        onClick={() => handleTimeTracking('stop')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center"
+                      >
+                        <Pause className="h-4 w-4 mr-2" />
+                        Pause Work
+                      </button>
+                    ) : selectedRequest.status === 'Paused' ? (
+                      <button
+                        onClick={() => handleTimeTracking('start')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Resume Work
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => handleTimeTracking('start')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                      >
+                        <Clock className="h-4 w-4 mr-2" />
+                        Start Work
+                      </button>
+                    )}
+
                     <button
                       onClick={() => {
                         setShowCloseModal(true);
                         setActionError(null);
+                        // Fetch time breakdown and auto-populate duration
+                        if (selectedRequest?.id) {
+                          fetchTimeBreakdown(selectedRequest.id);
+                        }
                       }}
                       disabled={actionLoading}
                       className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
@@ -1437,7 +1593,7 @@ const AdminServiceRequests: React.FC = () => {
                       setActionError(null);
                     }}
                     disabled={actionLoading}
-                    className={`px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
+                    className={`px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
                   >
                     Close
                   </button>
@@ -1651,6 +1807,55 @@ const AdminServiceRequests: React.FC = () => {
                   Tracked time: {formatDuration(selectedRequest.total_work_duration_minutes)}
                 </p>
               )}
+              {timeBreakdown && (
+                <div className={`mt-3 p-3 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
+                  {/* Show waived time for first-time clients */}
+                  {timeBreakdown.isFirstServiceRequest && parseFloat(timeBreakdown.waivedHours) > 0 && (
+                    <div className={`mb-3 pb-3 border-b ${themeClasses.border}`}>
+                      <p className={`text-xs ${themeClasses.text.secondary} mb-1`}>
+                        First Service Request Discount:
+                      </p>
+                      <p className={`text-sm font-medium text-green-600 dark:text-green-400`}>
+                        New Client Assessment - Waived: {timeBreakdown.waivedHours} hours
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Billable hours breakdown */}
+                  <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
+                    Billable Hours (Rounded to Nearest 0.5hr):
+                  </p>
+                  <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="text-center">
+                      <div className={`${themeClasses.text.secondary} mb-1`}>Standard</div>
+                      <div className={`font-bold ${themeClasses.text.primary}`}>
+                        {timeBreakdown.standardBillableHours.toFixed(1)} hrs
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.muted}`}>1.0x rate</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`${themeClasses.text.secondary} mb-1`}>Premium</div>
+                      <div className={`font-bold ${themeClasses.text.primary}`}>
+                        {timeBreakdown.premiumBillableHours.toFixed(1)} hrs
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.muted}`}>1.5x rate</div>
+                    </div>
+                    <div className="text-center">
+                      <div className={`${themeClasses.text.secondary} mb-1`}>Emergency</div>
+                      <div className={`font-bold ${themeClasses.text.primary}`}>
+                        {timeBreakdown.emergencyBillableHours.toFixed(1)} hrs
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.muted}`}>2.0x rate</div>
+                    </div>
+                  </div>
+                  <div className={`mt-2 pt-2 border-t ${themeClasses.border} text-center`}>
+                    <span className={`text-xs ${themeClasses.text.secondary}`}>Total Billable: </span>
+                    <span className={`text-sm font-bold ${themeClasses.text.primary}`}>
+                      {timeBreakdown.totalBillableHours.toFixed(1)} hours
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Equipment Used */}
@@ -1690,6 +1895,366 @@ const AdminServiceRequests: React.FC = () => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Uncancel Modal */}
+      {showUncancelModal && selectedRequest && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${themeClasses.bg.card} rounded-lg max-w-lg w-full p-6`}>
+            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
+              Restore Service Request
+            </h2>
+
+            <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
+              Are you sure you want to restore service request <span className="font-mono">{selectedRequest.request_number}</span>?
+              This will change the status back to "Submitted".
+            </p>
+
+            {actionError && (
+              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+                {actionError}
+              </div>
+            )}
+
+            <div className="mb-4">
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Reason for restoring (optional)
+              </label>
+              <textarea
+                value={uncancelReason}
+                onChange={(e) => setUncancelReason(e.target.value)}
+                placeholder="Provide a reason for restoring this request..."
+                rows={3}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
+              />
+            </div>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleUncancelRequest}
+                disabled={actionLoading}
+                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {actionLoading ? 'Restoring...' : 'Restore Request'}
+              </button>
+              <button
+                onClick={() => {
+                  setShowUncancelModal(false);
+                  setUncancelReason('');
+                  setActionError(null);
+                }}
+                disabled={actionLoading}
+                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Viewer Modal */}
+      {showInvoiceModal && selectedInvoiceId && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className={`${themeClasses.bg.card} rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto`}>
+            {loadingInvoice ? (
+              <div className="p-8 text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+                <p className={`mt-4 ${themeClasses.text.secondary}`}>Loading invoice...</p>
+              </div>
+            ) : invoiceData ? (
+              <div className="p-8" id="invoice-content">
+                {/* Header with Close Button */}
+                <div className="flex justify-between items-start mb-6">
+                  <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>Invoice</h2>
+                  <button
+                    onClick={() => {
+                      setShowInvoiceModal(false);
+                      setSelectedInvoiceId(null);
+                      setInvoiceData(null);
+                    }}
+                    className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
+                  >
+                    <XCircle className="h-6 w-6" />
+                  </button>
+                </div>
+
+                {/* Company Letterhead */}
+                <div className="mb-8 pb-6 border-b-2 border-gray-300 dark:border-gray-600">
+                  <h1 className={`text-3xl font-bold ${themeClasses.text.primary} mb-2`}>
+                    {invoiceData.companyInfo.company_name}
+                  </h1>
+                  <div className={`text-sm ${themeClasses.text.secondary}`}>
+                    <p>{invoiceData.companyInfo.company_address_line1}</p>
+                    <p>{invoiceData.companyInfo.company_address_line2}</p>
+                    <p>
+                      {invoiceData.companyInfo.company_city}, {invoiceData.companyInfo.company_state}{' '}
+                      {invoiceData.companyInfo.company_zip}
+                    </p>
+                    <p className="mt-2">Phone: {invoiceData.companyInfo.company_phone}</p>
+                    <p>Email: {invoiceData.companyInfo.company_email}</p>
+                  </div>
+                </div>
+
+                {/* Invoice Details & Client Info Side by Side */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
+                  {/* Invoice Details */}
+                  <div>
+                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Invoice Details</h3>
+                    <div className={`space-y-2 text-sm ${themeClasses.text.secondary}`}>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Invoice Number:</span>
+                        <span className="font-mono">{invoiceData.invoice.invoice_number}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Issue Date:</span>
+                        <span>{formatDate(invoiceData.invoice.issue_date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Due Date:</span>
+                        <span className="font-semibold">{formatDate(invoiceData.invoice.due_date)}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="font-medium">Payment Status:</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                            invoiceData.invoice.payment_status === 'paid'
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                              : invoiceData.invoice.payment_status === 'overdue'
+                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                          }`}
+                        >
+                          {invoiceData.invoice.payment_status.toUpperCase()}
+                        </span>
+                      </div>
+                      {invoiceData.invoice.payment_date && (
+                        <div className="flex justify-between">
+                          <span className="font-medium">Payment Date:</span>
+                          <span>{formatDate(invoiceData.invoice.payment_date)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Bill To */}
+                  <div>
+                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Bill To</h3>
+                    <div className={`text-sm ${themeClasses.text.secondary}`}>
+                      <p className="font-semibold text-base">{invoiceData.invoice.business_name}</p>
+                      <p className="mt-2">{invoiceData.invoice.primary_contact_name}</p>
+                      <p>{invoiceData.invoice.street_address}</p>
+                      <p>
+                        {invoiceData.invoice.city}, {invoiceData.invoice.state} {invoiceData.invoice.zip_code}
+                      </p>
+                      <p className="mt-2">{invoiceData.invoice.primary_contact_phone}</p>
+                      <p>{invoiceData.invoice.primary_contact_email}</p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Service Request Details */}
+                <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
+                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Service Request</h3>
+                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 text-sm ${themeClasses.text.secondary}`}>
+                    <div>
+                      <span className="font-medium">Request Number:</span>
+                      <span className="ml-2 font-mono">{invoiceData.invoice.request_number}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Service:</span>
+                      <span className="ml-2">{invoiceData.invoice.service_title}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Service Started:</span>
+                      <span className="ml-2">{formatDate(invoiceData.invoice.service_created_at)}</span>
+                    </div>
+                    <div>
+                      <span className="font-medium">Service Completed:</span>
+                      <span className="ml-2">{formatDate(invoiceData.invoice.service_completed_at)}</span>
+                    </div>
+                  </div>
+                  {invoiceData.invoice.work_description && (
+                    <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
+                      <p className="font-medium text-sm mb-1">Work Description:</p>
+                      <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
+                        {invoiceData.invoice.work_description}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Billable Hours Breakdown */}
+                <div className="mb-6">
+                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Time & Cost Breakdown</h3>
+
+                  {/* First-time Client Discount */}
+                  {invoiceData.invoice.is_first_service_request && invoiceData.invoice.waived_hours > 0 && (
+                    <div className={`mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg`}>
+                      <div className="flex justify-between items-center">
+                        <span className={`font-medium ${themeClasses.text.primary}`}>
+                          New Client Assessment - Waived
+                        </span>
+                        <span className={`font-semibold text-green-600 dark:text-green-400`}>
+                          {invoiceData.invoice.waived_hours.toFixed(2)} hours
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Billable Hours Table */}
+                  <div className={`overflow-hidden border ${themeClasses.border} rounded-lg`}>
+                    <table className="w-full">
+                      <thead className={`${themeClasses.bg.secondary}`}>
+                        <tr>
+                          <th className={`px-4 py-3 text-left text-sm font-semibold ${themeClasses.text.primary}`}>
+                            Rate Tier
+                          </th>
+                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
+                            Hours
+                          </th>
+                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
+                            Rate
+                          </th>
+                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
+                            Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className={`divide-y ${themeClasses.border}`}>
+                        {/* Standard Hours */}
+                        {invoiceData.invoice.standard_hours > 0 && (
+                          <tr>
+                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                              Standard (1.0x)
+                              <div className={`text-xs ${themeClasses.text.muted}`}>Mon-Fri 8am-5pm</div>
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              {invoiceData.invoice.standard_hours.toFixed(1)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.standard_rate.toFixed(2)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.standard_cost.toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* Premium Hours */}
+                        {invoiceData.invoice.premium_hours > 0 && (
+                          <tr>
+                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                              Premium (1.5x)
+                              <div className={`text-xs ${themeClasses.text.muted}`}>Weekends</div>
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              {invoiceData.invoice.premium_hours.toFixed(1)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.premium_rate.toFixed(2)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.premium_cost.toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
+
+                        {/* Emergency Hours */}
+                        {invoiceData.invoice.emergency_hours > 0 && (
+                          <tr>
+                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                              Emergency (2.0x)
+                              <div className={`text-xs ${themeClasses.text.muted}`}>Late night/overnight</div>
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              {invoiceData.invoice.emergency_hours.toFixed(1)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.emergency_rate.toFixed(2)}
+                            </td>
+                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
+                              ${invoiceData.invoice.emergency_cost.toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className={`text-xs ${themeClasses.text.muted} mt-2 italic`}>
+                    * Hours rounded up to nearest 0.5 hour per rate tier
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="mb-6">
+                  <div className={`max-w-sm ml-auto space-y-2 text-sm`}>
+                    <div className="flex justify-between">
+                      <span className={`${themeClasses.text.secondary}`}>Subtotal:</span>
+                      <span className={`${themeClasses.text.primary} font-semibold`}>
+                        ${invoiceData.invoice.subtotal.toFixed(2)}
+                      </span>
+                    </div>
+                    {invoiceData.invoice.tax_rate > 0 && (
+                      <div className="flex justify-between">
+                        <span className={`${themeClasses.text.secondary}`}>
+                          Tax ({(invoiceData.invoice.tax_rate * 100).toFixed(2)}%):
+                        </span>
+                        <span className={`${themeClasses.text.primary} font-semibold`}>
+                          ${invoiceData.invoice.tax_amount.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    <div className={`flex justify-between pt-2 border-t-2 border-gray-300 dark:border-gray-600`}>
+                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>Total Due:</span>
+                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
+                        ${invoiceData.invoice.total_amount.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {invoiceData.invoice.notes && (
+                  <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
+                    <h3 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Notes</h3>
+                    <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
+                      {invoiceData.invoice.notes}
+                    </p>
+                  </div>
+                )}
+
+                {/* Payment Terms */}
+                <div className={`text-xs ${themeClasses.text.muted} text-center`}>
+                  <p>Payment due within 30 days of invoice date.</p>
+                  <p className="mt-1">Thank you for your business!</p>
+                </div>
+
+                {/* Action Buttons */}
+                <div className="mt-8 flex justify-end space-x-3">
+                  <button
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    Print / Save PDF
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowInvoiceModal(false);
+                      setSelectedInvoiceId(null);
+                      setInvoiceData(null);
+                    }}
+                    className={`px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80`}
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

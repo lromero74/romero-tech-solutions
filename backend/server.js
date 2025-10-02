@@ -14,6 +14,7 @@ import uploadRoutes from './routes/uploads.js';
 import authRoutes from './routes/auth.js';
 import adminRoutes from './routes/admin.js';
 import adminWorkflowConfigRoutes from './routes/admin/workflowConfiguration.js';
+import adminInvoiceRoutes from './routes/admin/invoices.js';
 import locationRoutes from './routes/locations.js';
 import publicRoutes from './routes/public.js';
 import securityRoutes from './routes/security.js';
@@ -178,6 +179,12 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
 // Cookie parsing middleware for HttpOnly sessions
 app.use(cookieParser());
+
+// Global request logger for debugging
+app.use((req, res, next) => {
+  console.log(`🌐 INCOMING: ${req.method} ${req.path}`);
+  next();
+});
 
 // CSRF Protection Configuration
 // Define cookie name once for consistency
@@ -352,6 +359,7 @@ const authRateLimiter = (req, res, next) => {
 app.use('/api/auth', authRateLimiter, conditionalCsrfProtection, authRoutes); // Conditional rate limiting (heartbeat vs auth) + conditional CSRF
 app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRoutes); // Admin rate limiting + IP whitelist + CSRF
 app.use('/api/admin/workflow-configuration', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminWorkflowConfigRoutes); // Workflow configuration (admin only) + CSRF
+app.use('/api/admin', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminInvoiceRoutes); // Invoice routes (admin/executive/client) + CSRF
 app.use('/api/security', adminLimiter, adminIPWhitelist, securityRoutes); // Security monitoring (admin only) - GET only
 app.use('/api/public', generalLimiter, publicRoutes); // General rate limiting for public routes - mostly GET
 app.use('/api/locations', generalLimiter, doubleCsrfProtection, locationRoutes); // General rate limiting + CSRF

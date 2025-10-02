@@ -112,6 +112,10 @@ router.get('/service-requests', async (req, res) => {
         CONCAT(ack.first_name, ' ', ack.last_name) as acknowledged_by_name,
         CONCAT(closed.first_name, ' ', closed.last_name) as closed_by_name,
         cr.reason_name as closure_reason,
+        inv.id as invoice_id,
+        inv.invoice_number,
+        inv.total_amount as invoice_total,
+        inv.payment_status as invoice_payment_status,
         COUNT(*) OVER() as total_count
       FROM service_requests sr
       LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
@@ -125,6 +129,7 @@ router.get('/service-requests', async (req, res) => {
       LEFT JOIN employees ack ON sr.acknowledged_by_employee_id = ack.id
       LEFT JOIN employees closed ON sr.closed_by_employee_id = closed.id
       LEFT JOIN service_request_closure_reasons cr ON sr.closure_reason_id = cr.id
+      LEFT JOIN invoices inv ON sr.id = inv.service_request_id
       ${whereClause}
       ORDER BY sr.${safeSortBy} ${safeSortOrder}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -194,6 +199,201 @@ router.get('/service-requests/closure-reasons', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch closure reasons',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/service-requests/:id/time-breakdown
+ * Calculate time breakdown by rate tier (Standard/Premium/Emergency)
+ * Includes first-time client discount (first hour free) and rounds to nearest half hour
+ */
+router.get('/service-requests/:id/time-breakdown', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getPool();
+
+    // Get business_id for this service request to check if it's their first request
+    const serviceRequestQuery = `
+      SELECT business_id
+      FROM service_requests
+      WHERE id = $1
+    `;
+    const srResult = await pool.query(serviceRequestQuery, [id]);
+
+    if (srResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    const businessId = srResult.rows[0].business_id;
+
+    // Check if this is the client's first service request
+    // Count service requests with status "Closed" (excluding current one if it's closed)
+    const completedRequestsQuery = `
+      SELECT COUNT(*) as count
+      FROM service_requests sr
+      JOIN service_request_statuses srs ON sr.status_id = srs.id
+      WHERE sr.business_id = $1
+        AND srs.name = 'Closed'
+        AND sr.created_at < (
+          SELECT created_at FROM service_requests WHERE id = $2
+        )
+    `;
+    const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
+    const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
+
+    // Get all time entries for this service request
+    const timeEntriesQuery = `
+      SELECT
+        id,
+        start_time,
+        end_time,
+        duration_minutes
+      FROM service_request_time_entries
+      WHERE service_request_id = $1
+        AND end_time IS NOT NULL
+      ORDER BY start_time
+    `;
+
+    const timeEntriesResult = await pool.query(timeEntriesQuery, [id]);
+
+    if (timeEntriesResult.rows.length === 0) {
+      return res.json({
+        success: true,
+        data: {
+          isFirstServiceRequest,
+          waivedMinutes: 0,
+          waivedHours: 0,
+          standardMinutes: 0,
+          premiumMinutes: 0,
+          emergencyMinutes: 0,
+          standardBillableHours: 0,
+          premiumBillableHours: 0,
+          emergencyBillableHours: 0,
+          totalMinutes: 0,
+          totalBillableHours: 0
+        }
+      });
+    }
+
+    // Get rate tiers
+    const tiersQuery = `
+      SELECT
+        tier_name,
+        tier_level,
+        day_of_week,
+        time_start,
+        time_end
+      FROM service_hour_rate_tiers
+      WHERE is_active = true
+      ORDER BY tier_level DESC
+    `;
+
+    const tiersResult = await pool.query(tiersQuery);
+    const tiers = tiersResult.rows;
+
+    // Build a chronological array of minutes with their tier assignments
+    const chronologicalMinutes = [];
+
+    // Process each time entry
+    for (const entry of timeEntriesResult.rows) {
+      const startTime = new Date(entry.start_time);
+      const endTime = new Date(entry.end_time);
+
+      // Break down the time entry into 1-minute intervals
+      let currentTime = new Date(startTime);
+
+      while (currentTime < endTime) {
+        const dayOfWeek = currentTime.getDay(); // 0=Sunday, 1=Monday, etc.
+        const timeString = currentTime.toTimeString().substring(0, 8); // HH:MM:SS format
+
+        // Find the tier for this specific minute
+        let assignedTier = 'Standard'; // default
+
+        for (const tier of tiers) {
+          const tierDay = tier.day_of_week;
+
+          if (tierDay === dayOfWeek && timeString >= tier.time_start && timeString < tier.time_end) {
+            assignedTier = tier.tier_name;
+            break;
+          }
+        }
+
+        chronologicalMinutes.push({
+          timestamp: new Date(currentTime),
+          tier: assignedTier
+        });
+
+        // Move to next minute
+        currentTime.setMinutes(currentTime.getMinutes() + 1);
+      }
+    }
+
+    // Apply first-time client discount (waive first 60 minutes)
+    let waivedMinutes = 0;
+    const minutesToWaive = isFirstServiceRequest ? 60 : 0;
+
+    // Separate waived and billable minutes
+    const waivedArray = chronologicalMinutes.slice(0, minutesToWaive);
+    const billableArray = chronologicalMinutes.slice(minutesToWaive);
+
+    waivedMinutes = waivedArray.length;
+
+    // Calculate breakdown for billable time
+    let standardMinutes = 0;
+    let premiumMinutes = 0;
+    let emergencyMinutes = 0;
+
+    for (const minute of billableArray) {
+      if (minute.tier === 'Standard') {
+        standardMinutes++;
+      } else if (minute.tier === 'Premium') {
+        premiumMinutes++;
+      } else if (minute.tier === 'Emergency') {
+        emergencyMinutes++;
+      }
+    }
+
+    // Helper function to round up to nearest half hour
+    const roundUpToNearestHalfHour = (minutes) => {
+      if (minutes === 0) return 0;
+      const hours = minutes / 60;
+      return Math.ceil(hours * 2) / 2; // Round up to nearest 0.5
+    };
+
+    // Calculate billable hours (rounded up to nearest half hour per tier)
+    const standardBillableHours = roundUpToNearestHalfHour(standardMinutes);
+    const premiumBillableHours = roundUpToNearestHalfHour(premiumMinutes);
+    const emergencyBillableHours = roundUpToNearestHalfHour(emergencyMinutes);
+    const totalBillableHours = standardBillableHours + premiumBillableHours + emergencyBillableHours;
+
+    res.json({
+      success: true,
+      data: {
+        isFirstServiceRequest,
+        waivedMinutes,
+        waivedHours: (waivedMinutes / 60).toFixed(2),
+        standardMinutes,
+        premiumMinutes,
+        emergencyMinutes,
+        standardBillableHours,
+        premiumBillableHours,
+        emergencyBillableHours,
+        totalMinutes: chronologicalMinutes.length,
+        totalBillableMinutes: billableArray.length,
+        totalBillableHours
+      }
+    });
+
+  } catch (error) {
+    console.error('Error calculating time breakdown:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to calculate time breakdown',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
@@ -740,17 +940,29 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
       });
     }
 
+    // Get "Acknowledged" status ID
+    const statusQuery = await pool.query(`
+      SELECT id FROM service_request_statuses
+      WHERE name = 'Acknowledged' AND is_active = true
+      LIMIT 1
+    `);
+
+    const acknowledgeStatusId = statusQuery.rows[0]?.id;
+
     const updateQuery = `
       UPDATE service_requests
       SET
         acknowledged_at = NOW(),
         acknowledged_by_employee_id = $1,
+        assigned_to_employee_id = $1,
+        status_id = $2,
+        last_status_change = NOW(),
         updated_at = NOW()
-      WHERE id = $2 AND soft_delete = false
+      WHERE id = $3 AND soft_delete = false
       RETURNING id, request_number, acknowledged_at
     `;
 
-    const result = await pool.query(updateQuery, [employeeId, id]);
+    const result = await pool.query(updateQuery, [employeeId, acknowledgeStatusId, id]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -776,10 +988,11 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
 });
 
 /**
- * POST /api/admin/service-requests/:id/time-entry
+ * PUT /api/admin/service-requests/:id/time-entry
  * Start or stop a time tracking entry for a service request
  */
-router.post('/service-requests/:id/time-entry', async (req, res) => {
+router.put('/service-requests/:id/time-entry', async (req, res) => {
+  console.log('🎯 TIME ENTRY ROUTE HIT:', { id: req.params.id, action: req.body.action, userId: req.user?.id });
   try {
     const { id } = req.params;
     const { action } = req.body; // 'start' or 'stop'
@@ -800,7 +1013,7 @@ router.post('/service-requests/:id/time-entry', async (req, res) => {
       const checkQuery = `
         SELECT id FROM service_request_time_entries
         WHERE service_request_id = $1
-          AND employee_id = $2
+          AND technician_id = $2
           AND end_time IS NULL
       `;
       const checkResult = await pool.query(checkQuery, [id, employeeId]);
@@ -816,19 +1029,69 @@ router.post('/service-requests/:id/time-entry', async (req, res) => {
       const insertQuery = `
         INSERT INTO service_request_time_entries (
           service_request_id,
-          employee_id,
-          start_time
-        ) VALUES ($1, $2, NOW())
+          technician_id,
+          start_time,
+          work_description
+        ) VALUES ($1, $2, NOW(), $3)
         RETURNING id, start_time
       `;
-      const result = await pool.query(insertQuery, [id, employeeId]);
+      const result = await pool.query(insertQuery, [
+        id,
+        employeeId,
+        'Time tracking in progress'
+      ]);
 
-      // Update service request started_at if not already set
+      // Get current status to determine if this is "start" or "resume"
+      const currentStatusQuery = await pool.query(`
+        SELECT s.name
+        FROM service_requests sr
+        JOIN service_request_statuses s ON sr.status_id = s.id
+        WHERE sr.id = $1
+      `, [id]);
+      const currentStatus = currentStatusQuery.rows[0]?.name;
+      const isResuming = currentStatus === 'Paused';
+
+      // Get "Started" status ID
+      const statusQuery = await pool.query(`
+        SELECT id FROM service_request_statuses
+        WHERE name = 'Started' AND is_active = true
+        LIMIT 1
+      `);
+      const startedStatusId = statusQuery.rows[0]?.id;
+
+      // Update service request: set status to "Started", update timestamps
       await pool.query(`
         UPDATE service_requests
-        SET started_at = COALESCE(started_at, NOW()), updated_at = NOW()
-        WHERE id = $1
-      `, [id]);
+        SET
+          status_id = $1,
+          started_at = COALESCE(started_at, NOW()),
+          last_status_change = NOW(),
+          updated_at = NOW()
+        WHERE id = $2
+      `, [startedStatusId, id]);
+
+      // Add a note documenting the state change
+      const employeeName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+      const noteText = isResuming
+        ? `Work resumed by ${employeeName}`
+        : `Work started by ${employeeName}`;
+
+      await pool.query(`
+        INSERT INTO service_request_notes (
+          service_request_id,
+          note_text,
+          note_type,
+          created_by_type,
+          created_by_id,
+          created_by_name,
+          is_visible_to_client
+        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+      `, [
+        id,
+        noteText,
+        employeeId,
+        employeeName
+      ]);
 
       res.json({
         success: true,
@@ -841,7 +1104,7 @@ router.post('/service-requests/:id/time-entry', async (req, res) => {
       const findQuery = `
         SELECT id, start_time FROM service_request_time_entries
         WHERE service_request_id = $1
-          AND employee_id = $2
+          AND technician_id = $2
           AND end_time IS NULL
         ORDER BY start_time DESC
         LIMIT 1
@@ -868,20 +1131,50 @@ router.post('/service-requests/:id/time-entry', async (req, res) => {
       `;
       const result = await pool.query(updateQuery, [timeEntryId]);
 
-      // Update total work duration on service request
+      // Get "Paused" status ID
+      const pausedStatusQuery = await pool.query(`
+        SELECT id FROM service_request_statuses
+        WHERE name = 'Paused' AND is_active = true
+        LIMIT 1
+      `);
+      const pausedStatusId = pausedStatusQuery.rows[0]?.id;
+
+      // Update service request: change status to "Paused", update total duration
       const sumQuery = `
         UPDATE service_requests
         SET
+          status_id = $1,
           total_work_duration_minutes = (
             SELECT COALESCE(SUM(duration_minutes), 0)
             FROM service_request_time_entries
-            WHERE service_request_id = $1
+            WHERE service_request_id = $2
           ),
+          last_status_change = NOW(),
           updated_at = NOW()
-        WHERE id = $1
+        WHERE id = $2
         RETURNING total_work_duration_minutes
       `;
-      const sumResult = await pool.query(sumQuery, [id]);
+      const sumResult = await pool.query(sumQuery, [pausedStatusId, id]);
+
+      // Add a note documenting the pause action
+      const employeeName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+      const durationHours = (result.rows[0].duration_minutes / 60).toFixed(2);
+      await pool.query(`
+        INSERT INTO service_request_notes (
+          service_request_id,
+          note_text,
+          note_type,
+          created_by_type,
+          created_by_id,
+          created_by_name,
+          is_visible_to_client
+        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+      `, [
+        id,
+        `Work paused by ${employeeName} (Session: ${durationHours} hours)`,
+        employeeId,
+        employeeName
+      ]);
 
       res.json({
         success: true,
@@ -1073,10 +1366,251 @@ router.put('/service-requests/:id/close', async (req, res) => {
       `Request closed with reason ID ${closureReasonId}. Resolution: ${resolutionSummary.substring(0, 100)}...`
     ]);
 
+    // Generate invoice
+    // Get service request details with business info and rate
+    const srDetailsQuery = `
+      SELECT
+        sr.id,
+        sr.request_number,
+        sr.title,
+        sr.business_id,
+        sr.created_at as service_start_date,
+        sr.closed_at,
+        b.business_name,
+        hrc.base_hourly_rate
+      FROM service_requests sr
+      JOIN businesses b ON sr.business_id = b.id
+      LEFT JOIN hourly_rate_categories hrc ON b.hourly_rate_category_id = hrc.id
+      WHERE sr.id = $1
+    `;
+    const srDetails = await pool.query(srDetailsQuery, [id]);
+
+    if (srDetails.rows.length === 0) {
+      throw new Error('Failed to fetch service request details for invoice');
+    }
+
+    const serviceRequest = srDetails.rows[0];
+    const baseRate = parseFloat(serviceRequest.base_hourly_rate) || 75.00; // Default to Standard rate
+
+    // Get time breakdown with first-time client discount
+    const timeBreakdownUrl = `/service-requests/${id}/time-breakdown`;
+    const timeBreakdownQuery = `
+      SELECT business_id
+      FROM service_requests
+      WHERE id = $1
+    `;
+    const srResult = await pool.query(timeBreakdownQuery, [id]);
+
+    if (srResult.rows.length === 0) {
+      throw new Error('Service request not found for time breakdown');
+    }
+
+    const businessId = srResult.rows[0].business_id;
+
+    // Check if this is the client's first service request
+    const completedRequestsQuery = `
+      SELECT COUNT(*) as count
+      FROM service_requests sr
+      JOIN service_request_statuses srs ON sr.status_id = srs.id
+      WHERE sr.business_id = $1
+        AND srs.name = 'Closed'
+        AND sr.created_at < (
+          SELECT created_at FROM service_requests WHERE id = $2
+        )
+    `;
+    const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
+    const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
+
+    // Get all time entries for this service request
+    const timeEntriesQuery = `
+      SELECT
+        id,
+        start_time,
+        end_time,
+        duration_minutes
+      FROM service_request_time_entries
+      WHERE service_request_id = $1
+        AND end_time IS NOT NULL
+      ORDER BY start_time
+    `;
+    const timeEntriesResult = await pool.query(timeEntriesQuery, [id]);
+
+    // Get rate tiers
+    const tiersQuery = `
+      SELECT
+        tier_name,
+        tier_level,
+        day_of_week,
+        time_start,
+        time_end,
+        rate_multiplier
+      FROM service_hour_rate_tiers
+      WHERE is_active = true
+      ORDER BY tier_level DESC
+    `;
+    const tiersResult = await pool.query(tiersQuery);
+    const tiers = tiersResult.rows;
+
+    // Build chronological array of minutes
+    const chronologicalMinutes = [];
+    for (const entry of timeEntriesResult.rows) {
+      const startTime = new Date(entry.start_time);
+      const endTime = new Date(entry.end_time);
+      let currentTime = new Date(startTime);
+
+      while (currentTime < endTime) {
+        const dayOfWeek = currentTime.getDay();
+        const timeString = currentTime.toTimeString().substring(0, 8);
+        let assignedTier = 'Standard';
+        let rateMultiplier = 1.0;
+
+        for (const tier of tiers) {
+          const tierDay = tier.day_of_week;
+          if (tierDay === dayOfWeek && timeString >= tier.time_start && timeString < tier.time_end) {
+            assignedTier = tier.tier_name;
+            rateMultiplier = parseFloat(tier.rate_multiplier);
+            break;
+          }
+        }
+
+        chronologicalMinutes.push({
+          timestamp: new Date(currentTime),
+          tier: assignedTier,
+          multiplier: rateMultiplier
+        });
+
+        currentTime.setMinutes(currentTime.getMinutes() + 1);
+      }
+    }
+
+    // Apply first-time client discount
+    const minutesToWaive = isFirstServiceRequest ? 60 : 0;
+    const waivedArray = chronologicalMinutes.slice(0, minutesToWaive);
+    const billableArray = chronologicalMinutes.slice(minutesToWaive);
+
+    // Calculate breakdown
+    let standardMinutes = 0, premiumMinutes = 0, emergencyMinutes = 0;
+    for (const minute of billableArray) {
+      if (minute.tier === 'Standard') standardMinutes++;
+      else if (minute.tier === 'Premium') premiumMinutes++;
+      else if (minute.tier === 'Emergency') emergencyMinutes++;
+    }
+
+    // Round up to nearest half hour
+    const roundUpToNearestHalfHour = (minutes) => {
+      if (minutes === 0) return 0;
+      const hours = minutes / 60;
+      return Math.ceil(hours * 2) / 2;
+    };
+
+    const standardBillableHours = roundUpToNearestHalfHour(standardMinutes);
+    const premiumBillableHours = roundUpToNearestHalfHour(premiumMinutes);
+    const emergencyBillableHours = roundUpToNearestHalfHour(emergencyMinutes);
+
+    // Calculate costs
+    const standardRate = baseRate * 1.0;
+    const premiumRate = baseRate * 1.5;
+    const emergencyRate = baseRate * 2.0;
+
+    const standardCost = standardBillableHours * standardRate;
+    const premiumCost = premiumBillableHours * premiumRate;
+    const emergencyCost = emergencyBillableHours * emergencyRate;
+
+    const subtotal = standardCost + premiumCost + emergencyCost;
+
+    // Get company settings
+    const settingsQuery = `SELECT setting_key, setting_value FROM company_settings`;
+    const settingsResult = await pool.query(settingsQuery);
+    const settings = {};
+    settingsResult.rows.forEach(row => {
+      settings[row.setting_key] = row.setting_value;
+    });
+
+    const dueDays = parseInt(settings.invoice_due_days) || 30;
+    const taxRate = parseFloat(settings.invoice_tax_rate) || 0;
+    const taxAmount = subtotal * taxRate;
+    const totalAmount = subtotal + taxAmount;
+
+    // Generate unique invoice number (format: INV-YYYYMMDD-XXXX)
+    const invoiceDate = new Date();
+    const dateStr = invoiceDate.toISOString().slice(0, 10).replace(/-/g, '');
+    const countQuery = `SELECT COUNT(*) as count FROM invoices WHERE invoice_number LIKE $1`;
+    const countResult = await pool.query(countQuery, [`INV-${dateStr}-%`]);
+    const invoiceCount = parseInt(countResult.rows[0].count) + 1;
+    const invoiceNumber = `INV-${dateStr}-${invoiceCount.toString().padStart(4, '0')}`;
+
+    // Calculate due date
+    const dueDate = new Date(invoiceDate);
+    dueDate.setDate(dueDate.getDate() + dueDays);
+
+    // Insert invoice
+    const invoiceQuery = `
+      INSERT INTO invoices (
+        service_request_id,
+        business_id,
+        invoice_number,
+        base_hourly_rate,
+        standard_hours,
+        standard_rate,
+        standard_cost,
+        premium_hours,
+        premium_rate,
+        premium_cost,
+        emergency_hours,
+        emergency_rate,
+        emergency_cost,
+        waived_hours,
+        is_first_service_request,
+        subtotal,
+        tax_rate,
+        tax_amount,
+        total_amount,
+        issue_date,
+        due_date,
+        payment_status,
+        work_description
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+        $16, $17, $18, $19, $20, $21, 'due', $22
+      )
+      RETURNING id, invoice_number
+    `;
+
+    const invoiceResult = await pool.query(invoiceQuery, [
+      id,
+      serviceRequest.business_id,
+      invoiceNumber,
+      baseRate,
+      standardBillableHours,
+      standardRate,
+      standardCost,
+      premiumBillableHours,
+      premiumRate,
+      premiumCost,
+      emergencyBillableHours,
+      emergencyRate,
+      emergencyCost,
+      waivedArray.length / 60,
+      isFirstServiceRequest,
+      subtotal,
+      taxRate,
+      taxAmount,
+      totalAmount,
+      invoiceDate,
+      dueDate,
+      resolutionSummary
+    ]);
+
     res.json({
       success: true,
-      message: 'Service request closed successfully',
-      data: result.rows[0]
+      message: 'Service request closed successfully and invoice generated',
+      data: {
+        ...result.rows[0],
+        invoice: {
+          id: invoiceResult.rows[0].id,
+          invoiceNumber: invoiceResult.rows[0].invoice_number
+        }
+      }
     });
 
   } catch (error) {
@@ -1084,6 +1618,150 @@ router.put('/service-requests/:id/close', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to close service request',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/service-requests/:id/uncancel
+ * Restore a cancelled service request (only if it hasn't started yet)
+ */
+router.post('/service-requests/:id/uncancel', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reason } = req.body;
+    const pool = await getPool();
+
+    console.log(`📋 Admin uncancelling service request ${id}...`);
+
+    // Get service request details
+    const serviceRequestQuery = `
+      SELECT
+        sr.id,
+        sr.request_number,
+        sr.title,
+        sr.requested_date,
+        sr.requested_time_start,
+        srs.name as status_name,
+        srs.is_final_status
+      FROM service_requests sr
+      LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
+      WHERE sr.id = $1 AND sr.soft_delete = false
+    `;
+
+    const serviceRequestResult = await pool.query(serviceRequestQuery, [id]);
+
+    if (serviceRequestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    const serviceRequest = serviceRequestResult.rows[0];
+
+    // Check if request is cancelled
+    if (serviceRequest.status_name.toLowerCase() !== 'cancelled') {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot uncancel service request with status: ${serviceRequest.status_name}`
+      });
+    }
+
+    // Check if service request has already started or passed
+    const now = new Date();
+
+    // Parse UTC date and combine with local time
+    const requestedDate = new Date(serviceRequest.requested_date);
+    const year = requestedDate.getFullYear();
+    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(requestedDate.getDate()).padStart(2, '0');
+    const requestedDateTime = new Date(`${year}-${month}-${day}T${serviceRequest.requested_time_start}`);
+
+    if (requestedDateTime < now) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot uncancel service request that has already started or passed'
+      });
+    }
+
+    // Get "Submitted" status ID
+    const submittedStatusQuery = `
+      SELECT id FROM service_request_statuses
+      WHERE name = 'Submitted' AND is_active = true
+      LIMIT 1
+    `;
+    const submittedStatusResult = await pool.query(submittedStatusQuery);
+
+    if (submittedStatusResult.rows.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Submitted status not found in system. Please contact administrator.'
+      });
+    }
+
+    const submittedStatusId = submittedStatusResult.rows[0].id;
+
+    // Update service request status to Submitted
+    const updateQuery = `
+      UPDATE service_requests
+      SET
+        status_id = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING updated_at
+    `;
+
+    await pool.query(updateQuery, [submittedStatusId, id]);
+
+    // Add uncancellation note
+    const noteText = reason && reason.trim()
+      ? `Service request restored by admin. Reason: ${reason.trim()}`
+      : 'Service request restored by admin.';
+
+    const insertNoteQuery = `
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `;
+
+    const employeeId = req.user?.id || null;
+    const employeeName = req.user?.name || req.user?.email || 'Admin';
+
+    await pool.query(insertNoteQuery, [
+      id,
+      noteText,
+      'status_change',
+      'employee',
+      employeeId,
+      employeeName,
+      true
+    ]);
+
+    console.log(`✅ Service request ${serviceRequest.request_number} restored by ${employeeName}`);
+
+    res.json({
+      success: true,
+      message: 'Service request restored successfully',
+      data: {
+        id: serviceRequest.id,
+        requestNumber: serviceRequest.request_number,
+        status: 'Submitted'
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error uncancelling service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to uncancel service request',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
