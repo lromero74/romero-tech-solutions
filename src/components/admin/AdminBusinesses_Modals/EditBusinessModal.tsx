@@ -5,6 +5,8 @@ import { adminService } from '../../../services/adminService';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
+import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import apiService from '../../../services/apiService';
 // Removed unused imports: validateServiceAreaField, AlertModal
 
 interface AuthorizedDomain {
@@ -13,6 +15,14 @@ interface AuthorizedDomain {
   description?: string;
   is_active?: boolean;
   created_at?: string;
+}
+
+interface RateCategory {
+  id: string;
+  categoryName: string;
+  baseHourlyRate: number;
+  description: string;
+  isDefault: boolean;
 }
 
 interface Business {
@@ -33,6 +43,7 @@ interface Business {
   logoPositionY?: number;
   logoScale?: number;
   logoBackgroundColor?: string;
+  rateCategoryId?: string;
 }
 
 interface EditBusinessModalProps {
@@ -54,6 +65,7 @@ interface EditBusinessModalProps {
     logoPositionY?: number;
     logoScale?: number;
     logoBackgroundColor?: string;
+    rateCategoryId?: string;
   }) => Promise<void>;
   businesses?: Business[];
 }
@@ -65,6 +77,9 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   onSubmit,
   businesses = []
 }) => {
+  const { user } = useEnhancedAuth();
+  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
+
   const [formData, setFormData] = useState({
     businessName: '',
     isActive: true,
@@ -99,6 +114,10 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   const [serviceAreaValid, setServiceAreaValid] = useState(true); // Start as true for edit mode
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
   const [showZipValidationError, setShowZipValidationError] = useState(false);
+
+  // Rate category state
+  const [rateCategories, setRateCategories] = useState<RateCategory[]>([]);
+  const [selectedRateCategoryId, setSelectedRateCategoryId] = useState<string>('');
 
   // Check for duplicate business name in real-time
   const checkDuplicateName = (name: string) => {
@@ -144,6 +163,24 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       setLoadingDomains(false);
     }
   }, [business?.id]);
+
+  // Load rate categories
+  useEffect(() => {
+    const loadRateCategories = async () => {
+      try {
+        const response = await apiService.get<{ success: boolean; data: RateCategory[] }>('/admin/hourly-rate-categories');
+        if (response.success && response.data) {
+          setRateCategories(response.data);
+        }
+      } catch (error) {
+        console.error('Failed to load rate categories:', error);
+      }
+    };
+
+    if (showModal) {
+      loadRateCategories();
+    }
+  }, [showModal]);
 
   // Fetch authorized domains when business changes
   useEffect(() => {
@@ -195,6 +232,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         zipCode: business.address.zipCode,
         country: 'USA'
       });
+      setSelectedRateCategoryId(business.rateCategoryId || '');
       setOriginalBusiness(business);
     }
   }, [business]);
@@ -322,7 +360,8 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         logoPositionX: enableLogo ? formData.logoPositionX : null,
         logoPositionY: enableLogo ? formData.logoPositionY : null,
         logoScale: enableLogo ? formData.logoScale : null,
-        logoBackgroundColor: enableBackgroundColor ? formData.logoBackgroundColor : null
+        logoBackgroundColor: enableBackgroundColor ? formData.logoBackgroundColor : null,
+        rateCategoryId: selectedRateCategoryId || undefined
       });
 
       // Close modal after successful save
@@ -454,6 +493,31 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                   <option value="inactive">Inactive</option>
                 </select>
               </div>
+
+              {/* Rate Category Selection */}
+              {isExecutiveOrAdmin && rateCategories.length > 0 && (
+                <div className="md:col-span-2">
+                  <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                    Hourly Rate Category
+                  </label>
+                  <select
+                    value={selectedRateCategoryId}
+                    onChange={(e) => setSelectedRateCategoryId(e.target.value)}
+                    className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+                  >
+                    <option value="">Use Default Category</option>
+                    {rateCategories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.categoryName} (${category.baseHourlyRate}/hr)
+                        {category.isDefault ? ' - Default' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                    Base hourly rate used for calculating service costs for this business
+                  </p>
+                </div>
+              )}
 
               {/* Logo Upload Section */}
               <div className="md:col-span-2 mt-6">

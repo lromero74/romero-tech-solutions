@@ -79,8 +79,12 @@ router.get('/businesses', async (req, res) => {
         b.logo_scale,
         b.logo_background_color,
         b.is_active,
+        b.rate_category_id,
         COALESCE(b.soft_delete, false) as soft_delete,
         b.created_at,
+        -- Get rate category info
+        rc.category_name as rate_category_name,
+        rc.base_hourly_rate,
         -- Get primary business address from headquarters service location
         hq.street,
         hq.city,
@@ -98,6 +102,7 @@ router.get('/businesses', async (req, res) => {
         ) as domain_emails
       FROM businesses b
       LEFT JOIN service_locations hq ON hq.business_id = b.id AND hq.is_headquarters = true
+      LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
       ORDER BY b.business_name
     `);
 
@@ -113,6 +118,9 @@ router.get('/businesses', async (req, res) => {
           logoPositionY: business.logo_position_y,
           logoScale: business.logo_scale,
           logoBackgroundColor: business.logo_background_color,
+          rateCategoryId: business.rate_category_id,
+          rateCategoryName: business.rate_category_name,
+          baseHourlyRate: business.base_hourly_rate ? parseFloat(business.base_hourly_rate) : null,
           address: {
             street: business.street,
             city: business.city,
@@ -142,7 +150,7 @@ router.get('/businesses', async (req, res) => {
 router.put('/businesses/:businessId', requirePermission('modify.businesses.enable'), async (req, res) => {
   try {
     const { businessId } = req.params;
-    const { businessName, address, isActive, logo, logoPositionX, logoPositionY, logoScale, logoBackgroundColor } = req.body;
+    const { businessName, address, isActive, logo, logoPositionX, logoPositionY, logoScale, logoBackgroundColor, rateCategoryId } = req.body;
 
     // Validate required fields
     if (!businessName) {
@@ -167,9 +175,10 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
           logo_position_y = $5,
           logo_scale = $6,
           logo_background_color = $7,
+          rate_category_id = $8,
           updated_at = CURRENT_TIMESTAMP
-        WHERE id = $8
-        RETURNING id, business_name, is_active, logo_url, logo_position_x, logo_position_y, logo_scale, logo_background_color, created_at, updated_at
+        WHERE id = $9
+        RETURNING id, business_name, is_active, logo_url, logo_position_x, logo_position_y, logo_scale, logo_background_color, rate_category_id, created_at, updated_at
       `, [
         businessName,
         isActive,
@@ -178,6 +187,7 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
         Math.round(logoPositionY || 50),
         Math.round(logoScale || 100),
         logoBackgroundColor || null,
+        rateCategoryId || null,
         businessId
       ]);
 
@@ -316,7 +326,8 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
       logoPositionX,
       logoPositionY,
       logoScale,
-      logoBackgroundColor
+      logoBackgroundColor,
+      rateCategoryId
     } = req.body;
 
     // Validate required fields
@@ -347,10 +358,11 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
           logo_position_x,
           logo_position_y,
           logo_scale,
-          logo_background_color
+          logo_background_color,
+          rate_category_id
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-        RETURNING id, business_name, is_active, logo_url, logo_position_x, logo_position_y, logo_scale, logo_background_color, created_at
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, business_name, is_active, logo_url, logo_position_x, logo_position_y, logo_scale, logo_background_color, rate_category_id, created_at
       `, [
         businessName,
         true,
@@ -358,7 +370,8 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
         logoPositionX ? Math.round(logoPositionX) : null,
         logoPositionY ? Math.round(logoPositionY) : null,
         logoScale ? Math.round(logoScale) : null,
-        logoBackgroundColor || null
+        logoBackgroundColor || null,
+        rateCategoryId || null
       ]);
 
       const business = businessResult.rows[0];

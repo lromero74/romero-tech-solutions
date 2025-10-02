@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Save, Building, Plus, Trash2, AlertTriangle, Globe, CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
@@ -7,6 +7,8 @@ import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplet
 // Removed unused import: validateServiceAreaField
 import { validateDomain } from '../../../utils/domainValidation';
 import AlertModal from '../../shared/AlertModal';
+import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import apiService from '../../../services/apiService';
 
 interface AuthorizedDomain {
   domain: string;
@@ -19,6 +21,14 @@ interface AuthorizedDomain {
 interface Business {
   id: string;
   businessName: string;
+}
+
+interface RateCategory {
+  id: string;
+  categoryName: string;
+  baseHourlyRate: number;
+  description: string;
+  isDefault: boolean;
 }
 
 interface AddBusinessModalProps {
@@ -39,6 +49,7 @@ interface AddBusinessModalProps {
     logoPositionY?: number;
     logoScale?: number;
     logoBackgroundColor?: string;
+    rateCategoryId?: string;
   }) => Promise<void>;
   businesses?: Business[];
   onOpenServiceLocationModal?: (businessName: string, address: {
@@ -57,11 +68,18 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   businesses = [],
   onOpenServiceLocationModal
 }) => {
+  const { user } = useEnhancedAuth();
+  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
+
   // State declarations first
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showErrorDialog, setShowErrorDialog] = useState(false);
   const [showServiceAreaError, setShowServiceAreaError] = useState(false);
   const [showZipValidationError, setShowZipValidationError] = useState(false);
+
+  // Rate category state
+  const [rateCategories, setRateCategories] = useState<RateCategory[]>([]);
+  const [selectedRateCategoryId, setSelectedRateCategoryId] = useState<string>('');
 
   // Form state
   const [businessName, setBusinessName] = useState('');
@@ -139,6 +157,29 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
       }
     };
   }, [nameValidationTimer]);
+
+  // Load rate categories
+  useEffect(() => {
+    const loadRateCategories = async () => {
+      try {
+        const response = await apiService.get<{ success: boolean; data: RateCategory[] }>('/admin/hourly-rate-categories');
+        if (response.success && response.data) {
+          setRateCategories(response.data);
+          // Set default category as selected
+          const defaultCategory = response.data.find(cat => cat.isDefault);
+          if (defaultCategory) {
+            setSelectedRateCategoryId(defaultCategory.id);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load rate categories:', error);
+      }
+    };
+
+    if (showModal) {
+      loadRateCategories();
+    }
+  }, [showModal]);
 
 
   // Logo-related state
@@ -248,7 +289,8 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
         logoPositionX: enableLogo ? logoPositionX : undefined,
         logoPositionY: enableLogo ? logoPositionY : undefined,
         logoScale: enableLogo ? logoScale : undefined,
-        logoBackgroundColor: enableBackgroundColor ? logoBackgroundColor : undefined
+        logoBackgroundColor: enableBackgroundColor ? logoBackgroundColor : undefined,
+        rateCategoryId: selectedRateCategoryId || undefined
       });
       console.log('🟦 AddBusinessModal: onSubmit completed successfully');
 
@@ -275,6 +317,12 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
       setLogoScale(100);
       setEnableBackgroundColor(false);
       setLogoBackgroundColor('');
+
+      // Reset rate category to default
+      const defaultCategory = rateCategories.find(cat => cat.isDefault);
+      if (defaultCategory) {
+        setSelectedRateCategoryId(defaultCategory.id);
+      }
 
       // If the toggle is enabled and callback is provided, open service location modal
       if (openServiceLocationModal && onOpenServiceLocationModal) {
@@ -532,6 +580,30 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
             showSuggestions={true}
             triggerValidation={triggerValidation}
           />
+
+          {/* Rate Category Selection */}
+          {isExecutiveOrAdmin && rateCategories.length > 0 && (
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Hourly Rate Category
+              </label>
+              <select
+                value={selectedRateCategoryId}
+                onChange={(e) => setSelectedRateCategoryId(e.target.value)}
+                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
+              >
+                {rateCategories.map((category) => (
+                  <option key={category.id} value={category.id}>
+                    {category.categoryName} (${category.baseHourlyRate}/hr)
+                    {category.isDefault ? ' - Default' : ''}
+                  </option>
+                ))}
+              </select>
+              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                Base hourly rate used for calculating service costs for this business
+              </p>
+            </div>
+          )}
 
           {/* Logo Upload Section */}
           <div className="mt-6">

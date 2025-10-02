@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Clock } from 'lucide-react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
@@ -25,6 +25,7 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
   const [timeRemaining, setTimeRemaining] = useState<number>(sessionTimeoutMs);
   const [isWarningActive, setIsWarningActive] = useState(false);
   const [lastActivity, setLastActivity] = useState<number>(Date.now());
+  const lastActivityRef = useRef<number>(Date.now()); // Use ref for immediate updates
   const [warningTriggered, setWarningTriggered] = useState(false);
 
   // Track user activity to reset timer
@@ -33,6 +34,7 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
 
     const resetTimer = () => {
       const now = Date.now();
+      lastActivityRef.current = now;
       setLastActivity(now);
       setTimeRemaining(sessionTimeoutMs);
       setIsWarningActive(false);
@@ -42,9 +44,18 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
     // Throttle activity detection to avoid excessive updates
     let throttleTimeout: NodeJS.Timeout | null = null;
     const throttledReset = () => {
+      // Update activity timestamp immediately (no throttle for time calculation)
+      // This ensures timeRemaining always reflects current activity
+      lastActivityRef.current = Date.now();
+
+      // Throttle the state updates to avoid excessive re-renders
       if (!throttleTimeout) {
         throttleTimeout = setTimeout(() => {
-          resetTimer();
+          const now = Date.now();
+          setLastActivity(now);
+          setTimeRemaining(sessionTimeoutMs);
+          setIsWarningActive(false);
+          setWarningTriggered(false);
           throttleTimeout = null;
         }, 1000); // Throttle to once per second
       }
@@ -67,7 +78,8 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
   useEffect(() => {
     const interval = setInterval(() => {
       const now = Date.now();
-      const timeSinceLastActivity = now - lastActivity;
+      // Use ref for immediate activity updates, avoiding throttle delay
+      const timeSinceLastActivity = now - lastActivityRef.current;
       const remaining = Math.max(0, sessionTimeoutMs - timeSinceLastActivity);
 
       setTimeRemaining(remaining);

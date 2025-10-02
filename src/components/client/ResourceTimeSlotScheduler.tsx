@@ -100,21 +100,22 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
     const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
 
-    // Find matching tier for this day and time
-    const matchingTier = rateTiers.find(tier => {
+    // Find ALL matching tiers for this day and time (handle overlapping ranges)
+    const matchingTiers = rateTiers.filter(tier => {
       if (tier.dayOfWeek !== dayOfWeek) return false;
 
       // Compare time strings
       return timeString >= tier.timeStart && timeString < tier.timeEnd;
     });
 
-    // If no exact match, find the highest priority tier (Emergency > Premium > Standard)
-    if (!matchingTier && rateTiers.length > 0) {
-      const tiersForDay = rateTiers.filter(t => t.dayOfWeek === dayOfWeek);
-      return tiersForDay.sort((a, b) => b.tierLevel - a.tierLevel)[0];
+    // If multiple tiers match (overlapping ranges), return the highest priority tier
+    if (matchingTiers.length > 0) {
+      // Sort by tier level descending (Emergency = 3, Premium = 2, Standard = 1)
+      return matchingTiers.sort((a, b) => b.tierLevel - a.tierLevel)[0];
     }
 
-    return matchingTier;
+    // If no exact match, return undefined (no default tier)
+    return undefined;
   };
 
   // Check if selected time range includes emergency hours
@@ -241,13 +242,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       try {
         setLoading(true);
 
-        // Load base hourly rate
+        // Load business-specific base hourly rate
         try {
-          const rateResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL}/public/base-hourly-rate`);
+          const rateResponse = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL}/public/base-hourly-rate?businessId=${businessId}`
+          );
           if (rateResponse.ok) {
             const rateData = await rateResponse.json();
             if (rateData.success && rateData.data.baseHourlyRate) {
               setBaseHourlyRate(rateData.data.baseHourlyRate);
+              console.log(`💰 Loaded base hourly rate for business: $${rateData.data.baseHourlyRate}/hr (source: ${rateData.data.source || 'unknown'})`);
             }
           }
         } catch (error) {
@@ -284,45 +288,32 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     loadData();
   }, [selectedDate]);
 
-  // Auto-scroll to "Now" position when opening scheduler for today's date
+  // Auto-scroll to "Now" or first standard hour on initial load only
   useEffect(() => {
     if (loading) return; // Wait until loading completes
 
     const now = new Date();
     const isToday = selectedDate.toDateString() === now.toDateString();
+    const isFutureDate = selectedDate > now;
 
-    if (isToday) {
-      // Small delay to ensure DOM is ready
-      setTimeout(() => {
+    // Small delay to ensure DOM is ready
+    setTimeout(() => {
+      if (isToday) {
+        // Scroll to current time for today
         scrollToNow();
-      }, 150);
-    }
-  }, [loading, selectedDate]);
-
-  // Auto-scroll to selected time slot (for auto-suggest feature)
-  useEffect(() => {
-    if (loading || !selectedStartTime) return;
-
-    // Check if the selected time is on the currently displayed date
-    const selectedDay = new Date(selectedStartTime);
-    selectedDay.setHours(0, 0, 0, 0);
-    const currentDay = new Date(selectedDate);
-    currentDay.setHours(0, 0, 0, 0);
-
-    if (selectedDay.getTime() === currentDay.getTime()) {
-      setTimeout(() => {
-        const hours = selectedStartTime.getHours();
-        const minutes = selectedStartTime.getMinutes();
-        const slotIndex = (hours - 6) * 2 + (minutes / 30);
+      } else if (isFutureDate) {
+        // Scroll to first standard hour (08:00) for future dates
+        const firstStandardHour = 8; // 08:00
+        const slotIndex = firstStandardHour * 2; // Each hour has 2 slots (30-min intervals)
         const scrollPosition = slotIndex * 64;
 
         const container = document.getElementById('timeline-scroll');
         if (container) {
           container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
         }
-      }, 200);
-    }
-  }, [loading, selectedStartTime, selectedDate]);
+      }
+    }, 150);
+  }, [loading, selectedDate]); // Only trigger on loading completion or date change
 
   // Check if a time slot is blocked
   const checkIfSlotBlocked = (slotTime: Date, durationHours: number = selectedDuration): { isBlocked: boolean; reason?: string } => {

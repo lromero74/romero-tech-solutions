@@ -67,7 +67,7 @@ router.get('/rate-tiers', async (req, res) => {
         description
       FROM service_hour_rate_tiers
       WHERE is_active = true
-      ORDER BY day_of_week, tier_level, time_start
+      ORDER BY day_of_week, tier_level DESC, time_start
     `;
 
     const result = await pool.query(query);

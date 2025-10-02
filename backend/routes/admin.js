@@ -20,6 +20,7 @@ import serviceRequestsRoutes from './admin/serviceRequests.js';
 import permissionsRoutes from './admin/permissions.js';
 import permissionAuditLogRoutes from './admin/permissionAuditLog.js';
 import serviceHourRatesRoutes from './admin/serviceHourRates.js';
+import hourlyRateCategoriesRoutes from './admin/hourlyRateCategories.js';
 import { getSignupStats } from '../middleware/signupRateLimiter.js';
 import { getEmployeeLoginStats } from '../middleware/employeeLoginRateLimiter.js';
 
@@ -48,6 +49,7 @@ router.use('/', serviceRequestsRoutes);
 router.use('/', permissionsRoutes);
 router.use('/permission-audit-log', permissionAuditLogRoutes);
 router.use('/service-hour-rates', serviceHourRatesRoutes);
+router.use('/hourly-rate-categories', hourlyRateCategoriesRoutes);
 
 // Security monitoring endpoints
 router.get('/signup-stats', getSignupStats);

@@ -62,9 +62,18 @@ const SessionCountdownTimer: React.FC<SessionCountdownTimerProps> = ({
     // Throttle activity detection to avoid excessive updates
     let throttleTimeout: NodeJS.Timeout | null = null;
     const throttledReset = () => {
+      // Update activity timestamp immediately (no throttle for time calculation)
+      // This ensures timeRemaining always reflects current activity
+      lastActivityRef.current = Date.now();
+
+      // Throttle the state updates to avoid excessive re-renders
       if (!throttleTimeout) {
         throttleTimeout = setTimeout(() => {
-          resetTimer();
+          // Only update state flags, lastActivityRef already updated above
+          setIsWarningActive(false);
+          setWarningTriggered(false);
+          isWarningActiveRef.current = false;
+          warningTriggeredRef.current = false;
           throttleTimeout = null;
         }, 1000); // Throttle to once per second
       }

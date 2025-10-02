@@ -19,10 +19,10 @@ interface ServiceHourRateTier {
 }
 
 const DAYS_OF_WEEK = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-const TIER_LEVELS = [
-  { value: 1, label: 'Standard', defaultColor: '#28a745', multiplier: 1.0 },
-  { value: 2, label: 'Premium', defaultColor: '#ffc107', multiplier: 1.5 },
-  { value: 3, label: 'Emergency', defaultColor: '#dc3545', multiplier: 2.0 }
+const TIER_LEVELS_BASE = [
+  { value: 1, label: 'Standard', defaultColor: '#28a745', defaultMultiplier: 1.0 },
+  { value: 2, label: 'Premium', defaultColor: '#ffc107', defaultMultiplier: 1.5 },
+  { value: 3, label: 'Emergency', defaultColor: '#dc3545', defaultMultiplier: 2.0 }
 ];
 
 // Generate 24 hours (0-23)
@@ -42,6 +42,13 @@ const AdminServiceHourRates: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [activeTierLevel, setActiveTierLevel] = useState<number | null>(null);
+
+  // Custom multipliers for each tier (editable by user)
+  const [customMultipliers, setCustomMultipliers] = useState<Record<number, number>>({
+    1: 1.0,  // Standard default
+    2: 1.5,  // Premium default
+    3: 2.0   // Emergency default
+  });
 
   // Check if user has executive role
   const isExecutive = user?.role === 'executive';
@@ -105,7 +112,7 @@ const AdminServiceHourRates: React.FC = () => {
   const applyTierToCell = async (day: number, hour: number, tierLevel: number) => {
     setSaveStatus('saving');
     try {
-      const selectedTier = TIER_LEVELS.find(t => t.value === tierLevel);
+      const selectedTier = TIER_LEVELS_BASE.find(t => t.value === tierLevel);
       if (!selectedTier) return;
 
       const timeStart = `${String(hour).padStart(2, '0')}:00:00`;
@@ -125,7 +132,7 @@ const AdminServiceHourRates: React.FC = () => {
         dayOfWeek: day,
         timeStart: `${String(hour).padStart(2, '0')}:00`,
         timeEnd: `${String(hour + 1).padStart(2, '0')}:00`,
-        rateMultiplier: selectedTier.multiplier,
+        rateMultiplier: customMultipliers[tierLevel], // Use custom multiplier
         colorCode: selectedTier.defaultColor,
         description: '',
         isActive: true
@@ -192,8 +199,8 @@ const AdminServiceHourRates: React.FC = () => {
                 <p className={`${themeClasses.text.secondary}`}>
                   {isExecutive
                     ? activeTierLevel !== null
-                      ? `Paint mode: Click cells to apply ${TIER_LEVELS.find(t => t.value === activeTierLevel)?.label} tier`
-                      : 'Select a tier below, then click cells to paint the schedule'
+                      ? `Paint mode: Click cells to apply ${TIER_LEVELS_BASE.find(t => t.value === activeTierLevel)?.label} tier (${customMultipliers[activeTierLevel]}x)`
+                      : 'Set custom multipliers, select a tier, then click cells to paint the schedule'
                     : 'View-only access - showing current rate tier schedule'
                   }
                 </p>
@@ -219,39 +226,72 @@ const AdminServiceHourRates: React.FC = () => {
                 </button>
               )}
             </div>
-            <div className="flex flex-wrap gap-3">
-              {TIER_LEVELS.map(tier => {
+            <div className="space-y-3">
+              {TIER_LEVELS_BASE.map(tier => {
                 const isActive = activeTierLevel === tier.value;
+                const currentMultiplier = customMultipliers[tier.value];
                 return (
-                  <button
+                  <div
                     key={tier.value}
-                    onClick={() => isExecutive && setActiveTierLevel(tier.value)}
-                    disabled={!isExecutive}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-lg transition-all ${
-                      isExecutive ? 'cursor-pointer hover:scale-105' : 'cursor-default'
-                    } ${
+                    className={`flex items-center justify-between p-3 rounded-lg transition-all ${
                       isActive
-                        ? 'ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-gray-800 shadow-lg'
+                        ? 'ring-2 ring-blue-500 shadow-lg'
                         : 'hover:shadow-md'
                     }`}
                     style={{
-                      backgroundColor: isActive ? `${tier.defaultColor}30` : 'transparent',
-                      border: `2px solid ${isActive ? tier.defaultColor : 'transparent'}`
+                      backgroundColor: isActive ? `${tier.defaultColor}20` : `${tier.defaultColor}10`,
+                      border: `2px solid ${isActive ? tier.defaultColor : `${tier.defaultColor}40`}`
                     }}
                   >
-                    <div
-                      className="w-6 h-6 rounded flex-shrink-0"
-                      style={{ backgroundColor: tier.defaultColor }}
-                    ></div>
-                    <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                      {tier.label} ({tier.multiplier}x)
-                    </span>
-                    {isActive && (
-                      <span className="text-xs px-2 py-0.5 rounded bg-blue-500 text-white font-medium">
-                        Active
+                    <button
+                      onClick={() => isExecutive && setActiveTierLevel(tier.value)}
+                      disabled={!isExecutive}
+                      className={`flex items-center space-x-3 ${
+                        isExecutive ? 'cursor-pointer' : 'cursor-default'
+                      }`}
+                    >
+                      <div
+                        className="w-6 h-6 rounded flex-shrink-0"
+                        style={{ backgroundColor: tier.defaultColor }}
+                      ></div>
+                      <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                        {tier.label}
+                      </span>
+                      {isActive && (
+                        <span className="text-xs px-2 py-0.5 rounded bg-blue-500 text-white font-medium">
+                          Active
+                        </span>
+                      )}
+                    </button>
+
+                    {isExecutive ? (
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="number"
+                          min="0.25"
+                          max="10"
+                          step="0.25"
+                          value={currentMultiplier}
+                          onChange={(e) => {
+                            const value = parseFloat(e.target.value);
+                            if (!isNaN(value) && value >= 0.25 && value <= 10) {
+                              setCustomMultipliers(prev => ({
+                                ...prev,
+                                [tier.value]: value
+                              }));
+                            }
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`w-20 px-2 py-1 text-sm border ${themeClasses.border.primary} rounded focus:outline-none focus:ring-2 focus:ring-blue-500 ${themeClasses.bg.secondary} ${themeClasses.text.primary}`}
+                        />
+                        <span className={`text-sm ${themeClasses.text.secondary}`}>x</span>
+                      </div>
+                    ) : (
+                      <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                        {currentMultiplier}x
                       </span>
                     )}
-                  </button>
+                  </div>
                 );
               })}
             </div>
@@ -352,8 +392,9 @@ const AdminServiceHourRates: React.FC = () => {
             <ul className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
               <li>• Each cell represents one hour on a specific day of the week</li>
               <li>• Color-coded cells show which rate tier applies to that time slot</li>
-              <li>• S = Standard (1.0x), P = Premium (1.5x), E = Emergency (2.0x)</li>
+              <li>• S = Standard, P = Premium, E = Emergency (with custom multipliers)</li>
               {isExecutive && <li>• Click any cell to change the rate tier for that hour</li>}
+              {isExecutive && <li>• Adjust multipliers above, then paint cells to apply custom rates</li>}
               <li>• Gray cells are unassigned (default to standard rate)</li>
               <li>• Rate multipliers are applied when clients schedule appointments</li>
             </ul>
@@ -393,9 +434,10 @@ const AdminServiceHourRates: React.FC = () => {
 
               {/* Tier Options */}
               <div className="px-6 py-4 space-y-3">
-                {TIER_LEVELS.map(tier => {
+                {TIER_LEVELS_BASE.map(tier => {
                   const currentTier = getTierForCell(selectedCell.day, selectedCell.hour);
                   const isActive = currentTier?.tierLevel === tier.value;
+                  const currentMultiplier = customMultipliers[tier.value];
 
                   return (
                     <button
@@ -421,7 +463,7 @@ const AdminServiceHourRates: React.FC = () => {
                             {tier.label}
                           </div>
                           <div className={`text-xs ${themeClasses.text.muted}`}>
-                            {tier.multiplier}x multiplier
+                            {currentMultiplier}x multiplier
                           </div>
                         </div>
                       </div>

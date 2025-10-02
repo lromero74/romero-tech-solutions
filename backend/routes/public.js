@@ -108,8 +108,58 @@ router.post('/service-areas/validate', async (req, res) => {
 
 // Public endpoint to get base hourly rate (no auth required)
 // Needed for clients to see pricing in scheduler
+// Now supports business-specific rates via rate categories
 router.get('/base-hourly-rate', async (req, res) => {
   try {
+    const { businessId } = req.query;
+
+    // If business ID provided, get business-specific rate from rate category
+    if (businessId) {
+      const businessResult = await query(`
+        SELECT
+          b.id,
+          b.rate_category_id,
+          rc.base_hourly_rate as category_rate,
+          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate
+        FROM businesses b
+        LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
+        WHERE b.id = $1
+      `, [businessId]);
+
+      if (businessResult.rows.length > 0) {
+        const business = businessResult.rows[0];
+        // Use business category rate if assigned, otherwise use default category rate
+        const baseRate = business.category_rate || business.default_rate || 75;
+
+        return res.json({
+          success: true,
+          data: {
+            baseHourlyRate: parseFloat(baseRate),
+            source: business.category_rate ? 'business_category' : 'default_category'
+          }
+        });
+      }
+    }
+
+    // Fallback: Get default category rate
+    const defaultResult = await query(`
+      SELECT base_hourly_rate
+      FROM hourly_rate_categories
+      WHERE is_default = true
+      LIMIT 1
+    `);
+
+    if (defaultResult.rows.length > 0) {
+      return res.json({
+        success: true,
+        data: {
+          baseHourlyRate: parseFloat(defaultResult.rows[0].base_hourly_rate),
+          source: 'default_category'
+        }
+      });
+    }
+
+    // Ultimate fallback: system setting (for backwards compatibility)
     const result = await query(`
       SELECT setting_value
       FROM system_settings
