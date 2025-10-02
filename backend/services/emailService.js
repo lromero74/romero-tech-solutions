@@ -1310,10 +1310,13 @@ Serving Escondido, CA and surrounding areas.
 
       // Get employees with admin, executive, or technician roles
       const employeesQuery = `
-        SELECT id, email, first_name, last_name, role
-        FROM employees
-        WHERE role IN ('admin', 'executive', 'technician')
-        AND is_active = true
+        SELECT DISTINCT e.id, e.email, e.first_name, e.last_name, r.name as role
+        FROM employees e
+        JOIN employee_roles er ON e.id = er.employee_id
+        JOIN roles r ON er.role_id = r.id
+        WHERE r.name IN ('admin', 'executive', 'technician')
+        AND e.is_active = true
+        AND r.is_active = true
       `;
       const employeesResult = await pool.query(employeesQuery);
       const employees = employeesResult.rows;
@@ -1482,10 +1485,13 @@ Email: info@romerotechsolutions.com
 
       // Get employees with admin, executive, or technician roles
       const employeesQuery = `
-        SELECT id, email, first_name, last_name, role
-        FROM employees
-        WHERE role IN ('admin', 'executive', 'technician')
-        AND is_active = true
+        SELECT DISTINCT e.id, e.email, e.first_name, e.last_name, r.name as role
+        FROM employees e
+        JOIN employee_roles er ON e.id = er.employee_id
+        JOIN roles r ON er.role_id = r.id
+        WHERE r.name IN ('admin', 'executive', 'technician')
+        AND e.is_active = true
+        AND r.is_active = true
       `;
       const employeesResult = await pool.query(employeesQuery);
       const employees = employeesResult.rows;
