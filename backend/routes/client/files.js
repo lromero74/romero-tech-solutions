@@ -75,12 +75,17 @@ const clientFileFilter = (req, file, cb) => {
     'application/gzip'
   ];
 
+  console.log(`🔍 File upload attempt: ${file.originalname}, MIME type: ${file.mimetype}`);
+
   const validation = validateFileUpload(file, 'documents');
 
   if (!allowedTypes.includes(file.mimetype)) {
+    console.log(`❌ File type rejected: ${file.mimetype}`);
     cb(new Error(`File type ${file.mimetype} not allowed. Allowed types: ${allowedTypes.join(', ')}`), false);
     return;
   }
+
+  console.log(`✅ File type accepted: ${file.mimetype}`);
 
   if (validation.isValid) {
     cb(null, true);

@@ -191,6 +191,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
         });
 
         xhr.addEventListener('load', async () => {
+          console.log('📤 Upload response status:', xhr.status);
+          console.log('📤 Upload response:', xhr.responseText);
+
           if (xhr.status === 200) {
             // Update status to scanning
             setUploads(prev => prev.map(u =>
