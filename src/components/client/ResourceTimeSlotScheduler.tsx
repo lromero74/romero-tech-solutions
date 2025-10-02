@@ -37,9 +37,20 @@ interface ExistingBooking {
   isOwnBooking: boolean;
 }
 
+interface CostBreakdown {
+  total: number;
+  baseHourlyRate: number;
+  breakdown: {
+    tierName: string;
+    multiplier: number;
+    hours: number;
+    cost: number;
+  }[];
+}
+
 interface ResourceTimeSlotSchedulerProps {
   selectedDate: Date;
-  onSlotSelect: (resourceId: string, startTime: Date, endTime: Date) => void;
+  onSlotSelect: (resourceId: string, startTime: Date, endTime: Date, costBreakdown?: CostBreakdown) => void;
   onDateChange: (date: Date) => void;
   onClose: () => void;
   businessId: string;
@@ -92,7 +103,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
   const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
   const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
-  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('any');
+  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
 
   const BUFFER_HOURS = 1;
 
@@ -165,6 +176,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const dayOfWeek = selectedStartTime.getDay();
     let totalCost = 0;
 
+    // Track tier blocks (contiguous periods of same tier)
+    interface TierBlock {
+      tierName: string;
+      multiplier: number;
+      hours: number;
+      cost: number;
+    }
+    const tierBlocks: TierBlock[] = [];
+    let currentBlock: { tierName: string; multiplier: number; halfHourCount: number } | null = null;
+
     // Calculate cost for each 30-minute increment
     let currentTime = new Date(selectedStartTime);
     while (currentTime < selectedEndTime) {
@@ -174,16 +195,47 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         dayOfWeek
       );
 
+      const tierName = tier?.tierName || 'Standard';
       const multiplier = tier?.rateMultiplier || 1.0;
       const incrementCost = (baseHourlyRate * multiplier) / 2; // Half-hour rate
       totalCost += incrementCost;
 
+      // Group contiguous blocks of same tier
+      if (currentBlock && currentBlock.tierName === tierName && currentBlock.multiplier === multiplier) {
+        currentBlock.halfHourCount += 1;
+      } else {
+        // Save previous block if exists
+        if (currentBlock) {
+          const hours = currentBlock.halfHourCount / 2;
+          tierBlocks.push({
+            tierName: currentBlock.tierName,
+            multiplier: currentBlock.multiplier,
+            hours,
+            cost: hours * baseHourlyRate * currentBlock.multiplier
+          });
+        }
+        // Start new block
+        currentBlock = { tierName, multiplier, halfHourCount: 1 };
+      }
+
       currentTime = new Date(currentTime.getTime() + 30 * 60 * 1000); // Add 30 minutes
+    }
+
+    // Save final block
+    if (currentBlock) {
+      const hours = currentBlock.halfHourCount / 2;
+      tierBlocks.push({
+        tierName: currentBlock.tierName,
+        multiplier: currentBlock.multiplier,
+        hours,
+        cost: hours * baseHourlyRate * currentBlock.multiplier
+      });
     }
 
     return {
       total: totalCost,
-      hourly: totalCost / ((selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60))
+      hourly: totalCost / ((selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60)),
+      breakdown: tierBlocks
     };
   };
 
@@ -604,9 +656,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
   // Confirm booking
   const handleConfirmBooking = () => {
-    if (selectedStartTime && selectedEndTime) {
+    if (selectedStartTime && selectedEndTime && estimatedCost) {
+      // Prepare cost breakdown data
+      const costBreakdown: CostBreakdown = {
+        total: estimatedCost.total,
+        baseHourlyRate,
+        breakdown: estimatedCost.breakdown
+      };
+
       // Use first service location as resourceId (simplified - you may want to add location selector)
-      onSlotSelect('', selectedStartTime, selectedEndTime);
+      onSlotSelect('', selectedStartTime, selectedEndTime, costBreakdown);
     }
   };
 
@@ -1061,10 +1120,27 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             {selectedStartTime && selectedEndTime && !isSelectedDateInPast && (
               <div className="flex items-center justify-end space-x-4">
                 {estimatedCost && (
-                  <div className="flex items-center px-3 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
-                    <span className="text-sm font-semibold text-green-800 dark:text-green-300">
-                      {t('scheduler.estimatedCost', 'Est. Cost:')} ${estimatedCost.total.toFixed(2)}
-                    </span>
+                  <div className="flex flex-col px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
+                    {/* Base Rate */}
+                    <div className="text-xs text-green-600 dark:text-green-500 mb-1">
+                      {t('scheduler.baseRate', 'Base Rate')}: ${baseHourlyRate}/hr
+                    </div>
+                    {/* Breakdown */}
+                    {estimatedCost.breakdown.map((block, idx) => {
+                      // Translate tier name
+                      const tierKey = `scheduler.tier.${block.tierName.toLowerCase()}`;
+                      const translatedTierName = t(tierKey, block.tierName);
+
+                      return (
+                        <div key={idx} className="text-xs text-green-700 dark:text-green-400">
+                          {block.hours}h {translatedTierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                        </div>
+                      );
+                    })}
+                    {/* Total */}
+                    <div className="text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
+                      {t('scheduler.total', 'Total')}: ${estimatedCost.total.toFixed(2)}
+                    </div>
                   </div>
                 )}
                 <button

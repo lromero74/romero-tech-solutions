@@ -46,6 +46,11 @@ const ServiceScheduler: React.FC = () => {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [calendarView, setCalendarView] = useState<'year' | 'month' | 'week' | 'today'>('month');
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
+  const [costBreakdown, setCostBreakdown] = useState<{
+    total: number;
+    baseHourlyRate: number;
+    breakdown: { tierName: string; multiplier: number; hours: number; cost: number; }[];
+  } | null>(null);
 
   // Data state
   const [locations, setLocations] = useState<ServiceLocation[]>([]);
@@ -401,7 +406,16 @@ const ServiceScheduler: React.FC = () => {
   };
 
   // Handle time slot selection from advanced scheduler
-  const handleTimeSlotSelect = (resourceId: string, startTime: Date, endTime: Date) => {
+  const handleTimeSlotSelect = (
+    resourceId: string,
+    startTime: Date,
+    endTime: Date,
+    costBreakdownData?: {
+      total: number;
+      baseHourlyRate: number;
+      breakdown: { tierName: string; multiplier: number; hours: number; cost: number; }[];
+    }
+  ) => {
     // Update form state with selected date and time
     setSelectedDate(startTime);
     setSelectedTime(startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
@@ -411,6 +425,11 @@ const ServiceScheduler: React.FC = () => {
     const durationMs = endTime.getTime() - startTime.getTime();
     const durationHours = durationMs / (1000 * 60 * 60);
     setSelectedDuration(durationHours);
+
+    // Store cost breakdown if provided
+    if (costBreakdownData) {
+      setCostBreakdown(costBreakdownData);
+    }
 
     // Close the scheduler modal
     setShowTimeSlotScheduler(false);
@@ -627,26 +646,54 @@ const ServiceScheduler: React.FC = () => {
         <div className="space-y-6">
           {/* Selected Date & Time Display */}
           {selectedDate && selectedTime && (
-            <div className={`p-4 rounded-lg border ${
-              isDarkMode
-                ? 'bg-blue-900/20 border-blue-600'
-                : 'bg-blue-50 border-blue-300'
-            }`}>
-              <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>
-                {t('schedule.selectedDateTime', 'Selected Date & Time')}
-              </h4>
-              <div className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-                {selectedDate.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
-                  weekday: 'long',
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric'
-                })}
+            <>
+              <div className={`p-4 rounded-lg border ${
+                isDarkMode
+                  ? 'bg-blue-900/20 border-blue-600'
+                  : 'bg-blue-50 border-blue-300'
+              }`}>
+                <h4 className={`text-sm font-medium mb-2 ${isDarkMode ? 'text-blue-300' : 'text-blue-900'}`}>
+                  {t('schedule.selectedDateTime', 'Selected Date & Time')}
+                </h4>
+                <div className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                  {selectedDate.toLocaleDateString(language === 'es' ? 'es-ES' : 'en-US', {
+                    weekday: 'long',
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </div>
+                <div className={`text-md mt-1 ${isDarkMode ? 'text-blue-200' : 'text-blue-700'}`}>
+                  {selectedTime} {selectedEndTime && `- ${selectedEndTime}`} ({selectedDuration}h)
+                </div>
               </div>
-              <div className={`text-md mt-1 ${isDarkMode ? 'text-blue-200' : 'text-blue-700'}`}>
-                {selectedTime} {selectedEndTime && `- ${selectedEndTime}`} ({selectedDuration}h)
-              </div>
-            </div>
+
+              {/* Cost Breakdown */}
+              {costBreakdown && (
+                <div className="flex flex-col px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
+                  {/* Base Rate */}
+                  <div className="text-xs text-green-600 dark:text-green-500 mb-1">
+                    {t('scheduler.baseRate', 'Base Rate')}: ${costBreakdown.baseHourlyRate}/hr
+                  </div>
+                  {/* Breakdown */}
+                  {costBreakdown.breakdown.map((block, idx) => {
+                    // Translate tier name
+                    const tierKey = `scheduler.tier.${block.tierName.toLowerCase()}`;
+                    const translatedTierName = t(tierKey, block.tierName);
+
+                    return (
+                      <div key={idx} className="text-xs text-green-700 dark:text-green-400">
+                        {block.hours}h {translatedTierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                      </div>
+                    );
+                  })}
+                  {/* Total */}
+                  <div className="text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
+                    {t('scheduler.total', 'Total')}: ${costBreakdown.total.toFixed(2)}
+                  </div>
+                </div>
+              )}
+            </>
           )}
 
           {/* Service Location */}
