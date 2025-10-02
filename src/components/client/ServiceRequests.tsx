@@ -608,12 +608,6 @@ const ServiceRequests: React.FC = () => {
                         <p className="text-gray-900 dark:text-white">{selectedRequest.serviceType}</p>
                       </div>
                     )}
-                    <div>
-                      <span className="font-medium text-gray-700 dark:text-gray-300">Requested Date:</span>
-                      <p className="text-gray-900 dark:text-white">
-                        {formatDateTime(selectedRequest.requestedDate, selectedRequest.requestedTimeStart)}
-                      </p>
-                    </div>
                     {selectedRequest.scheduledDate && (
                       <div>
                         <span className="font-medium text-gray-700 dark:text-gray-300">Scheduled Date:</span>
