@@ -88,6 +88,14 @@ class ApiService {
   }
 
   /**
+   * Get CSRF token for manual requests (e.g., XMLHttpRequest)
+   * Public method to allow components to access the token
+   */
+  async getToken(): Promise<string | null> {
+    return await this.getCsrfToken();
+  }
+
+  /**
    * Set callback for handling unauthorized responses (401)
    */
   setUnauthorizedHandler(handler: () => void) {

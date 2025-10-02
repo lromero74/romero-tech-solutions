@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useRef } from 'react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import apiService from '../../services/apiService';
 import {
   Upload,
   X,
@@ -273,6 +274,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
         xhr.open('POST', `${API_BASE_URL}/client/files/upload`);
         xhr.withCredentials = true;
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+
+        // Add CSRF token to headers
+        const csrfToken = await apiService.getToken();
+        if (csrfToken) {
+          xhr.setRequestHeader('x-csrf-token', csrfToken);
+        }
+
         xhr.send(formData);
 
       } catch (error) {
