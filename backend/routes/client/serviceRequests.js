@@ -374,30 +374,65 @@ router.get('/', async (req, res) => {
     const result = await pool.query(query, [businessId, clientId, limit, offset]);
     const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
 
+    // Helper function to calculate estimated cost
+    const calculateCost = (date, timeStart, timeEnd, baseRate) => {
+      if (!date || !timeStart || !timeEnd || !baseRate) return null;
+
+      // Parse times
+      const [startHour, startMin] = timeStart.split(':').map(Number);
+      const [endHour, endMin] = timeEnd.split(':').map(Number);
+
+      // Calculate duration in hours
+      const startMinutes = startHour * 60 + startMin;
+      const endMinutes = endHour * 60 + endMin;
+      const durationHours = (endMinutes - startMinutes) / 60;
+
+      // For now, use standard 1x rate (in future, could query rate tiers)
+      const cost = baseRate * durationHours;
+
+      return {
+        baseRate,
+        durationHours,
+        total: cost
+      };
+    };
+
     res.json({
       success: true,
       data: {
-        serviceRequests: result.rows.map(row => ({
-          id: row.id,
-          requestNumber: row.request_number,
-          title: row.title,
-          description: row.description,
-          requestedDate: row.requested_date,
-          requestedTimeStart: row.requested_time_start,
-          requestedTimeEnd: row.requested_time_end,
-          scheduledDate: row.scheduled_date,
-          scheduledTimeStart: row.scheduled_time_start,
-          scheduledTimeEnd: row.scheduled_time_end,
-          status: row.status_name,
-          statusDescription: row.status_description,
-          urgency: row.urgency_name,
-          priority: row.priority_name,
-          serviceType: row.service_name,
-          location: row.location_name,
-          fileCount: parseInt(row.file_count),
-          createdAt: row.created_at,
-          updatedAt: row.updated_at
-        })),
+        serviceRequests: result.rows.map(row => {
+          // Use default base rate of $75/hr (matches scheduler default)
+          // TODO: Could be enhanced to fetch actual business rate from hourly_rate_categories
+          const costInfo = calculateCost(
+            row.requested_date,
+            row.requested_time_start,
+            row.requested_time_end,
+            75 // Default base hourly rate
+          );
+
+          return {
+            id: row.id,
+            requestNumber: row.request_number,
+            title: row.title,
+            description: row.description,
+            requestedDate: row.requested_date,
+            requestedTimeStart: row.requested_time_start,
+            requestedTimeEnd: row.requested_time_end,
+            scheduledDate: row.scheduled_date,
+            scheduledTimeStart: row.scheduled_time_start,
+            scheduledTimeEnd: row.scheduled_time_end,
+            status: row.status_name,
+            statusDescription: row.status_description,
+            urgency: row.urgency_name,
+            priority: row.priority_name,
+            serviceType: row.service_name,
+            location: row.location_name,
+            fileCount: parseInt(row.file_count),
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+            cost: costInfo
+          };
+        }),
         pagination: {
           page,
           limit,

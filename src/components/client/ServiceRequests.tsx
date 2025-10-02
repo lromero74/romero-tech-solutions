@@ -43,6 +43,11 @@ interface ServiceRequest {
   fileCount: number;
   createdAt: string;
   updatedAt: string;
+  cost?: {
+    baseRate: number;
+    durationHours: number;
+    total: number;
+  } | null;
 }
 
 interface ServiceRequestFile {
@@ -441,6 +446,29 @@ const ServiceRequests: React.FC = () => {
                     </p>
                   )}
 
+                  {/* Cost Summary */}
+                  {request.cost && request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd && (
+                    <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <div className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                        {new Date(request.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                      <div className="text-sm text-blue-800 dark:text-blue-200">
+                        {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
+                      </div>
+                      <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
+                        <div className="text-xs text-blue-700 dark:text-blue-300">
+                          {t('serviceRequests.baseRate', 'Base Rate')}: ${request.cost.baseRate}/hr
+                        </div>
+                        <div className="text-xs text-blue-700 dark:text-blue-300">
+                          {request.cost.durationHours}h Standard @ 1x = ${request.cost.total.toFixed(2)}
+                        </div>
+                        <div className="mt-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
+                          {t('serviceRequests.total', 'Total')}: ${request.cost.total.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 dark:text-gray-400">
                     {request.location && (
                       <div className="flex items-center gap-1">
@@ -538,6 +566,30 @@ const ServiceRequests: React.FC = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Cost Summary in Modal */}
+                  {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
+                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">Selected Date & Time</h4>
+                      <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                        {new Date(selectedRequest.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                      </div>
+                      <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
+                        {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                      </div>
+                      <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
+                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                          Base Rate: ${selectedRequest.cost.baseRate}/hr
+                        </div>
+                        <div className="text-sm text-blue-700 dark:text-blue-300">
+                          {selectedRequest.cost.durationHours}h Standard @ 1x = ${selectedRequest.cost.total.toFixed(2)}
+                        </div>
+                        <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
+                          Total*: ${selectedRequest.cost.total.toFixed(2)}
+                        </div>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                     <div>
