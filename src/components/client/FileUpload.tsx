@@ -164,6 +164,9 @@ const FileUpload: React.FC<FileUploadProps> = ({
       setUploads(prev => [...prev, upload]);
 
       try {
+        // Get CSRF token first
+        const csrfToken = await apiService.getToken();
+
         // Create FormData
         const formData = new FormData();
         formData.append('files', file);
@@ -275,8 +278,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
         xhr.withCredentials = true;
         xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
 
-        // Add CSRF token to headers
-        const csrfToken = await apiService.getToken();
+        // Add CSRF token to headers (token already fetched above)
         if (csrfToken) {
           xhr.setRequestHeader('x-csrf-token', csrfToken);
         }
