@@ -80,7 +80,7 @@ interface PaginationInfo {
 
 const ServiceRequests: React.FC = () => {
   const { isDarkMode } = useClientTheme();
-  const { t } = useClientLanguage();
+  const { t, language } = useClientLanguage();
   const { addServiceRequestChange } = useNotifications();
 
   const themeClasses = {
@@ -330,12 +330,17 @@ const ServiceRequests: React.FC = () => {
     return phone;
   };
 
+  // Get locale for date formatting based on current language
+  const getLocale = () => {
+    return language === 'es' ? 'es-ES' : 'en-US';
+  };
+
   // Format date and time
   const formatDateTime = (date: string | null, time: string | null) => {
-    if (!date) return t('serviceRequests.notScheduled', 'Not scheduled');
+    if (!date) return t('serviceRequests.notScheduled', undefined, 'Not scheduled');
 
     const dateObj = new Date(date);
-    const formattedDate = dateObj.toLocaleDateString();
+    const formattedDate = dateObj.toLocaleDateString(getLocale());
 
     if (time) {
       return `${formattedDate} ${t('serviceRequests.at', undefined, 'at')} ${time}`;
@@ -498,7 +503,7 @@ const ServiceRequests: React.FC = () => {
                   {request.cost && request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd && (
                     <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <div className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        {new Date(request.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                        {new Date(request.requestedDate).toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                       </div>
                       <div className="text-sm text-blue-800 dark:text-blue-200">
                         {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
@@ -515,6 +520,9 @@ const ServiceRequests: React.FC = () => {
                         </div>
                         <div className="mt-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
                           {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
+                        </div>
+                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
+                          * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
                         </div>
                       </div>
                     </div>
@@ -640,7 +648,7 @@ const ServiceRequests: React.FC = () => {
                     <div>
                       <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.created', undefined, 'Created')}:</span>
                       <p className="text-gray-900 dark:text-white">
-                        {new Date(selectedRequest.createdAt).toLocaleString()}
+                        {new Date(selectedRequest.createdAt).toLocaleString(getLocale())}
                       </p>
                     </div>
                   </div>
@@ -652,7 +660,7 @@ const ServiceRequests: React.FC = () => {
                       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
                         <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                          {new Date(selectedRequest.requestedDate).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                          {new Date(selectedRequest.requestedDate).toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                         </div>
                         <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
                           {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
@@ -669,6 +677,9 @@ const ServiceRequests: React.FC = () => {
                           </div>
                           <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
                             {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
+                          </div>
+                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
+                            * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
                           </div>
                         </div>
                       </div>
