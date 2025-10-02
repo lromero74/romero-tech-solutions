@@ -110,7 +110,7 @@ router.get('/service-requests', async (req, res) => {
         tech.email as technician_email,
         CONCAT(ack.first_name, ' ', ack.last_name) as acknowledged_by_name,
         CONCAT(closed.first_name, ' ', closed.last_name) as closed_by_name,
-        cr.reason as closure_reason,
+        cr.reason_name as closure_reason,
         COUNT(*) OVER() as total_count
       FROM service_requests sr
       LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
@@ -158,6 +158,126 @@ router.get('/service-requests', async (req, res) => {
 });
 
 /**
+ * GET /api/admin/service-requests/closure-reasons
+ * Get all available closure reasons
+ */
+router.get('/service-requests/closure-reasons', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    const query = `
+      SELECT
+        id,
+        reason_name,
+        reason_description,
+        is_active
+      FROM service_request_closure_reasons
+      WHERE is_active = true
+      ORDER BY reason_name
+    `;
+
+    const result = await pool.query(query);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching closure reasons:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch closure reasons',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/service-requests/statuses
+ * Get all available service request statuses
+ */
+router.get('/service-requests/statuses', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    const query = `
+      SELECT
+        id,
+        name,
+        description,
+        color_code,
+        display_order as sort_order,
+        is_final_status,
+        requires_technician
+      FROM service_request_statuses
+      WHERE is_active = true
+      ORDER BY display_order
+    `;
+
+    const result = await pool.query(query);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching service request statuses:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch service request statuses',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/service-requests/technicians
+ * Get all active technicians available for assignment
+ */
+router.get('/service-requests/technicians', async (req, res) => {
+  try {
+    const pool = await getPool();
+
+    const query = `
+      SELECT
+        e.id,
+        e.first_name,
+        e.last_name,
+        e.email,
+        e.phone,
+        CONCAT(e.first_name, ' ', e.last_name) as full_name,
+        ws.status_name as working_status,
+        ws.display_name as working_status_display,
+        COUNT(DISTINCT sr.id) as active_requests
+      FROM employees e
+      LEFT JOIN employee_working_statuses ws ON e.working_status_id = ws.id
+      LEFT JOIN service_request_assignments sra ON e.id = sra.technician_id AND sra.is_active = true
+      LEFT JOIN service_requests sr ON sra.service_request_id = sr.id AND sr.soft_delete = false
+      WHERE e.is_active = true
+      GROUP BY e.id, e.first_name, e.last_name, e.email, e.phone, ws.status_name, ws.display_name
+      ORDER BY e.first_name, e.last_name
+    `;
+
+    const result = await pool.query(query);
+
+    res.json({
+      success: true,
+      data: result.rows
+    });
+
+  } catch (error) {
+    console.error('Error fetching technicians:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch technicians',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
  * GET /api/admin/service-requests/:id
  * Get single service request with full details
  */
@@ -199,8 +319,8 @@ router.get('/service-requests/:id', async (req, res) => {
         ack.last_name as acknowledged_by_last_name,
         closed.first_name as closed_by_first_name,
         closed.last_name as closed_by_last_name,
-        cr.reason as closure_reason,
-        cr.description as closure_reason_description
+        cr.reason_name as closure_reason,
+        cr.reason_description as closure_reason_description
       FROM service_requests sr
       LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
       LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
@@ -301,127 +421,6 @@ router.put('/service-requests/:id/assign', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to assign service request',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /api/admin/service-requests/closure-reasons
- * Get all available closure reasons
- */
-router.get('/service-requests/closure-reasons', async (req, res) => {
-  try {
-    const pool = await getPool();
-
-    const query = `
-      SELECT
-        id,
-        reason,
-        description,
-        requires_follow_up,
-        is_active
-      FROM service_request_closure_reasons
-      WHERE is_active = true
-      ORDER BY reason
-    `;
-
-    const result = await pool.query(query);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-
-  } catch (error) {
-    console.error('Error fetching closure reasons:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch closure reasons',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /api/admin/service-requests/statuses
- * Get all available service request statuses
- */
-router.get('/service-requests/statuses', async (req, res) => {
-  try {
-    const pool = await getPool();
-
-    const query = `
-      SELECT
-        id,
-        name,
-        description,
-        color_code,
-        sort_order,
-        is_final_status,
-        requires_technician
-      FROM service_request_statuses
-      WHERE is_active = true
-      ORDER BY sort_order
-    `;
-
-    const result = await pool.query(query);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-
-  } catch (error) {
-    console.error('Error fetching service request statuses:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch service request statuses',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-    });
-  }
-});
-
-/**
- * GET /api/admin/service-requests/technicians
- * Get all active technicians available for assignment
- */
-router.get('/service-requests/technicians', async (req, res) => {
-  try {
-    const pool = await getPool();
-
-    const query = `
-      SELECT
-        e.id,
-        e.first_name,
-        e.last_name,
-        e.email,
-        e.phone,
-        CONCAT(e.first_name, ' ', e.last_name) as full_name,
-        ws.status_name as working_status,
-        ws.display_name as working_status_display,
-        COUNT(DISTINCT sr.id) as active_requests
-      FROM employees e
-      LEFT JOIN employee_working_statuses ws ON e.working_status_id = ws.id
-      LEFT JOIN service_request_assignments sra ON e.id = sra.technician_id AND sra.is_active = true
-      LEFT JOIN service_requests sr ON sra.service_request_id = sr.id AND sr.soft_delete = false
-      WHERE e.is_active = true
-      GROUP BY e.id, e.first_name, e.last_name, e.email, e.phone, ws.status_name, ws.display_name
-      ORDER BY e.first_name, e.last_name
-    `;
-
-    const result = await pool.query(query);
-
-    res.json({
-      success: true,
-      data: result.rows
-    });
-
-  } catch (error) {
-    console.error('Error fetching technicians:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch technicians',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }

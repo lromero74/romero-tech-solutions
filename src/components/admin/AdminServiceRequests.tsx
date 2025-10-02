@@ -15,6 +15,7 @@ import {
   ChevronUp
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 
 interface ServiceRequest {
   id: string;
@@ -135,7 +136,7 @@ const AdminServiceRequests: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -196,7 +197,7 @@ const AdminServiceRequests: React.FC = () => {
   // Fetch technicians
   const fetchTechnicians = async () => {
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) return;
 
       const response = await fetch(`${API_BASE_URL}/admin/service-requests/technicians`, {
@@ -220,7 +221,7 @@ const AdminServiceRequests: React.FC = () => {
   // Fetch statuses
   const fetchStatuses = async () => {
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) return;
 
       const response = await fetch(`${API_BASE_URL}/admin/service-requests/statuses`, {
@@ -244,7 +245,7 @@ const AdminServiceRequests: React.FC = () => {
   // Fetch closure reasons
   const fetchClosureReasons = async () => {
     try {
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) return;
 
       const response = await fetch(`${API_BASE_URL}/admin/service-requests/closure-reasons`, {
@@ -273,7 +274,7 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -318,7 +319,7 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -367,7 +368,7 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -409,7 +410,7 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }
@@ -451,7 +452,7 @@ const AdminServiceRequests: React.FC = () => {
       setActionLoading(true);
       setActionError(null);
 
-      const sessionToken = localStorage.getItem('sessionToken');
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
       if (!sessionToken) {
         throw new Error('No session token available');
       }

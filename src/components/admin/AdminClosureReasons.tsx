@@ -3,12 +3,13 @@ import { Plus, Edit2, Trash2, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import AlertModal from '../shared/AlertModal';
 import DeleteConfirmModal from './shared/DeleteConfirmModal';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 // Helper function to get auth headers
 const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('token') || localStorage.getItem('sessionToken');
+  const token = RoleBasedStorage.getItem('sessionToken');
   return {
     'Content-Type': 'application/json',
     ...(token ? { 'Authorization': `Bearer ${token}` } : {})

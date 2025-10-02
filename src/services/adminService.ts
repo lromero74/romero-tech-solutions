@@ -857,6 +857,23 @@ export class AdminService {
       throw error;
     }
   }
+
+  async getServiceTypes(): Promise<{
+    data: {
+      serviceTypes: any[];
+    };
+  }> {
+    try {
+      console.log('📋 AdminService: Fetching service types...');
+      const apiService = await this.getApiService();
+      const result = await apiService.get('/service-types/admin');
+      console.log('📋 AdminService: Service types response:', result);
+      return result;
+    } catch (error) {
+      console.error('📋 AdminService: Error fetching service types:', error);
+      throw error;
+    }
+  }
 }
 
 export const adminService = new AdminService();

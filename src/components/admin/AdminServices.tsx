@@ -132,7 +132,7 @@ const AdminServiceTypes: React.FC = () => {
   const loadServiceTypes = async () => {
     try {
       setLoading(true);
-      const response = await adminService.get('/service-types/admin');
+      const response = await adminService.getServiceTypes();
       setServiceTypes(response.data.serviceTypes);
     } catch (error) {
       console.error('Error loading service types:', error);
@@ -208,10 +208,10 @@ const AdminServiceTypes: React.FC = () => {
 
   const filteredAndSortedTypes = serviceTypes
     .filter(type =>
-      type.name_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      type.description_en.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      type.type_code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      type.category.toLowerCase().includes(searchTerm.toLowerCase())
+      type.name_en?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.description_en?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.type_code?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      type.category?.toLowerCase().includes(searchTerm.toLowerCase())
     )
     .sort((a, b) => {
       const aVal = a[sortBy as keyof ServiceType];
