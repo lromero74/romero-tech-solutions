@@ -593,13 +593,9 @@ router.put('/update-service-location/:locationId', authenticateClient, async (re
       });
     }
 
-    // Check if headquarters - prevent editing headquarters location
-    if (verifyResult.rows[0].is_headquarters) {
-      return res.status(403).json({
-        success: false,
-        message: 'Cannot edit headquarters location'
-      });
-    }
+    // Note: Clients CAN edit headquarters location details (address, contact info, etc.)
+    // The is_headquarters flag itself cannot be changed via this endpoint
+    // Only deletion of headquarters is prevented (see delete endpoint)
 
     // Check if location name already exists for this business (excluding current location)
     const existingLocation = await pool.query(`
