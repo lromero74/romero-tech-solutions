@@ -3,6 +3,7 @@ import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
+import apiService from '../../services/apiService';
 import {
   Clock,
   Calendar,
@@ -336,11 +337,15 @@ const ServiceRequests: React.FC = () => {
         throw new Error('No session token found');
       }
 
+      // Get CSRF token
+      const csrfToken = await apiService.getToken();
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/notes`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken
         },
         credentials: 'include',
         body: JSON.stringify({ noteText: newNoteText.trim() })
