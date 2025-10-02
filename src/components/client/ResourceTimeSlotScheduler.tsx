@@ -402,18 +402,21 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         });
       }
       if (hasOverlap) {
+        const startTime = booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const endTime = booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return {
           isBlocked: true,
-          reason: `Overlaps with existing appointment (${booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+          reason: t('scheduler.overlapsAppointment', { start: startTime, end: endTime }, `Overlaps with existing appointment (${startTime} - ${endTime})`)
         };
       }
 
       // Check 1-hour buffer after existing appointment (Rule 7)
       const oneHourAfter = new Date(booking.endTime.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
       if (slotTime >= booking.endTime && slotTime < oneHourAfter) {
+        const endTime = booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return {
           isBlocked: true,
-          reason: `Must wait 1 hour after appointment ending at ${booking.endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          reason: t('scheduler.mustWaitAfter', { time: endTime }, `Must wait 1 hour after appointment ending at ${endTime}`)
         };
       }
 
@@ -437,9 +440,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }
 
       if (slotEnd > oneHourBefore && slotEnd <= booking.startTime) {
+        const startTime = booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
         return {
           isBlocked: true,
-          reason: `Must end 1 hour before appointment starting at ${booking.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+          reason: t('scheduler.mustEndBefore', { time: startTime }, `Must end 1 hour before appointment starting at ${startTime}`)
         };
       }
     }
