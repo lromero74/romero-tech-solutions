@@ -374,6 +374,29 @@ router.get('/', async (req, res) => {
     const result = await pool.query(query, [businessId, clientId, limit, offset]);
     const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
 
+    // Fetch business-specific base hourly rate from rate category
+    let baseHourlyRate = 75; // Fallback default
+    try {
+      const rateResult = await pool.query(`
+        SELECT
+          b.id,
+          b.rate_category_id,
+          rc.base_hourly_rate as category_rate,
+          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate
+        FROM businesses b
+        LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
+        WHERE b.id = $1
+      `, [businessId]);
+
+      if (rateResult.rows.length > 0) {
+        const business = rateResult.rows[0];
+        // Use business category rate if assigned, otherwise use default category rate
+        baseHourlyRate = parseFloat(business.category_rate || business.default_rate || 75);
+      }
+    } catch (error) {
+      console.error('Error fetching base hourly rate, using fallback:', error);
+    }
+
     // Helper function to calculate estimated cost
     const calculateCost = (date, timeStart, timeEnd, baseRate) => {
       if (!date || !timeStart || !timeEnd || !baseRate) return null;
@@ -401,13 +424,12 @@ router.get('/', async (req, res) => {
       success: true,
       data: {
         serviceRequests: result.rows.map(row => {
-          // Use default base rate of $75/hr (matches scheduler default)
-          // TODO: Could be enhanced to fetch actual business rate from hourly_rate_categories
+          // Calculate cost using business-specific rate from rate category
           const costInfo = calculateCost(
             row.requested_date,
             row.requested_time_start,
             row.requested_time_end,
-            75 // Default base hourly rate
+            baseHourlyRate
           );
 
           return {

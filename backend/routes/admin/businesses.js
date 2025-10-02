@@ -349,6 +349,19 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
     await query('BEGIN');
 
     try {
+      // If no rate category provided, default to "Standard" category
+      let finalRateCategoryId = rateCategoryId;
+      if (!finalRateCategoryId) {
+        const defaultCategoryResult = await query(`
+          SELECT id FROM hourly_rate_categories
+          WHERE is_default = true
+          LIMIT 1
+        `);
+        if (defaultCategoryResult.rows.length > 0) {
+          finalRateCategoryId = defaultCategoryResult.rows[0].id;
+        }
+      }
+
       // Create the business record (NO address columns - address goes in service_locations)
       const businessResult = await query(`
         INSERT INTO businesses (
@@ -371,7 +384,7 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
         logoPositionY ? Math.round(logoPositionY) : null,
         logoScale ? Math.round(logoScale) : null,
         logoBackgroundColor || null,
-        rateCategoryId || null
+        finalRateCategoryId
       ]);
 
       const business = businessResult.rows[0];
