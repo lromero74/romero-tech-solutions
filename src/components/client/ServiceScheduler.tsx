@@ -35,7 +35,7 @@ const ServiceScheduler: React.FC = () => {
   const [selectedEndTime, setSelectedEndTime] = useState<string>('');
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [selectedLocation, setSelectedLocation] = useState<string>('');
-  const [selectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
+  const [selectedUrgency, setSelectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
   const [description, setDescription] = useState('');
   const [contactName, setContactName] = useState('');
