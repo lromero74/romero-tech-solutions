@@ -4,6 +4,7 @@ import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { useNotifications } from '../../contexts/NotificationContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
+import { formatLongDate } from '../../utils/dateFormatter';
 import {
   Clock,
   Calendar,
@@ -605,7 +606,7 @@ const ServiceRequests: React.FC = () => {
                   {request.cost && request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd && (
                     <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <div className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        {new Date(request.requestedDate).toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                        {formatLongDate(new Date(request.requestedDate), t, language)}
                       </div>
                       <div className="text-sm text-blue-800 dark:text-blue-200">
                         {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
@@ -767,7 +768,7 @@ const ServiceRequests: React.FC = () => {
                       <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                         <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
                         <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                          {new Date(selectedRequest.requestedDate).toLocaleDateString(getLocale(), { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                          {formatLongDate(new Date(selectedRequest.requestedDate), t, language)}
                         </div>
                         <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
                           {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
