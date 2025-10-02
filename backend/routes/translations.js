@@ -3,7 +3,75 @@ import { getPool } from '../config/database.js';
 
 const router = express.Router();
 
-// Get translations for a specific language and namespace
+// IMPORTANT: More specific routes must come before general parameterized routes
+// Get all client-relevant translations for a language (multiple namespaces)
+router.get('/client/:language', async (req, res) => {
+  try {
+    const { language } = req.params;
+
+    // Validate language code format
+    if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(language)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid language code format'
+      });
+    }
+
+    const pool = await getPool();
+
+    // Client needs: client, common, and scheduler namespaces
+    const clientNamespaces = ['client', 'common', 'scheduler'];
+
+    // Get all translations for client namespaces
+    const result = await pool.query(`
+      SELECT
+        tk.key_path,
+        t.value,
+        tk.default_value
+      FROM t_translations t
+      JOIN t_translation_keys tk ON t.key_id = tk.id
+      JOIN t_translation_namespaces tn ON tk.namespace_id = tn.id
+      JOIN t_languages l ON t.language_id = l.id
+      WHERE l.code = $1
+        AND tn.namespace = ANY($2::text[])
+        AND t.is_approved = true
+      ORDER BY tn.namespace, tk.key_path
+    `, [language, clientNamespaces]);
+
+    // Get language information
+    const languageResult = await pool.query(`
+      SELECT code, name, native_name, direction
+      FROM t_languages
+      WHERE code = $1 AND is_active = true
+    `, [language]);
+
+    if (languageResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Language not found or not active'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        language: languageResult.rows[0],
+        translations: result.rows,
+        count: result.rows.length,
+        namespaces: clientNamespaces
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching client translations:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch client translations'
+    });
+  }
+});
+
+// Get translations for a specific language and namespace (general endpoint)
 router.get('/:namespace/:language', async (req, res) => {
   try {
     const { namespace, language } = req.params;
