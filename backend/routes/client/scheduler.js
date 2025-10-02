@@ -152,7 +152,7 @@ router.get('/resources', clientContextMiddleware, requireClientAccess(['business
 router.get('/bookings', clientContextMiddleware, requireClientAccess(['business', 'location']), async (req, res) => {
   try {
     const { date } = req.query;
-    const clientId = req.user.userId;
+    const clientId = req.user.id; // authMiddleware sets req.user.id
 
     if (!date) {
       return res.status(400).json({
@@ -253,7 +253,7 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
     } = req.body;
 
     const businessId = req.user.businessId;
-    const clientId = req.user.userId;
+    const clientId = req.user.id; // authMiddleware sets req.user.id
 
     if (!resourceId || !startTime || !endTime) {
       return res.status(400).json({
