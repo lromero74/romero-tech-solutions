@@ -149,18 +149,20 @@ router.get('/service-requests', async (req, res) => {
 
     // Helper function to calculate cost with tier breakdown
     const calculateCost = async (date, timeStart, timeEnd, businessId, clientId) => {
-      if (!date || !timeStart || !timeEnd || !businessId) return null;
+      if (!date || !timeStart || !timeEnd) {
+        return null;
+      }
 
       try {
-        // Get business-specific base rate
+        // Get default base rate from hourly_rate_categories
         const rateQuery = `
           SELECT base_hourly_rate
-          FROM rate_categories
-          WHERE business_id = $1 AND is_active = true
+          FROM hourly_rate_categories
+          WHERE is_active = true AND is_default = true
           ORDER BY created_at DESC
           LIMIT 1
         `;
-        const rateResult = await pool.query(rateQuery, [businessId]);
+        const rateResult = await pool.query(rateQuery);
         const baseRate = rateResult.rows[0]?.base_hourly_rate || 75;
 
         // Check if this is the client's first service request
@@ -284,7 +286,7 @@ router.get('/service-requests', async (req, res) => {
           isFirstRequest
         };
       } catch (error) {
-        console.error('Error calculating cost:', error);
+        console.error('Error calculating cost:', error.message);
         return null;
       }
     };

@@ -146,7 +146,9 @@ const AdminServiceRequests: React.FC = () => {
         ...(filters.technician !== 'all' && { technicianId: filters.technician })
       });
 
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests?${params}`, {
+      const url = `${API_BASE_URL}/admin/service-requests?${params}`;
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
           'Content-Type': 'application/json'
@@ -1322,63 +1324,66 @@ const AdminServiceRequests: React.FC = () => {
 
               {/* Date/Time & Cost Summary & Location Side-by-Side */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
-                {/* Date/Time & Cost Summary */}
+                {/* Date/Time */}
                 {selectedRequest.requested_date && selectedRequest.requested_time_start && selectedRequest.requested_time_end && (
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Selected Date & Time</h4>
                     <div className={`text-lg font-semibold ${themeClasses.text.primary} mb-1`}>
                       {new Date(selectedRequest.requested_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
                     </div>
-                    <div className={`text-base ${themeClasses.text.secondary} mb-3`}>
+                    <div className={`text-base ${themeClasses.text.secondary}`}>
                       {selectedRequest.requested_time_start.substring(0, 5)} - {selectedRequest.requested_time_end.substring(0, 5)}
                       {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
                     </div>
-
-                    {/* Cost Information - Only for users with permission */}
-                    {canViewCosts && selectedRequest.cost && (
-                      <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
-                        <div className={`text-sm ${themeClasses.text.secondary} mb-1`}>
-                          Base Rate: ${selectedRequest.cost.baseRate}/hr
-                        </div>
-                        {/* Tier Breakdown */}
-                        {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block: any, idx: number) => (
-                          <div key={idx} className={`text-sm ${themeClasses.text.secondary}`}>
-                            {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
-                          </div>
-                        ))}
-                        {/* First Hour Discount */}
-                        {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
-                          <>
-                            <div className={`text-sm ${themeClasses.text.secondary} mt-1 pt-1 border-t border-blue-200 dark:border-blue-700`}>
-                              Subtotal: ${selectedRequest.cost.subtotal?.toFixed(2)}
-                            </div>
-                            <div className="text-sm text-green-600 dark:text-green-400 font-medium mb-1">
-                              🎁 First Hour Comp (New Client):
-                            </div>
-                            {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock: any, idx: number) => (
-                              <div key={idx} className="text-sm text-green-600 dark:text-green-400 ml-4">
-                                • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
-                              </div>
-                            ))}
-                            {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
-                              <div className="text-sm text-green-600 dark:text-green-400 font-medium ml-4">
-                                Total Discount: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
-                              </div>
-                            )}
-                          </>
-                        )}
-                        <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2 pt-1 border-t border-blue-200 dark:border-blue-700`}>
-                          Total*: ${selectedRequest.cost.total.toFixed(2)}
-                        </div>
-                        <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
-                          * Actual cost may vary based on time required to complete the service
-                        </div>
-                      </div>
-                    )}
                   </div>
                 )}
 
-                {/* Location & Contact Information */}
+                {/* Cost Estimate - Only for users with permission */}
+                {canViewCosts && selectedRequest.cost && (
+                  <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Estimated Cost</h4>
+                    <div className={`text-sm ${themeClasses.text.secondary} mb-2`}>
+                      Base Rate: ${selectedRequest.cost.baseRate}/hr
+                    </div>
+                    {/* Tier Breakdown */}
+                    {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block: any, idx: number) => (
+                      <div key={idx} className={`text-sm ${themeClasses.text.secondary}`}>
+                        {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                      </div>
+                    ))}
+                    {/* First Hour Discount */}
+                    {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
+                      <>
+                        <div className={`text-sm ${themeClasses.text.secondary} mt-2 pt-2 border-t border-green-200 dark:border-green-700`}>
+                          Subtotal: ${selectedRequest.cost.subtotal?.toFixed(2)}
+                        </div>
+                        <div className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">
+                          🎁 First Hour Comp (New Client):
+                        </div>
+                        {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock: any, idx: number) => (
+                          <div key={idx} className="text-sm text-green-600 dark:text-green-400 ml-4">
+                            • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                          </div>
+                        ))}
+                        {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
+                          <div className="text-sm text-green-600 dark:text-green-400 font-medium ml-4">
+                            Total Discount: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
+                          </div>
+                        )}
+                      </>
+                    )}
+                    <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2 pt-2 border-t border-green-200 dark:border-green-700`}>
+                      Total*: ${selectedRequest.cost.total.toFixed(2)}
+                    </div>
+                    <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
+                      * Actual cost may vary based on time required to complete the service
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Location & Contact Information */}
+              <div className="my-4">
                 {selectedRequest.locationDetails && (
                   <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
                     <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Location & Contact</h4>
