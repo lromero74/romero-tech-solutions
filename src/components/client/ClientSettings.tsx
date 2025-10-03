@@ -185,6 +185,92 @@ const ClientSettings: React.FC = () => {
     return Object.values(passwordRequirements).every(req => req);
   };
 
+  // Phone number formatting utilities
+  const formatPhoneNumber = (value: string): string => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+
+    // Apply progressive formatting
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+
+    // Fallback (should not reach here)
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
+
+  const handlePhoneChange = (value: string, isBackspace = false) => {
+    // Only allow digits and formatting characters
+    const digits = value.replace(/\D/g, '');
+
+    // Special handling for backspace - allow deletion through formatting
+    if (isBackspace) {
+      const formattedValue = formatPhoneNumber(digits);
+      setContactInfo(prev => ({ ...prev, phone: formattedValue }));
+      return;
+    }
+
+    // Limit to 10 digits for regular typing
+    if (digits.length <= 10) {
+      const formattedValue = formatPhoneNumber(value);
+      setContactInfo(prev => ({ ...prev, phone: formattedValue }));
+    }
+  };
+
+  // Handle backspace/delete key specifically
+  const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    const cursorPos = target.selectionStart || 0;
+    const currentValue = target.value;
+
+    if (e.key === 'Backspace' && cursorPos > 0) {
+      e.preventDefault();
+
+      // Find the previous digit position
+      let posToRemove = cursorPos - 1;
+      while (posToRemove >= 0 && !/\d/.test(currentValue[posToRemove])) {
+        posToRemove--;
+      }
+
+      if (posToRemove >= 0) {
+        // Remove that digit
+        const newValue = currentValue.slice(0, posToRemove) + currentValue.slice(posToRemove + 1);
+        handlePhoneChange(newValue, true);
+
+        // Set cursor position after formatting
+        setTimeout(() => {
+          const digits = newValue.replace(/\D/g, '');
+          const formattedValue = formatPhoneNumber(digits);
+          let newCursorPos = Math.min(posToRemove, formattedValue.length);
+          target.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+      }
+    } else if (e.key === 'Delete' && cursorPos < currentValue.length) {
+      e.preventDefault();
+
+      // Find the next digit position
+      let posToRemove = cursorPos;
+      while (posToRemove < currentValue.length && !/\d/.test(currentValue[posToRemove])) {
+        posToRemove++;
+      }
+
+      if (posToRemove < currentValue.length) {
+        // Remove that digit
+        const newValue = currentValue.slice(0, posToRemove) + currentValue.slice(posToRemove + 1);
+        handlePhoneChange(newValue, true);
+
+        // Set cursor position after formatting
+        setTimeout(() => {
+          const digits = newValue.replace(/\D/g, '');
+          const formattedValue = formatPhoneNumber(digits);
+          let newCursorPos = Math.min(cursorPos, formattedValue.length);
+          target.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+      }
+    }
+  };
+
   const handleContactInfoSave = async () => {
     setLoading(true);
     try {
@@ -422,7 +508,8 @@ const ClientSettings: React.FC = () => {
                 <input
                   type="tel"
                   value={contactInfo.phone}
-                  onChange={(e) => setContactInfo(prev => ({ ...prev, phone: e.target.value }))}
+                  onChange={(e) => handlePhoneChange(e.target.value)}
+                  onKeyDown={handlePhoneKeyDown}
                   className={`w-full px-3 py-2 border rounded-md ${themeClasses.input}`}
                   placeholder={t('settings.profile.phonePlaceholder')}
                 />
