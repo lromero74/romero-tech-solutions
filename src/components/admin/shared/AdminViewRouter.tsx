@@ -124,12 +124,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Get current user for authorization checks
   const { user, isAuthenticated } = useEnhancedAuth();
 
-  // Refresh online status whenever the view changes (navigation) - only if authenticated
-  useEffect(() => {
-    if (isAuthenticated && user) {
-      refreshOnlineStatus();
-    }
-  }, [currentView, refreshOnlineStatus, isAuthenticated, user]);
+  // NOTE: We no longer poll refreshOnlineStatus() on view changes because we have WebSocket
+  // for real-time employee status updates. The WebSocket connection is managed in AdminDataContext
+  // and provides instant updates without needing to repeatedly call the API.
 
   // Initialize filter hooks - always call hooks to maintain hook order
   const employeeFilters = useEmployeeFilters();

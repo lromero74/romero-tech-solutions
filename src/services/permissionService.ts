@@ -9,25 +9,7 @@
  *   const canDelete = await permissionService.checkPermission('hardDelete.businesses.enable');
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-
-// Helper function to get auth headers
-const getAuthHeaders = (): HeadersInit => {
-  const token = localStorage.getItem('token') || localStorage.getItem('sessionToken');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  };
-};
-
-// Helper function to handle fetch responses
-const handleResponse = async (response: Response) => {
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ message: 'Request failed' }));
-    throw new Error(error.message || `HTTP ${response.status}: ${response.statusText}`);
-  }
-  return response.json();
-};
+import { apiService } from './apiService';
 
 export interface Permission {
   id: string;
@@ -109,10 +91,8 @@ export interface AuditLogStats {
 }
 
 class PermissionService {
-  private apiBaseUrl: string;
-
   constructor() {
-    this.apiBaseUrl = API_BASE_URL;
+    // No longer needed - using apiService
   }
 
   /**
@@ -132,13 +112,9 @@ class PermissionService {
    */
   async getUserPermissions(): Promise<UserPermissions> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/permissions/user-permissions`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const data = await handleResponse(response);
+      const data = await apiService.get<{ success: boolean; data: UserPermissions; message?: string }>(
+        '/admin/permissions/user-permissions'
+      );
 
       if (data.success) {
         return data.data;
@@ -157,13 +133,9 @@ class PermissionService {
    */
   async getAllPermissions(): Promise<Permission[]> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/permissions`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const data = await handleResponse(response);
+      const data = await apiService.get<{ success: boolean; data: { permissions: Permission[] }; message?: string }>(
+        '/admin/permissions'
+      );
 
       if (data.success) {
         return data.data.permissions;
@@ -182,13 +154,9 @@ class PermissionService {
    */
   async getRolesWithPermissions(): Promise<{ roles: any[] }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/roles-with-permissions`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const data = await handleResponse(response);
+      const data = await apiService.get<{ success: boolean; data: { roles: any[] }; message?: string }>(
+        '/admin/roles-with-permissions'
+      );
 
       if (data.success && data.data) {
         return { roles: data.data.roles || [] };
@@ -208,13 +176,9 @@ class PermissionService {
    */
   async getRolePermissions(roleId: string): Promise<{ permissions: Permission[] }> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/role-permissions/${roleId}`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const data = await handleResponse(response);
+      const data = await apiService.get<{ success: boolean; permissions: Permission[]; message?: string }>(
+        `/admin/role-permissions/${roleId}`
+      );
 
       if (data.success) {
         return { permissions: data.permissions };
@@ -229,23 +193,27 @@ class PermissionService {
 
   /**
    * Update permissions for a role (executive only)
-   * @param roleId - Role name (e.g., 'admin', 'technician')
-   * @param permissionIds - Array of permission IDs to grant
+   * @param roleId - Role ID
+   * @param allPermissions - Array of all permission objects
+   * @param grantedPermissionKeys - Set of permission keys to grant
    * @returns Promise<any>
    */
   async updateRolePermissions(
     roleId: string,
-    permissionIds: string[]
+    allPermissions: Array<{ id: string; permission_key: string }>,
+    grantedPermissionKeys: Set<string>
   ): Promise<any> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/role-permissions/${roleId}`, {
-        method: 'PUT',
-        headers: getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify({ permissionIds })
-      });
+      // Build permissions array in the format backend expects
+      const permissions = allPermissions.map(perm => ({
+        permissionId: perm.id,
+        isGranted: grantedPermissionKeys.has(perm.permission_key)
+      }));
 
-      const data = await handleResponse(response);
+      const data = await apiService.put<{ success: boolean; data: any; message?: string }>(
+        `/admin/role-permissions/${roleId}`,
+        { permissions }
+      );
 
       if (data.success) {
         return data.data;
@@ -272,24 +240,18 @@ class PermissionService {
     limit?: number;
   }): Promise<{ logs: AuditLogEntry[]; pagination: any }> {
     try {
-      const params = new URLSearchParams();
-      if (filters?.employeeId) params.append('employeeId', filters.employeeId);
-      if (filters?.result) params.append('result', filters.result);
-      if (filters?.startDate) params.append('startDate', filters.startDate);
-      if (filters?.endDate) params.append('endDate', filters.endDate);
-      if (filters?.page) params.append('page', filters.page.toString());
-      if (filters?.limit) params.append('limit', filters.limit.toString());
+      const params: Record<string, string> = {};
+      if (filters?.employeeId) params.employeeId = filters.employeeId;
+      if (filters?.result) params.result = filters.result;
+      if (filters?.startDate) params.startDate = filters.startDate;
+      if (filters?.endDate) params.endDate = filters.endDate;
+      if (filters?.page) params.page = filters.page.toString();
+      if (filters?.limit) params.limit = filters.limit.toString();
 
-      const response = await fetch(
-        `${this.apiBaseUrl}/admin/permission-audit-log?${params.toString()}`,
-        {
-          method: 'GET',
-          headers: getAuthHeaders(),
-          credentials: 'include'
-        }
+      const data = await apiService.get<{ success: boolean; data: { logs: AuditLogEntry[]; pagination: any }; message?: string }>(
+        '/admin/permission-audit-log',
+        { params }
       );
-
-      const data = await handleResponse(response);
 
       if (data.success) {
         return data.data;
@@ -308,13 +270,9 @@ class PermissionService {
    */
   async getAuditLogStats(): Promise<AuditLogStats> {
     try {
-      const response = await fetch(`${this.apiBaseUrl}/admin/permission-audit-log/stats`, {
-        method: 'GET',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const data = await handleResponse(response);
+      const data = await apiService.get<{ success: boolean; data: AuditLogStats; message?: string }>(
+        '/admin/permission-audit-log/stats'
+      );
 
       if (data.success) {
         return data.data;

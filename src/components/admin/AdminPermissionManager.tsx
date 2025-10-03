@@ -1,34 +1,35 @@
 /**
- * Admin Permission Manager
+ * Admin Permission Manager - Matrix View with Tree Structure
  *
- * Executive-only component for managing role permissions with inheritance visualization.
+ * Executive-only component for managing role permissions with a spreadsheet-like interface.
  * Features:
- * - Hierarchical permission tree (Resource > Operation Category > Permission)
- * - Search/filter permissions
- * - Multi-select with parent-child propagation
- * - Inheritance visualization (inherited permissions shown but disabled)
- * - Role selector to manage permissions for different roles
+ * - Matrix view: Permissions (rows) × Roles (columns)
+ * - Collapsible tree structure for easy navigation
+ * - Visual inheritance indicators
+ * - Bulk operations by role or permission
+ * - Search and filter
+ * - Real-time save
  *
  * Usage:
  *   <AdminPermissionManager />
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckSquare,
   Square,
-  MinusSquare,
-  ChevronRight,
-  ChevronDown,
-  Search,
   Shield,
   Save,
-  X,
   AlertCircle,
   Info,
-  Copy,
+  Search,
+  RotateCcw,
   CheckCircle,
-  RotateCcw
+  Lock,
+  ChevronRight,
+  ChevronDown,
+  Folder,
+  FolderOpen
 } from 'lucide-react';
 import { usePermission } from '../../hooks/usePermission';
 import { permissionService } from '../../services/permissionService';
@@ -48,36 +49,36 @@ interface Role {
   id: string;
   name: string;
   display_name: string;
+  permissions: Set<string>; // permission_keys
+  inheritedPermissions: Set<string>; // permission_keys inherited from other roles
 }
 
-interface PermissionNode {
-  id: string;
-  name: string;
-  description?: string;
-  permissionKey?: string;
-  children?: PermissionNode[];
-  level: 'resource' | 'category' | 'permission';
-  selected: boolean;
-  indeterminate: boolean;
-  inherited?: boolean; // If this permission comes from role inheritance
-  inheritedFrom?: string; // Which role it's inherited from
+interface PermissionCategory {
+  categoryName: string;
+  permissions: Permission[];
+}
+
+interface PermissionGroup {
+  resourceType: string;
+  resourceName: string;
+  categories: PermissionCategory[];
+  expanded: boolean;
 }
 
 const AdminPermissionManager: React.FC = () => {
   const { isExecutive, loading: permissionLoading } = usePermission();
-  const [selectedRole, setSelectedRole] = useState<string>('');
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [permissionTree, setPermissionTree] = useState<PermissionNode[]>([]);
-  const [selectedPermissions, setSelectedPermissions] = useState<Set<string>>(new Set());
-  const [inheritedPermissions, setInheritedPermissions] = useState<Set<string>>(new Set());
+  const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>([]);
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [hasChanges, setHasChanges] = useState(false);
   const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [successModal, setSuccessModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
 
-  // Role inheritance map (matches backend permissionService.js)
+  // Role inheritance map (matches backend)
   const roleInheritance: { [key: string]: string[] } = {
     executive: ['admin', 'sales', 'technician'],
     admin: ['technician'],
@@ -85,34 +86,85 @@ const AdminPermissionManager: React.FC = () => {
     technician: []
   };
 
+  // Role display order
+  const roleOrder = ['executive', 'admin', 'sales', 'technician'];
+
   // Load initial data
   useEffect(() => {
     if (!permissionLoading && isExecutive) {
-      loadInitialData();
+      loadData();
     }
   }, [permissionLoading, isExecutive]);
 
-  const loadInitialData = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
 
-      // Load roles
-      const rolesData = await permissionService.getRolesWithPermissions();
-      setRoles(rolesData.roles);
+      // Load all permissions and roles with their permissions in parallel (faster!)
+      const [allPermissions, rolesData] = await Promise.all([
+        permissionService.getAllPermissions(),
+        permissionService.getRolesWithPermissions()
+      ]);
 
-      // Load all permissions
-      const permsData = await permissionService.getAllPermissions();
-      setPermissions(permsData.permissions);
+      setPermissions(allPermissions || []);
 
-      // Set initial role to admin
-      if (rolesData.roles.length > 0) {
-        const adminRole = rolesData.roles.find((r: Role) => r.name === 'admin');
-        if (adminRole) {
-          setSelectedRole(adminRole.id);
-        } else {
-          setSelectedRole(rolesData.roles[0].id);
+      // Build role data structure using data already in rolesData (no additional API calls needed!)
+      const rolesWithPerms: Role[] = [];
+
+      for (const roleData of (rolesData?.roles || [])) {
+        // Use permissions already in roleData instead of fetching again
+        const directPermissions = new Set(
+          (roleData.permissions || [])
+            .filter((p: any) => p.is_granted)
+            .map((p: any) => p.permission_key)
+        );
+
+        // Calculate inherited permissions
+        const inheritedPerms = new Set<string>();
+        const inheritedFrom = roleInheritance[roleData.name] || [];
+
+        for (const inheritedRoleName of inheritedFrom) {
+          const inheritedRole = (rolesData?.roles || []).find((r: any) => r.name === inheritedRoleName);
+          if (inheritedRole) {
+            // Use permissions already in inheritedRole instead of fetching again
+            (inheritedRole.permissions || [])
+              .filter((p: any) => p.is_granted)
+              .forEach((p: any) => {
+                if (!directPermissions.has(p.permission_key)) {
+                  inheritedPerms.add(p.permission_key);
+                }
+              });
+          }
         }
+
+        rolesWithPerms.push({
+          id: roleData.id.toString(),
+          name: roleData.name,
+          display_name: roleData.displayName || roleData.display_name || roleData.name,
+          permissions: directPermissions,
+          inheritedPermissions: inheritedPerms
+        });
       }
+
+      // Sort roles by hierarchy
+      rolesWithPerms.sort((a, b) => roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name));
+      setRoles(rolesWithPerms);
+
+      // Group permissions by resource type
+      const groups = groupPermissions(allPermissions);
+      setPermissionGroups(groups);
+
+      // Expand all groups by default
+      const allExpanded = new Set<string>();
+      groups.forEach(group => {
+        allExpanded.add(group.resourceType);
+        group.categories.forEach(category => {
+          allExpanded.add(`${group.resourceType}:${category.categoryName}`);
+        });
+      });
+      setExpandedCategories(allExpanded);
+
+      setHasChanges(false);
     } catch (error) {
       setErrorModal({
         show: true,
@@ -123,56 +175,19 @@ const AdminPermissionManager: React.FC = () => {
     }
   };
 
-  // Load role permissions when role changes
-  useEffect(() => {
-    if (selectedRole && permissions && permissions.length > 0) {
-      loadRolePermissions(selectedRole);
-    }
-  }, [selectedRole, permissions]);
-
-  const loadRolePermissions = async (roleId: string) => {
-    try {
-      const roleData = await permissionService.getRolePermissions(roleId);
-      const role = roles.find(r => r.id === roleId);
-
-      // Get direct permissions for this role
-      const directPermissionKeys = new Set(roleData.permissions.map((p: Permission) => p.permission_key));
-      setSelectedPermissions(directPermissionKeys);
-
-      // Calculate inherited permissions
-      if (role) {
-        const inheritedRoles = roleInheritance[role.name] || [];
-        const inheritedPerms = new Set<string>();
-
-        for (const inheritedRoleName of inheritedRoles) {
-          const inheritedRole = roles.find(r => r.name === inheritedRoleName);
-          if (inheritedRole) {
-            const inheritedRoleData = await permissionService.getRolePermissions(inheritedRole.id);
-            inheritedRoleData.permissions.forEach((p: Permission) => {
-              inheritedPerms.add(p.permission_key);
-            });
-          }
-        }
-
-        setInheritedPermissions(inheritedPerms);
-      }
-
-      // Build permission tree
-      buildPermissionTree(permissions, directPermissionKeys, inheritedPerms);
-    } catch (error) {
-      setErrorModal({
-        show: true,
-        message: error instanceof Error ? error.message : 'Failed to load role permissions'
-      });
-    }
+  const getActionCategory = (actionType: string): string => {
+    if (actionType.includes('view') || actionType.includes('View')) return 'View Operations';
+    if (actionType.includes('add') || actionType.includes('Add')) return 'Add Operations';
+    if (actionType.includes('modify') || actionType.includes('Modify') || actionType.includes('edit') || actionType.includes('Edit')) return 'Modify Operations';
+    if (actionType.includes('delete') || actionType.includes('Delete')) return 'Delete Operations';
+    return 'Other Operations';
   };
 
-  const buildPermissionTree = (
-    perms: Permission[],
-    selected: Set<string>,
-    inherited: Set<string>
-  ) => {
-    // Group permissions by resource type
+  const groupPermissions = (perms: Permission[]): PermissionGroup[] => {
+    if (!perms || !Array.isArray(perms)) {
+      return [];
+    }
+
     const resourceGroups: { [key: string]: Permission[] } = {};
 
     perms.forEach(perm => {
@@ -182,83 +197,37 @@ const AdminPermissionManager: React.FC = () => {
       resourceGroups[perm.resource_type].push(perm);
     });
 
-    // Build tree structure
-    const tree: PermissionNode[] = Object.entries(resourceGroups).map(([resourceType, resourcePerms]) => {
-      // Group by action category
-      const actionCategories: { [key: string]: Permission[] } = {};
+    return Object.entries(resourceGroups)
+      .map(([resourceType, resourcePerms]) => {
+        // Group by action category
+        const categoryGroups: { [key: string]: Permission[] } = {};
 
-      resourcePerms.forEach(perm => {
-        const category = getActionCategory(perm.action_type);
-        if (!actionCategories[category]) {
-          actionCategories[category] = [];
-        }
-        actionCategories[category].push(perm);
-      });
-
-      // Build category nodes
-      const categoryNodes: PermissionNode[] = Object.entries(actionCategories).map(([category, categoryPerms]) => {
-        // Build permission leaf nodes
-        const permissionNodes: PermissionNode[] = categoryPerms.map(perm => {
-          const isInherited = inherited.has(perm.permission_key) && !selected.has(perm.permission_key);
-          return {
-            id: perm.id,
-            name: formatPermissionName(perm.action_type),
-            description: perm.description,
-            permissionKey: perm.permission_key,
-            level: 'permission' as const,
-            selected: selected.has(perm.permission_key),
-            indeterminate: false,
-            inherited: isInherited,
-            inheritedFrom: isInherited ? getInheritedFromRole(perm.permission_key) : undefined
-          };
+        resourcePerms.forEach(perm => {
+          const category = getActionCategory(perm.action_type);
+          if (!categoryGroups[category]) {
+            categoryGroups[category] = [];
+          }
+          categoryGroups[category].push(perm);
         });
 
-        // Calculate category selection state
-        const selectedCount = permissionNodes.filter(n => n.selected).length;
-        const categorySelected = selectedCount === permissionNodes.length && permissionNodes.length > 0;
-        const categoryIndeterminate = selectedCount > 0 && selectedCount < permissionNodes.length;
+        // Convert to categories array
+        const categories = Object.entries(categoryGroups).map(([categoryName, categoryPerms]) => ({
+          categoryName,
+          permissions: categoryPerms.sort((a, b) => a.action_type.localeCompare(b.action_type))
+        }));
+
+        // Sort categories (View, Add, Modify, Delete, Other)
+        const categoryOrder = ['View Operations', 'Add Operations', 'Modify Operations', 'Delete Operations', 'Other Operations'];
+        categories.sort((a, b) => categoryOrder.indexOf(a.categoryName) - categoryOrder.indexOf(b.categoryName));
 
         return {
-          id: `${resourceType}-${category}`,
-          name: category,
-          level: 'category' as const,
-          children: permissionNodes,
-          selected: categorySelected,
-          indeterminate: categoryIndeterminate
+          resourceType,
+          resourceName: formatResourceName(resourceType),
+          categories,
+          expanded: true
         };
-      });
-
-      // Calculate resource selection state
-      const allPermissionNodes = categoryNodes.flatMap(cat => cat.children || []);
-      const selectedCount = allPermissionNodes.filter(n => n.selected).length;
-      const resourceSelected = selectedCount === allPermissionNodes.length && allPermissionNodes.length > 0;
-      const resourceIndeterminate = selectedCount > 0 && selectedCount < allPermissionNodes.length;
-
-      return {
-        id: resourceType,
-        name: formatResourceName(resourceType),
-        level: 'resource' as const,
-        children: categoryNodes,
-        selected: resourceSelected,
-        indeterminate: resourceIndeterminate
-      };
-    });
-
-    setPermissionTree(tree);
-  };
-
-  const rebuildTree = (selected: Set<string>, inherited: Set<string>) => {
-    buildPermissionTree(permissions, selected, inherited);
-  };
-
-  const getActionCategory = (actionType: string): string => {
-    if (actionType.includes('add')) return 'Add Operations';
-    if (actionType.includes('modify')) return 'Modify Operations';
-    if (actionType.includes('delete') || actionType.includes('Delete')) {
-      return 'Delete Operations';
-    }
-    if (actionType.includes('view')) return 'View Operations';
-    return 'Other Operations';
+      })
+      .sort((a, b) => a.resourceName.localeCompare(b.resourceName));
   };
 
   const formatResourceName = (resourceType: string): string => {
@@ -268,7 +237,7 @@ const AdminPermissionManager: React.FC = () => {
       .join(' ');
   };
 
-  const formatPermissionName = (actionType: string): string => {
+  const formatActionName = (actionType: string): string => {
     return actionType
       .replace(/([A-Z])/g, ' $1')
       .replace(/_/g, ' ')
@@ -278,285 +247,162 @@ const AdminPermissionManager: React.FC = () => {
       .join(' ');
   };
 
-  const getInheritedFromRole = (permissionKey: string): string => {
-    const role = roles.find(r => r.id === selectedRole);
-    if (!role) return '';
-
-    const inheritedRoles = roleInheritance[role.name] || [];
-    return inheritedRoles.join(', ');
-  };
-
-  const handleNodeToggle = (node: PermissionNode, path: number[]) => {
-    const newSelected = new Set(selectedPermissions);
-
-    if (node.level === 'permission') {
-      // Toggle leaf node
-      if (node.permissionKey) {
-        if (newSelected.has(node.permissionKey)) {
-          newSelected.delete(node.permissionKey);
-        } else {
-          newSelected.add(node.permissionKey);
+  const togglePermission = (roleId: string, permissionKey: string) => {
+    setRoles(prevRoles => {
+      const newRoles = prevRoles.map(role => {
+        if (role.id === roleId) {
+          const newPermissions = new Set(role.permissions);
+          if (newPermissions.has(permissionKey)) {
+            newPermissions.delete(permissionKey);
+          } else {
+            newPermissions.add(permissionKey);
+          }
+          return { ...role, permissions: newPermissions };
         }
-      }
-    } else {
-      // Toggle parent node - propagate to all children
-      const newState = !node.selected && !node.indeterminate;
-      toggleNodeChildren(node, newState, newSelected);
-    }
-
-    setSelectedPermissions(newSelected);
-    buildPermissionTree(permissions, newSelected, inheritedPermissions);
+        return role;
+      });
+      return newRoles;
+    });
+    setHasChanges(true);
   };
 
-  const toggleNodeChildren = (node: PermissionNode, select: boolean, selectedSet: Set<string>) => {
-    if (node.level === 'permission' && node.permissionKey) {
-      if (select) {
-        selectedSet.add(node.permissionKey);
-      } else {
-        selectedSet.delete(node.permissionKey);
-      }
+  const hasPermission = (role: Role, permissionKey: string): { has: boolean; inherited: boolean } => {
+    if (role.permissions.has(permissionKey)) {
+      return { has: true, inherited: false };
     }
-
-    if (node.children) {
-      node.children.forEach(child => toggleNodeChildren(child, select, selectedSet));
+    if (role.inheritedPermissions.has(permissionKey)) {
+      return { has: true, inherited: true };
     }
+    return { has: false, inherited: false };
   };
 
   const handleSave = async () => {
-    if (!selectedRole) {
-      setErrorModal({ show: true, message: 'Please select a role first' });
-      return;
-    }
-
     try {
       setSaving(true);
 
-      // Get permission IDs from selected keys
-      const selectedPermissionIds = permissions
-        .filter(p => selectedPermissions.has(p.permission_key))
-        .map(p => p.id);
+      // Save each role's permissions (except executive - it's immutable)
+      for (const role of roles) {
+        if (role.name === 'executive') {
+          continue; // Skip executive role - it always has all permissions
+        }
 
-      await permissionService.updateRolePermissions(selectedRole, selectedPermissionIds);
+        await permissionService.updateRolePermissions(
+          role.id,
+          permissions,
+          role.permissions
+        );
+      }
 
       setSuccessModal({ show: true, message: 'Role permissions updated successfully!' });
+      setHasChanges(false);
 
-      // Reload role permissions
-      await loadRolePermissions(selectedRole);
+      // Reload to refresh inherited permissions
+      await loadData();
     } catch (error) {
       setErrorModal({
         show: true,
-        message: error instanceof Error ? error.message : 'Failed to save role permissions'
+        message: error instanceof Error ? error.message : 'Failed to save permissions'
       });
     } finally {
       setSaving(false);
     }
   };
 
-  // Bulk operation: Copy permissions from another role
-  const handleCopyFromRole = async (sourceRoleName: string) => {
-    if (!selectedRole || sourceRoleName === selectedRole) {
-      return;
-    }
-
-    try {
-      // Find the source role's permissions
-      const sourceRoleData = roles.find(r => r.name === sourceRoleName);
-      if (!sourceRoleData) {
-        setErrorModal({ show: true, message: 'Source role not found' });
-        return;
-      }
-
-      // Load permissions for source role
-      const sourcePermissionsData = await permissionService.getRolePermissions(sourceRoleName);
-      const sourcePermissionKeys = new Set(sourcePermissionsData.permissions.map((p: Permission) => p.permission_key));
-
-      // Merge with current selections
-      const merged = new Set([...selectedPermissions, ...sourcePermissionKeys]);
-      setSelectedPermissions(merged);
-      rebuildTree(merged, inheritedPermissions);
-
-      setSuccessModal({ show: true, message: `Copied ${sourcePermissionKeys.size} permissions from ${sourceRoleName}` });
-    } catch (error) {
-      setErrorModal({
-        show: true,
-        message: error instanceof Error ? error.message : 'Failed to copy permissions'
-      });
-    }
+  const handleReset = () => {
+    loadData();
+    setHasChanges(false);
   };
 
-  // Bulk operation: Select all permissions in a category
-  const handleSelectAllInCategory = (categoryNode: PermissionNode) => {
-    const newSelections = new Set(selectedPermissions);
-
-    // Add all non-inherited permissions in this category
-    if (categoryNode.children) {
-      categoryNode.children.forEach(permNode => {
-        if (permNode.permissionKey && !permNode.inherited) {
-          newSelections.add(permNode.permissionKey);
+  const toggleAllPermissionsForRole = (roleId: string, enable: boolean) => {
+    setRoles(prevRoles => {
+      const newRoles = prevRoles.map(role => {
+        if (role.id === roleId) {
+          if (enable) {
+            // Add all non-inherited permissions
+            const allPerms = new Set(role.permissions);
+            permissions.forEach(p => {
+              if (!role.inheritedPermissions.has(p.permission_key)) {
+                allPerms.add(p.permission_key);
+              }
+            });
+            return { ...role, permissions: allPerms };
+          } else {
+            // Remove all permissions
+            return { ...role, permissions: new Set() };
+          }
         }
+        return role;
       });
-    }
-
-    setSelectedPermissions(newSelections);
-    rebuildTree(newSelections, inheritedPermissions);
+      return newRoles;
+    });
+    setHasChanges(true);
   };
 
-  // Bulk operation: Deselect all permissions in a category
-  const handleDeselectAllInCategory = (categoryNode: PermissionNode) => {
-    const newSelections = new Set(selectedPermissions);
-
-    // Remove all permissions in this category
-    if (categoryNode.children) {
-      categoryNode.children.forEach(permNode => {
-        if (permNode.permissionKey) {
-          newSelections.delete(permNode.permissionKey);
+  const toggleResourceGroup = (resourceType: string) => {
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(resourceType)) {
+        newSet.delete(resourceType);
+        // Also collapse all categories under this resource
+        const group = permissionGroups.find(g => g.resourceType === resourceType);
+        if (group) {
+          group.categories.forEach(cat => {
+            newSet.delete(`${resourceType}:${cat.categoryName}`);
+          });
         }
-      });
-    }
-
-    setSelectedPermissions(newSelections);
-    rebuildTree(newSelections, inheritedPermissions);
-  };
-
-  // Bulk operation: Reset to default role permissions
-  const handleResetToDefault = async () => {
-    if (!selectedRole) {
-      return;
-    }
-
-    try {
-      // Reload fresh from database
-      await loadRolePermissions(selectedRole);
-      setSuccessModal({ show: true, message: 'Permissions reset to saved state' });
-    } catch (error) {
-      setErrorModal({
-        show: true,
-        message: error instanceof Error ? error.message : 'Failed to reset permissions'
-      });
-    }
-  };
-
-  const renderCheckbox = (node: PermissionNode, path: number[]) => {
-    if (node.inherited) {
-      // Inherited permissions shown as checked but disabled
-      return (
-        <div className="relative" title={`Inherited from ${node.inheritedFrom}`}>
-          <CheckSquare className={`w-5 h-5 ${themeClasses.text.accent} opacity-50`} />
-          <Info className={`w-3 h-3 ${themeClasses.text.accent} absolute -top-1 -right-1`} />
-        </div>
-      );
-    }
-
-    if (node.indeterminate) {
-      return (
-        <MinusSquare
-          className={`w-5 h-5 ${themeClasses.text.secondary} cursor-pointer hover:${themeClasses.text.primary}`}
-          onClick={() => handleNodeToggle(node, path)}
-        />
-      );
-    }
-
-    if (node.selected) {
-      return (
-        <CheckSquare
-          className={`w-5 h-5 ${themeClasses.text.success} cursor-pointer hover:text-green-800 dark:hover:text-green-600`}
-          onClick={() => handleNodeToggle(node, path)}
-        />
-      );
-    }
-
-    return (
-      <Square
-        className={`w-5 h-5 ${themeClasses.text.muted} cursor-pointer hover:${themeClasses.text.secondary}`}
-        onClick={() => handleNodeToggle(node, path)}
-      />
-    );
-  };
-
-  // Separate component for tree nodes to properly use hooks
-  const PermissionTreeNode: React.FC<{
-    node: PermissionNode;
-    path: number[];
-    depth: number;
-    searchQuery: string;
-    onToggle: (node: PermissionNode, path: number[]) => void;
-    renderCheckbox: (node: PermissionNode, path: number[]) => JSX.Element;
-  }> = ({ node, path, depth, searchQuery, onToggle, renderCheckbox }) => {
-    const [expanded, setExpanded] = useState(true);
-
-    // Filter by search query
-    if (searchQuery) {
-      const matchesSearch =
-        node.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        node.description?.toLowerCase().includes(searchQuery.toLowerCase());
-
-      const hasMatchingChildren = node.children?.some(child =>
-        child.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        child.description?.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-
-      if (!matchesSearch && !hasMatchingChildren) {
-        return null;
+      } else {
+        newSet.add(resourceType);
       }
-    }
-
-    return (
-      <div key={node.id} className="w-full">
-        <div
-          className={`flex items-center gap-2 py-2 px-3 ${themeClasses.bg.hover} rounded ${
-            depth === 0 ? 'font-semibold' : depth === 1 ? 'font-medium' : ''
-          }`}
-          style={{ paddingLeft: `${depth * 24 + 12}px` }}
-        >
-          {node.children && node.children.length > 0 && (
-            <button onClick={() => setExpanded(!expanded)} className="p-0.5">
-              {expanded ? (
-                <ChevronDown className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
-              ) : (
-                <ChevronRight className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
-              )}
-            </button>
-          )}
-
-          {!node.children && <div className="w-5" />}
-
-          {renderCheckbox(node, path)}
-
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className={node.inherited ? themeClasses.text.accent : themeClasses.text.primary}>
-                {node.name}
-              </span>
-              {node.inherited && (
-                <span className={`text-xs ${themeClasses.text.accent} bg-blue-50 dark:bg-blue-900/30 px-2 py-0.5 rounded`}>
-                  Inherited
-                </span>
-              )}
-            </div>
-            {node.description && (
-              <div className={`text-xs ${themeClasses.text.tertiary} mt-0.5`}>{node.description}</div>
-            )}
-          </div>
-        </div>
-
-        {expanded && node.children && (
-          <div>
-            {node.children.map((child, index) => (
-              <PermissionTreeNode
-                key={child.id}
-                node={child}
-                path={[...path, index]}
-                depth={depth + 1}
-                searchQuery={searchQuery}
-                onToggle={onToggle}
-                renderCheckbox={renderCheckbox}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
+      return newSet;
+    });
   };
+
+  const toggleCategory = (resourceType: string, categoryName: string) => {
+    const key = `${resourceType}:${categoryName}`;
+    setExpandedCategories(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  const expandAll = () => {
+    const allExpanded = new Set<string>();
+    permissionGroups.forEach(group => {
+      allExpanded.add(group.resourceType);
+      group.categories.forEach(category => {
+        allExpanded.add(`${group.resourceType}:${category.categoryName}`);
+      });
+    });
+    setExpandedCategories(allExpanded);
+  };
+
+  const collapseAll = () => {
+    setExpandedCategories(new Set());
+  };
+
+  // Filter permissions by search
+  const filteredGroups = permissionGroups
+    .map(group => ({
+      ...group,
+      categories: group.categories
+        .map(category => ({
+          ...category,
+          permissions: category.permissions.filter(perm =>
+            searchQuery === '' ||
+            perm.action_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            perm.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            group.resourceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            category.categoryName.toLowerCase().includes(searchQuery.toLowerCase())
+          )
+        }))
+        .filter(category => category.permissions.length > 0)
+    }))
+    .filter(group => group.categories.length > 0);
 
   if (permissionLoading) {
     return (
@@ -594,181 +440,356 @@ const AdminPermissionManager: React.FC = () => {
 
   return (
     <div className={`${themeClasses.bg.card} rounded-lg ${themeClasses.shadow.sm} border ${themeClasses.border.primary} p-6`}>
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
           <Shield className={`w-6 h-6 ${themeClasses.text.accent}`} />
-          <h2 className={`text-xl font-bold ${themeClasses.text.primary}`}>Permission Management</h2>
+          <div>
+            <h2 className={`text-xl font-bold ${themeClasses.text.primary}`}>Permission Matrix</h2>
+            <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+              Manage permissions for all roles in one view
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-2">
+          {hasChanges && (
+            <button
+              onClick={handleReset}
+              disabled={saving}
+              className={`flex items-center gap-2 px-4 py-2 border ${themeClasses.border.primary} ${themeClasses.text.secondary} rounded-lg hover:${themeClasses.bg.hover} disabled:opacity-50 transition-colors`}
+            >
+              <RotateCcw className="w-4 h-4" />
+              Reset
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={saving || !hasChanges}
+            className={`flex items-center gap-2 px-6 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium ${
+              hasChanges ? 'ring-2 ring-green-300 dark:ring-green-800' : ''
+            }`}
+          >
+            {saving ? (
+              <>
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                Saving...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Save Changes {hasChanges && '(*)'}
+              </>
+            )}
+          </button>
         </div>
       </div>
 
-      {/* Role Selector */}
-      <div className="mb-6">
-        <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-          Select Role to Manage
-        </label>
-        <select
-          value={selectedRole}
-          onChange={(e) => setSelectedRole(e.target.value)}
-          className={`w-full max-w-md px-3 py-2 border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} rounded-lg focus:ring-2 ${themeClasses.ring.primary} focus:border-transparent`}
-          disabled={saving}
-        >
-          <option value="">Choose a role...</option>
-          {roles && roles.map(role => (
-            <option key={role.id} value={role.id}>
-              {role.display_name}
-            </option>
-          ))}
-        </select>
+      {/* Instructions */}
+      <div className={`mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 border-l-4 border-blue-500 rounded-r`}>
+        <div className="flex items-start gap-3">
+          <Info className="w-5 h-5 text-blue-500 flex-shrink-0 mt-0.5" />
+          <div>
+            <h3 className={`text-sm font-semibold ${themeClasses.text.primary} mb-1`}>How to use:</h3>
+            <ul className={`text-sm ${themeClasses.text.secondary} space-y-1 list-disc list-inside`}>
+              <li>Click folder icons to expand/collapse permission groups</li>
+              <li>Check/uncheck boxes to grant or revoke permissions for each role</li>
+              <li>Use column header buttons to select/deselect all permissions for a role</li>
+              <li>Grayed checkboxes with lock icons are inherited from other roles</li>
+              <li>Changes are highlighted - click "Save Changes" when ready</li>
+            </ul>
+          </div>
+        </div>
       </div>
 
-      {selectedRole && (
-        <>
-          {/* Search Bar */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${themeClasses.text.muted}`} />
-              <input
-                type="text"
-                placeholder="Search permissions..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`w-full pl-10 pr-4 py-2 border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} rounded-lg focus:ring-2 ${themeClasses.ring.primary} focus:border-transparent`}
-              />
-            </div>
-          </div>
+      {/* Search Bar & Controls */}
+      <div className="mb-4 flex gap-2">
+        <div className="relative flex-1">
+          <Search className={`absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 ${themeClasses.text.muted}`} />
+          <input
+            type="text"
+            placeholder="Search permissions by name or resource..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className={`w-full pl-10 pr-4 py-2 border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} rounded-lg focus:ring-2 ${themeClasses.ring.primary} focus:border-transparent`}
+          />
+        </div>
+        <button
+          onClick={expandAll}
+          className={`px-4 py-2 border ${themeClasses.border.primary} ${themeClasses.text.secondary} rounded-lg hover:${themeClasses.bg.hover} transition-colors whitespace-nowrap`}
+        >
+          Expand All
+        </button>
+        <button
+          onClick={collapseAll}
+          className={`px-4 py-2 border ${themeClasses.border.primary} ${themeClasses.text.secondary} rounded-lg hover:${themeClasses.bg.hover} transition-colors whitespace-nowrap`}
+        >
+          Collapse All
+        </button>
+      </div>
 
-          {/* Permission Tree */}
-          <div className={`border ${themeClasses.border.primary} rounded-lg max-h-[600px] overflow-y-auto mb-4`}>
-            {permissionTree.length > 0 ? (
-              <div className="py-2">
-                {permissionTree.map((node, index) => (
-                  <PermissionTreeNode
-                    key={node.id}
-                    node={node}
-                    path={[index]}
-                    depth={0}
-                    searchQuery={searchQuery}
-                    onToggle={handleNodeToggle}
-                    renderCheckbox={renderCheckbox}
-                  />
+      {/* Permission Matrix Table */}
+      <div className={`border ${themeClasses.border.primary} rounded-lg overflow-hidden`}>
+        <div className="overflow-x-auto">
+          <table className="w-full">
+            {/* Table Header */}
+            <thead className={`${themeClasses.bg.tertiary} sticky top-0 z-10`}>
+              <tr>
+                <th className={`px-4 py-3 text-left ${themeClasses.text.primary} font-semibold border-r ${themeClasses.border.primary} min-w-[350px]`}>
+                  Permission
+                </th>
+                {roles.map(role => (
+                  <th
+                    key={role.id}
+                    className={`px-4 py-3 text-center ${themeClasses.text.primary} font-semibold border-r ${themeClasses.border.primary} min-w-[140px] ${
+                      role.name === 'executive' ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <div className="flex items-center gap-2">
+                        <div className="font-bold">{role.display_name}</div>
+                        {role.name === 'executive' && (
+                          <Lock className="w-4 h-4 text-blue-500" title="Executive role always has all permissions" />
+                        )}
+                      </div>
+                      <div className="text-xs font-normal">
+                        <span className={themeClasses.text.success}>
+                          {role.permissions.size}
+                        </span>
+                        {role.inheritedPermissions.size > 0 && (
+                          <span className={themeClasses.text.tertiary}>
+                            {' '}+ {role.inheritedPermissions.size} inherited
+                          </span>
+                        )}
+                      </div>
+                      {role.name !== 'executive' && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => toggleAllPermissionsForRole(role.id, true)}
+                            className={`text-xs px-2 py-1 rounded ${themeClasses.bg.primary} hover:${themeClasses.bg.hover} ${themeClasses.text.secondary} border ${themeClasses.border.primary}`}
+                            title="Select all"
+                          >
+                            All
+                          </button>
+                          <button
+                            onClick={() => toggleAllPermissionsForRole(role.id, false)}
+                            className={`text-xs px-2 py-1 rounded ${themeClasses.bg.primary} hover:${themeClasses.bg.hover} ${themeClasses.text.secondary} border ${themeClasses.border.primary}`}
+                            title="Clear all"
+                          >
+                            None
+                          </button>
+                        </div>
+                      )}
+                      {role.name === 'executive' && (
+                        <div className="text-xs text-blue-600 dark:text-blue-400">
+                          Read-only
+                        </div>
+                      )}
+                    </div>
+                  </th>
                 ))}
-              </div>
-            ) : (
-              <div className={`text-center py-12 ${themeClasses.text.tertiary}`}>
-                No permissions found
-              </div>
-            )}
-          </div>
+              </tr>
+            </thead>
 
-          {/* Bulk Operations */}
-          <div className={`p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border ${themeClasses.border.primary} mb-4`}>
-            <h4 className={`text-sm font-semibold ${themeClasses.text.secondary} mb-3`}>Bulk Operations</h4>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {/* Copy from Role */}
-              <div>
-                <label className={`block text-xs ${themeClasses.text.tertiary} mb-1`}>Copy From Role:</label>
-                <select
-                  onChange={(e) => {
-                    if (e.target.value) {
-                      handleCopyFromRole(e.target.value);
-                      e.target.value = ''; // Reset dropdown
-                    }
-                  }}
-                  className={`w-full px-3 py-2 text-sm border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} rounded-lg hover:border-blue-400 dark:hover:border-blue-500 focus:border-blue-500 dark:focus:border-blue-400 focus:ring-1 ${themeClasses.ring.primary}`}
-                  disabled={!selectedRole}
-                >
-                  <option value="">Select a role...</option>
-                  {roles
-                    .filter(r => r.name !== selectedRole)
-                    .map(role => (
-                      <option key={role.id} value={role.name}>
-                        {role.display_name}
-                      </option>
-                    ))}
-                </select>
-              </div>
+            {/* Table Body */}
+            <tbody>
+              {filteredGroups.map((group) => {
+                const isResourceExpanded = expandedCategories.has(group.resourceType);
+                const totalPermissions = group.categories.reduce((sum, cat) => sum + cat.permissions.length, 0);
 
-              {/* Select All */}
-              <button
-                onClick={() => {
-                  // Select all non-inherited permissions
-                  const allPerms = new Set<string>();
-                  permissions.forEach(p => {
-                    if (!inheritedPermissions.has(p.permission_key)) {
-                      allPerms.add(p.permission_key);
-                    }
-                  });
-                  setSelectedPermissions(allPerms);
-                  rebuildTree(allPerms, inheritedPermissions);
-                }}
-                disabled={!selectedRole}
-                className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <CheckCircle className="w-4 h-4" />
-                Select All
-              </button>
+                return (
+                  <React.Fragment key={group.resourceType}>
+                    {/* Resource Group Header */}
+                    <tr className={`${themeClasses.bg.secondary} border-t-2 ${themeClasses.border.primary}`}>
+                      <td
+                        colSpan={roles.length + 1}
+                        className="px-4 py-2"
+                      >
+                        <button
+                          onClick={() => toggleResourceGroup(group.resourceType)}
+                          className="flex items-center gap-2 w-full hover:opacity-75 transition-opacity"
+                        >
+                          {isResourceExpanded ? (
+                            <FolderOpen className={`w-5 h-5 ${themeClasses.text.accent}`} />
+                          ) : (
+                            <Folder className={`w-5 h-5 ${themeClasses.text.accent}`} />
+                          )}
+                          {isResourceExpanded ? (
+                            <ChevronDown className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
+                          ) : (
+                            <ChevronRight className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
+                          )}
+                          <span className={`font-semibold ${themeClasses.text.primary}`}>
+                            {group.resourceName}
+                          </span>
+                          <span className={`text-sm ${themeClasses.text.tertiary}`}>
+                            ({totalPermissions} permissions)
+                          </span>
+                        </button>
+                      </td>
+                    </tr>
 
-              {/* Reset to Default */}
-              <button
-                onClick={handleResetToDefault}
-                disabled={!selectedRole}
-                className="flex items-center justify-center gap-2 px-4 py-2 text-sm bg-orange-600 dark:bg-orange-700 text-white rounded-lg hover:bg-orange-700 dark:hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset to Saved
-              </button>
-            </div>
-          </div>
+                    {/* Categories and Permissions */}
+                    {isResourceExpanded && group.categories.map((category) => {
+                      const categoryKey = `${group.resourceType}:${category.categoryName}`;
+                      const isCategoryExpanded = expandedCategories.has(categoryKey);
 
-          {/* Actions */}
-          <div className={`flex items-center justify-between pt-4 border-t ${themeClasses.border.primary}`}>
-            <div className={`text-sm ${themeClasses.text.secondary}`}>
-              <span className="font-medium">{selectedPermissions.size}</span> direct permissions selected
-              {inheritedPermissions.size > 0 && (
-                <> + <span className="font-medium">{inheritedPermissions.size}</span> inherited</>
+                      return (
+                        <React.Fragment key={categoryKey}>
+                          {/* Category Header */}
+                          <tr className={`${themeClasses.bg.tertiary} border-t ${themeClasses.border.primary}`}>
+                            <td
+                              colSpan={roles.length + 1}
+                              className="px-4 py-2 pl-12"
+                            >
+                              <button
+                                onClick={() => toggleCategory(group.resourceType, category.categoryName)}
+                                className="flex items-center gap-2 w-full hover:opacity-75 transition-opacity"
+                              >
+                                {isCategoryExpanded ? (
+                                  <ChevronDown className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                ) : (
+                                  <ChevronRight className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                )}
+                                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+                                  {category.categoryName}
+                                </span>
+                                <span className={`text-xs ${themeClasses.text.tertiary}`}>
+                                  ({category.permissions.length})
+                                </span>
+                              </button>
+                            </td>
+                          </tr>
+
+                          {/* Permission Rows */}
+                          {isCategoryExpanded && category.permissions.map((permission) => (
+                            <tr
+                              key={permission.id}
+                              className={`border-t ${themeClasses.border.primary} hover:${themeClasses.bg.hover} transition-colors`}
+                            >
+                              {/* Permission Name & Description */}
+                              <td className={`px-4 py-3 pl-20 border-r ${themeClasses.border.primary}`}>
+                                <div>
+                                  <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                    {formatActionName(permission.action_type)}
+                                  </div>
+                                  <div className={`text-xs ${themeClasses.text.tertiary} mt-0.5`}>
+                                    {permission.description}
+                                  </div>
+                                  <code className={`text-xs ${themeClasses.text.muted} mt-1 block`}>
+                                    {permission.permission_key}
+                                  </code>
+                                </div>
+                              </td>
+
+                              {/* Role Checkboxes */}
+                              {roles.map(role => {
+                                const permState = hasPermission(role, permission.permission_key);
+                                const isInherited = permState.inherited;
+                                const isChecked = permState.has;
+                                const isExecutive = role.name === 'executive';
+
+                                return (
+                                  <td
+                                    key={role.id}
+                                    className={`px-4 py-3 text-center border-r ${themeClasses.border.primary} ${
+                                      isExecutive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                                    }`}
+                                  >
+                                    {isExecutive ? (
+                                      <div className="flex items-center justify-center gap-1" title="Executive role always has all permissions (read-only)">
+                                        <CheckSquare className={`w-5 h-5 text-blue-500 opacity-60`} />
+                                        <Lock className={`w-3 h-3 text-blue-500`} />
+                                      </div>
+                                    ) : isInherited ? (
+                                      <div className="flex items-center justify-center gap-1" title="Inherited from other role">
+                                        <CheckSquare className={`w-5 h-5 ${themeClasses.text.accent} opacity-50`} />
+                                        <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => togglePermission(role.id, permission.permission_key)}
+                                        className="mx-auto hover:scale-110 transition-transform"
+                                      >
+                                        {isChecked ? (
+                                          <CheckSquare className={`w-5 h-5 ${themeClasses.text.success} hover:text-green-800 dark:hover:text-green-600`} />
+                                        ) : (
+                                          <Square className={`w-5 h-5 ${themeClasses.text.muted} hover:${themeClasses.text.secondary}`} />
+                                        )}
+                                      </button>
+                                    )}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          ))}
+                        </React.Fragment>
+                      );
+                    })}
+                  </React.Fragment>
+                );
+              })}
+
+              {filteredGroups.length === 0 && (
+                <tr>
+                  <td colSpan={roles.length + 1} className={`px-4 py-12 text-center ${themeClasses.text.tertiary}`}>
+                    No permissions found matching "{searchQuery}"
+                  </td>
+                </tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Legend */}
+      <div className={`mt-4 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
+        <h4 className={`text-sm font-semibold ${themeClasses.text.secondary} mb-2`}>Legend:</h4>
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm ${themeClasses.text.tertiary}`}>
+          <div className="flex items-center gap-2">
+            <CheckSquare className={`w-4 h-4 ${themeClasses.text.success}`} />
+            <span>Direct permission (can be changed)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <CheckSquare className={`w-4 h-4 ${themeClasses.text.accent} opacity-50`} />
+              <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
+            </div>
+            <span>Inherited permission (automatic)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              <CheckSquare className={`w-4 h-4 text-blue-500 opacity-60`} />
+              <Lock className={`w-3 h-3 text-blue-500`} />
+            </div>
+            <span>Executive role (read-only, has all)</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <Square className={`w-4 h-4 ${themeClasses.text.muted}`} />
+            <span>No permission</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Save Reminder at Bottom */}
+      {hasChanges && (
+        <div className={`mt-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 rounded-r`}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+              <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                You have unsaved changes. Click "Save Changes" to apply them.
+              </p>
             </div>
             <button
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 dark:bg-blue-700 text-white rounded-lg hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 dark:bg-green-700 text-white rounded-lg hover:bg-green-700 dark:hover:bg-green-600 disabled:opacity-50 transition-colors font-medium"
             >
-              {saving ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="w-4 h-4" />
-                  Save Permissions
-                </>
-              )}
+              <Save className="w-4 h-4" />
+              Save Now
             </button>
           </div>
-
-          {/* Legend */}
-          <div className={`mt-4 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
-            <h4 className={`text-sm font-semibold ${themeClasses.text.secondary} mb-2`}>Legend:</h4>
-            <div className={`grid grid-cols-3 gap-4 text-xs ${themeClasses.text.tertiary}`}>
-              <div className="flex items-center gap-2">
-                <CheckSquare className={`w-4 h-4 ${themeClasses.text.success}`} />
-                <span>Direct Permission</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <CheckSquare className={`w-4 h-4 ${themeClasses.text.accent} opacity-50`} />
-                  <Info className={`w-2 h-2 ${themeClasses.text.accent} absolute -top-0.5 -right-0.5`} />
-                </div>
-                <span>Inherited Permission</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <MinusSquare className={`w-4 h-4 ${themeClasses.text.secondary}`} />
-                <span>Partially Selected</span>
-              </div>
-            </div>
-          </div>
-        </>
+        </div>
       )}
 
       {/* Error Modal */}
