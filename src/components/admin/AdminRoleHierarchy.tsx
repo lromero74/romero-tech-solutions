@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 import { ArrowDown, Shield, Users, Building, CheckCircle, Info } from 'lucide-react';
+import { permissionService } from '../../services/permissionService';
 
 interface Role {
   id: number;
@@ -25,7 +26,6 @@ interface RoleWithPermissions {
 }
 
 const AdminRoleHierarchy: React.FC = () => {
-  const { themeClasses } = useTheme();
   const [rolesData, setRolesData] = useState<RoleWithPermissions[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -40,17 +40,7 @@ const AdminRoleHierarchy: React.FC = () => {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('/api/admin/roles-with-permissions', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch role hierarchy');
-      }
-
-      const data = await response.json();
+      const data = await permissionService.getRolesWithPermissions();
 
       // Build hierarchy with inheritance information
       const hierarchy = buildHierarchy(data.roles);
@@ -75,13 +65,19 @@ const AdminRoleHierarchy: React.FC = () => {
     // Sort roles by hierarchy level (top to bottom)
     const roleOrder = ['executive', 'admin', 'sales', 'technician'];
     const sortedRoles = roles.sort((a, b) => {
-      return roleOrder.indexOf(a.role.name) - roleOrder.indexOf(b.role.name);
+      return roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name);
     });
 
-    // Add inheritance information
+    // Convert flat structure to expected format with inheritance information
     return sortedRoles.map(roleData => ({
-      ...roleData,
-      inheritedFrom: inheritanceMap[roleData.role.name] || []
+      role: {
+        id: roleData.id,
+        name: roleData.name,
+        description: roleData.description,
+        is_active: roleData.isActive
+      },
+      permissions: roleData.permissions || [],
+      inheritedFrom: inheritanceMap[roleData.name] || []
     }));
   };
 

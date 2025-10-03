@@ -237,7 +237,7 @@ const AdminServiceTypes: React.FC = () => {
         <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Service Types Management</h1>
         <button
           onClick={() => setShowForm(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700"
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 dark:bg-green-700 hover:bg-green-700 dark:hover:bg-green-600"
         >
           <Plus className="w-4 h-4 mr-2" />
           Add Service Type
@@ -259,7 +259,7 @@ const AdminServiceTypes: React.FC = () => {
         <select
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value)}
-          className={`px-4 py-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.primary}`}
+          className={`px-4 py-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary}`}
         >
           <option value="sort_order">Sort Order</option>
           <option value="name_en">Name</option>
@@ -277,17 +277,17 @@ const AdminServiceTypes: React.FC = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Service Types</div>
-          <div className="text-2xl font-bold text-green-600">{serviceTypes.length}</div>
+          <div className={`text-2xl font-bold ${themeClasses.text.success}`}>{serviceTypes.length}</div>
         </div>
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Active</div>
-          <div className="text-2xl font-bold text-blue-600">
+          <div className={`text-2xl font-bold ${themeClasses.text.accent}`}>
             {serviceTypes.filter(t => t.is_active).length}
           </div>
         </div>
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>System Types</div>
-          <div className="text-2xl font-bold text-purple-600">
+          <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
             {serviceTypes.filter(t => t.is_system).length}
           </div>
         </div>
@@ -318,7 +318,7 @@ const AdminServiceTypes: React.FC = () => {
                     </div>
                   </div>
                   {type.is_system && (
-                    <span className="text-xs px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                    <span className="text-xs px-2 py-1 bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 rounded">
                       System
                     </span>
                   )}
@@ -331,7 +331,7 @@ const AdminServiceTypes: React.FC = () => {
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEdit(type)}
-                    className="flex-1 inline-flex items-center justify-center px-3 py-1 text-sm border border-gray-300 rounded hover:bg-gray-50"
+                    className={`flex-1 inline-flex items-center justify-center px-3 py-1 text-sm border ${themeClasses.border.primary} rounded hover:bg-gray-50 dark:hover:bg-gray-700 ${themeClasses.text.primary}`}
                   >
                     <Edit className="w-4 h-4 mr-1" />
                     Edit
@@ -340,8 +340,8 @@ const AdminServiceTypes: React.FC = () => {
                     onClick={() => handleToggleActive(type)}
                     className={`px-3 py-1 text-sm rounded ${
                       type.is_active
-                        ? 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
-                        : 'bg-green-100 text-green-800 hover:bg-green-200'
+                        ? 'bg-yellow-100 dark:bg-yellow-900 text-yellow-800 dark:text-yellow-200 hover:bg-yellow-200 dark:hover:bg-yellow-800'
+                        : 'bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 hover:bg-green-200 dark:hover:bg-green-800'
                     }`}
                   >
                     {type.is_active ? 'Deactivate' : 'Activate'}
@@ -349,7 +349,7 @@ const AdminServiceTypes: React.FC = () => {
                   {!type.is_system && (
                     <button
                       onClick={() => handleDelete(type)}
-                      className="px-3 py-1 text-sm bg-red-100 text-red-800 rounded hover:bg-red-200"
+                      className="px-3 py-1 text-sm bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 rounded hover:bg-red-200 dark:hover:bg-red-800"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -363,7 +363,7 @@ const AdminServiceTypes: React.FC = () => {
 
       {/* Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50">
+        <div className="fixed inset-0 bg-gray-600 dark:bg-black bg-opacity-50 dark:bg-opacity-70 overflow-y-auto h-full w-full z-50">
           <div className={`relative top-10 mx-auto p-6 border w-full max-w-2xl shadow-lg rounded-md ${themeClasses.bg.modal} max-h-screen overflow-y-auto mb-10`}>
             <div className="flex justify-between items-center mb-4">
               <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
@@ -503,7 +503,7 @@ const AdminServiceTypes: React.FC = () => {
                         onClick={() => setFormData({ ...formData, icon: key })}
                         className={`p-2 rounded-md border-2 flex items-center justify-center h-12 ${
                           formData.icon === key
-                            ? 'border-green-500 bg-green-50'
+                            ? 'border-green-500 dark:border-green-400 bg-green-50 dark:bg-green-900/30'
                             : themeClasses.border.primary
                         }`}
                         title={iconData.name}
@@ -527,7 +527,7 @@ const AdminServiceTypes: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleCloseForm}
-                  className="px-4 py-2 border border-gray-300 text-sm font-medium rounded-md hover:bg-gray-50"
+                  className={`px-4 py-2 border ${themeClasses.border.primary} text-sm font-medium rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 ${themeClasses.text.primary}`}
                 >
                   Cancel
                 </button>

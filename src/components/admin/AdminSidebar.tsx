@@ -44,7 +44,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       ]
     },
     {
-      title: 'People Management',
+      title: 'People & HR',
       items: [
         { id: 'employees', label: 'Employees', icon: Users },
         { id: 'employee-calendar', label: 'Employee Calendar', icon: Calendar }
@@ -59,26 +59,36 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       ]
     },
     {
-      title: 'Service Management',
+      title: 'Service Operations',
       items: [
-        { id: 'services', label: 'Services', icon: Settings },
+        { id: 'services', label: 'Service Types', icon: Settings },
         { id: 'service-requests', label: 'Service Requests', icon: ClipboardList },
-        { id: 'invoices', label: 'Invoices', icon: Receipt },
         { id: 'workflow-configuration', label: 'Workflow Configuration', icon: Workflow },
         { id: 'closure-reasons', label: 'Closure Reasons', icon: XCircle }
       ]
     },
     {
-      title: 'System Management',
+      title: 'Billing & Finance',
+      items: [
+        { id: 'invoices', label: 'Invoices', icon: Receipt },
+        { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock },
+        { id: 'pricing-settings', label: 'Pricing Settings', icon: DollarSign }
+      ]
+    },
+    {
+      title: 'Security & Permissions',
       items: [
         { id: 'roles', label: 'Roles', icon: UserCog },
         { id: 'permissions', label: 'Permissions', icon: Shield },
         { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network },
         { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText },
-        { id: 'password-complexity', label: 'Password Policy', icon: Lock },
-        { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock },
-        { id: 'pricing-settings', label: 'Pricing Settings', icon: DollarSign },
-        { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'password-complexity', label: 'Password Policy', icon: Lock }
+      ]
+    },
+    {
+      title: 'Administration',
+      items: [
+        { id: 'reports', label: 'Reports', icon: BarChart3 },
         { id: 'settings', label: 'Settings', icon: Settings }
       ]
     }
