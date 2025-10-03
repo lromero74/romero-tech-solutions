@@ -600,7 +600,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           try {
             // Set loading state for this specific employee
             setLoadingEmployeeOperations(prev => ({ ...prev, [empData.id]: true }));
-            await adminService.deleteUser(empData.id);
+            await adminService.deleteUser(empData.id, true); // hardDelete = true
             console.log('✅ Hard delete API call completed, waiting for WebSocket broadcast...');
             setConfirmationDialog(prev => ({ ...prev, isOpen: false }));
           } catch (error) {

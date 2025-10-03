@@ -46,6 +46,7 @@ router.get('/employees/:id/full', async (req, res) => {
         e.is_on_vacation,
         e.is_out_sick,
         e.is_on_other_leave,
+        COALESCE(e.soft_delete, false) as soft_delete,
         a.street as address_street,
         a.street_2 as address_street_2,
         a.city as address_city,
@@ -76,7 +77,7 @@ router.get('/employees/:id/full', async (req, res) => {
                d.name, e.hire_date, es.status_name, es.display_name, e.phone,
                ep.file_url, ep.position_x, ep.position_y, ep.scale_factor, ep.background_color,
                ws.status_name, ws.display_name, ws.color_code, ws.is_available_for_work,
-               e.is_active, e.is_on_vacation, e.is_out_sick, e.is_on_other_leave,
+               e.is_active, e.is_on_vacation, e.is_out_sick, e.is_on_other_leave, e.soft_delete,
                a.street, a.street_2, a.city, a.state, a.zip_code, a.country,
                ec.first_name, ec.last_name, ec.relationship, ec.phone, ec.email,
                e.created_at, e.updated_at
@@ -123,6 +124,7 @@ router.get('/employees/:id/full', async (req, res) => {
       isOnVacation: employee.is_on_vacation,
       isOutSick: employee.is_out_sick,
       isOnOtherLeave: employee.is_on_other_leave,
+      softDelete: employee.soft_delete || false,
       userType: 'employee',
       address: (employee.address_street || employee.address_city) ? {
         street: employee.address_street,
@@ -269,6 +271,7 @@ router.get('/employees-login-status', async (req, res) => {
         e.is_on_vacation,
         e.is_out_sick,
         e.is_on_other_leave,
+        COALESCE(e.soft_delete, false) as soft_delete,
         a.street as address_street,
         a.street_2 as address_street_2,
         a.city as address_city,
@@ -298,7 +301,7 @@ router.get('/employees-login-status', async (req, res) => {
                d.name, e.hire_date, es.status_name, es.display_name, e.phone,
                ep.file_url, ep.position_x, ep.position_y, ep.scale_factor, ep.background_color,
                ws.status_name, ws.display_name, ws.color_code, ws.is_available_for_work,
-               e.is_active, e.is_on_vacation, e.is_out_sick, e.is_on_other_leave,
+               e.is_active, e.is_on_vacation, e.is_out_sick, e.is_on_other_leave, e.soft_delete,
                a.street, a.street_2, a.city, a.state, a.zip_code, a.country,
                ec.first_name, ec.last_name, ec.relationship, ec.phone, ec.email,
                e.created_at, e.updated_at
@@ -352,6 +355,7 @@ router.get('/employees-login-status', async (req, res) => {
       isOnVacation: employee.is_on_vacation,
       isOutSick: employee.is_out_sick,
       isOnOtherLeave: employee.is_on_other_leave,
+      softDelete: employee.soft_delete || false,
       userType: 'employee',
       address: (employee.address_street || employee.address_street_2 || employee.address_city || employee.address_state || employee.address_zip_code || employee.address_country) ? {
         street: employee.address_street,

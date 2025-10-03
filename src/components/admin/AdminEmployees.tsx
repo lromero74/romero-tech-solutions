@@ -145,6 +145,7 @@ interface Employee {
   photoBackgroundColor?: string;
   phone?: string;
   isActive: boolean;
+  softDelete?: boolean; // Soft delete flag
   isOnVacation?: boolean;
   isOutSick?: boolean;
   isOnOtherLeave?: boolean;

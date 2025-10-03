@@ -668,7 +668,9 @@ router.patch('/users/:id/soft-delete',
     const user = updateResult.rows[0];
 
     // Broadcast soft delete/restore to other admin clients via WebSocket
-    const action = user.soft_delete ? 'deleted' : 'restored';
+    // Use 'updated' for soft delete so employee stays in list (just marked inactive)
+    // Use 'restored' when undeleting to trigger refresh
+    const action = user.soft_delete ? 'updated' : 'restored';
     if (userExistsResult.isEmployee) {
       websocketService.broadcastEmployeeUpdate(id, action);
     } else {
