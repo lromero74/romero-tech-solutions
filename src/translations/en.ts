@@ -332,6 +332,16 @@ export const enTranslations = {
   'dashboard.auth.clientLogin': 'Client Login',
   'dashboard.auth.backToHome': 'Back to Home',
 
+  // Dashboard stats
+  'dashboard.stats.individual': 'Individual',
+  'dashboard.stats.business': 'Business',
+  'dashboard.stats.site': 'Site',
+  'dashboard.stats.accessLevel': 'Access Level',
+  'dashboard.stats.locations': 'Locations',
+  'dashboard.stats.activeRequests': 'Active Requests',
+  'dashboard.stats.storageUsed': 'Storage Used',
+  'dashboard.stats.availableSpace': 'Available Space',
+
   // Common
   'common.phone': '(619) 940-5550',
   'common.email': 'info@romerotechsolutions.com',

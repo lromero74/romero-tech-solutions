@@ -45,6 +45,7 @@ interface User {
   business: {
     id: string;
     name: string;
+    isIndividual: boolean;
     address: {
       street: string;
       city: string;
@@ -444,7 +445,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   }
 
   const { user } = clientData;
-  const isBusinessLevelClient = user.accessibleLocations.length > 1;
+
+  // Determine access level display
+  const getAccessLevel = () => {
+    if (user.business.isIndividual) {
+      return t('dashboard.stats.individual');
+    }
+    return user.accessibleLocations.length > 1
+      ? t('dashboard.stats.business')
+      : t('dashboard.stats.site');
+  };
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-200 ${
@@ -739,7 +749,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       <div className="ml-3 sm:ml-4">
                         <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400">{t('dashboard.stats.accessLevel')}</p>
                         <p className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
-                          {isBusinessLevelClient ? t('dashboard.stats.business') : t('dashboard.stats.site')}
+                          {getAccessLevel()}
                         </p>
                       </div>
                     </div>

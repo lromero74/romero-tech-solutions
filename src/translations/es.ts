@@ -332,6 +332,16 @@ export const esTranslations = {
   'dashboard.auth.clientLogin': 'Inicio de Sesión del Cliente',
   'dashboard.auth.backToHome': 'Volver al Inicio',
 
+  // Dashboard stats
+  'dashboard.stats.individual': 'Individual',
+  'dashboard.stats.business': 'Empresa',
+  'dashboard.stats.site': 'Sitio',
+  'dashboard.stats.accessLevel': 'Nivel de Acceso',
+  'dashboard.stats.locations': 'Ubicaciones',
+  'dashboard.stats.activeRequests': 'Solicitudes Activas',
+  'dashboard.stats.storageUsed': 'Almacenamiento Usado',
+  'dashboard.stats.availableSpace': 'Espacio Disponible',
+
   // Common
   'common.phone': '(619) 940-5550',
   'common.email': 'info@romerotechsolutions.com',

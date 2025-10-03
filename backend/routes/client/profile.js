@@ -293,6 +293,7 @@ router.get('/business', authenticateClient, async (req, res) => {
       SELECT
         b.id as id,
         b.business_name as name,
+        b.is_individual as "isIndividual",
         hq.street_address_1 as street,
         hq.city as city,
         hq.state as state,
