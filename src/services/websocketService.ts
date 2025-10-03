@@ -56,6 +56,8 @@ type ServiceRequestViewersCallback = (update: ServiceRequestViewersUpdate) => vo
 class WebSocketService {
   private socket: Socket | null = null;
   private isConnected = false;
+  private isConnecting = false;
+  private currentUrl: string | null = null;
   private reconnectAttempts = 0;
   private maxReconnectAttempts = 5;
   private reconnectInterval = 1000;
@@ -70,9 +72,38 @@ class WebSocketService {
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
       try {
-        if (this.socket) {
+        // 🚀 OPTIMIZATION: Skip reconnection if already connected to same URL
+        if (this.socket && this.isConnected && this.currentUrl === serverUrl) {
+          console.log('✅ Already connected to', serverUrl, '- reusing existing connection');
+          resolve();
+          return;
+        }
+
+        // 🚀 OPTIMIZATION: Prevent concurrent connection attempts
+        if (this.isConnecting) {
+          console.log('⏳ Connection already in progress, waiting...');
+          // Wait for existing connection attempt
+          const checkInterval = setInterval(() => {
+            if (!this.isConnecting) {
+              clearInterval(checkInterval);
+              if (this.isConnected && this.currentUrl === serverUrl) {
+                resolve();
+              } else {
+                reject(new Error('Concurrent connection attempt failed'));
+              }
+            }
+          }, 100);
+          return;
+        }
+
+        // Only disconnect if connecting to a different URL
+        if (this.socket && this.currentUrl !== serverUrl) {
+          console.log('🔄 Switching WebSocket connection from', this.currentUrl, 'to', serverUrl);
           this.disconnect();
         }
+
+        this.isConnecting = true;
+        this.currentUrl = serverUrl;
 
         this.socket = io(serverUrl, {
           autoConnect: true,
@@ -85,6 +116,7 @@ class WebSocketService {
         this.socket.on('connect', () => {
           console.log('🔌 WebSocket connected to server');
           this.isConnected = true;
+          this.isConnecting = false;
           this.reconnectAttempts = 0;
           resolve();
         });
@@ -97,6 +129,7 @@ class WebSocketService {
         this.socket.on('connect_error', (error) => {
           console.error('❌ WebSocket connection error:', error);
           this.isConnected = false;
+          this.isConnecting = false;
           if (this.reconnectAttempts === 0) {
             reject(error);
           }
@@ -182,6 +215,8 @@ class WebSocketService {
       this.socket.disconnect();
       this.socket = null;
       this.isConnected = false;
+      this.isConnecting = false;
+      this.currentUrl = null;
     }
   }
 

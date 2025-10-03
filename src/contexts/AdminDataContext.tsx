@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { adminService } from '../services/adminService';
 import { websocketService } from '../services/websocketService';
 import { useEnhancedAuth } from './EnhancedAuthContext';
@@ -430,13 +430,31 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     }
   }, [sessionToken]);
 
+  // Track previous sessionToken to prevent unnecessary reconnections
+  const prevSessionTokenRef = useRef<string | null>(null);
+
   // WebSocket connection for real-time employee status updates
   useEffect(() => {
     console.log('🔌 WebSocket useEffect triggered, sessionToken:', sessionToken ? '***EXISTS***' : 'NULL');
-    if (!sessionToken) {
-      console.log('🔌 No session token available for WebSocket connection');
+
+    // 🚀 OPTIMIZATION: Skip if sessionToken hasn't actually changed
+    if (prevSessionTokenRef.current === sessionToken && sessionToken) {
+      console.log('✅ SessionToken unchanged, reusing existing WebSocket connection');
       return;
     }
+
+    if (!sessionToken) {
+      console.log('🔌 No session token available for WebSocket connection');
+      // Disconnect if we had a previous connection
+      if (prevSessionTokenRef.current) {
+        websocketService.disconnect();
+      }
+      prevSessionTokenRef.current = null;
+      return;
+    }
+
+    // Update ref with new sessionToken
+    prevSessionTokenRef.current = sessionToken;
 
     const initializeWebSocket = async () => {
       try {
@@ -616,10 +634,11 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
     initializeWebSocket();
 
-    // Cleanup
+    // Cleanup - Note: websocketService is now smart about not disconnecting if connection is reused
     return () => {
-      console.log('🧹 Cleaning up WebSocket connection...');
-      websocketService.disconnect();
+      // Only cleanup runs when component unmounts or sessionToken actually changes
+      // The websocketService will handle keeping connections alive when appropriate
+      console.log('🧹 WebSocket cleanup function called (may not disconnect if connection reused)');
     };
   }, [sessionToken]);
 

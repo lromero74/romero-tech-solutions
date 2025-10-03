@@ -46,6 +46,9 @@ import { websocketService } from './services/websocketService.js';
 // Import workflow scheduler
 import { workflowScheduler } from './services/workflowScheduler.js';
 
+// Import environment-aware logger
+import { loggers as log } from './utils/logger.js';
+
 // Import security middleware
 import {
   generalLimiter,
@@ -95,16 +98,49 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-      imgSrc: ["'self'", "data:", "https:"],
+      styleSrc: ["'self'", "'unsafe-inline'", "https://m.stripe.network"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://js.stripe.com",
+        "https://m.stripe.network",
+        "'sha256-7PZaH7TzFg4JdT5xJguN7Och6VcMcP1LW4N3fQ936Fs='",
+        "'sha256-MqH8JJslY2fF2bGYY1rZlpCNrRCnWKRzrrDefixUJTI='",
+        "'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='",
+        "'sha256-e357n1PxCJ8d03/QCSKaHFmHF1JADyvSHdSfshxM494='",
+        "'sha256-5DA+a07wxWmEka9IdoWjSPVHb17Cp5284/lJzfbl8KA='",
+        "'sha256-/5Guo2nzv5n/w6ukZpOBZOtTJBJPSkJ6mhHpnBgm3Ls='"
+      ],
+      scriptSrcElem: [
+        "'self'",
+        "'unsafe-inline'",
+        "https://cdn.jsdelivr.net",
+        "https://js.stripe.com",
+        "https://m.stripe.network",
+        "'sha256-7PZaH7TzFg4JdT5xJguN7Och6VcMcP1LW4N3fQ936Fs='",
+        "'sha256-MqH8JJslY2fF2bGYY1rZlpCNrRCnWKRzrrDefixUJTI='",
+        "'sha256-ZswfTY7H35rbv8WC7NXBoiC7WNu86vSzCDChNWwZZDM='",
+        "'sha256-e357n1PxCJ8d03/QCSKaHFmHF1JADyvSHdSfshxM494='",
+        "'sha256-5DA+a07wxWmEka9IdoWjSPVHb17Cp5284/lJzfbl8KA='",
+        "'sha256-/5Guo2nzv5n/w6ukZpOBZOtTJBJPSkJ6mhHpnBgm3Ls='"
+      ],
+      imgSrc: ["'self'", "data:", "https:", "blob:"],
       fontSrc: ["'self'", "https:", "data:"],
-      connectSrc: ["'self'", "https:", "wss:", "ws:"],
+      connectSrc: [
+        "'self'",
+        ...(process.env.NODE_ENV === 'development' ? ["http:"] : []),
+        "https:",
+        "wss:",
+        "ws:",
+        "https://api.stripe.com",
+        "https://m.stripe.network"
+      ],
       mediaSrc: ["'self'"],
       objectSrc: ["'none'"],
-      childSrc: ["'self'"],
-      frameSrc: ["'none'"],
-      workerSrc: ["'self'"],
+      childSrc: ["'self'", "https://js.stripe.com", "https://m.stripe.network"],
+      frameSrc: ["'self'", "https://js.stripe.com", "https://m.stripe.network"],
+      workerSrc: ["'self'", "blob:"],
       manifestSrc: ["'self'"],
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
@@ -187,9 +223,9 @@ app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 // Cookie parsing middleware for HttpOnly sessions
 app.use(cookieParser());
 
-// Global request logger for debugging
+// Global request logger for debugging (trace level - only in dev)
 app.use((req, res, next) => {
-  console.log(`🌐 INCOMING: ${req.method} ${req.path}`);
+  log.request.trace(`INCOMING: ${req.method} ${req.path}`);
   next();
 });
 
@@ -200,27 +236,27 @@ const CSRF_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-csrf' :
 const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
-    // Debug: Log all available cookies
-    console.log(`🍪 All cookies available:`, req.cookies ? Object.keys(req.cookies) : 'NO COOKIES');
+    // Debug: Log all available cookies (trace level)
+    log.csrf.trace(`All cookies available:`, req.cookies ? Object.keys(req.cookies) : 'NO COOKIES');
 
     // Use session token if available (post-authentication)
     // Check both session_token (snake_case) and sessionToken (camelCase)
     const sessionToken = req.cookies?.session_token || req.cookies?.sessionToken;
     if (sessionToken) {
-      console.log(`🔐 CSRF session identifier: Using session token (authenticated request)`);
+      log.csrf.trace(`CSRF session identifier: Using session token (authenticated request)`);
       return sessionToken;
     }
 
     // For pre-authentication, use CSRF cookie itself as the session identifier
     // This ensures the same session identifier is used for the entire pre-auth flow
     if (req.cookies && req.cookies[CSRF_COOKIE_NAME]) {
-      console.log(`🔐 CSRF session identifier: Using ${CSRF_COOKIE_NAME} cookie (pre-auth request)`);
+      log.csrf.trace(`CSRF session identifier: Using ${CSRF_COOKIE_NAME} cookie (pre-auth request)`);
       return req.cookies[CSRF_COOKIE_NAME];
     }
 
     // Ultimate fallback for very first request (when no cookies exist yet)
     const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
-    console.log(`🔐 CSRF session identifier: Using IP+UA (initial request): ${identifier.substring(0, 60)}...`);
+    log.csrf.trace(`CSRF session identifier: Using IP+UA (initial request): ${identifier.substring(0, 60)}...`);
     return identifier;
   },
   // Use __Host- prefix only in production (requires HTTPS)
