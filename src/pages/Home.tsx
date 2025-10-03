@@ -206,20 +206,20 @@ const Home: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
                   <div className="text-center bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                    <div className="text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat1')}</div>
-                    <div className="text-blue-200 text-sm">{t('home.hero.stat1Label')}</div>
+                    <div className="text-lg md:text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat1')}</div>
+                    <div className="text-blue-200 text-xs sm:text-sm">{t('home.hero.stat1Label')}</div>
                   </div>
                   <div className="text-center bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                    <div className="text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat2')}</div>
-                    <div className="text-blue-200 text-sm">{t('home.hero.stat2Label')}</div>
+                    <div className="text-lg md:text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat2')}</div>
+                    <div className="text-blue-200 text-xs sm:text-sm">{t('home.hero.stat2Label')}</div>
                   </div>
                   <div className="text-center bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                    <div className="text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat3')}</div>
-                    <div className="text-blue-200 text-sm">{t('home.hero.stat3Label')}</div>
+                    <div className="text-lg md:text-2xl font-bold text-cyan-300 mb-2">{t('home.hero.stat3')}</div>
+                    <div className="text-blue-200 text-xs sm:text-sm">{t('home.hero.stat3Label')}</div>
                   </div>
                   <div className="text-center bg-white/10 backdrop-blur-sm rounded-2xl p-4 border border-white/20">
-                    <div className="text-2xl font-bold text-cyan-300 mb-2">{t('home.about.stats.satisfaction')}</div>
-                    <div className="text-blue-200 text-sm">Rate</div>
+                    <div className="text-lg md:text-2xl font-bold text-cyan-300 mb-2">{t('home.about.stats.satisfaction')}</div>
+                    <div className="text-blue-200 text-xs sm:text-sm">Rate</div>
                   </div>
                 </div>
 

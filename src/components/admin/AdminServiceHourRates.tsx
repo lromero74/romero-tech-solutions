@@ -62,6 +62,7 @@ const AdminServiceHourRates: React.FC = () => {
       setLoading(true);
       const response = await apiService.get('/admin/service-hour-rates');
       if (response.success) {
+        console.log('📊 Loaded rate tiers:', response.data);
         setRateTiers(response.data);
       }
     } catch (error) {
@@ -71,27 +72,43 @@ const AdminServiceHourRates: React.FC = () => {
     }
   };
 
-  // Get the tier for a specific day and hour
+  // Get the tier for a specific day and hour (converts Pacific display time to UTC for lookup)
   const getTierForCell = (dayOfWeek: number, hour: number): ServiceHourRateTier | null => {
-    const timeStart = `${String(hour).padStart(2, '0')}:00:00`;
-    const timeEnd = `${String(hour + 1).padStart(2, '0')}:00:00`;
+    // Convert Pacific time to UTC for database lookup
+    const pacificDate = new Date();
+    const currentDayOfWeek = pacificDate.getDay();
+    const daysUntilTarget = (dayOfWeek - currentDayOfWeek + 7) % 7;
+    pacificDate.setDate(pacificDate.getDate() + daysUntilTarget);
+    pacificDate.setHours(hour, 0, 0, 0);
 
-    // First, try to find an exact match (1-hour tier for this specific hour)
+    const utcStartDay = pacificDate.getUTCDay();
+    const utcStartHour = pacificDate.getUTCHours();
+    const utcStartMinutes = pacificDate.getUTCMinutes();
+
+    const pacificEndDate = new Date(pacificDate);
+    pacificEndDate.setHours(pacificEndDate.getHours() + 1);
+    const utcEndHour = pacificEndDate.getUTCHours();
+    const utcEndMinutes = pacificEndDate.getUTCMinutes();
+
+    const utcTimeStart = `${String(utcStartHour).padStart(2, '0')}:${String(utcStartMinutes).padStart(2, '0')}:00`;
+    const utcTimeEnd = `${String(utcEndHour).padStart(2, '0')}:${String(utcEndMinutes).padStart(2, '0')}:00`;
+
+    // First, try to find an exact match using UTC times
     const exactMatch = rateTiers.find(tier =>
-      tier.dayOfWeek === dayOfWeek &&
+      tier.dayOfWeek === utcStartDay &&
       tier.isActive &&
-      tier.timeStart === timeStart &&
-      tier.timeEnd === timeEnd
+      tier.timeStart === utcTimeStart &&
+      tier.timeEnd === utcTimeEnd
     );
 
     if (exactMatch) return exactMatch;
 
-    // If no exact match, find any tier that covers this hour
+    // If no exact match, find any tier that covers this hour in UTC
     return rateTiers.find(tier =>
-      tier.dayOfWeek === dayOfWeek &&
+      tier.dayOfWeek === utcStartDay &&
       tier.isActive &&
-      tier.timeStart <= timeStart &&
-      tier.timeEnd > timeStart
+      tier.timeStart <= utcTimeStart &&
+      tier.timeEnd > utcTimeStart
     ) || null;
   };
 
@@ -115,35 +132,63 @@ const AdminServiceHourRates: React.FC = () => {
       const selectedTier = TIER_LEVELS_BASE.find(t => t.value === tierLevel);
       if (!selectedTier) return;
 
-      const timeStart = `${String(hour).padStart(2, '0')}:00:00`;
-      const timeEnd = `${String(hour + 1).padStart(2, '0')}:00:00`;
+      // Convert Pacific time to UTC for database storage
+      // Create a date in Pacific timezone for the selected day/hour
+      const pacificDate = new Date();
+      const currentDayOfWeek = pacificDate.getDay();
+      const daysUntilTarget = (day - currentDayOfWeek + 7) % 7;
+      pacificDate.setDate(pacificDate.getDate() + daysUntilTarget);
+      pacificDate.setHours(hour, 0, 0, 0);
 
-      // Find existing tier with EXACT same time range (not just overlapping)
+      // Get UTC equivalents
+      const utcStartDay = pacificDate.getUTCDay();
+      const utcStartHour = pacificDate.getUTCHours();
+      const utcStartMinutes = pacificDate.getUTCMinutes();
+
+      // End time is 1 hour later
+      const pacificEndDate = new Date(pacificDate);
+      pacificEndDate.setHours(pacificEndDate.getHours() + 1);
+      const utcEndHour = pacificEndDate.getUTCHours();
+      const utcEndMinutes = pacificEndDate.getUTCMinutes();
+
+      const utcTimeStart = `${String(utcStartHour).padStart(2, '0')}:${String(utcStartMinutes).padStart(2, '0')}:00`;
+      const utcTimeEnd = `${String(utcEndHour).padStart(2, '0')}:${String(utcEndMinutes).padStart(2, '0')}:00`;
+
+      console.log('🌍 Time conversion:', {
+        pacific: `Day ${day} ${hour}:00`,
+        utc: `Day ${utcStartDay} ${utcTimeStart}`,
+        utcEnd: `${utcTimeEnd}`
+      });
+
+      // Find existing tier with EXACT same time range in UTC
       const exactMatchTier = rateTiers.find(tier =>
-        tier.dayOfWeek === day &&
+        tier.dayOfWeek === utcStartDay &&
         tier.isActive &&
-        tier.timeStart === timeStart &&
-        tier.timeEnd === timeEnd
+        tier.timeStart === utcTimeStart &&
+        tier.timeEnd === utcTimeEnd
       );
 
       const tierData = {
         tierName: selectedTier.label,
         tierLevel: selectedTier.value,
-        dayOfWeek: day,
-        timeStart: `${String(hour).padStart(2, '0')}:00`,
-        timeEnd: `${String(hour + 1).padStart(2, '0')}:00`,
-        rateMultiplier: customMultipliers[tierLevel], // Use custom multiplier
+        dayOfWeek: utcStartDay,
+        timeStart: utcTimeStart.substring(0, 5), // HH:MM format
+        timeEnd: utcTimeEnd.substring(0, 5),     // HH:MM format
+        rateMultiplier: customMultipliers[tierLevel],
         colorCode: selectedTier.defaultColor,
         description: '',
         isActive: true
       };
 
+      console.log('💾 Saving tier:', { day, hour, tierLevel, exactMatchTier: exactMatchTier?.id, tierData });
+
       let response;
       if (exactMatchTier) {
         // Update existing tier with exact same time range
+        console.log('📝 Updating existing tier:', exactMatchTier.id);
         response = await apiService.put(`/admin/service-hour-rates/${exactMatchTier.id}`, tierData);
 
-        // Optimistically update the state
+        // Optimistic update for existing tier
         if (response.success) {
           setRateTiers(prev => prev.map(tier =>
             tier.id === exactMatchTier.id
@@ -153,18 +198,22 @@ const AdminServiceHourRates: React.FC = () => {
         }
       } else {
         // Create new tier for this specific hour
+        console.log('✨ Creating new tier');
         response = await apiService.post('/admin/service-hour-rates', tierData);
 
-        // Optimistically add to state
+        // Optimistic update for new tier
         if (response.success) {
           setRateTiers(prev => [...prev, response.data]);
         }
       }
 
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 1000);
+      if (response.success) {
+        console.log('✅ Tier saved successfully');
+        setSaveStatus('saved');
+        setTimeout(() => setSaveStatus('idle'), 1000);
+      }
     } catch (error) {
-      console.error('Failed to save rate tier:', error);
+      console.error('❌ Failed to save rate tier:', error);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 2000);
     }

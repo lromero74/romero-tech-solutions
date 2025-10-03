@@ -37,6 +37,7 @@ const ServiceScheduler: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [selectedUrgency, setSelectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
+  const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [contactName, setContactName] = useState('');
   const [contactPhone, setContactPhone] = useState('');
@@ -346,7 +347,7 @@ const ServiceScheduler: React.FC = () => {
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedDate || !selectedTime || !selectedLocation || !selectedServiceType) {
+    if (!selectedDate || !selectedTime || !selectedLocation || !selectedServiceType || !title.trim()) {
       return;
     }
 
@@ -361,6 +362,7 @@ const ServiceScheduler: React.FC = () => {
         requested_date: selectedDate.toISOString().split('T')[0],
         requested_time_start: selectedTime,
         requested_time_end: selectedEndTime || selectedTime, // Include end time from time slot picker
+        title: title.trim(),
         description,
         contact_name: contactName,
         contact_phone: contactPhone,
@@ -393,6 +395,7 @@ const ServiceScheduler: React.FC = () => {
     setSelectedLocation('');
     setSelectedUrgency('');
     setSelectedServiceType('');
+    setTitle('');
     setDescription('');
     setUploadedFiles([]);
     setShowConfirmation(false);
@@ -741,6 +744,25 @@ const ServiceScheduler: React.FC = () => {
                 </option>
               ))}
             </select>
+          </div>
+
+          {/* Title */}
+          <div>
+            <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+              {t('schedule.title', undefined, 'Title')} <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                isDarkMode
+                  ? 'bg-gray-700 border-gray-600 text-white placeholder-gray-400'
+                  : 'bg-white border-gray-300 text-gray-900 placeholder-gray-500'
+              }`}
+              placeholder={t('schedule.titlePlaceholder', undefined, 'Enter a brief title for your request')}
+              required
+            />
           </div>
 
           {/* Description */}

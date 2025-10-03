@@ -1866,6 +1866,207 @@ Email: info@romerotechsolutions.com
       throw error;
     }
   }
+
+  /**
+   * Send late cancellation notification to executives and admins
+   * @param {Object} params - Notification parameters
+   * @param {Object} params.serviceRequest - Service request details
+   * @param {Object} params.client - Client who cancelled
+   * @param {string} params.cancellationReason - Reason for cancellation
+   * @param {string} params.hoursNotice - Hours of notice given
+   * @param {Array<Object>} params.recipients - List of executives and admins to notify
+   * @returns {Promise<Object>} Email sending result
+   */
+  async sendLateCancellationNotification({ serviceRequest, client, cancellationReason, hoursNotice, recipients }) {
+    try {
+      console.log('⚠️ Sending late cancellation notification to executives and admins...');
+
+      const subject = `⚠️ Late Cancellation Alert: ${serviceRequest.requestNumber}`;
+
+      const html = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>${subject}</title>
+            <style>
+              body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #991b1b, #dc2626); color: white; padding: 30px 20px; border-radius: 8px; }
+              .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+              .tagline { font-size: 14px; opacity: 0.9; }
+              .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+              .alert-box { background: #fee2e2; border-left: 4px solid #dc2626; padding: 20px; margin: 20px 0; border-radius: 4px; }
+              .alert-header { font-size: 16px; color: #991b1b; font-weight: bold; margin-bottom: 10px; }
+              .alert-text { color: #7f1d1d; }
+              .info-box { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
+              .info-label { font-weight: bold; color: #1e40af; display: inline-block; min-width: 120px; }
+              .info-value { color: #1e3a8a; }
+              .request-number { background: #dc2626; color: white; padding: 15px; text-align: center; border-radius: 8px; margin: 20px 0; font-size: 18px; font-weight: bold; }
+              .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="header">
+                <div style="text-align: center; margin-bottom: 10px;">
+                  <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+                </div>
+                <div class="logo">Romero Tech Solutions</div>
+                <div class="tagline">Late Cancellation Alert</div>
+              </div>
+
+              <div class="content">
+                <h2 style="color: #991b1b; margin-bottom: 15px;">⚠️ Late Service Request Cancellation</h2>
+
+                <p style="color: #475569;">A service request has been cancelled with less than 1 hour notice. A late cancellation fee may apply.</p>
+
+                <div class="request-number">
+                  ${serviceRequest.requestNumber}: ${serviceRequest.title}
+                </div>
+
+                <div class="alert-box">
+                  <div class="alert-header">⏰ Late Cancellation Details</div>
+                  <div class="alert-text">
+                    <strong>Hours of Notice:</strong> ${hoursNotice} hours<br>
+                    <strong>Minimum Required:</strong> 1.00 hours<br>
+                    <strong>Fee Status:</strong> Late cancellation fee applies
+                  </div>
+                </div>
+
+                <div class="info-box">
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Client:</span>
+                    <span class="info-value">${client.firstName} ${client.lastName}</span>
+                  </p>
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Email:</span>
+                    <span class="info-value"><a href="mailto:${client.email}" style="color: #1e40af;">${client.email}</a></span>
+                  </p>
+                  ${client.phone ? `
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Phone:</span>
+                    <span class="info-value"><a href="tel:${client.phone}" style="color: #1e40af;">${formatPhone(client.phone)}</a></span>
+                  </p>` : ''}
+                </div>
+
+                <div class="info-box">
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Request #:</span>
+                    <span class="info-value">${serviceRequest.requestNumber}</span>
+                  </p>
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Title:</span>
+                    <span class="info-value">${serviceRequest.title}</span>
+                  </p>
+                  ${serviceRequest.description ? `
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Description:</span>
+                    <span class="info-value">${serviceRequest.description}</span>
+                  </p>` : ''}
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Scheduled Date:</span>
+                    <span class="info-value">${new Date(serviceRequest.requestedDate).toLocaleDateString()} ${serviceRequest.requestedTimeStart} - ${serviceRequest.requestedTimeEnd}</span>
+                  </p>
+                  ${serviceRequest.locationName ? `
+                  <p style="margin: 0 0 10px 0;">
+                    <span class="info-label">Location:</span>
+                    <span class="info-value">${serviceRequest.locationName}</span>
+                  </p>` : ''}
+                  ${serviceRequest.locationAddress ? `
+                  <p style="margin: 0;">
+                    <span class="info-label">Address:</span>
+                    <span class="info-value"><a href="https://maps.google.com/?q=${formatAddressForMaps(serviceRequest.locationAddress)}" style="color: #1e40af;" target="_blank">${formatAddressDisplay(serviceRequest.locationAddress)}</a></span>
+                  </p>` : ''}
+                </div>
+
+                <div class="info-box">
+                  <p style="margin: 0;">
+                    <span class="info-label">Reason:</span>
+                    <span class="info-value">${cancellationReason}</span>
+                  </p>
+                </div>
+
+                <p style="color: #64748b; font-size: 14px; margin-top: 20px; font-style: italic;">
+                  This notification was sent to all executives and administrators for review and follow-up action.
+                </p>
+              </div>
+
+              <div class="footer">
+                <p><strong>Questions? Contact us:</strong></p>
+                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p style="margin-top: 15px;">
+                  © 2025 Romero Tech Solutions. All rights reserved.<br>
+                  Serving Escondido, CA and surrounding areas.
+                </p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      const text = `
+⚠️ Late Service Request Cancellation Alert
+
+A service request has been cancelled with less than 1 hour notice. A late cancellation fee may apply.
+
+SERVICE REQUEST: ${serviceRequest.requestNumber}: ${serviceRequest.title}
+
+LATE CANCELLATION DETAILS:
+Hours of Notice: ${hoursNotice} hours
+Minimum Required: 1.00 hours
+Fee Status: Late cancellation fee applies
+
+CLIENT INFORMATION:
+Name: ${client.firstName} ${client.lastName}
+Email: ${client.email}
+${client.phone ? `Phone: ${formatPhone(client.phone)}` : ''}
+
+SERVICE REQUEST DETAILS:
+Request Number: ${serviceRequest.requestNumber}
+Title: ${serviceRequest.title}
+${serviceRequest.description ? `Description: ${serviceRequest.description}` : ''}
+Scheduled: ${new Date(serviceRequest.requestedDate).toLocaleDateString()} ${serviceRequest.requestedTimeStart} - ${serviceRequest.requestedTimeEnd}
+${serviceRequest.locationName ? `Location: ${serviceRequest.locationName}` : ''}
+${serviceRequest.locationAddress ? `Address: ${[serviceRequest.locationAddress.street1, serviceRequest.locationAddress.street2, serviceRequest.locationAddress.city, serviceRequest.locationAddress.state, serviceRequest.locationAddress.zip].filter(Boolean).join(', ')}` : ''}
+
+CANCELLATION REASON:
+${cancellationReason}
+
+This notification was sent to all executives and administrators for review and follow-up action.
+
+Questions? Contact us:
+Phone: (619) 940-5550
+Email: info@romerotechsolutions.com
+
+© 2025 Romero Tech Solutions. All rights reserved.
+      `;
+
+      // Send to all recipients
+      const recipientEmails = recipients.map(r => r.email).join(', ');
+
+      const result = await transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: recipientEmails,
+        subject: subject,
+        text: text,
+        html: html
+      });
+
+      console.log(`✅ Late cancellation notification sent to: ${recipientEmails}`);
+
+      return {
+        success: true,
+        messageId: result.messageId,
+        recipientCount: recipients.length
+      };
+
+    } catch (error) {
+      console.error('❌ Error sending late cancellation notification:', error);
+      throw error;
+    }
+  }
 }
 
 export const emailService = new EmailService();
@@ -1879,5 +2080,6 @@ export const sendServiceRequestConfirmationToClient = (params) => emailService.s
 export const sendServiceRequestCreationNotification = (params) => emailService.sendServiceRequestCreationNotification(params);
 export const sendNoteAdditionNotification = (params) => emailService.sendNoteAdditionNotification(params);
 export const sendEmployeeNoteNotificationToClient = (params) => emailService.sendEmployeeNoteNotificationToClient(params);
+export const sendLateCancellationNotification = (params) => emailService.sendLateCancellationNotification(params);
 
 export default emailService;

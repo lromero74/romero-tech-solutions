@@ -22,7 +22,8 @@ import {
   ChevronRight,
   Eye,
   Download,
-  ExternalLink
+  ExternalLink,
+  X
 } from 'lucide-react';
 
 interface ServiceRequest {
@@ -124,7 +125,8 @@ const ServiceRequests: React.FC = () => {
 
   const [filters, setFilters] = useState({
     search: '',
-    status: 'all'
+    status: 'all',
+    hideClosed: true  // Hide completed/cancelled by default
   });
 
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
@@ -134,18 +136,27 @@ const ServiceRequests: React.FC = () => {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [cancellingRequest, setCancellingRequest] = useState<ServiceRequest | null>(null);
+  const [cancellationReason, setCancellationReason] = useState('');
+  const [isCancelling, setIsCancelling] = useState(false);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Status color mapping
   const getStatusColor = (status: string) => {
     const statusLower = status.toLowerCase();
-    if (statusLower.includes('pending') || statusLower.includes('submitted')) {
+    if (statusLower.includes('cancelled') || statusLower.includes('rejected')) {
+      return 'bg-gray-500 text-white';
+    } else if (statusLower === 'submitted') {
+      return 'bg-blue-600 text-white';
+    } else if (statusLower === 'acknowledged') {
+      return isDarkMode ? 'bg-orange-500 text-white' : 'bg-orange-500 text-black';
+    } else if (statusLower.includes('pending')) {
       return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/50 dark:text-yellow-200';
     } else if (statusLower.includes('progress') || statusLower.includes('assigned')) {
       return 'bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-200';
     } else if (statusLower.includes('completed') || statusLower.includes('resolved')) {
       return 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-200';
-    } else if (statusLower.includes('cancelled') || statusLower.includes('rejected')) {
-      return 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-200';
     }
     return 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200';
   };
@@ -387,6 +398,108 @@ const ServiceRequests: React.FC = () => {
     fetchRequestNotes(request.id);
   };
 
+  // Check if a service request can be cancelled
+  const canCancelRequest = (request: ServiceRequest) => {
+    // Cannot cancel if already in final status
+    const statusLower = request.status.toLowerCase();
+    if (statusLower.includes('completed') || statusLower.includes('cancelled')) {
+      console.log(`Cannot cancel ${request.requestNumber}: status is ${request.status}`);
+      return false;
+    }
+
+    // Cannot cancel if already started or passed
+    if (!request.requestedDate || !request.requestedTimeStart) {
+      console.log(`Cannot cancel ${request.requestNumber}: missing date (${request.requestedDate}) or time (${request.requestedTimeStart})`);
+      return false;
+    }
+
+    const now = new Date();
+
+    // Parse the UTC date to get the local date part
+    const utcDate = new Date(request.requestedDate);
+    const year = utcDate.getFullYear();
+    const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+    const day = String(utcDate.getDate()).padStart(2, '0');
+
+    // Combine local date with local time
+    const requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
+
+    if (isNaN(requestedDateTime.getTime())) {
+      console.log(`Cannot cancel ${request.requestNumber}: invalid date format`);
+      return false;
+    }
+
+    if (requestedDateTime > now) {
+      console.log(`✅ Can cancel ${request.requestNumber}: scheduled for ${requestedDateTime}`);
+      return true;
+    } else {
+      console.log(`Cannot cancel ${request.requestNumber}: already started (${requestedDateTime} < ${now})`);
+      return false;
+    }
+  };
+
+  // Calculate hours until service request starts
+  const getHoursUntilStart = (request: ServiceRequest) => {
+    if (!request.requestedDate || !request.requestedTimeStart) {
+      return 0;
+    }
+
+    const now = new Date();
+
+    // Parse the UTC date to get the local date part
+    const utcDate = new Date(request.requestedDate);
+    const year = utcDate.getFullYear();
+    const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+    const day = String(utcDate.getDate()).padStart(2, '0');
+
+    // Combine local date with local time
+    const requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
+    return (requestedDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
+  };
+
+  // Handle cancel request click
+  const handleCancelRequest = (request: ServiceRequest) => {
+    setCancellingRequest(request);
+    setCancellationReason('');
+    setShowCancelModal(true);
+  };
+
+  // Handle cancel confirmation
+  const handleConfirmCancellation = async () => {
+    if (!cancellingRequest) return;
+
+    setIsCancelling(true);
+    try {
+      const response = await apiService.post(
+        `/client/service-requests/${cancellingRequest.id}/cancel`,
+        { cancellationReason: cancellationReason.trim() || undefined }
+      );
+
+      if (response.success) {
+        // Refresh service requests
+        await fetchServiceRequests(pagination.page);
+
+        // Close modal
+        setShowCancelModal(false);
+        setCancellingRequest(null);
+        setCancellationReason('');
+
+        // Show success message
+        setSuccessMessage(t('serviceRequests.cancelSuccess', undefined, 'Service request cancelled successfully'));
+
+        // Auto-hide success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        alert(response.message || t('serviceRequests.cancelError', undefined, 'Failed to cancel service request'));
+      }
+    } catch (error: any) {
+      console.error('Error cancelling service request:', error);
+      alert(error.message || t('serviceRequests.cancelError', undefined, 'Failed to cancel service request'));
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   // Format file size
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
@@ -461,7 +574,12 @@ const ServiceRequests: React.FC = () => {
     const matchesStatus = filters.status === 'all' ||
       request.status.toLowerCase().includes(filters.status.toLowerCase());
 
-    return matchesSearch && matchesStatus;
+    // Hide closed/cancelled requests if filter is enabled
+    const statusLower = request.status.toLowerCase();
+    const isClosed = statusLower.includes('completed') || statusLower.includes('cancelled') || statusLower.includes('resolved');
+    const matchesClosedFilter = !filters.hideClosed || !isClosed;
+
+    return matchesSearch && matchesStatus && matchesClosedFilter;
   });
 
   // Load service requests on component mount
@@ -515,6 +633,18 @@ const ServiceRequests: React.FC = () => {
 
   return (
     <div className={`${themeClasses.background} rounded-lg shadow-sm border ${themeClasses.border} overflow-hidden`}>
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mx-6 mt-6 rounded-md bg-green-50 dark:bg-green-900/20 p-4 border border-green-200 dark:border-green-800">
+          <div className="flex items-center">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 mr-3" />
+            <p className="text-sm font-medium text-green-800 dark:text-green-200">
+              {successMessage}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="px-6 py-4 border-b dark:border-gray-700">
         <div className="flex items-center justify-between">
@@ -558,6 +688,19 @@ const ServiceRequests: React.FC = () => {
               <option value="completed">{t('serviceRequests.completed', undefined, 'Completed')}</option>
             </select>
           </div>
+          <div className="flex items-center">
+            <label className="flex items-center cursor-pointer">
+              <input
+                type="checkbox"
+                checked={filters.hideClosed}
+                onChange={(e) => setFilters(prev => ({ ...prev, hideClosed: e.target.checked }))}
+                className="mr-2 h-4 w-4 text-blue-600 focus:ring-2 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className={`text-sm ${themeClasses.text} whitespace-nowrap`}>
+                {t('serviceRequests.hideClosed', undefined, 'Hide Closed')}
+              </span>
+            </label>
+          </div>
         </div>
       </div>
 
@@ -567,7 +710,7 @@ const ServiceRequests: React.FC = () => {
           <div className="px-6 py-12 text-center">
             <FileText className={`h-12 w-12 ${themeClasses.textSecondary} mx-auto mb-4`} />
             <p className={`${themeClasses.textSecondary}`}>
-              {filters.search || filters.status !== 'all'
+              {filters.search || filters.status !== 'all' || filters.hideClosed
                 ? t('serviceRequests.noFilteredResults', undefined, 'No service requests match your filters')
                 : t('serviceRequests.noRequests', undefined, 'No service requests found')
               }
@@ -662,12 +805,23 @@ const ServiceRequests: React.FC = () => {
                   </div>
                 </div>
 
-                <button
-                  onClick={() => handleViewRequest(request)}
-                  className={`ml-4 p-2 rounded-md border ${themeClasses.border} hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors`}
-                >
-                  <Eye className={`h-4 w-4 ${themeClasses.textSecondary}`} />
-                </button>
+                <div className="ml-4 flex items-center gap-2">
+                  {canCancelRequest(request) && (
+                    <button
+                      onClick={() => handleCancelRequest(request)}
+                      className={`p-2 rounded-md border border-red-300 dark:border-red-700 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors`}
+                      title={t('serviceRequests.cancel', undefined, 'Cancel')}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleViewRequest(request)}
+                    className={`p-2 rounded-md border ${themeClasses.border} hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors`}
+                  >
+                    <Eye className={`h-4 w-4 ${themeClasses.textSecondary}`} />
+                  </button>
+                </div>
               </div>
             </div>
           ))
@@ -1003,12 +1157,118 @@ const ServiceRequests: React.FC = () => {
                 </div>
               </div>
 
-              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
                 <button
                   onClick={() => setSelectedRequest(null)}
-                  className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm"
+                  className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm"
                 >
                   {t('general.close', undefined, 'Close')}
+                </button>
+                {canCancelRequest(selectedRequest) && (
+                  <button
+                    onClick={() => {
+                      setSelectedRequest(null);
+                      handleCancelRequest(selectedRequest);
+                    }}
+                    className="w-full inline-flex justify-center rounded-md border border-red-300 dark:border-red-700 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm"
+                  >
+                    {t('serviceRequests.cancel', undefined, 'Cancel')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancellation Modal */}
+      {showCancelModal && cancellingRequest && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => !isCancelling && setShowCancelModal(false)} />
+
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="mx-auto flex-shrink-0 flex items-center justify-center h-12 w-12 rounded-full bg-red-100 dark:bg-red-900/30 sm:mx-0 sm:h-10 sm:w-10">
+                    <AlertCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div className="mt-3 text-center sm:mt-0 sm:ml-4 sm:text-left flex-1">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                      {t('serviceRequests.cancelModal.title', undefined, 'Cancel Service Request')}
+                    </h3>
+                    <div className="mt-4 space-y-4">
+                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                        {t('serviceRequests.cancelModal.confirmMessage', {
+                          requestNumber: cancellingRequest.requestNumber
+                        }, 'Are you sure you want to cancel service request {{requestNumber}}?')}
+                      </p>
+
+                      {/* Late Cancellation Warning */}
+                      {getHoursUntilStart(cancellingRequest) < 1 && (
+                        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
+                          <div className="flex items-start">
+                            <AlertCircle className="h-5 w-5 text-red-600 dark:text-red-400 mr-3 flex-shrink-0 mt-0.5" />
+                            <div>
+                              <h4 className="text-sm font-semibold text-red-900 dark:text-red-200">
+                                {t('serviceRequests.cancelModal.lateFeeWarning', undefined, '⚠️ Late Cancellation Fee')}
+                              </h4>
+                              <p className="text-sm text-red-800 dark:text-red-300 mt-1">
+                                {t('serviceRequests.cancelModal.lateFeeMessage', undefined,
+                                  'This service request starts in less than 1 hour. A late cancellation fee may apply.')}
+                              </p>
+                              <p className="text-xs text-red-700 dark:text-red-400 mt-2">
+                                {t('serviceRequests.cancelModal.hoursNotice', {
+                                  hours: getHoursUntilStart(cancellingRequest).toFixed(2)
+                                }, 'Hours of notice: {{hours}}')}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cancellation Reason */}
+                      <div>
+                        <label htmlFor="cancellationReason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                          {t('serviceRequests.cancelModal.reasonLabel', undefined, 'Reason for cancellation (optional)')}
+                        </label>
+                        <textarea
+                          id="cancellationReason"
+                          rows={3}
+                          value={cancellationReason}
+                          onChange={(e) => setCancellationReason(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                          placeholder={t('serviceRequests.cancelModal.reasonPlaceholder', undefined, 'Please provide a reason for cancellation...')}
+                          disabled={isCancelling}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
+                <button
+                  type="button"
+                  onClick={handleConfirmCancellation}
+                  disabled={isCancelling}
+                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isCancelling ? (
+                    <>
+                      <RefreshCw className="animate-spin h-4 w-4 mr-2" />
+                      {t('serviceRequests.cancelModal.cancelling', undefined, 'Cancelling...')}
+                    </>
+                  ) : (
+                    t('serviceRequests.cancelModal.confirm', undefined, 'Yes, Cancel Request')
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowCancelModal(false)}
+                  disabled={isCancelling}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {t('general.cancel', undefined, 'Cancel')}
                 </button>
               </div>
             </div>

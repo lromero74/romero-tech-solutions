@@ -398,7 +398,16 @@ const AdminServiceRequests: React.FC = () => {
   const fetchTimeBreakdown = async (requestId: string) => {
     try {
       const response = await apiService.get(`/admin/service-requests/${requestId}/time-breakdown`);
+      console.log('🔍 Time breakdown API response:', response);
       if (response.success && response.data) {
+        console.log('📊 Time breakdown data:', {
+          isFirstServiceRequest: response.data.isFirstServiceRequest,
+          waivedHours: response.data.waivedHours,
+          waivedMinutes: response.data.waivedMinutes,
+          totalBillableMinutes: response.data.totalBillableMinutes,
+          totalBillableHours: response.data.totalBillableHours
+        });
+
         setTimeBreakdown({
           isFirstServiceRequest: response.data.isFirstServiceRequest,
           waivedHours: response.data.waivedHours,
@@ -407,8 +416,13 @@ const AdminServiceRequests: React.FC = () => {
           emergencyBillableHours: response.data.emergencyBillableHours,
           totalBillableHours: response.data.totalBillableHours
         });
+
         // Auto-populate actual duration field with total billable minutes
-        setActualDurationMinutes(response.data.totalBillableMinutes.toString());
+        if (response.data.totalBillableMinutes !== undefined && response.data.totalBillableMinutes !== null) {
+          setActualDurationMinutes(response.data.totalBillableMinutes.toString());
+        } else {
+          console.warn('⚠️ totalBillableMinutes is undefined or null');
+        }
       }
     } catch (err) {
       console.error('Error fetching time breakdown:', err);

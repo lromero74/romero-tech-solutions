@@ -246,20 +246,28 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
-    // Get all time entries for this service request
+    // Get all time entries for this service request (including active ones)
     const timeEntriesQuery = `
       SELECT
         id,
         start_time,
-        end_time,
-        duration_minutes
+        CASE
+          WHEN end_time IS NULL THEN NOW()  -- Use current time for active entries
+          ELSE end_time
+        END as end_time,
+        CASE
+          WHEN end_time IS NULL THEN EXTRACT(EPOCH FROM (NOW() - start_time))/60  -- Calculate duration for active entries
+          ELSE duration_minutes
+        END as duration_minutes
       FROM service_request_time_entries
       WHERE service_request_id = $1
-        AND end_time IS NOT NULL
       ORDER BY start_time
     `;
 
     const timeEntriesResult = await pool.query(timeEntriesQuery, [id]);
+
+    console.log('🔍 Time entries found:', timeEntriesResult.rows.length);
+    console.log('📊 Time entries data:', JSON.stringify(timeEntriesResult.rows, null, 2));
 
     if (timeEntriesResult.rows.length === 0) {
       return res.json({
@@ -304,12 +312,25 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
       const startTime = new Date(entry.start_time);
       const endTime = new Date(entry.end_time);
 
+      console.log('⏱️  Processing entry:', {
+        start_time: entry.start_time,
+        end_time: entry.end_time,
+        duration_minutes: entry.duration_minutes,
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+        isValidEndTime: !isNaN(endTime.getTime())
+      });
+
       // Break down the time entry into 1-minute intervals
       let currentTime = new Date(startTime);
 
       while (currentTime < endTime) {
-        const dayOfWeek = currentTime.getDay(); // 0=Sunday, 1=Monday, etc.
-        const timeString = currentTime.toTimeString().substring(0, 8); // HH:MM:SS format
+        // All timestamps are UTC - compare directly
+        const dayOfWeek = currentTime.getUTCDay(); // 0=Sunday, 1=Monday, etc.
+        const hours = String(currentTime.getUTCHours()).padStart(2, '0');
+        const minutes = String(currentTime.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(currentTime.getUTCSeconds()).padStart(2, '0');
+        const timeString = `${hours}:${minutes}:${seconds}`; // HH:MM:SS format in UTC
 
         // Find the tier for this specific minute
         let assignedTier = 'Standard'; // default
@@ -332,6 +353,8 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
         currentTime.setMinutes(currentTime.getMinutes() + 1);
       }
     }
+
+    console.log('📈 Total chronological minutes:', chronologicalMinutes.length);
 
     // Apply first-time client discount (waive first 60 minutes)
     let waivedMinutes = 0;
@@ -1421,16 +1444,21 @@ router.put('/service-requests/:id/close', async (req, res) => {
     const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
-    // Get all time entries for this service request
+    // Get all time entries for this service request (including active ones)
     const timeEntriesQuery = `
       SELECT
         id,
         start_time,
-        end_time,
-        duration_minutes
+        CASE
+          WHEN end_time IS NULL THEN NOW()  -- Use current time for active entries
+          ELSE end_time
+        END as end_time,
+        CASE
+          WHEN end_time IS NULL THEN EXTRACT(EPOCH FROM (NOW() - start_time))/60  -- Calculate duration for active entries
+          ELSE duration_minutes
+        END as duration_minutes
       FROM service_request_time_entries
       WHERE service_request_id = $1
-        AND end_time IS NOT NULL
       ORDER BY start_time
     `;
     const timeEntriesResult = await pool.query(timeEntriesQuery, [id]);
@@ -1459,8 +1487,12 @@ router.put('/service-requests/:id/close', async (req, res) => {
       let currentTime = new Date(startTime);
 
       while (currentTime < endTime) {
-        const dayOfWeek = currentTime.getDay();
-        const timeString = currentTime.toTimeString().substring(0, 8);
+        // All timestamps are UTC - compare directly
+        const dayOfWeek = currentTime.getUTCDay();
+        const hours = String(currentTime.getUTCHours()).padStart(2, '0');
+        const minutes = String(currentTime.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(currentTime.getUTCSeconds()).padStart(2, '0');
+        const timeString = `${hours}:${minutes}:${seconds}`;
         let assignedTier = 'Standard';
         let rateMultiplier = 1.0;
 

@@ -712,4 +712,229 @@ router.post('/:id/notes', async (req, res) => {
   }
 });
 
+/**
+ * POST /api/client/service-requests/:id/cancel
+ * Cancel a service request
+ * Warns client if cancellation is within 1 hour of start time (late cancellation fee applies)
+ * Sends email to executives and admins for late cancellations
+ */
+router.post('/:id/cancel', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { cancellationReason } = req.body;
+    const businessId = req.user.businessId;
+    const clientId = req.user.id;
+    const clientEmail = req.user.email;
+
+    const pool = await getPool();
+
+    // Verify service request belongs to this client and get details
+    const serviceRequestQuery = `
+      SELECT
+        sr.id,
+        sr.request_number,
+        sr.title,
+        sr.description,
+        sr.requested_date,
+        sr.requested_time_start,
+        sr.requested_time_end,
+        srs.name as status_name,
+        srs.is_final_status,
+        u.first_name as client_first_name,
+        u.last_name as client_last_name,
+        u.email as client_email,
+        u.phone as client_phone,
+        sl.location_name,
+        sl.street_address_1,
+        sl.street_address_2,
+        sl.city,
+        sl.state,
+        sl.zip_code
+      FROM service_requests sr
+      LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
+      LEFT JOIN users u ON sr.client_id = u.id
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
+      WHERE sr.id = $1 AND sr.business_id = $2 AND sr.client_id = $3 AND sr.soft_delete = false
+    `;
+
+    const serviceRequestResult = await pool.query(serviceRequestQuery, [id, businessId, clientId]);
+
+    if (serviceRequestResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    const serviceRequest = serviceRequestResult.rows[0];
+
+    // Check if already in final status
+    if (serviceRequest.is_final_status) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot cancel service request with status: ${serviceRequest.status_name}`
+      });
+    }
+
+    // Check if service request has already started or passed
+    const now = new Date();
+
+    // Parse UTC date and combine with local time
+    const requestedDate = new Date(serviceRequest.requested_date);
+    const year = requestedDate.getFullYear();
+    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
+    const day = String(requestedDate.getDate()).padStart(2, '0');
+    const requestedDateTime = new Date(`${year}-${month}-${day}T${serviceRequest.requested_time_start}`);
+
+    if (requestedDateTime < now) {
+      return res.status(400).json({
+        success: false,
+        message: 'Cannot cancel service request that has already started or passed'
+      });
+    }
+
+    // Calculate time until service request starts (in hours)
+    const hoursUntilStart = (requestedDateTime - now) / (1000 * 60 * 60);
+    const isLateCancellation = hoursUntilStart < 1;
+
+    // Get "Cancelled" status ID
+    const cancelledStatusQuery = `
+      SELECT id FROM service_request_statuses
+      WHERE name = 'Cancelled' AND is_active = true
+      LIMIT 1
+    `;
+    const cancelledStatusResult = await pool.query(cancelledStatusQuery);
+
+    if (cancelledStatusResult.rows.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Cancelled status not found in system. Please contact administrator.'
+      });
+    }
+
+    const cancelledStatusId = cancelledStatusResult.rows[0].id;
+
+    // Update service request status to Cancelled
+    const updateQuery = `
+      UPDATE service_requests
+      SET
+        status_id = $1,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $2
+      RETURNING updated_at
+    `;
+
+    await pool.query(updateQuery, [cancelledStatusId, id]);
+
+    // Add cancellation note
+    const noteText = cancellationReason && cancellationReason.trim()
+      ? `Service request cancelled by client. Reason: ${cancellationReason.trim()}`
+      : 'Service request cancelled by client.';
+
+    const insertNoteQuery = `
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `;
+
+    await pool.query(insertNoteQuery, [
+      id,
+      noteText,
+      'cancellation',
+      'client',
+      clientId,
+      clientEmail,
+      true
+    ]);
+
+    console.log(`🚫 Service request ${serviceRequest.request_number} cancelled by client ${clientEmail}`);
+
+    // If late cancellation, send email to executives and admins
+    if (isLateCancellation) {
+      console.log(`⚠️ Late cancellation detected (${hoursUntilStart.toFixed(2)} hours notice) - notifying executives and admins`);
+
+      // Get executives and admins
+      const executivesAndAdminsQuery = `
+        SELECT DISTINCT
+          e.id,
+          e.email,
+          e.first_name,
+          e.last_name
+        FROM employees e
+        JOIN employee_roles er ON e.id = er.employee_id
+        JOIN roles r ON er.role_id = r.id
+        WHERE e.business_id = $1
+          AND e.is_active = true
+          AND e.email IS NOT NULL
+          AND (r.name = 'executive' OR r.name = 'admin')
+      `;
+
+      const executivesAdminsResult = await pool.query(executivesAndAdminsQuery, [businessId]);
+
+      if (executivesAdminsResult.rows.length > 0) {
+        // Import email service
+        const { sendLateCancellationNotification } = await import('../../services/emailService.js');
+
+        // Send notification (async, don't block response)
+        sendLateCancellationNotification({
+          serviceRequest: {
+            requestNumber: serviceRequest.request_number,
+            title: serviceRequest.title,
+            description: serviceRequest.description,
+            requestedDate: serviceRequest.requested_date,
+            requestedTimeStart: serviceRequest.requested_time_start,
+            requestedTimeEnd: serviceRequest.requested_time_end,
+            locationName: serviceRequest.location_name,
+            locationAddress: {
+              street1: serviceRequest.street_address_1,
+              street2: serviceRequest.street_address_2,
+              city: serviceRequest.city,
+              state: serviceRequest.state,
+              zip: serviceRequest.zip_code
+            }
+          },
+          client: {
+            firstName: serviceRequest.client_first_name,
+            lastName: serviceRequest.client_last_name,
+            email: serviceRequest.client_email,
+            phone: serviceRequest.client_phone
+          },
+          cancellationReason: cancellationReason || 'No reason provided',
+          hoursNotice: hoursUntilStart.toFixed(2),
+          recipients: executivesAdminsResult.rows.map(row => ({
+            email: row.email,
+            firstName: row.first_name,
+            lastName: row.last_name
+          }))
+        }).catch(err => {
+          console.error('❌ Failed to send late cancellation notification:', err);
+        });
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'Service request cancelled successfully',
+      data: {
+        isLateCancellation,
+        hoursNotice: hoursUntilStart.toFixed(2),
+        lateFeeApplies: isLateCancellation
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error cancelling service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to cancel service request'
+    });
+  }
+});
+
 export default router;

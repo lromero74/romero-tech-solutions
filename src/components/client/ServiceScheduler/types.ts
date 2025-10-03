@@ -45,6 +45,7 @@ export interface ServiceRequest {
   priority_level_id: string;
   scheduled_date: string;
   scheduled_time: string;
+  title: string;
   description: string;
   contact_name: string;
   contact_phone: string;
