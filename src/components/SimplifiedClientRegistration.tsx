@@ -29,6 +29,7 @@ interface FormData {
   streetAddress2: string;
   city: string;
   state: string;
+  isIndividual: boolean;
   // Contact Information
   firstName: string;
   lastName: string;
@@ -104,6 +105,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     streetAddress2: '',
     city: '',
     state: '',
+    isIndividual: false,
     firstName: '',
     lastName: '',
     title: '',
@@ -287,14 +289,20 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     setEmailDomainError('');
 
     try {
-      const result = await validateEmailDomain(email, { checkDNS: true, timeout: 5000 });
+      // Use backend proxy for DNS validation to avoid CORS issues
+      const response = await apiService.post<{
+        success: boolean;
+        isValid: boolean;
+        error?: string;
+        message?: string;
+      }>('/validate-email-domain', { email });
 
-      if (result.isValid) {
+      if (response.success && response.isValid) {
         setEmailDomainValid(true);
         setEmailDomainError('');
-      } else {
+      } else if (!response.success || !response.isValid) {
         setEmailDomainValid(false);
-        setEmailDomainError(result.error || 'Email domain does not exist');
+        setEmailDomainError(response.error || 'Email domain does not exist');
       }
     } catch (error) {
       console.error('Email domain validation error:', error);
@@ -422,6 +430,11 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     setError('');
 
     try {
+      // Construct business name for individuals (for email verification)
+      const finalBusinessName = formData.isIndividual
+        ? `Individual: ${formData.email}`
+        : formData.businessName;
+
       const data = await apiService.post<{
         success: boolean;
         code?: string;
@@ -429,7 +442,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         error?: string;
       }>('/auth/send-verification', {
         email: formData.email,
-        businessName: formData.businessName,
+        businessName: finalBusinessName,
         language: language
       });
 
@@ -466,6 +479,11 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     setError('');
 
     try {
+      // Construct business name for individuals
+      const finalBusinessName = formData.isIndividual
+        ? `Individual: ${formData.email}`
+        : formData.businessName;
+
       const registrationData = {
         email: formData.email,
         verificationCode,
@@ -474,7 +492,8 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         title: formData.title,
         phone: getPhoneDigits(formData.phone),
         cellPhone: getPhoneDigits(formData.cellPhone),
-        businessName: formData.businessName,
+        businessName: finalBusinessName,
+        isIndividual: formData.isIndividual,
         // Business address (will be stored as service location)
         streetAddress1: formData.streetAddress1,
         streetAddress2: formData.streetAddress2,
@@ -507,7 +526,8 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
 
     switch (currentStep) {
       case 'business':
-        if (!formData.businessName.trim()) {
+        // Only validate business name if NOT in Individual mode
+        if (!formData.isIndividual && !formData.businessName.trim()) {
           setError(t('registration.errors.businessNameRequired'));
           return false;
         }
@@ -638,28 +658,73 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     <div className="space-y-6">
       <div className="text-center mb-6">
         <div className="mx-auto h-16 w-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-          <Building2 className="h-8 w-8 text-blue-600" />
+          {formData.isIndividual ? (
+            <User className="h-8 w-8 text-blue-600" />
+          ) : (
+            <Building2 className="h-8 w-8 text-blue-600" />
+          )}
         </div>
-        <h3 className="text-2xl font-bold text-white">{t('registration.business.title')}</h3>
-        <p className="text-blue-200 mt-2">{t('registration.business.subtitle')}</p>
+        <h3 className="text-2xl font-bold text-white">
+          {formData.isIndividual ? 'Individual Information' : t('registration.business.title')}
+        </h3>
+        <p className="text-blue-200 mt-2">
+          {formData.isIndividual
+            ? 'Provide your location and contact details'
+            : t('registration.business.subtitle')}
+        </p>
       </div>
 
       <div className="space-y-4">
-        {/* Business Name - Tab Index 1 */}
-        <div>
-          <label className="block text-sm font-medium text-white mb-1">
-            {t('registration.business.nameLabel')}
-          </label>
-          <input
-            type="text"
-            value={formData.businessName}
-            onChange={(e) => updateFormData('businessName', e.target.value)}
-            className="w-full px-3 py-3 bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
-            placeholder={t('registration.business.namePlaceholder')}
-            tabIndex={1}
-            required
-          />
+        {/* Business/Individual Toggle */}
+        <div className="bg-white/5 backdrop-blur-sm rounded-lg p-4 border border-white/10">
+          <div className="flex items-center justify-center space-x-4">
+            <span className={`text-sm font-medium transition-colors ${!formData.isIndividual ? 'text-white' : 'text-blue-300'}`}>
+              Business
+            </span>
+            <button
+              type="button"
+              onClick={() => {
+                updateFormData('isIndividual', !formData.isIndividual);
+                // Clear business name when toggling to Individual mode
+                if (!formData.isIndividual) {
+                  updateFormData('businessName', '');
+                }
+              }}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 focus:ring-offset-slate-800 ${
+                formData.isIndividual ? 'bg-blue-600' : 'bg-white/20'
+              }`}
+              role="switch"
+              aria-checked={formData.isIndividual}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  formData.isIndividual ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+            <span className={`text-sm font-medium transition-colors ${formData.isIndividual ? 'text-white' : 'text-blue-300'}`}>
+              Individual
+            </span>
+          </div>
         </div>
+
+        {/* Business Name - Only show when NOT individual - Tab Index 1 */}
+        {!formData.isIndividual && (
+          <div>
+            <label className="block text-sm font-medium text-white mb-1">
+              {t('registration.business.nameLabel')}
+            </label>
+            <input
+              type="text"
+              value={formData.businessName}
+              onChange={(e) => updateFormData('businessName', e.target.value)}
+              className="w-full px-3 py-3 bg-white/10 backdrop-blur-sm border border-white/20 text-white placeholder-blue-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+              placeholder={t('registration.business.namePlaceholder')}
+              tabIndex={1}
+              required
+            />
+          </div>
+        )}
 
         {/* Street Address - Tab Index 3 */}
         <div>
@@ -1189,17 +1254,22 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
     </div>
   );
 
-  const renderSuccessStep = () => (
-    <div className="space-y-6 text-center">
-      <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
-        <CheckCircle className="h-8 w-8 text-green-600" />
-      </div>
+  const renderSuccessStep = () => {
+    const displayBusinessName = formData.isIndividual
+      ? `Individual: ${formData.email}`
+      : formData.businessName;
 
-      <div>
-        <h3 className="text-2xl font-bold text-white mb-4">Welcome to Romero Tech Solutions!</h3>
-        <p className="text-blue-200 mb-6">
-          Your account has been successfully created for <strong>{formData.businessName}</strong>
-        </p>
+    return (
+      <div className="space-y-6 text-center">
+        <div className="mx-auto h-16 w-16 bg-green-100 rounded-full flex items-center justify-center mb-6">
+          <CheckCircle className="h-8 w-8 text-green-600" />
+        </div>
+
+        <div>
+          <h3 className="text-2xl font-bold text-white mb-4">Welcome to Romero Tech Solutions!</h3>
+          <p className="text-blue-200 mb-6">
+            Your account has been successfully created for <strong>{displayBusinessName}</strong>
+          </p>
 
         <div className="bg-blue-500/20 backdrop-blur-sm border border-blue-300/30 rounded-lg p-6 text-left">
           <h4 className="font-medium text-white mb-3">What's Next?</h4>
@@ -1222,7 +1292,8 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderCurrentStep = () => {
     switch (currentStep) {

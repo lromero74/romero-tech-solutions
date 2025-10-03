@@ -272,6 +272,19 @@ export async function validateDomain(domain: string, options: {
     };
 
     if (!dnsResult.hasValidDNS) {
+      // Check if it's a popular domain - if so, allow it even if DNS fails
+      if (POPULAR_DOMAINS.includes(cleanDomain)) {
+        console.log(`✅ Allowing popular domain ${cleanDomain} despite DNS lookup failure`);
+        return {
+          isValid: true,
+          domainInfo: {
+            isReal: true,
+            hasValidDNS: false,
+            hasMXRecord: false
+          }
+        };
+      }
+
       return {
         isValid: false,
         error: 'Domain does not exist or is not reachable',

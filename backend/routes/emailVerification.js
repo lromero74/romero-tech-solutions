@@ -125,6 +125,7 @@ router.post('/register-client', async (req, res) => {
       phone,
       cellPhone,
       businessName,
+      isIndividual = false,
       streetAddress1,
       streetAddress2,
       city,
@@ -148,6 +149,7 @@ router.post('/register-client', async (req, res) => {
     console.log('  Cell Phone:', cellPhone || '(not provided)');
     console.log('\n🏢 Business Information:');
     console.log('  Business Name:', businessName || '(not provided)');
+    console.log('  Is Individual:', isIndividual ? 'YES' : 'NO');
     console.log('\n📍 Address Information:');
     console.log('  Street Address 1:', streetAddress1 || '(not provided)');
     console.log('  Street Address 2:', streetAddress2 || '(not provided)');
@@ -171,6 +173,7 @@ router.post('/register-client', async (req, res) => {
       phone: phone || null,
       cellPhone: cellPhone || null,
       businessName: businessName || null,
+      isIndividual: isIndividual || false,
       streetAddress1: streetAddress1 || null,
       streetAddress2: streetAddress2 || null,
       city: city || null,
@@ -253,15 +256,17 @@ router.post('/register-client', async (req, res) => {
       console.log('✅ Transaction started');
 
       // Create business record (without primary address fields)
-      console.log('🏢 Creating business record:', finalBusinessName);
+      console.log('🏢 Creating business record:', finalBusinessName, '(Individual:', isIndividual, ')');
       const businessResult = await client.query(`
         INSERT INTO businesses (
           business_name,
+          is_individual,
           created_at
-        ) VALUES ($1, CURRENT_TIMESTAMP)
+        ) VALUES ($1, $2, CURRENT_TIMESTAMP)
         RETURNING id
       `, [
-        finalBusinessName
+        finalBusinessName,
+        isIndividual
       ]);
 
       const businessId = businessResult.rows[0].id;
