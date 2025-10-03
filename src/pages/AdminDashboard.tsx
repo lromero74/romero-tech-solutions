@@ -26,6 +26,7 @@ const AdminDashboardContent: React.FC = () => {
     const roleMap: Record<string, string> = {
       'executive': 'Executive',
       'admin': 'Administrator',
+      'manager': 'Manager',
       'sales': 'Sales',
       'technician': 'Technician',
       'client': 'Client'
@@ -41,6 +42,8 @@ const AdminDashboardContent: React.FC = () => {
     const roleLower = role.toLowerCase();
     if (roleLower === 'executive') {
       return 'Executive Dashboard';
+    } else if (roleLower === 'manager') {
+      return 'Manager Dashboard';
     } else if (roleLower === 'technician') {
       return 'Technician Dashboard';
     } else if (roleLower === 'sales') {
@@ -57,6 +60,7 @@ const AdminDashboardContent: React.FC = () => {
     const roleColorMap: Record<string, string> = {
       'executive': 'bg-black',
       'admin': 'bg-red-600',
+      'manager': 'bg-purple-600',
       'sales': 'bg-green-600',
       'technician': 'bg-blue-600'
     };

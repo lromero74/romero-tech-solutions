@@ -187,7 +187,7 @@ export const requireRole = (requiredRoles) => {
 /**
  * Admin role requirement middleware
  */
-export const requireAdmin = requireRole(['admin', 'executive']);
+export const requireAdmin = requireRole(['admin', 'manager', 'executive']);
 
 /**
  * Executive role requirement middleware
@@ -197,7 +197,7 @@ export const requireExecutive = requireRole(['executive']);
 /**
  * Admin or Executive role requirement middleware
  */
-export const requireAdminOrExecutive = requireRole(['admin', 'executive']);
+export const requireAdminOrExecutive = requireRole(['admin', 'manager', 'executive']);
 
 /**
  * Employee role requirement middleware (any employee role)
