@@ -1,6 +1,6 @@
 import express from 'express';
 import { query } from '../../config/database.js';
-import { requireRole } from '../../middleware/authMiddleware.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 
 const router = express.Router();
 
@@ -46,8 +46,8 @@ router.get('/system-settings/:key', async (req, res) => {
 });
 
 // PUT /system-settings/:key - Update a specific system setting
-// Requires executive role
-router.put('/system-settings/:key', requireRole(['executive']), async (req, res) => {
+// Requires modify.system_settings.enable permission
+router.put('/system-settings/:key', requirePermission('modify.system_settings.enable'), async (req, res) => {
   try {
     const { key } = req.params;
     const { value } = req.body;

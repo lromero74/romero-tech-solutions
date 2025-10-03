@@ -144,6 +144,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
         try {
           const user = await signIn(formData.email, formData.password);
 
+          // NOTE: This role check is appropriate for authentication flow boundary
+          // It verifies the user is accessing the correct login portal for their role
+          // Operational permissions are handled via RBAC after authentication
           if (user.role === 'admin') {
             setSuccess('Signed in successfully! Redirecting to admin dashboard...');
             setTimeout(() => {

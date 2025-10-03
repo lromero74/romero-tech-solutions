@@ -1,5 +1,6 @@
 import express from 'express';
-import { authMiddleware, requireRole } from '../../middleware/authMiddleware.js';
+import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 
@@ -72,9 +73,9 @@ router.get('/', async (req, res) => {
 /**
  * POST /api/admin/service-hour-rates
  * Create a new service hour rate tier
- * Requires executive role
+ * Requires modify.service_hour_rates.enable permission
  */
-router.post('/', requireRole(['executive']), async (req, res) => {
+router.post('/', requirePermission('modify.service_hour_rates.enable'), async (req, res) => {
   try {
     const {
       tierName,
@@ -185,7 +186,7 @@ router.post('/', requireRole(['executive']), async (req, res) => {
  * Update a service hour rate tier
  * Requires executive role
  */
-router.put('/:id', requireRole(['executive']), async (req, res) => {
+router.put('/:id', requirePermission('modify.service_hour_rates.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -360,7 +361,7 @@ router.put('/:id', requireRole(['executive']), async (req, res) => {
  * Delete a service hour rate tier
  * Requires executive role
  */
-router.delete('/:id', requireRole(['executive']), async (req, res) => {
+router.delete('/:id', requirePermission('modify.service_hour_rates.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await getPool();

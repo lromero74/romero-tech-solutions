@@ -1,12 +1,13 @@
 import express from 'express';
-import { authMiddleware, requireRole } from '../../middleware/authMiddleware.js';
+import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 import { getPool } from '../../config/database.js';
 
 const router = express.Router();
 
-// Require executive or admin role for all workflow configuration routes
+// Require modify.workflow_configuration.enable permission for all workflow configuration routes
 router.use(authMiddleware);
-router.use(requireRole(['executive', 'admin']));
+router.use(requirePermission('modify.workflow_configuration.enable'));
 
 /**
  * GET /api/admin/workflow-configuration/rules

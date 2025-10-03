@@ -1,5 +1,6 @@
 import express from 'express';
-import { authMiddleware, requireRole } from '../../middleware/authMiddleware.js';
+import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 import { validateAndUseToken } from '../../utils/workflowTokens.js';
 import {
   handleServiceRequestAcknowledged,
@@ -14,7 +15,7 @@ const router = express.Router();
  * POST /api/employee/service-requests/acknowledge/:token
  * Acknowledge a service request using a unique token
  */
-router.post('/acknowledge/:token', authMiddleware, requireRole(['executive', 'admin', 'technician']), async (req, res) => {
+router.post('/acknowledge/:token', authMiddleware, requirePermission('start.service_request_work.enable'), async (req, res) => {
   try {
     const { token } = req.params;
     const employeeId = req.user.employeeId;
@@ -69,7 +70,7 @@ router.post('/acknowledge/:token', authMiddleware, requireRole(['executive', 'ad
  * POST /api/employee/service-requests/start/:token
  * Start a service request using a unique token
  */
-router.post('/start/:token', authMiddleware, requireRole(['executive', 'admin', 'technician']), async (req, res) => {
+router.post('/start/:token', authMiddleware, requirePermission('start.service_request_work.enable'), async (req, res) => {
   try {
     const { token } = req.params;
     const employeeId = req.user.employeeId;
@@ -163,7 +164,7 @@ router.post('/start/:token', authMiddleware, requireRole(['executive', 'admin', 
  * POST /api/employee/service-requests/close/:token
  * Close a service request using a unique token
  */
-router.post('/close/:token', authMiddleware, requireRole(['executive', 'admin', 'technician']), async (req, res) => {
+router.post('/close/:token', authMiddleware, requirePermission('stop.service_request_work.enable'), async (req, res) => {
   try {
     const { token } = req.params;
     const { closeReasonId, resolution, actualCost, actualDuration } = req.body;
@@ -283,7 +284,7 @@ router.post('/close/:token', authMiddleware, requireRole(['executive', 'admin', 
  * GET /api/employee/service-requests/:id/workflow-state
  * Get workflow state for a service request
  */
-router.get('/:id/workflow-state', authMiddleware, requireRole(['executive', 'admin', 'technician']), async (req, res) => {
+router.get('/:id/workflow-state', authMiddleware, requirePermission('view.service_request_time_entries.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await getPool();

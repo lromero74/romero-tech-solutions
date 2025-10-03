@@ -5,11 +5,8 @@
 
 import express from 'express';
 import pool from '../config/database.js';
-import {
-  authMiddleware,
-  requireAdminOrExecutive,
-  requireExecutive
-} from '../middleware/authMiddleware.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { requirePermission } from '../middleware/permissionMiddleware.js';
 
 const router = express.Router();
 
@@ -48,7 +45,7 @@ router.get('/', authMiddleware, async (req, res) => {
  * Get all service types (including inactive) for admin management
  * Admin or Executive only endpoint
  */
-router.get('/admin', authMiddleware, requireAdminOrExecutive, async (req, res) => {
+router.get('/admin', authMiddleware, requirePermission('modify.service_types.enable'), async (req, res) => {
   try {
     const languageCode = req.query.lang || 'en';
 
@@ -139,7 +136,7 @@ router.get('/admin', authMiddleware, requireAdminOrExecutive, async (req, res) =
  * Create a new service type
  * Admin or Executive only endpoint
  */
-router.post('/', authMiddleware, requireAdminOrExecutive, async (req, res) => {
+router.post('/', authMiddleware, requirePermission('modify.service_types.enable'), async (req, res) => {
   try {
     const {
       type_code,
@@ -230,7 +227,7 @@ router.post('/', authMiddleware, requireAdminOrExecutive, async (req, res) => {
  * Update an existing service type
  * Admin or Executive only endpoint
  */
-router.put('/:id', authMiddleware, requireAdminOrExecutive, async (req, res) => {
+router.put('/:id', authMiddleware, requirePermission('modify.service_types.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const {
@@ -312,7 +309,7 @@ router.put('/:id', authMiddleware, requireAdminOrExecutive, async (req, res) => 
  * Toggle active status of a service type
  * Admin or Executive only endpoint
  */
-router.patch('/:id/toggle', authMiddleware, requireAdminOrExecutive, async (req, res) => {
+router.patch('/:id/toggle', authMiddleware, requirePermission('modify.service_types.enable'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -362,7 +359,7 @@ router.patch('/:id/toggle', authMiddleware, requireAdminOrExecutive, async (req,
  * Delete a service type (only non-system types can be deleted)
  * Executive only endpoint
  */
-router.delete('/:id', authMiddleware, requireExecutive, async (req, res) => {
+router.delete('/:id', authMiddleware, requirePermission('reorder.service_types.enable'), async (req, res) => {
   try {
     const { id } = req.params;
 
@@ -424,7 +421,7 @@ router.delete('/:id', authMiddleware, requireExecutive, async (req, res) => {
  * Get list of available categories
  * Admin or Executive only endpoint
  */
-router.get('/categories', authMiddleware, requireAdminOrExecutive, async (req, res) => {
+router.get('/categories', authMiddleware, requirePermission('modify.service_types.enable'), async (req, res) => {
   try {
     const result = await pool.query(
       'SELECT DISTINCT category FROM service_types ORDER BY category'

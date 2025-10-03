@@ -101,6 +101,9 @@ const AdminServiceRequests: React.FC = () => {
   const [editedTitle, setEditedTitle] = useState('');
   const [editedDescription, setEditedDescription] = useState('');
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Close confirmation state
+  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
@@ -249,6 +252,39 @@ const AdminServiceRequests: React.FC = () => {
     };
   }, [selectedRequest]);
 
+  // Handle ESC key to close the detail modal (only if no edits in progress)
+  useEffect(() => {
+    if (!selectedRequest) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseDetailModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [selectedRequest, editingTitle, editingDescription, savingEdit, newNoteText]);
+
+  // Handle ESC key to close the Complete Service Request modal
+  useEffect(() => {
+    if (!showCloseModal) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !actionLoading) {
+        setShowCloseModal(false);
+        setSelectedClosureReasonId('');
+        setResolutionSummary('');
+        setActualDurationMinutes('');
+        setEquipmentUsed('');
+        setActionError(null);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [showCloseModal, actionLoading]);
+
   // Fetch technicians
   const fetchTechnicians = async () => {
     try {
@@ -373,6 +409,38 @@ const AdminServiceRequests: React.FC = () => {
     } catch (err) {
       console.error('Error assigning technician:', err);
       setActionError(err instanceof Error ? err.message : 'Failed to assign technician');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle assuming ownership (assign to self)
+  const handleAssumeOwnership = async () => {
+    if (!selectedRequest || !user) return;
+
+    try {
+      setActionLoading(true);
+      setActionError(null);
+
+      const response = await apiService.put(`/admin/service-requests/${selectedRequest.id}/assign`, {
+        technicianId: user.id,
+        assumeOwnership: true // Flag to indicate this is an ownership assumption
+      });
+
+      if (response.success) {
+        // Refresh service requests list and update selected request
+        await fetchServiceRequests();
+        // Update the selected request to reflect the new assignment
+        if (selectedRequest) {
+          const updatedRequest = { ...selectedRequest, assigned_technician_id: user.id, assigned_technician_name: user.name };
+          setSelectedRequest(updatedRequest);
+        }
+      } else {
+        throw new Error(response.message || 'Failed to assume ownership');
+      }
+    } catch (err) {
+      console.error('Error assuming ownership:', err);
+      setActionError(err instanceof Error ? err.message : 'Failed to assume ownership');
     } finally {
       setActionLoading(false);
     }
@@ -702,6 +770,28 @@ const AdminServiceRequests: React.FC = () => {
     }
   };
 
+  // Handle closing detail modal with confirmation if there are pending changes
+  const handleCloseDetailModal = () => {
+    const hasPendingChanges = editingTitle || editingDescription || savingEdit || newNoteText.trim().length > 0;
+
+    if (hasPendingChanges) {
+      setShowCloseConfirmation(true);
+    } else {
+      setSelectedRequest(null);
+      setActionError(null);
+    }
+  };
+
+  const confirmCloseDetailModal = () => {
+    setSelectedRequest(null);
+    setActionError(null);
+    setShowCloseConfirmation(false);
+    // Clear any pending changes
+    setNewNoteText('');
+    setEditingTitle(false);
+    setEditingDescription(false);
+  };
+
   // Handle file operations
   const startRenameFile = (file: ServiceRequestFile) => {
     setRenamingFileId(file.id);
@@ -932,36 +1022,69 @@ const AdminServiceRequests: React.FC = () => {
     );
   });
 
+  // Get unique clients for filter dropdown
+  const uniqueClients = React.useMemo(() => {
+    const clientMap = new Map<string, string>();
+    serviceRequests.forEach(req => {
+      if (req.business_id && req.business_name) {
+        clientMap.set(req.business_id, req.business_name);
+      }
+    });
+    return Array.from(clientMap.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [serviceRequests]);
+
+  // Check if user can complete a service request
+  const canCompleteRequest = (request: ServiceRequest) => {
+    if (!user) return false;
+
+    // Check if user can complete any request
+    const canCompleteAny = checkPermission('complete.service_requests.enable');
+    if (canCompleteAny) {
+      return true;
+    }
+
+    // Check if user can complete requests assigned to them
+    const canCompleteAssigned = checkPermission('complete.assigned_service_requests.enable');
+    if (canCompleteAssigned && request.assigned_technician_id === user.id) {
+      return true;
+    }
+
+    return false;
+  };
+
+  // Check if user can assume ownership of a service request
+  const canAssumeOwnership = (request: ServiceRequest) => {
+    if (!user) return false;
+
+    // Can't assume ownership if already assigned to you
+    if (request.assigned_technician_id === user.id) {
+      return false;
+    }
+
+    // Check permission to assume ownership
+    return checkPermission('assume_ownership.service_requests.enable');
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex justify-between items-center">
-        <div className="flex items-center space-x-3">
-          <ClipboardList className={`h-8 w-8 ${themeClasses.text.primary}`} />
-          <div>
-            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Service Requests</h1>
-            <p className={`text-sm ${themeClasses.text.muted}`}>
-              {pagination.totalCount} total requests
-            </p>
-          </div>
+      <div className="flex items-center space-x-3">
+        <ClipboardList className={`h-8 w-8 ${themeClasses.text.primary}`} />
+        <div>
+          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Service Requests</h1>
+          <p className={`text-sm ${themeClasses.text.muted}`}>
+            {pagination.totalCount} total requests
+          </p>
         </div>
-
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`flex items-center space-x-2 px-4 py-2 rounded-lg ${themeClasses.bg.hover} transition-colors`}
-        >
-          <Filter className="h-5 w-5" />
-          <span>Filters</span>
-          {showFilters ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-        </button>
       </div>
 
       {/* Filters */}
-      {showFilters && (
-        <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4">
+      <div className={`${themeClasses.bg.card} border ${themeClasses.border.primary} rounded-lg p-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {/* Search */}
-            <div className="lg:col-span-2">
+            <div className="md:col-span-2 lg:col-span-3 xl:col-span-2">
               <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
                 Search
               </label>
@@ -972,7 +1095,7 @@ const AdminServiceRequests: React.FC = () => {
                   value={filters.search}
                   onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
                   placeholder="Request #, title, client, business..."
-                  className={`w-full pl-10 pr-4 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                  className={`w-full pl-10 pr-4 py-2 rounded-lg ${themeClasses.input}`}
                 />
               </div>
             </div>
@@ -985,7 +1108,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={filters.status}
                 onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="all">All Statuses</option>
                 <option value="pending">Pending</option>
@@ -1005,7 +1128,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={filters.urgency}
                 onChange={(e) => setFilters(prev => ({ ...prev, urgency: e.target.value }))}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="all">All Urgencies</option>
                 <option value="normal">Normal</option>
@@ -1022,7 +1145,7 @@ const AdminServiceRequests: React.FC = () => {
               <select
                 value={filters.priority}
                 onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-lg ${themeClasses.bg.input}`}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="all">All Priorities</option>
                 <option value="low">Low</option>
@@ -1031,10 +1154,48 @@ const AdminServiceRequests: React.FC = () => {
                 <option value="critical">Critical</option>
               </select>
             </div>
+
+            {/* Technician */}
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Technician
+              </label>
+              <select
+                value={filters.technician}
+                onChange={(e) => setFilters(prev => ({ ...prev, technician: e.target.value }))}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
+              >
+                <option value="all">All Technicians</option>
+                {technicians.map((tech) => (
+                  <option key={tech.id} value={tech.id}>
+                    {tech.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Client/Business */}
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
+                Client
+              </label>
+              <select
+                value={filters.business}
+                onChange={(e) => setFilters(prev => ({ ...prev, business: e.target.value }))}
+                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
+              >
+                <option value="all">All Clients</option>
+                {uniqueClients.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           {/* Clear Filters */}
-          {(filters.search || filters.status !== 'all' || filters.urgency !== 'all' || filters.priority !== 'all') && (
+          {(filters.search || filters.status !== 'all' || filters.urgency !== 'all' || filters.priority !== 'all' || filters.business !== 'all' || filters.technician !== 'all') && (
             <div className="mt-4">
               <button
                 onClick={() => setFilters({
@@ -1045,14 +1206,13 @@ const AdminServiceRequests: React.FC = () => {
                   business: 'all',
                   technician: 'all'
                 })}
-                className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                className={`text-sm ${themeClasses.text.link} hover:underline`}
               >
                 Clear all filters
               </button>
             </div>
           )}
         </div>
-      )}
 
       {/* Service Requests Table */}
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden`}>
@@ -1308,7 +1468,7 @@ const AdminServiceRequests: React.FC = () => {
                   </p>
                 </div>
                 <button
-                  onClick={() => setSelectedRequest(null)}
+                  onClick={handleCloseDetailModal}
                   className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
                 >
                   <XCircle className="h-6 w-6" />
@@ -1609,6 +1769,7 @@ const AdminServiceRequests: React.FC = () => {
                 onNewNoteChange={setNewNoteText}
                 onSubmitNote={submitNote}
                 otherViewers={otherViewers}
+                timeFormatPreference={(user?.timeFormatPreference as '12h' | '24h') || '12h'}
               />
 
               {/* Files Section */}
@@ -1649,6 +1810,16 @@ const AdminServiceRequests: React.FC = () => {
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                     >
                       Assign Technician
+                    </button>
+                  )}
+                  {canAssumeOwnership(selectedRequest) && (
+                    <button
+                      onClick={handleAssumeOwnership}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center"
+                    >
+                      <User className="h-4 w-4 mr-2" />
+                      {actionLoading ? 'Assuming...' : 'Assume Ownership'}
                     </button>
                   )}
                   <button
@@ -1728,31 +1899,30 @@ const AdminServiceRequests: React.FC = () => {
                       </button>
                     )}
 
-                    <button
-                      onClick={() => {
-                        setShowCloseModal(true);
-                        setActionError(null);
-                        // Fetch time breakdown and auto-populate duration
-                        if (selectedRequest?.id) {
-                          fetchTimeBreakdown(selectedRequest.id);
-                        }
-                      }}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Complete Request
-                    </button>
+                    {canCompleteRequest(selectedRequest) && (
+                      <button
+                        onClick={() => {
+                          setShowCloseModal(true);
+                          setActionError(null);
+                          // Fetch time breakdown and auto-populate duration
+                          if (selectedRequest?.id) {
+                            fetchTimeBreakdown(selectedRequest.id);
+                          }
+                        }}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
+                      >
+                        <CheckCircle className="h-4 w-4 mr-2" />
+                        Complete Request
+                      </button>
+                    )}
                   </div>
                 )}
 
                 {/* Row 3: Close */}
                 <div className="flex justify-end">
                   <button
-                    onClick={() => {
-                      setSelectedRequest(null);
-                      setActionError(null);
-                    }}
+                    onClick={handleCloseDetailModal}
                     disabled={actionLoading}
                     className={`px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
                   >
@@ -1760,6 +1930,36 @@ const AdminServiceRequests: React.FC = () => {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Confirmation Modal */}
+      {showCloseConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
+          <div className={`${themeClasses.bg.card} rounded-lg max-w-md w-full p-6`}>
+            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
+              Unsaved Changes
+            </h2>
+
+            <p className={`text-sm ${themeClasses.text.secondary} mb-6`}>
+              You have unsaved changes. Are you sure you want to close this service request? All unsaved changes will be lost.
+            </p>
+
+            <div className="flex space-x-3">
+              <button
+                onClick={confirmCloseDetailModal}
+                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Discard Changes
+              </button>
+              <button
+                onClick={() => setShowCloseConfirmation(false)}
+                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80`}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
@@ -1902,10 +2102,11 @@ const AdminServiceRequests: React.FC = () => {
       {/* Complete/Close Request Modal */}
       {showCloseModal && selectedRequest && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-2xl w-full p-6 max-h-[90vh] overflow-y-auto`}>
-            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-              Complete Service Request
-            </h2>
+          <div className={`${themeClasses.bg.card} rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col`}>
+            <div className="p-6 overflow-y-auto flex-1">
+              <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
+                Complete Service Request
+              </h2>
 
             <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
               Complete and close service request <span className="font-mono">{selectedRequest.request_number}</span>
@@ -1963,7 +2164,7 @@ const AdminServiceRequests: React.FC = () => {
                 min="0"
                 className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               />
-              {selectedRequest.total_work_duration_minutes && (
+              {selectedRequest.total_work_duration_minutes > 0 && (
                 <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
                   Tracked time: {formatDuration(selectedRequest.total_work_duration_minutes)}
                 </p>
@@ -2051,10 +2252,11 @@ const AdminServiceRequests: React.FC = () => {
                   setActionError(null);
                 }}
                 disabled={actionLoading}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
+                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
               >
                 Cancel
               </button>
+            </div>
             </div>
           </div>
         </div>

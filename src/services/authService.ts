@@ -589,6 +589,9 @@ export class AuthService {
   }
 
   // Check if current user is admin
+  // @deprecated Use permission-based checks via usePermission() hook instead
+  // This method uses hardcoded role checks which bypass the RBAC system
+  // Example: const { checkPermission } = usePermission(); checkPermission('your.permission.key')
   async isCurrentUserAdmin(): Promise<boolean> {
     try {
       const user = await this.getCurrentAuthUser();
@@ -599,6 +602,9 @@ export class AuthService {
   }
 
   // Check if current user is technician or admin
+  // @deprecated Use permission-based checks via usePermission() hook instead
+  // This method uses hardcoded role checks which bypass the RBAC system
+  // Example: const { checkPermission } = usePermission(); checkPermission('your.permission.key')
   async isCurrentUserTechnicianOrAdmin(): Promise<boolean> {
     try {
       const user = await this.getCurrentAuthUser();

@@ -1,5 +1,6 @@
 import express from 'express';
-import { authMiddleware, requireRole } from '../../middleware/authMiddleware.js';
+import { authMiddleware } from '../../middleware/authMiddleware.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
 import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 
@@ -62,9 +63,10 @@ router.get('/', async (req, res) => {
 
 /**
  * POST /api/admin/hourly-rate-categories
- * Create a new hourly rate category (Executive/Admin only)
+ * Create a new hourly rate category
+ * Requires modify.hourly_rate_categories.enable permission
  */
-router.post('/', requireRole(['executive', 'admin']), async (req, res) => {
+router.post('/', requirePermission('modify.hourly_rate_categories.enable'), async (req, res) => {
   try {
     const { categoryName, baseHourlyRate, description, isDefault, displayOrder } = req.body;
 
@@ -156,7 +158,7 @@ router.post('/', requireRole(['executive', 'admin']), async (req, res) => {
  * PUT /api/admin/hourly-rate-categories/:id
  * Update an hourly rate category (Executive/Admin only)
  */
-router.put('/:id', requireRole(['executive', 'admin']), async (req, res) => {
+router.put('/:id', requirePermission('modify.hourly_rate_categories.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const { categoryName, baseHourlyRate, description, isDefault, displayOrder, isActive } = req.body;
@@ -267,7 +269,7 @@ router.put('/:id', requireRole(['executive', 'admin']), async (req, res) => {
  * DELETE /api/admin/hourly-rate-categories/:id
  * Soft delete an hourly rate category (Executive/Admin only)
  */
-router.delete('/:id', requireRole(['executive', 'admin']), async (req, res) => {
+router.delete('/:id', requirePermission('modify.hourly_rate_categories.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const pool = await getPool();

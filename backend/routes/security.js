@@ -1,5 +1,6 @@
 import express from 'express';
-import { authMiddleware, requireAdmin } from '../middleware/authMiddleware.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { getSecurityStats, SECURITY_EVENTS } from '../utils/securityMonitoring.js';
 import { validateEnvironmentConfig, validateDatabaseSecurity } from '../utils/productionHardening.js';
 
@@ -11,7 +12,7 @@ const router = express.Router();
  */
 
 // GET /api/security/stats - Get security statistics
-router.get('/stats', authMiddleware, requireAdmin, async (req, res) => {
+router.get('/stats', authMiddleware, requirePermission('manage.security_sessions.enable'), async (req, res) => {
   try {
     const stats = getSecurityStats();
 
@@ -31,7 +32,7 @@ router.get('/stats', authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // GET /api/security/health - Comprehensive security health check
-router.get('/health', authMiddleware, requireAdmin, async (req, res) => {
+router.get('/health', authMiddleware, requirePermission('manage.security_sessions.enable'), async (req, res) => {
   try {
     console.log('🔍 Admin requested security health check');
 
@@ -79,7 +80,7 @@ router.get('/health', authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // GET /api/security/events - Get recent security events (admin only)
-router.get('/events', authMiddleware, requireAdmin, async (req, res) => {
+router.get('/events', authMiddleware, requirePermission('manage.security_sessions.enable'), async (req, res) => {
   try {
     const limit = parseInt(req.query.limit) || 50;
     const eventType = req.query.type; // Optional filter by event type
@@ -110,7 +111,7 @@ router.get('/events', authMiddleware, requireAdmin, async (req, res) => {
 });
 
 // POST /api/security/test-alert - Test security alerting system (development only)
-router.post('/test-alert', authMiddleware, requireAdmin, async (req, res) => {
+router.post('/test-alert', authMiddleware, requirePermission('manage.security_sessions.enable'), async (req, res) => {
   try {
     if (process.env.NODE_ENV === 'production') {
       return res.status(403).json({

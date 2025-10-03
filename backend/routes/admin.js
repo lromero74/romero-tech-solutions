@@ -1,5 +1,6 @@
 import express from 'express';
-import { authMiddleware, requireAdmin, requireEmployee } from '../middleware/authMiddleware.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
+import { requirePermission } from '../middleware/permissionMiddleware.js';
 
 // Import modular route handlers
 import dashboardRoutes from './admin/dashboard.js';
@@ -29,32 +30,32 @@ const router = express.Router();
 // Apply authentication middleware to all admin routes
 router.use(authMiddleware);
 
-// Service requests routes - accessible by all employees
-router.use('/', requireEmployee, serviceRequestsRoutes);
+// Service requests routes - accessible by all employees with access.admin_routes.enable
+router.use('/', requirePermission('access.admin_routes.enable'), serviceRequestsRoutes);
 
 // Employees routes - accessible by all employees (with permission checks inside routes)
-router.use('/', requireEmployee, employeesRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), employeesRoutes);
 
 // Employee Calendar routes - accessible by all employees
-router.use('/', requireEmployee, employeeCalendarRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), employeeCalendarRoutes);
 
 // Businesses routes - accessible by all employees (with permission checks inside routes)
-router.use('/', requireEmployee, businessesRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), businessesRoutes);
 
 // Permissions routes - user-permissions endpoint needs to be accessible by all employees
-router.use('/', requireEmployee, permissionsRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), permissionsRoutes);
 
 // Users (Clients) routes - accessible by all employees (with permission checks inside routes)
-router.use('/', requireEmployee, usersRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), usersRoutes);
 
 // Service Locations routes - accessible by all employees (with permission checks inside routes)
-router.use('/', requireEmployee, serviceLocationsRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), serviceLocationsRoutes);
 
 // Location Contacts routes - accessible by all employees (needed for service locations table)
-router.use('/', requireEmployee, locationContactsRoutes);
+router.use('/', requirePermission('access.admin_routes.enable'), locationContactsRoutes);
 
-// All other admin routes - require admin/executive role
-router.use(requireAdmin);
+// All other admin routes - require manage.security_sessions.enable
+router.use(requirePermission('manage.security_sessions.enable'));
 
 // Mount modular routes
 router.use('/', dashboardRoutes);

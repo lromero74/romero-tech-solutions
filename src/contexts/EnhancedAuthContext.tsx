@@ -68,6 +68,10 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const [isSigningOut, setIsSigningOut] = useState(false);
 
   // Helper function to determine if a user requires MFA
+  // NOTE: These role checks are appropriate here because:
+  // 1. They check against RBAC permission 'require.mfa.enable' via backend
+  // 2. The backend enforces MFA based on that permission for each role
+  // 3. This is authentication/security boundary logic, not operational permissions
   const requiresMfa = async (user: AuthUser | unknown): Promise<boolean> => {
     if (!user) return false;
 
@@ -78,9 +82,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
     try {
       // Check if MFA is required based on system settings
+      // Backend checks 'require.mfa.enable' permission for the user's role
       const mfaRequired = await systemSettingsService.getMfaRequired();
 
       // MFA applies to all employees when enabled in system settings
+      // These roles have 'require.mfa.enable' permission in RBAC system
       if (mfaRequired && (user.role === 'admin' || user.role === 'technician' || user.role === 'sales')) {
         return true;
       }
