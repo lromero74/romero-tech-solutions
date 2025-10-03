@@ -930,13 +930,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           </div>
 
           {/* Duration Selector, Time Format Toggle, and Auto-Suggest */}
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-4">
-            <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-3 mt-4">
+            {/* Duration Selector */}
+            <div className="flex items-center gap-2 min-w-fit">
               <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.duration', 'Duration:')}</label>
               <select
                 value={selectedDuration}
                 onChange={(e) => handleDurationChange(parseFloat(e.target.value))}
-                className={`flex-1 sm:flex-initial px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-white'
                     : 'bg-white border-gray-300 text-gray-900'
@@ -950,12 +951,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Tier Preference Selector */}
+            <div className="flex items-center gap-2 min-w-fit">
               <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.tierPreference', 'Prefer:')}</label>
               <select
                 value={tierPreference}
                 onChange={(e) => setTierPreference(e.target.value as 'any' | 'standard' | 'premium' | 'emergency')}
-                className={`flex-1 sm:flex-initial px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-white'
                     : 'bg-white border-gray-300 text-gray-900'
@@ -968,7 +970,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </select>
             </div>
 
-            <div className="flex items-center gap-2">
+            {/* Time Format Toggle */}
+            <div className="flex items-center gap-2 min-w-fit">
               <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.timeFormat', 'Time:')}</label>
               <button
                 type="button"
@@ -984,15 +987,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </button>
             </div>
 
-            <div className="flex gap-2">
+            {/* Auto-Suggest and Now buttons */}
+            <div className="flex gap-2 flex-1 min-w-fit">
               <button
                 onClick={handleAutoSuggest}
                 disabled={isAutoSuggesting || isSelectedDateInPast}
-                className="flex-1 sm:flex-initial flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm sm:text-base"
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
               >
-                <Sparkles className="h-4 w-4" />
-                <span className="hidden sm:inline">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}</span>
-                <span className="sm:hidden">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}</span>
+                <Sparkles className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden md:inline">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}</span>
+                <span className="md:hidden">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}</span>
               </button>
 
               {selectedDate.toDateString() === new Date().toDateString() && (
