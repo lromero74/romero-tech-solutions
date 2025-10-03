@@ -116,7 +116,22 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [rateCategoryName, setRateCategoryName] = useState<string>('Standard'); // Default category name
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [isFirstTimer, setIsFirstTimer] = useState<boolean>(false);
-  const [is24HourFormat, setIs24HourFormat] = useState<boolean>(false); // Default to 12-hour format
+
+  // Initialize time format from user preference if available
+  const getUserTimeFormatPreference = (): boolean => {
+    try {
+      const authUser = RoleBasedStorage.getItem('authUser');
+      if (authUser) {
+        const user = JSON.parse(authUser);
+        return user.timeFormatPreference === '24h';
+      }
+    } catch (error) {
+      console.warn('Failed to load user time format preference:', error);
+    }
+    return false; // Default to 12-hour format
+  };
+
+  const [is24HourFormat, setIs24HourFormat] = useState<boolean>(getUserTimeFormatPreference());
 
   const BUFFER_HOURS = 1;
 
