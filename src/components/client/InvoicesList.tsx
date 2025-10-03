@@ -12,6 +12,8 @@ import {
 } from 'lucide-react';
 import { apiService } from '../../services/apiService';
 import { InvoicePaymentModal } from './InvoicePaymentModal';
+import { useClientTheme } from '../../contexts/ClientThemeContext';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 
 interface Invoice {
   id: string;
@@ -32,6 +34,8 @@ interface InvoicesListProps {
 }
 
 export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }) => {
+  const { isDarkMode } = useClientTheme();
+  const { t } = useClientLanguage();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -77,40 +81,52 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       paid: {
-        bg: 'bg-green-100',
-        text: 'text-green-800',
+        bgLight: 'bg-green-100',
+        bgDark: 'dark:bg-green-900/30',
+        textLight: 'text-green-800',
+        textDark: 'dark:text-green-300',
         icon: CheckCircle,
-        label: 'Paid',
+        labelKey: 'invoices.status.paid',
       },
       due: {
-        bg: 'bg-blue-100',
-        text: 'text-blue-800',
+        bgLight: 'bg-blue-100',
+        bgDark: 'dark:bg-blue-900/30',
+        textLight: 'text-blue-800',
+        textDark: 'dark:text-blue-300',
         icon: Clock,
-        label: 'Due',
+        labelKey: 'invoices.status.due',
       },
       pending: {
-        bg: 'bg-yellow-100',
-        text: 'text-yellow-800',
+        bgLight: 'bg-yellow-100',
+        bgDark: 'dark:bg-yellow-900/30',
+        textLight: 'text-yellow-800',
+        textDark: 'dark:text-yellow-300',
         icon: Clock,
-        label: 'Pending',
+        labelKey: 'invoices.status.pending',
       },
       failed: {
-        bg: 'bg-red-100',
-        text: 'text-red-800',
+        bgLight: 'bg-red-100',
+        bgDark: 'dark:bg-red-900/30',
+        textLight: 'text-red-800',
+        textDark: 'dark:text-red-300',
         icon: AlertCircle,
-        label: 'Failed',
+        labelKey: 'invoices.status.failed',
       },
       overdue: {
-        bg: 'bg-orange-100',
-        text: 'text-orange-800',
+        bgLight: 'bg-orange-100',
+        bgDark: 'dark:bg-orange-900/30',
+        textLight: 'text-orange-800',
+        textDark: 'dark:text-orange-300',
         icon: AlertCircle,
-        label: 'Overdue',
+        labelKey: 'invoices.status.overdue',
       },
       comped: {
-        bg: 'bg-purple-100',
-        text: 'text-purple-800',
+        bgLight: 'bg-purple-100',
+        bgDark: 'dark:bg-purple-900/30',
+        textLight: 'text-purple-800',
+        textDark: 'dark:text-purple-300',
         icon: CheckCircle,
-        label: 'Comped',
+        labelKey: 'invoices.status.comped',
       },
     };
 
@@ -120,10 +136,10 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
 
     return (
       <span
-        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${config.bgLight} ${config.bgDark} ${config.textLight} ${config.textDark}`}
       >
         <Icon className="w-3.5 h-3.5" />
-        {config.label}
+        {t(config.labelKey, status.charAt(0).toUpperCase() + status.slice(1))}
       </span>
     );
   };
@@ -147,23 +163,31 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader className="w-8 h-8 text-blue-600 animate-spin" />
+        <Loader className={`w-8 h-8 animate-spin ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-lg p-6 flex items-start gap-3">
-        <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+      <div className={`border rounded-lg p-6 flex items-start gap-3 ${
+        isDarkMode
+          ? 'bg-red-900/20 border-red-800'
+          : 'bg-red-50 border-red-200'
+      }`}>
+        <AlertCircle className={`w-5 h-5 flex-shrink-0 mt-0.5 ${isDarkMode ? 'text-red-400' : 'text-red-500'}`} />
         <div>
-          <p className="text-red-800 font-medium">Error loading invoices</p>
-          <p className="text-red-700 text-sm mt-1">{error}</p>
+          <p className={`font-medium ${isDarkMode ? 'text-red-300' : 'text-red-800'}`}>{t('invoices.errorLoading', 'Error loading invoices')}</p>
+          <p className={`text-sm mt-1 ${isDarkMode ? 'text-red-400' : 'text-red-700'}`}>{error}</p>
           <button
             onClick={fetchInvoices}
-            className="mt-3 px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm font-medium"
+            className={`mt-3 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${
+              isDarkMode
+                ? 'bg-red-900/40 text-red-300 hover:bg-red-900/60'
+                : 'bg-red-100 text-red-700 hover:bg-red-200'
+            }`}
           >
-            Try Again
+            {t('invoices.tryAgain', 'Try Again')}
           </button>
         </div>
       </div>
@@ -172,13 +196,13 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-          <FileText className="w-7 h-7 text-blue-600" />
-          Invoices
+      <div className="flex items-center justify-between flex-wrap gap-4">
+        <h2 className={`text-2xl font-bold flex items-center gap-2 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+          <FileText className={`w-7 h-7 ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
+          {t('invoices.title', 'Invoices')}
         </h2>
 
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {['all', 'due', 'paid', 'overdue', 'failed'].map((status) => (
             <button
               key={status}
@@ -186,23 +210,29 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
                 filterStatus === status
                   ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  : isDarkMode
+                    ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {t(`invoices.filter.${status}`, status.charAt(0).toUpperCase() + status.slice(1))}
             </button>
           ))}
         </div>
       </div>
 
       {invoices.length === 0 ? (
-        <div className="bg-gray-50 border border-gray-200 rounded-lg p-12 text-center">
-          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-          <p className="text-gray-600 text-lg font-medium">No invoices found</p>
-          <p className="text-gray-500 text-sm mt-2">
+        <div className={`border rounded-lg p-12 text-center ${
+          isDarkMode
+            ? 'bg-gray-800 border-gray-700'
+            : 'bg-gray-50 border-gray-200'
+        }`}>
+          <FileText className={`w-12 h-12 mx-auto mb-4 ${isDarkMode ? 'text-gray-500' : 'text-gray-400'}`} />
+          <p className={`text-lg font-medium ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('invoices.noInvoices', 'No invoices found')}</p>
+          <p className={`text-sm mt-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
             {filterStatus !== 'all'
-              ? `No ${filterStatus} invoices at this time.`
-              : 'You have no invoices at this time.'}
+              ? t('invoices.noFilteredInvoices', `No ${filterStatus} invoices at this time.`, { status: filterStatus })
+              : t('invoices.noInvoicesYet', 'You have no invoices at this time.')}
           </p>
         </div>
       ) : (
@@ -210,18 +240,22 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
           {invoices.map((invoice) => (
             <div
               key={invoice.id}
-              className="bg-white border border-gray-200 rounded-lg p-6 hover:shadow-md transition-shadow"
+              className={`border rounded-lg p-6 hover:shadow-md transition-shadow ${
+                isDarkMode
+                  ? 'bg-gray-800 border-gray-700'
+                  : 'bg-white border-gray-200'
+              }`}
             >
               <div className="flex items-start justify-between mb-4">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-gray-900">
-                      Invoice #{invoice.invoice_number}
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
+                    <h3 className={`text-lg font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+                      {t('invoices.invoiceNumber', 'Invoice #{{number}}', { number: invoice.invoice_number })}
                     </h3>
                     {getStatusBadge(invoice.payment_status)}
                   </div>
                   {invoice.service_title && (
-                    <p className="text-sm text-gray-600 flex items-center gap-1.5">
+                    <p className={`text-sm flex items-center gap-1.5 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                       <FileText className="w-4 h-4" />
                       {invoice.service_title}
                       {invoice.request_number && ` (SR-${invoice.request_number})`}
@@ -229,49 +263,53 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                   )}
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold text-gray-900">
+                  <div className={`text-2xl font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                     {formatAmount(invoice.total_amount)}
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
-                <div className="flex items-center gap-2 text-gray-600">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-sm">
+                <div className={`flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <Calendar className="w-4 h-4" />
-                  <span>Issued: {formatDate(invoice.issue_date)}</span>
+                  <span>{t('invoices.issued', 'Issued')}: {formatDate(invoice.issue_date)}</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-600">
+                <div className={`flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                   <Calendar className="w-4 h-4" />
-                  <span>Due: {formatDate(invoice.due_date)}</span>
+                  <span>{t('invoices.due', 'Due')}: {formatDate(invoice.due_date)}</span>
                 </div>
                 {invoice.payment_date && (
-                  <div className="flex items-center gap-2 text-green-600">
+                  <div className={`flex items-center gap-2 ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
                     <CheckCircle className="w-4 h-4" />
-                    <span>Paid: {formatDate(invoice.payment_date)}</span>
+                    <span>{t('invoices.paid', 'Paid')}: {formatDate(invoice.payment_date)}</span>
                   </div>
                 )}
                 {invoice.payment_method && (
-                  <div className="flex items-center gap-2 text-gray-600">
+                  <div className={`flex items-center gap-2 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                     <CreditCard className="w-4 h-4" />
-                    <span>Method: {invoice.payment_method}</span>
+                    <span>{t('invoices.method', 'Method')}: {invoice.payment_method}</span>
                   </div>
                 )}
               </div>
 
-              <div className="flex gap-3 pt-4 border-t border-gray-200">
+              <div className={`flex gap-3 pt-4 border-t ${isDarkMode ? 'border-gray-700' : 'border-gray-200'}`}>
                 <button
-                  className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
+                  className={`flex-1 px-4 py-2 rounded-lg transition-colors flex items-center justify-center gap-2 text-sm font-medium ${
+                    isDarkMode
+                      ? 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
                 >
                   <Eye className="w-4 h-4" />
-                  View Details
+                  {t('invoices.viewDetails', 'View Details')}
                 </button>
-                {invoice.payment_status !== 'paid' && (
+                {invoice.payment_status !== 'paid' && invoice.payment_status !== 'comped' && (
                   <button
                     onClick={() => setSelectedInvoice(invoice)}
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 text-sm font-medium"
                   >
                     <DollarSign className="w-4 h-4" />
-                    Pay Now
+                    {t('invoices.payNow', 'Pay Now')}
                   </button>
                 )}
               </div>
