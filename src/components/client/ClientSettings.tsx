@@ -149,6 +149,13 @@ const ClientSettings: React.FC = () => {
       setContactInfo(info);
       setOriginalContactInfo(info);
 
+      // Update authUser with latest timeFormatPreference to ensure it's in sync
+      if (contactData.data.timeFormatPreference && authUser) {
+        authUser.timeFormatPreference = contactData.data.timeFormatPreference;
+        RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
+        console.log('📝 Synced authUser with profile timeFormatPreference:', contactData.data.timeFormatPreference);
+      }
+
       // Load MFA settings
       const mfaData = await apiService.get('/client/mfa/settings');
       setMfaSettings({
@@ -181,8 +188,21 @@ const ClientSettings: React.FC = () => {
   const handleContactInfoSave = async () => {
     setLoading(true);
     try {
-      await apiService.put('/client/profile', contactInfo);
+      const response = await apiService.put('/client/profile', contactInfo);
       setOriginalContactInfo(contactInfo);
+
+      // Update authUser in storage with new time format preference
+      try {
+        const authUser = JSON.parse(RoleBasedStorage.getItem('authUser') || '{}');
+        if (authUser && response.data?.timeFormatPreference) {
+          authUser.timeFormatPreference = response.data.timeFormatPreference;
+          RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
+          console.log('✅ Updated authUser with new time format preference:', response.data.timeFormatPreference);
+        }
+      } catch (storageError) {
+        console.warn('Failed to update authUser storage:', storageError);
+      }
+
       setMessage({ type: 'success', text: t('settings.profile.updateSuccess') });
     } catch (error: any) {
       console.error('Failed to update contact info:', error);

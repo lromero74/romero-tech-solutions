@@ -121,13 +121,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const getUserTimeFormatPreference = (): boolean => {
     try {
       const authUser = RoleBasedStorage.getItem('authUser');
+      console.log('🕐 Loading time format preference from authUser:', authUser);
       if (authUser) {
         const user = JSON.parse(authUser);
-        return user.timeFormatPreference === '24h';
+        console.log('🕐 Parsed user data:', user);
+        console.log('🕐 timeFormatPreference:', user.timeFormatPreference);
+        const is24h = user.timeFormatPreference === '24h';
+        console.log('🕐 Setting is24HourFormat to:', is24h);
+        return is24h;
       }
     } catch (error) {
       console.warn('Failed to load user time format preference:', error);
     }
+    console.log('🕐 Defaulting to 12-hour format');
     return false; // Default to 12-hour format
   };
 
