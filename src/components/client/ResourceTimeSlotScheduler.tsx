@@ -987,27 +987,26 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </button>
             </div>
 
-            {/* Auto-Suggest and Now buttons */}
-            <div className="flex gap-2 flex-1 min-w-fit">
-              <button
-                onClick={handleAutoSuggest}
-                disabled={isAutoSuggesting || isSelectedDateInPast}
-                className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
-              >
-                <Sparkles className="h-4 w-4 flex-shrink-0" />
-                <span className="hidden md:inline">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}</span>
-                <span className="md:hidden">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}</span>
-              </button>
+            {/* Auto-Suggest button */}
+            <button
+              onClick={handleAutoSuggest}
+              disabled={isAutoSuggesting || isSelectedDateInPast}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
+            >
+              <Sparkles className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden md:inline">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}</span>
+              <span className="md:hidden">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}</span>
+            </button>
 
-              {selectedDate.toDateString() === new Date().toDateString() && (
-                <button
-                  onClick={scrollToNow}
-                  className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
-                >
-                  {t('scheduler.now', 'Now')}
-                </button>
-              )}
-            </div>
+            {/* Now button */}
+            {selectedDate.toDateString() === new Date().toDateString() && (
+              <button
+                onClick={scrollToNow}
+                className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
+              >
+                {t('scheduler.now', 'Now')}
+              </button>
+            )}
           </div>
 
           {/* Error Message */}
