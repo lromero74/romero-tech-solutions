@@ -92,6 +92,8 @@ router.get('/service-requests', async (req, res) => {
         sr.client_satisfaction_rating,
         sr.requires_follow_up,
         sr.follow_up_date,
+        sr.business_id,
+        sr.client_id,
         srs.name as status,
         srs.color_code as status_color,
         ul.name as urgency,
@@ -145,10 +147,169 @@ router.get('/service-requests', async (req, res) => {
 
     console.log('📊 [Service Requests] Total count:', totalCount);
 
+    // Helper function to calculate cost with tier breakdown
+    const calculateCost = async (date, timeStart, timeEnd, businessId, clientId) => {
+      if (!date || !timeStart || !timeEnd || !businessId) return null;
+
+      try {
+        // Get business-specific base rate
+        const rateQuery = `
+          SELECT base_hourly_rate
+          FROM rate_categories
+          WHERE business_id = $1 AND is_active = true
+          ORDER BY created_at DESC
+          LIMIT 1
+        `;
+        const rateResult = await pool.query(rateQuery, [businessId]);
+        const baseRate = rateResult.rows[0]?.base_hourly_rate || 75;
+
+        // Check if this is the client's first service request
+        const firstRequestCheck = await pool.query(`
+          SELECT COUNT(*) as request_count
+          FROM service_requests
+          WHERE client_id = $1 AND soft_delete = false
+        `, [clientId]);
+        const isFirstRequest = parseInt(firstRequestCheck.rows[0].request_count) === 1;
+
+        // Parse times
+        const [startHour, startMin] = timeStart.split(':').map(Number);
+        const [endHour, endMin] = timeEnd.split(':').map(Number);
+
+        // Calculate duration
+        const startMinutes = startHour * 60 + startMin;
+        const endMinutes = endHour * 60 + endMin;
+        const durationHours = (endMinutes - startMinutes) / 60;
+
+        // Get day of week
+        const requestDate = new Date(date);
+        const dayOfWeek = requestDate.getDay();
+
+        // Load rate tiers
+        const tiersQuery = `
+          SELECT tier_name, tier_level, time_start, time_end, rate_multiplier
+          FROM service_hour_rate_tiers
+          WHERE is_active = true AND day_of_week = $1
+          ORDER BY tier_level DESC
+        `;
+        const tiersResult = await pool.query(tiersQuery, [dayOfWeek]);
+        const rateTiers = tiersResult.rows;
+
+        // Helper to find rate tier
+        const findRateTier = (hour, minute) => {
+          const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+          const matchingTier = rateTiers.find(tier =>
+            timeString >= tier.time_start && timeString < tier.time_end
+          );
+          return matchingTier ? {
+            tierName: matchingTier.tier_name,
+            multiplier: parseFloat(matchingTier.rate_multiplier)
+          } : { tierName: 'Standard', multiplier: 1.0 };
+        };
+
+        // Calculate cost by 30-minute increments
+        let totalCost = 0;
+        const tierBlocks = [];
+        let currentBlock = null;
+        let currentHour = startHour;
+        let currentMinute = startMin;
+
+        while (currentHour < endHour || (currentHour === endHour && currentMinute < endMin)) {
+          const tier = findRateTier(currentHour, currentMinute);
+          const incrementCost = (baseRate * tier.multiplier) / 2;
+          totalCost += incrementCost;
+
+          if (currentBlock && currentBlock.tierName === tier.tierName && currentBlock.multiplier === tier.multiplier) {
+            currentBlock.halfHourCount += 1;
+          } else {
+            if (currentBlock) {
+              const hours = currentBlock.halfHourCount / 2;
+              tierBlocks.push({
+                tierName: currentBlock.tierName,
+                multiplier: currentBlock.multiplier,
+                hours,
+                cost: hours * baseRate * currentBlock.multiplier
+              });
+            }
+            currentBlock = { tierName: tier.tierName, multiplier: tier.multiplier, halfHourCount: 1 };
+          }
+
+          currentMinute += 30;
+          if (currentMinute >= 60) {
+            currentMinute = 0;
+            currentHour += 1;
+          }
+        }
+
+        if (currentBlock) {
+          const hours = currentBlock.halfHourCount / 2;
+          tierBlocks.push({
+            tierName: currentBlock.tierName,
+            multiplier: currentBlock.multiplier,
+            hours,
+            cost: hours * baseRate * currentBlock.multiplier
+          });
+        }
+
+        // Apply first-hour comp
+        let firstHourDiscount = 0;
+        const firstHourCompBreakdown = [];
+
+        if (isFirstRequest && durationHours >= 1) {
+          let hoursAccounted = 0;
+          for (const block of tierBlocks) {
+            if (hoursAccounted >= 1) break;
+            const hoursInThisBlock = Math.min(block.hours, 1 - hoursAccounted);
+            const discountForThisBlock = hoursInThisBlock * baseRate * block.multiplier;
+            firstHourCompBreakdown.push({
+              tierName: block.tierName,
+              multiplier: block.multiplier,
+              hours: hoursInThisBlock,
+              discount: discountForThisBlock
+            });
+            firstHourDiscount += discountForThisBlock;
+            hoursAccounted += hoursInThisBlock;
+          }
+        }
+
+        const finalTotal = Math.max(0, totalCost - firstHourDiscount);
+
+        return {
+          baseRate,
+          durationHours,
+          total: finalTotal,
+          subtotal: totalCost,
+          firstHourDiscount: firstHourDiscount > 0 ? firstHourDiscount : undefined,
+          firstHourCompBreakdown: firstHourCompBreakdown.length > 0 ? firstHourCompBreakdown : undefined,
+          breakdown: tierBlocks,
+          isFirstRequest
+        };
+      } catch (error) {
+        console.error('Error calculating cost:', error);
+        return null;
+      }
+    };
+
+    // Add cost calculations to service requests
+    const serviceRequestsWithCosts = await Promise.all(
+      result.rows.map(async (row) => {
+        const costInfo = await calculateCost(
+          row.requested_date,
+          row.requested_time_start,
+          row.requested_time_end,
+          row.business_id,
+          row.client_id
+        );
+        return {
+          ...row,
+          cost: costInfo
+        };
+      })
+    );
+
     res.json({
       success: true,
       data: {
-        serviceRequests: result.rows,
+        serviceRequests: serviceRequestsWithCosts,
         pagination: {
           page: parseInt(page),
           limit: parseInt(limit),

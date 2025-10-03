@@ -65,7 +65,19 @@ interface ServiceRequest {
     durationHours: number;
     total: number;
     subtotal?: number;
-    firstHourWaiver?: number;
+    firstHourDiscount?: number;
+    firstHourCompBreakdown?: {
+      tierName: string;
+      multiplier: number;
+      hours: number;
+      discount: number;
+    }[];
+    breakdown: {
+      tierName: string;
+      multiplier: number;
+      hours: number;
+      cost: number;
+    }[];
     isFirstRequest?: boolean;
   } | null;
 }
@@ -1020,21 +1032,37 @@ const ServiceRequests: React.FC = () => {
                         {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
                       </div>
                       <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
-                        <div className="text-xs text-blue-700 dark:text-blue-300">
+                        <div className="text-xs text-blue-700 dark:text-blue-300 mb-1">
                           {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
                         </div>
-                        <div className="text-xs text-blue-700 dark:text-blue-300">
-                          {t('serviceRequests.standardRate', {
-                            hours: String(request.cost.durationHours),
-                            total: (request.cost.subtotal || request.cost.total).toFixed(2)
-                          }, '{{hours}}h Standard @ 1x = ${{total}}')}
-                        </div>
-                        {request.cost.firstHourWaiver && request.cost.firstHourWaiver > 0 && (
-                          <div className="text-xs text-green-700 dark:text-green-300 font-medium">
-                            {t('serviceRequests.newClientFirstHourWaived', { amount: request.cost.firstHourWaiver.toFixed(2) }, 'New Client 1st Hour Waived: -${{amount}}')}
+                        {/* Tier Breakdown */}
+                        {request.cost.breakdown && request.cost.breakdown.map((block, idx) => (
+                          <div key={idx} className="text-xs text-blue-700 dark:text-blue-300">
+                            {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
                           </div>
+                        ))}
+                        {/* First Hour Discount */}
+                        {request.cost.firstHourDiscount && request.cost.firstHourDiscount > 0 && (
+                          <>
+                            <div className="text-xs text-blue-700 dark:text-blue-300 mt-1 pt-1 border-t border-blue-200 dark:border-blue-700">
+                              {t('serviceRequests.subtotal', 'Subtotal')}: ${request.cost.subtotal?.toFixed(2)}
+                            </div>
+                            <div className="text-xs text-green-700 dark:text-green-300 font-medium mb-1">
+                              🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                            </div>
+                            {request.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
+                              <div key={idx} className="text-xs text-green-700 dark:text-green-300 ml-4">
+                                • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                              </div>
+                            ))}
+                            {request.cost.firstHourCompBreakdown && request.cost.firstHourCompBreakdown.length > 1 && (
+                              <div className="text-xs text-green-700 dark:text-green-300 font-medium ml-4">
+                                {t('serviceRequests.totalDiscount', 'Total Discount')}: -${request.cost.firstHourDiscount.toFixed(2)}
+                              </div>
+                            )}
+                          </>
                         )}
-                        <div className="mt-1 text-sm font-semibold text-blue-900 dark:text-blue-100">
+                        <div className="mt-1 pt-1 border-t border-blue-200 dark:border-blue-700 text-sm font-semibold text-blue-900 dark:text-blue-100">
                           {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
                         </div>
                         <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
@@ -1240,18 +1268,34 @@ const ServiceRequests: React.FC = () => {
                           <div className="text-sm text-blue-700 dark:text-blue-300">
                             {t('serviceRequests.baseRatePerHour', { rate: String(selectedRequest.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
                           </div>
-                          <div className="text-sm text-blue-700 dark:text-blue-300">
-                            {t('serviceRequests.standardRate', {
-                              hours: String(selectedRequest.cost.durationHours),
-                              total: (selectedRequest.cost.subtotal || selectedRequest.cost.total).toFixed(2)
-                            }, '{{hours}}h Standard @ 1x = ${{total}}')}
-                          </div>
-                          {selectedRequest.cost.firstHourWaiver && selectedRequest.cost.firstHourWaiver > 0 && (
-                            <div className="text-sm text-green-700 dark:text-green-300 font-medium">
-                              {t('serviceRequests.newClientFirstHourWaived', { amount: selectedRequest.cost.firstHourWaiver.toFixed(2) }, 'New Client 1st Hour Waived: -${{amount}}')}
+                          {/* Tier Breakdown */}
+                          {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block, idx) => (
+                            <div key={idx} className="text-sm text-blue-700 dark:text-blue-300">
+                              {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
                             </div>
+                          ))}
+                          {/* First Hour Discount */}
+                          {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
+                            <>
+                              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1 pt-1 border-t border-blue-200 dark:border-blue-700">
+                                {t('serviceRequests.subtotal', 'Subtotal')}: ${selectedRequest.cost.subtotal?.toFixed(2)}
+                              </div>
+                              <div className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">
+                                🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                              </div>
+                              {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
+                                <div key={idx} className="text-sm text-green-700 dark:text-green-300 ml-4">
+                                  • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                                </div>
+                              ))}
+                              {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
+                                <div className="text-sm text-green-700 dark:text-green-300 font-medium ml-4">
+                                  {t('serviceRequests.totalDiscount', 'Total Discount')}: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
+                                </div>
+                              )}
+                            </>
                           )}
-                          <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2">
+                          <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2 pt-1 border-t border-blue-200 dark:border-blue-700">
                             {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
                           </div>
                           <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">

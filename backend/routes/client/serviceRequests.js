@@ -322,7 +322,7 @@ router.get('/', async (req, res) => {
     const isFirstServiceRequest = parseInt(firstServiceRequestCheck.rows[0].request_count) === 1;
 
     // Helper function to calculate estimated cost with first-hour waiver for new clients
-    const calculateCost = (date, timeStart, timeEnd, baseRate, isFirstRequest) => {
+    const calculateCost = async (date, timeStart, timeEnd, baseRate, isFirstRequest) => {
       if (!date || !timeStart || !timeEnd || !baseRate) return null;
 
       // Parse times
@@ -334,48 +334,136 @@ router.get('/', async (req, res) => {
       const endMinutes = endHour * 60 + endMin;
       const durationHours = (endMinutes - startMinutes) / 60;
 
-      // Calculate base cost
-      const baseCost = baseRate * durationHours;
+      // Get day of week from date
+      const requestDate = new Date(date);
+      const dayOfWeek = requestDate.getDay();
 
-      // Apply first-hour waiver for first-time clients
-      let firstHourWaiver = 0;
-      let finalCost = baseCost;
+      // Load rate tiers for this day
+      const tiersQuery = `
+        SELECT tier_name, tier_level, time_start, time_end, rate_multiplier
+        FROM service_hour_rate_tiers
+        WHERE is_active = true AND day_of_week = $1
+        ORDER BY tier_level DESC
+      `;
+      const tiersResult = await pool.query(tiersQuery, [dayOfWeek]);
+      const rateTiers = tiersResult.rows;
+
+      // Helper to find rate tier for a specific time
+      const findRateTier = (hour, minute) => {
+        const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+        const matchingTier = rateTiers.find(tier =>
+          timeString >= tier.time_start && timeString < tier.time_end
+        );
+        return matchingTier ? {
+          tierName: matchingTier.tier_name,
+          multiplier: parseFloat(matchingTier.rate_multiplier)
+        } : { tierName: 'Standard', multiplier: 1.0 };
+      };
+
+      // Calculate cost by 30-minute increments
+      let totalCost = 0;
+      const tierBlocks = [];
+      let currentBlock = null;
+
+      let currentHour = startHour;
+      let currentMinute = startMin;
+
+      while (currentHour < endHour || (currentHour === endHour && currentMinute < endMin)) {
+        const tier = findRateTier(currentHour, currentMinute);
+        const incrementCost = (baseRate * tier.multiplier) / 2; // Half-hour rate
+        totalCost += incrementCost;
+
+        // Group contiguous blocks of same tier
+        if (currentBlock && currentBlock.tierName === tier.tierName && currentBlock.multiplier === tier.multiplier) {
+          currentBlock.halfHourCount += 1;
+        } else {
+          if (currentBlock) {
+            const hours = currentBlock.halfHourCount / 2;
+            tierBlocks.push({
+              tierName: currentBlock.tierName,
+              multiplier: currentBlock.multiplier,
+              hours,
+              cost: hours * baseRate * currentBlock.multiplier
+            });
+          }
+          currentBlock = { tierName: tier.tierName, multiplier: tier.multiplier, halfHourCount: 1 };
+        }
+
+        // Advance by 30 minutes
+        currentMinute += 30;
+        if (currentMinute >= 60) {
+          currentMinute = 0;
+          currentHour += 1;
+        }
+      }
+
+      // Save final block
+      if (currentBlock) {
+        const hours = currentBlock.halfHourCount / 2;
+        tierBlocks.push({
+          tierName: currentBlock.tierName,
+          multiplier: currentBlock.multiplier,
+          hours,
+          cost: hours * baseRate * currentBlock.multiplier
+        });
+      }
+
+      // Apply first-hour comp for first-time clients
+      let firstHourDiscount = 0;
+      const firstHourCompBreakdown = [];
 
       if (isFirstRequest && durationHours >= 1) {
-        // Waive first hour fee for new clients
-        firstHourWaiver = baseRate;
-        finalCost = baseCost - firstHourWaiver;
+        let hoursAccounted = 0;
+        for (const block of tierBlocks) {
+          if (hoursAccounted >= 1) break;
+
+          const hoursInThisBlock = Math.min(block.hours, 1 - hoursAccounted);
+          const discountForThisBlock = hoursInThisBlock * baseRate * block.multiplier;
+
+          firstHourCompBreakdown.push({
+            tierName: block.tierName,
+            multiplier: block.multiplier,
+            hours: hoursInThisBlock,
+            discount: discountForThisBlock
+          });
+
+          firstHourDiscount += discountForThisBlock;
+          hoursAccounted += hoursInThisBlock;
+        }
       }
+
+      const finalTotal = Math.max(0, totalCost - firstHourDiscount);
 
       return {
         baseRate,
         durationHours,
-        total: finalCost,
-        subtotal: baseCost,
-        firstHourWaiver: firstHourWaiver > 0 ? firstHourWaiver : undefined,
+        total: finalTotal,
+        subtotal: totalCost,
+        firstHourDiscount: firstHourDiscount > 0 ? firstHourDiscount : undefined,
+        firstHourCompBreakdown: firstHourCompBreakdown.length > 0 ? firstHourCompBreakdown : undefined,
+        breakdown: tierBlocks,
         isFirstRequest
       };
     };
 
-    res.json({
-      success: true,
-      data: {
-        serviceRequests: result.rows.map(row => {
-          // Calculate cost using business-specific rate from rate category
-          const costInfo = calculateCost(
-            row.requested_date,
-            row.requested_time_start,
-            row.requested_time_end,
-            baseHourlyRate,
-            isFirstServiceRequest
-          );
+    // Calculate costs for all service requests
+    const serviceRequestsWithCosts = await Promise.all(
+      result.rows.map(async (row) => {
+        // Calculate cost using business-specific rate from rate category
+        const costInfo = await calculateCost(
+          row.requested_date,
+          row.requested_time_start,
+          row.requested_time_end,
+          baseHourlyRate,
+          isFirstServiceRequest
+        );
 
-          // Check if we have any location data (address or contact info)
-          const hasLocationData = row.street_address_1 || row.city || row.state ||
-                                 row.location_contact_phone || row.location_contact_person ||
-                                 row.location_contact_email;
+        // Check if we have any location data (address or contact info)
+        const hasLocationData = row.street_address_1 || row.city || row.state ||
+                               row.location_contact_phone || row.location_contact_person ||
+                               row.location_contact_email;
 
-          return {
+        return {
             id: row.id,
             requestNumber: row.request_number,
             title: row.title,
@@ -407,8 +495,14 @@ router.get('/', async (req, res) => {
             createdAt: row.created_at,
             updatedAt: row.updated_at,
             cost: costInfo
-          };
-        }),
+        };
+      })
+    );
+
+    res.json({
+      success: true,
+      data: {
+        serviceRequests: serviceRequestsWithCosts,
         pagination: {
           page,
           limit,
