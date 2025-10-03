@@ -362,6 +362,11 @@ export const esTranslations = {
   'registration.business.zipServiceAvailable': '¡Excelente! Brindamos servicio en {city}, {state}',
   'registration.business.zipServiceUnavailable': 'Lo sentimos, pero actualmente no brindamos servicio en el área {zipCode}. Por favor contáctenos directamente para discutir sus necesidades.',
 
+  // Individual registration
+  'registration.individual.title': 'Información Individual',
+  'registration.individual.subtitle': 'Proporcione su ubicación y detalles de contacto',
+  'registration.individual.zipLabel': 'Código Postal *',
+
   'registration.contact.title': 'Información de Contacto',
   'registration.contact.subtitle': 'Díganos cómo contactarlo',
   'registration.contact.firstNameLabel': 'Nombre *',

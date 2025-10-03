@@ -665,11 +665,11 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
           )}
         </div>
         <h3 className="text-2xl font-bold text-white">
-          {formData.isIndividual ? 'Individual Information' : t('registration.business.title')}
+          {formData.isIndividual ? t('registration.individual.title') : t('registration.business.title')}
         </h3>
         <p className="text-blue-200 mt-2">
           {formData.isIndividual
-            ? 'Provide your location and contact details'
+            ? t('registration.individual.subtitle')
             : t('registration.business.subtitle')}
         </p>
       </div>
@@ -818,7 +818,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         {/* ZIP Code - Tab Index 2 (normal position but custom tab order) */}
         <div>
           <label className="block text-sm font-medium text-white mb-1">
-            {t('registration.business.zipLabel')}
+            {formData.isIndividual ? t('registration.individual.zipLabel') : t('registration.business.zipLabel')}
           </label>
           <div className="relative">
             <input
