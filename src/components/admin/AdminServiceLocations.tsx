@@ -125,6 +125,8 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
   const canModify = checkPermission('modify.service_locations.enable');
   const canSoftDelete = checkPermission('softDelete.service_locations.enable');
   const canHardDelete = checkPermission('hardDelete.service_locations.enable');
+  const canViewSoftDeleted = checkPermission('view.soft_deleted_service_locations.enable');
+  const canViewStats = checkPermission('view.service_location_stats.enable');
 
   // Permission denied modal state
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -238,7 +240,8 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      {canViewStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
           <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Locations</div>
           <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{filteredServiceLocations.filter(l => !l.soft_delete).length}</div>
@@ -269,6 +272,7 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
           </div>
         </div>
       </div>
+      )}
 
       {/* Service Location Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
@@ -299,21 +303,23 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
               />
             </button>
           </div>
-          <div>
-            <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
-            <button
-              onClick={toggleShowSoftDeletedServiceLocations}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                showSoftDeletedServiceLocations ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  showSoftDeletedServiceLocations ? 'translate-x-6' : 'translate-x-1'
+          {canViewSoftDeleted && (
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
+              <button
+                onClick={toggleShowSoftDeletedServiceLocations}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  showSoftDeletedServiceLocations ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showSoftDeletedServiceLocations ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
           <div className="flex items-end">
             <button
               onClick={clearServiceLocationFilters}
@@ -549,136 +555,87 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
                     </span>
                   </td>
                   <td className={`px-2 py-3  text-sm font-medium border-r ${themeClasses.border.primary}`}>
-                    <div className="flex items-center space-x-2">
-                      {/* Edit Button */}
-                      {canModify ? (
-                        <button
-                          onClick={() => onEditServiceLocation?.(location)}
-                          className="text-blue-600 hover:text-blue-900"
-                          title="Edit service location"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setPermissionDenied({
-                            show: true,
-                            action: 'Edit Service Location',
-                            requiredPermission: 'modify.service_locations.enable',
-                            message: 'You do not have permission to modify service locations'
-                          })}
-                          disabled
-                          className="text-gray-300 cursor-not-allowed opacity-50"
-                          title="Technician, Admin, or Executive role required"
-                        >
-                          <Edit className="w-4 h-4" />
-                        </button>
-                      )}
+                    {/* Show actions based on permissions */}
+                    {(canModify || canSoftDelete || canHardDelete) ? (
+                      <div className="flex items-center space-x-2">
+                        {/* Edit Button */}
+                        {canModify && (
+                          <button
+                            onClick={() => onEditServiceLocation?.(location)}
+                            className="text-blue-600 hover:text-blue-900"
+                            title="Edit service location"
+                          >
+                            <Edit className="w-4 h-4" />
+                          </button>
+                        )}
 
-                      {/* Toggle Active/Inactive Button */}
-                      {canModify ? (
-                        <button
-                          onClick={() => toggleServiceLocationStatus?.(location.id, location.is_active ? 'inactive' : 'active')}
-                          disabled={loadingServiceLocationOperations[location.id]}
-                          className={`${location.is_active ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={loadingServiceLocationOperations[location.id] ? "Processing..." : location.is_active ? "Deactivate location" : "Activate location"}
-                        >
-                          {loadingServiceLocationOperations[location.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Power className="w-4 h-4" />
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          disabled
-                          className="text-gray-300 cursor-not-allowed opacity-50"
-                          title="Technician, Admin, or Executive role required"
-                        >
-                          <Power className="w-4 h-4" />
-                        </button>
-                      )}
+                        {/* Toggle Active/Inactive Button */}
+                        {canModify && (
+                          <button
+                            onClick={() => toggleServiceLocationStatus?.(location.id, location.is_active ? 'inactive' : 'active')}
+                            disabled={loadingServiceLocationOperations[location.id]}
+                            className={`${location.is_active ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={loadingServiceLocationOperations[location.id] ? "Processing..." : location.is_active ? "Deactivate location" : "Activate location"}
+                          >
+                            {loadingServiceLocationOperations[location.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Power className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
 
-                      {/* Soft Delete/Restore Button */}
-                      {canSoftDelete ? (
-                        <button
-                          onClick={() => onSoftDeleteServiceLocation?.(location)}
-                          disabled={loadingServiceLocationOperations[location.id]}
-                          className={`${
-                            location.soft_delete && !canServiceLocationBeRestored(location)
-                              ? 'text-gray-400'
-                              : location.soft_delete
-                                ? 'text-blue-600 hover:text-blue-900'
-                                : 'text-orange-600 hover:text-orange-900'
-                          } ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={
-                            loadingServiceLocationOperations[location.id]
-                              ? "Processing..."
-                              : location.soft_delete && !canServiceLocationBeRestored(location)
-                                ? "Cannot restore: parent business is soft deleted"
+                        {/* Soft Delete/Restore Button */}
+                        {canSoftDelete && (
+                          <button
+                            onClick={() => onSoftDeleteServiceLocation?.(location)}
+                            disabled={loadingServiceLocationOperations[location.id]}
+                            className={`${
+                              location.soft_delete && !canServiceLocationBeRestored(location)
+                                ? 'text-gray-400'
                                 : location.soft_delete
-                                  ? "Restore location"
-                                  : "Soft delete location"
-                          }
-                        >
-                          {loadingServiceLocationOperations[location.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : location.soft_delete ? (
-                            <Undo2 className="w-4 h-4" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setPermissionDenied({
-                            show: true,
-                            action: location.soft_delete ? 'Restore Service Location' : 'Soft Delete Service Location',
-                            requiredPermission: 'softDelete.service_locations.enable',
-                            message: 'You do not have permission to soft delete service locations'
-                          })}
-                          disabled
-                          className="text-gray-300 cursor-not-allowed opacity-50"
-                          title="Admin or Executive role required"
-                        >
-                          {location.soft_delete ? (
-                            <Undo2 className="w-4 h-4" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      )}
+                                  ? 'text-blue-600 hover:text-blue-900'
+                                  : 'text-orange-600 hover:text-orange-900'
+                            } ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={
+                              loadingServiceLocationOperations[location.id]
+                                ? "Processing..."
+                                : location.soft_delete && !canServiceLocationBeRestored(location)
+                                  ? "Cannot restore: parent business is soft deleted"
+                                  : location.soft_delete
+                                    ? "Restore location"
+                                    : "Soft delete location"
+                            }
+                          >
+                            {loadingServiceLocationOperations[location.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : location.soft_delete ? (
+                              <Undo2 className="w-4 h-4" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
 
-                      {/* Hard Delete Button */}
-                      {canHardDelete ? (
-                        <button
-                          onClick={() => onDeleteServiceLocation?.(location)}
-                          disabled={loadingServiceLocationOperations[location.id]}
-                          className={`text-red-600 hover:text-red-900 ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                          title={loadingServiceLocationOperations[location.id] ? "Processing..." : "Permanently delete location"}
-                        >
-                          {loadingServiceLocationOperations[location.id] ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <X className="w-4 h-4" />
-                          )}
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => setPermissionDenied({
-                            show: true,
-                            action: 'Permanently Delete Service Location',
-                            requiredPermission: 'hardDelete.service_locations.enable',
-                            message: 'You do not have permission to permanently delete service locations'
-                          })}
-                          disabled
-                          className="text-gray-300 cursor-not-allowed opacity-50"
-                          title="Executive role required"
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
+                        {/* Hard Delete Button */}
+                        {canHardDelete && (
+                          <button
+                            onClick={() => onDeleteServiceLocation?.(location)}
+                            disabled={loadingServiceLocationOperations[location.id]}
+                            className={`text-red-600 hover:text-red-900 ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            title={loadingServiceLocationOperations[location.id] ? "Processing..." : "Permanently delete location"}
+                          >
+                            {loadingServiceLocationOperations[location.id] ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <X className="w-4 h-4" />
+                            )}
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <div className={`text-xs ${themeClasses.text.muted} text-center`}>-</div>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -776,136 +733,84 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
             </div>
 
             {/* Action buttons */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
-              {/* Edit Button */}
-              {canModify ? (
-                <button
-                  onClick={() => onEditServiceLocation?.(location)}
-                  className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
-                  title="Edit service location"
-                >
-                  <Edit className="w-5 h-5" />
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPermissionDenied({
-                    show: true,
-                    action: 'Edit Service Location',
-                    requiredPermission: 'modify.service_locations.enable',
-                    message: 'You do not have permission to modify service locations'
-                  })}
-                  disabled
-                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
-                  title="Technician, Admin, or Executive role required"
-                >
-                  <Edit className="w-5 h-5" />
-                </button>
-              )}
+            {(canModify || canSoftDelete || canHardDelete) && (
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+                {/* Edit Button */}
+                {canModify && (
+                  <button
+                    onClick={() => onEditServiceLocation?.(location)}
+                    className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
+                    title="Edit service location"
+                  >
+                    <Edit className="w-5 h-5" />
+                  </button>
+                )}
 
-              {/* Toggle Active/Inactive Button */}
-              {canModify ? (
-                <button
-                  onClick={() => toggleServiceLocationStatus?.(location.id, location.is_active ? 'inactive' : 'active')}
-                  disabled={loadingServiceLocationOperations[location.id]}
-                  className={`p-2 ${location.is_active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'} ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={loadingServiceLocationOperations[location.id] ? "Processing..." : location.is_active ? "Deactivate location" : "Activate location"}
-                >
-                  {loadingServiceLocationOperations[location.id] ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Power className="w-5 h-5" />
-                  )}
-                </button>
-              ) : (
-                <button
-                  disabled
-                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
-                  title="Technician, Admin, or Executive role required"
-                >
-                  <Power className="w-5 h-5" />
-                </button>
-              )}
+                {/* Toggle Active/Inactive Button */}
+                {canModify && (
+                  <button
+                    onClick={() => toggleServiceLocationStatus?.(location.id, location.is_active ? 'inactive' : 'active')}
+                    disabled={loadingServiceLocationOperations[location.id]}
+                    className={`p-2 ${location.is_active ? 'text-green-600 dark:text-green-400' : 'text-gray-400'} ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={loadingServiceLocationOperations[location.id] ? "Processing..." : location.is_active ? "Deactivate location" : "Activate location"}
+                  >
+                    {loadingServiceLocationOperations[location.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Power className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
 
-              {/* Soft Delete/Restore Button */}
-              {canSoftDelete ? (
-                <button
-                  onClick={() => onSoftDeleteServiceLocation?.(location)}
-                  disabled={loadingServiceLocationOperations[location.id]}
-                  className={`p-2 ${
-                    location.soft_delete && !canServiceLocationBeRestored(location)
-                      ? 'text-gray-400'
-                      : location.soft_delete
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-orange-600 dark:text-orange-400'
-                  } ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={
-                    loadingServiceLocationOperations[location.id]
-                      ? "Processing..."
-                      : location.soft_delete && !canServiceLocationBeRestored(location)
-                        ? "Cannot restore: parent business is soft deleted"
+                {/* Soft Delete/Restore Button */}
+                {canSoftDelete && (
+                  <button
+                    onClick={() => onSoftDeleteServiceLocation?.(location)}
+                    disabled={loadingServiceLocationOperations[location.id]}
+                    className={`p-2 ${
+                      location.soft_delete && !canServiceLocationBeRestored(location)
+                        ? 'text-gray-400'
                         : location.soft_delete
-                          ? "Restore location"
-                          : "Soft delete location"
-                  }
-                >
-                  {loadingServiceLocationOperations[location.id] ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : location.soft_delete ? (
-                    <Undo2 className="w-5 h-5" />
-                  ) : (
-                    <Trash2 className="w-5 h-5" />
-                  )}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPermissionDenied({
-                    show: true,
-                    action: location.soft_delete ? 'Restore Service Location' : 'Soft Delete Service Location',
-                    requiredPermission: 'softDelete.service_locations.enable',
-                    message: 'You do not have permission to soft delete service locations'
-                  })}
-                  disabled
-                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
-                  title="Admin or Executive role required"
-                >
-                  {location.soft_delete ? (
-                    <Undo2 className="w-5 h-5" />
-                  ) : (
-                    <Trash2 className="w-5 h-5" />
-                  )}
-                </button>
-              )}
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-orange-600 dark:text-orange-400'
+                    } ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={
+                      loadingServiceLocationOperations[location.id]
+                        ? "Processing..."
+                        : location.soft_delete && !canServiceLocationBeRestored(location)
+                          ? "Cannot restore: parent business is soft deleted"
+                          : location.soft_delete
+                            ? "Restore location"
+                            : "Soft delete location"
+                    }
+                  >
+                    {loadingServiceLocationOperations[location.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : location.soft_delete ? (
+                      <Undo2 className="w-5 h-5" />
+                    ) : (
+                      <Trash2 className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
 
-              {/* Hard Delete Button */}
-              {canHardDelete ? (
-                <button
-                  onClick={() => onDeleteServiceLocation?.(location)}
-                  disabled={loadingServiceLocationOperations[location.id]}
-                  className={`p-2 text-red-600 hover:text-red-900 dark:text-red-400 ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  title={loadingServiceLocationOperations[location.id] ? "Processing..." : "Permanently delete location"}
-                >
-                  {loadingServiceLocationOperations[location.id] ? (
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <X className="w-5 h-5" />
-                  )}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setPermissionDenied({
-                    show: true,
-                    action: 'Permanently Delete Service Location',
-                    requiredPermission: 'hardDelete.service_locations.enable',
-                    message: 'You do not have permission to permanently delete service locations'
-                  })}
-                  disabled
-                  className="p-2 text-gray-300 cursor-not-allowed opacity-50"
-                  title="Executive role required"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
+                {/* Hard Delete Button */}
+                {canHardDelete && (
+                  <button
+                    onClick={() => onDeleteServiceLocation?.(location)}
+                    disabled={loadingServiceLocationOperations[location.id]}
+                    className={`p-2 text-red-600 hover:text-red-900 dark:text-red-400 ${loadingServiceLocationOperations[location.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title={loadingServiceLocationOperations[location.id] ? "Processing..." : "Permanently delete location"}
+                  >
+                    {loadingServiceLocationOperations[location.id] ? (
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <X className="w-5 h-5" />
+                    )}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ))}
 

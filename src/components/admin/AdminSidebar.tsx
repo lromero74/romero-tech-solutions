@@ -22,6 +22,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
+import { usePermissionContext } from '../../contexts/PermissionContext';
 
 type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
 
@@ -31,12 +32,26 @@ interface AdminSidebarProps {
   user: unknown;
 }
 
+interface NavigationItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<any>;
+  permission?: string;
+}
+
+interface NavigationGroup {
+  title: string;
+  items: NavigationItem[];
+}
+
 const AdminSidebar: React.FC<AdminSidebarProps> = ({
   currentView,
   setCurrentView,
   user
 }) => {
-  const navigationGroups = [
+  const { hasPermission } = usePermissionContext();
+
+  const navigationGroups: NavigationGroup[] = [
     {
       title: '',
       items: [
@@ -46,7 +61,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
     {
       title: 'People & HR',
       items: [
-        { id: 'employees', label: 'Employees', icon: Users },
+        { id: 'employees', label: 'Employees', icon: Users, permission: 'view.employees.enable' },
         { id: 'employee-calendar', label: 'Employee Calendar', icon: Calendar }
       ]
     },
@@ -61,42 +76,53 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
     {
       title: 'Service Operations',
       items: [
-        { id: 'services', label: 'Service Types', icon: Settings },
-        { id: 'service-requests', label: 'Service Requests', icon: ClipboardList },
-        { id: 'workflow-configuration', label: 'Workflow Configuration', icon: Workflow },
-        { id: 'closure-reasons', label: 'Closure Reasons', icon: XCircle }
+        { id: 'services', label: 'Service Types', icon: Settings, permission: 'view.services.enable' },
+        { id: 'service-requests', label: 'Service Requests', icon: ClipboardList, permission: 'view.service_requests.enable' },
+        { id: 'workflow-configuration', label: 'Workflow Configuration', icon: Workflow, permission: 'view.workflow_configuration.enable' },
+        { id: 'closure-reasons', label: 'Closure Reasons', icon: XCircle, permission: 'view.closure_reasons.enable' }
       ]
     },
     {
       title: 'Billing & Finance',
       items: [
-        { id: 'invoices', label: 'Invoices', icon: Receipt },
-        { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock },
-        { id: 'pricing-settings', label: 'Pricing Settings', icon: DollarSign }
+        { id: 'invoices', label: 'Invoices', icon: Receipt, permission: 'view.invoices.enable' },
+        { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock, permission: 'view.service_hour_rates.enable' },
+        { id: 'pricing-settings', label: 'Pricing Settings', icon: DollarSign, permission: 'view.pricing_settings.enable' }
       ]
     },
     {
       title: 'Security & Permissions',
       items: [
-        { id: 'roles', label: 'Roles', icon: UserCog },
-        { id: 'permissions', label: 'Permissions', icon: Shield },
-        { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network },
-        { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText },
-        { id: 'password-complexity', label: 'Password Policy', icon: Lock }
+        { id: 'roles', label: 'Roles', icon: UserCog, permission: 'view.roles.enable' },
+        { id: 'permissions', label: 'Permissions', icon: Shield, permission: 'view.permissions.enable' },
+        { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network, permission: 'view.role_hierarchy.enable' },
+        { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText, permission: 'view.permission_audit_log.enable' },
+        { id: 'password-complexity', label: 'Password Policy', icon: Lock, permission: 'view.password_complexity.enable' }
       ]
     },
     {
       title: 'Administration',
       items: [
-        { id: 'reports', label: 'Reports', icon: BarChart3 },
-        { id: 'settings', label: 'Settings', icon: Settings }
+        { id: 'reports', label: 'Reports', icon: BarChart3, permission: 'view.reports.enable' },
+        { id: 'settings', label: 'Settings', icon: Settings, permission: 'view.settings.enable' }
       ]
     }
-  ] as const;
+  ];
+
+  // Filter navigation groups to show only items with permissions
+  const filteredNavigationGroups = navigationGroups.map(group => ({
+    ...group,
+    items: group.items.filter(item => {
+      // If item has no permission requirement, always show it
+      if (!item.permission) return true;
+      // Otherwise, check if user has the required permission
+      return hasPermission(item.permission);
+    })
+  })).filter(group => group.items.length > 0); // Hide groups with no visible items
 
   // Find which group contains the current view
   const getActiveGroupIndex = (): number => {
-    return navigationGroups.findIndex(group =>
+    return filteredNavigationGroups.findIndex(group =>
       group.items.some(item => item.id === currentView)
     );
   };
@@ -121,7 +147,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const isGroupExpanded = (groupIndex: number): boolean => {
     const activeGroupIndex = getActiveGroupIndex();
     // Show if: no title (Overview), manually expanded, or contains active view
-    return !navigationGroups[groupIndex].title ||
+    return !filteredNavigationGroups[groupIndex].title ||
            manuallyExpandedGroup === groupIndex ||
            activeGroupIndex === groupIndex;
   };
@@ -131,7 +157,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       {/* Navigation */}
       <nav className="flex-1 overflow-y-auto px-4 py-6 pt-8">
         <div className="space-y-2">
-          {navigationGroups.map((group, groupIndex) => (
+          {filteredNavigationGroups.map((group, groupIndex) => (
             <div key={groupIndex}>
               {/* Group Header - Collapsible */}
               {group.title ? (

@@ -352,6 +352,21 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     setError(null);
 
     try {
+      // Helper function to safely fetch data with permission handling
+      const safeFetch = async <T,>(fetchFn: () => Promise<T>, defaultValue: T): Promise<T> => {
+        try {
+          return await fetchFn();
+        } catch (error: any) {
+          // If it's a permission error (403), silently return default value
+          if (error.message?.includes('Insufficient permissions') || error.message?.includes('403')) {
+            console.log(`ℹ️ Skipping data fetch due to insufficient permissions`);
+            return defaultValue;
+          }
+          // Re-throw other errors
+          throw error;
+        }
+      };
+
       // Fetch all data in parallel
       const [
         dashboardResult,
@@ -362,13 +377,13 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         servicesResult,
         serviceRequestsResult
       ] = await Promise.all([
-        adminService.getDashboardData(),
-        adminService.getEmployeesWithLoginStatus(),
-        adminService.getBusinesses(),
-        adminService.getServiceLocations(),
-        adminService.getUsers({ role: 'client', limit: 1000 }),
-        adminService.getServices(),
-        adminService.getServiceRequests()
+        safeFetch(() => adminService.getDashboardData(), { employees: 0, businesses: 0, services: 0, clients: 0, serviceRequests: 0 }),
+        safeFetch(() => adminService.getEmployeesWithLoginStatus(), { employees: [] }),
+        safeFetch(() => adminService.getBusinesses(), { businesses: [] }),
+        safeFetch(() => adminService.getServiceLocations(), { serviceLocations: [] }),
+        safeFetch(() => adminService.getUsers({ role: 'client', limit: 1000 }), { users: [] }),
+        safeFetch(() => adminService.getServices(), { services: [] }),
+        safeFetch(() => adminService.getServiceRequests(), { serviceRequests: [] })
       ]);
 
       // Set the data

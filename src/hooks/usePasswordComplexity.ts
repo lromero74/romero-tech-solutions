@@ -28,9 +28,18 @@ export const usePasswordComplexity = (): UsePasswordComplexityReturn => {
       const currentRequirements = await passwordComplexityService.getPasswordComplexityRequirements();
       setRequirements(currentRequirements);
     } catch (err: unknown) {
-      console.error('Failed to fetch password complexity requirements:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch password requirements');
-      // Keep using current requirements or defaults
+      const errorMessage = err instanceof Error ? err.message : 'Failed to fetch password requirements';
+
+      // If permission denied (403), silently use defaults
+      if (errorMessage.includes('Insufficient permissions') || errorMessage.includes('403')) {
+        console.log('ℹ️ Cannot load password complexity requirements (insufficient permissions), using defaults');
+        setRequirements(DEFAULT_PASSWORD_REQUIREMENTS);
+        setError(null); // Don't show error
+      } else {
+        console.error('Failed to fetch password complexity requirements:', err);
+        setError(errorMessage);
+        // Keep using current requirements or defaults
+      }
     } finally {
       setLoading(false);
     }

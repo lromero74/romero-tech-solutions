@@ -22,6 +22,8 @@ import {
 import { getDepartmentDisplayName } from '../../utils/employeeUtils';
 import { Department, EmployeeStatus, Role } from '../../types/database';
 import { themeClasses, useTheme } from '../../contexts/ThemeContext';
+import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
+import { usePermission } from '../../hooks/usePermission';
 import adminService from '../../services/adminService';
 import EditEmployeeModal from './AdminEmployees_Modals/EditEmployeeModal';
 import ViewEmployeeModal from './AdminEmployees_Modals/ViewEmployeeModal';
@@ -289,6 +291,7 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
   toggleShowSoftDeletedEmployees
 }) => {
   const { theme } = useTheme();
+  const { user: authUser } = useEnhancedAuth();
   const [editingEmployee, setEditingEmployee] = React.useState<Employee | null>(null);
   const [showEditForm, setShowEditForm] = React.useState(false);
   const [viewingEmployee, setViewingEmployee] = React.useState<Employee | null>(null);
@@ -568,6 +571,13 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
     });
     setShowPhotoModal(true);
   };
+
+  // Permission checks
+  const { checkPermission } = usePermission();
+  const canViewStats = checkPermission('view.employee_stats.enable');
+  const canViewSoftDeleted = checkPermission('view.soft_deleted_employees.enable');
+  const canModifyOthers = checkPermission('modify.other_employees.enable');
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -669,74 +679,76 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
       )}
 
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Filtered Results</div>
-          <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{getFilteredAndSortedEmployees().length}</div>
-          <div className={`text-xs ${themeClasses.text.muted}`}>of {employees.length} total</div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Active Employees</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#059669', theme === 'dark') }}
-          >
-            {employees.filter(u => u.isActive && !u.isOnVacation && !u.isOutSick && !u.isOnOtherLeave).length}
+      {/* Summary Stats - Hidden from users without permission */}
+      {canViewStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Filtered Results</div>
+            <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{getFilteredAndSortedEmployees().length}</div>
+            <div className={`text-xs ${themeClasses.text.muted}`}>of {employees.length} total</div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Active Employees</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#059669', theme === 'dark') }}
+            >
+              {employees.filter(u => u.isActive && !u.isOnVacation && !u.isOutSick && !u.isOnOtherLeave).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Inactive</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#dc2626', theme === 'dark') }}
+            >
+              {employees.filter(u => !u.isActive).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>On Vacation</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#ea580c', theme === 'dark') }}
+            >
+              {employees.filter(u => u.isOnVacation).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Out Sick</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#ef4444', theme === 'dark') }}
+            >
+              {employees.filter(u => u.isOutSick).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Other Leave</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#9333ea', theme === 'dark') }}
+            >
+              {employees.filter(u => u.isOnOtherLeave).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Logged In</div>
+            <div
+              className="text-2xl font-bold"
+              style={{ color: applyDarkModeMuting('#2563eb', theme === 'dark') }}
+            >
+              {employees.filter(u => u.isLoggedIn).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Not Logged In</div>
+            <div className="text-2xl font-bold text-gray-600">
+              {employees.filter(u => !u.isLoggedIn).length}
+            </div>
           </div>
         </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Inactive</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#dc2626', theme === 'dark') }}
-          >
-            {employees.filter(u => !u.isActive).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>On Vacation</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#ea580c', theme === 'dark') }}
-          >
-            {employees.filter(u => u.isOnVacation).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Out Sick</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#ef4444', theme === 'dark') }}
-          >
-            {employees.filter(u => u.isOutSick).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Other Leave</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#9333ea', theme === 'dark') }}
-          >
-            {employees.filter(u => u.isOnOtherLeave).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Logged In</div>
-          <div
-            className="text-2xl font-bold"
-            style={{ color: applyDarkModeMuting('#2563eb', theme === 'dark') }}
-          >
-            {employees.filter(u => u.isLoggedIn).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.tertiary}`}>Not Logged In</div>
-          <div className="text-2xl font-bold text-gray-600">
-            {employees.filter(u => !u.isLoggedIn).length}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Employee Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
@@ -834,21 +846,24 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
             </button>
           </div>
 
-          <div>
-            <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
-            <button
-              onClick={toggleShowSoftDeletedEmployees}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                showSoftDeletedEmployees ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  showSoftDeletedEmployees ? 'translate-x-6' : 'translate-x-1'
+          {/* Show Soft Deleted toggle - only visible to users with permission */}
+          {canViewSoftDeleted && (
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
+              <button
+                onClick={toggleShowSoftDeletedEmployees}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  showSoftDeletedEmployees ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showSoftDeletedEmployees ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="mt-4 flex justify-end">
@@ -1104,125 +1119,130 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
                       </div>
                     </td>
                     <td className={`px-2 py-2 pr-4 border-r ${themeClasses.border.primary}`}>
-                      <div className="flex flex-wrap items-center gap-1 mr-2">
-                        {/* Active/Inactive Toggle */}
-                        <button
-                          onClick={() => toggleUserStatus(user.id, 'active')}
-                          className={`p-1 rounded ${user.isActive ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
-                          style={{
-                            color: user.isActive ?
-                              applyDarkModeMuting('#059669', theme === 'dark') :
-                              undefined
-                          }}
-                          onMouseEnter={(e) => {
-                            if (user.isActive) {
-                              e.currentTarget.style.color = applyDarkModeMuting('#065f46', theme === 'dark');
-                            }
-                          }}
-                          onMouseLeave={(e) => {
-                            if (user.isActive) {
-                              e.currentTarget.style.color = applyDarkModeMuting('#059669', theme === 'dark');
-                            }
-                          }}
-                          title={user.isActive ? 'Deactivate User' : 'Activate User'}
-                        >
-                          {user.isActive ? (
-                            <ToggleRight className="w-5 h-5" />
-                          ) : (
-                            <ToggleLeft className="w-5 h-5" />
+                      {/* Technicians can only see toggles for themselves */}
+                      {(canModifyOthers || user.id === authUser?.id) ? (
+                        <div className="flex flex-wrap items-center gap-1 mr-2">
+                          {/* Active/Inactive Toggle */}
+                          <button
+                            onClick={() => toggleUserStatus(user.id, 'active')}
+                            className={`p-1 rounded ${user.isActive ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
+                            style={{
+                              color: user.isActive ?
+                                applyDarkModeMuting('#059669', theme === 'dark') :
+                                undefined
+                            }}
+                            onMouseEnter={(e) => {
+                              if (user.isActive) {
+                                e.currentTarget.style.color = applyDarkModeMuting('#065f46', theme === 'dark');
+                              }
+                            }}
+                            onMouseLeave={(e) => {
+                              if (user.isActive) {
+                                e.currentTarget.style.color = applyDarkModeMuting('#059669', theme === 'dark');
+                              }
+                            }}
+                            title={user.isActive ? 'Deactivate User' : 'Activate User'}
+                          >
+                            {user.isActive ? (
+                              <ToggleRight className="w-5 h-5" />
+                            ) : (
+                              <ToggleLeft className="w-5 h-5" />
+                            )}
+                          </button>
+
+                          {/* Vacation Toggle (only for employees) */}
+                          {user.userType === 'employee' && user.isActive && (
+                            <button
+                              onClick={() => toggleUserStatus(user.id, 'vacation')}
+                              className={`p-1 rounded ${user.isOnVacation ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
+                              style={{
+                                color: user.isOnVacation ?
+                                  applyDarkModeMuting('#ea580c', theme === 'dark') :
+                                  undefined
+                              }}
+                              onMouseEnter={(e) => {
+                                if (user.isOnVacation) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#c2410c', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#ea580c', theme === 'dark');
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (user.isOnVacation) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#ea580c', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = '';
+                                }
+                              }}
+                              title={user.isOnVacation ? 'Return from Vacation' : 'Set On Vacation'}
+                            >
+                              <Plane className="w-4 h-4" />
+                            </button>
                           )}
-                        </button>
 
-                        {/* Vacation Toggle (only for employees) */}
-                        {user.userType === 'employee' && user.isActive && (
-                          <button
-                            onClick={() => toggleUserStatus(user.id, 'vacation')}
-                            className={`p-1 rounded ${user.isOnVacation ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
-                            style={{
-                              color: user.isOnVacation ?
-                                applyDarkModeMuting('#ea580c', theme === 'dark') :
-                                undefined
-                            }}
-                            onMouseEnter={(e) => {
-                              if (user.isOnVacation) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#c2410c', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = applyDarkModeMuting('#ea580c', theme === 'dark');
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (user.isOnVacation) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#ea580c', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = '';
-                              }
-                            }}
-                            title={user.isOnVacation ? 'Return from Vacation' : 'Set On Vacation'}
-                          >
-                            <Plane className="w-4 h-4" />
-                          </button>
-                        )}
+                          {/* Sick Toggle (only for employees) */}
+                          {user.userType === 'employee' && user.isActive && (
+                            <button
+                              onClick={() => toggleUserStatus(user.id, 'sick')}
+                              className={`p-1 rounded ${user.isOutSick ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
+                              style={{
+                                color: user.isOutSick ?
+                                  applyDarkModeMuting('#dc2626', theme === 'dark') :
+                                  undefined
+                              }}
+                              onMouseEnter={(e) => {
+                                if (user.isOutSick) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#b91c1c', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#dc2626', theme === 'dark');
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (user.isOutSick) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#dc2626', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = '';
+                                }
+                              }}
+                              title={user.isOutSick ? 'Return from Sick Leave' : 'Set Out Sick'}
+                            >
+                              <Heart className="w-4 h-4" />
+                            </button>
+                          )}
 
-                        {/* Sick Toggle (only for employees) */}
-                        {user.userType === 'employee' && user.isActive && (
-                          <button
-                            onClick={() => toggleUserStatus(user.id, 'sick')}
-                            className={`p-1 rounded ${user.isOutSick ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
-                            style={{
-                              color: user.isOutSick ?
-                                applyDarkModeMuting('#dc2626', theme === 'dark') :
-                                undefined
-                            }}
-                            onMouseEnter={(e) => {
-                              if (user.isOutSick) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#b91c1c', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = applyDarkModeMuting('#dc2626', theme === 'dark');
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (user.isOutSick) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#dc2626', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = '';
-                              }
-                            }}
-                            title={user.isOutSick ? 'Return from Sick Leave' : 'Set Out Sick'}
-                          >
-                            <Heart className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Other Leave Toggle (only for employees) */}
-                        {user.userType === 'employee' && user.isActive && (
-                          <button
-                            onClick={() => toggleUserStatus(user.id, 'other')}
-                            className={`p-1 rounded ${user.isOnOtherLeave ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
-                            style={{
-                              color: user.isOnOtherLeave ?
-                                applyDarkModeMuting('#9333ea', theme === 'dark') :
-                                undefined
-                            }}
-                            onMouseEnter={(e) => {
-                              if (user.isOnOtherLeave) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#7c3aed', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = applyDarkModeMuting('#9333ea', theme === 'dark');
-                              }
-                            }}
-                            onMouseLeave={(e) => {
-                              if (user.isOnOtherLeave) {
-                                e.currentTarget.style.color = applyDarkModeMuting('#9333ea', theme === 'dark');
-                              } else {
-                                e.currentTarget.style.color = '';
-                              }
-                            }}
-                            title={user.isOnOtherLeave ? 'Return from Other Leave' : 'Set Other Leave'}
-                          >
-                            <Calendar className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                          {/* Other Leave Toggle (only for employees) */}
+                          {user.userType === 'employee' && user.isActive && (
+                            <button
+                              onClick={() => toggleUserStatus(user.id, 'other')}
+                              className={`p-1 rounded ${user.isOnOtherLeave ? '' : `${themeClasses.text.muted} hover:${themeClasses.text.secondary}`}`}
+                              style={{
+                                color: user.isOnOtherLeave ?
+                                  applyDarkModeMuting('#9333ea', theme === 'dark') :
+                                  undefined
+                              }}
+                              onMouseEnter={(e) => {
+                                if (user.isOnOtherLeave) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#7c3aed', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#9333ea', theme === 'dark');
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (user.isOnOtherLeave) {
+                                  e.currentTarget.style.color = applyDarkModeMuting('#9333ea', theme === 'dark');
+                                } else {
+                                  e.currentTarget.style.color = '';
+                                }
+                              }}
+                              title={user.isOnOtherLeave ? 'Return from Other Leave' : 'Set Other Leave'}
+                            >
+                              <Calendar className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className={`text-xs ${themeClasses.text.muted} text-center`}>-</div>
+                      )}
                     </td>
                     <td className={`px-2 py-2 pr-4 text-sm font-medium border-r ${themeClasses.border.primary}`}>
                       <button
@@ -1232,76 +1252,81 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
                       >
                         <Eye className="w-4 h-4" />
                       </button>
-                      <button
-                        onClick={() => handleEditEmployee(user)}
-                        className="text-blue-600 hover:text-blue-900 mr-3"
-                        title="Edit employee"
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                      {/* Only show delete buttons if this is not the current user */}
-                      {currentUser && currentUser.id !== user.id && (
+                      {/* Users can edit themselves, or users with modify others permission can edit anyone */}
+                      {(canModifyOthers || user.id === authUser?.id) && (
                         <>
-                          {/* Soft Delete/Restore Button */}
                           <button
-                            onClick={() => {
-                              console.log('🖱️ Soft delete button clicked for:', user.employeeNumber, user.firstName, user.lastName);
-                              console.log('Current user.softDelete:', user.softDelete);
-                              console.log('Full user object:', user);
-                              onSoftDeleteEmployee?.(user);
-                            }}
-                            disabled={loadingEmployeeOperations?.[user.id]}
-                            className={`mr-2 ${user.softDelete ? 'text-green-600 hover:text-green-900' : 'text-orange-600 hover:text-orange-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
-                            title={user.softDelete ? "Restore employee" : "Soft delete employee"}
+                            onClick={() => handleEditEmployee(user)}
+                            className="text-blue-600 hover:text-blue-900 mr-3"
+                            title="Edit employee"
                           >
-                            {loadingEmployeeOperations?.[user.id] ? (
-                              <Loader className="w-4 h-4 animate-spin" />
-                            ) : user.softDelete ? (
-                              <Undo2 className="w-4 h-4" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
+                            <Edit className="w-4 h-4" />
                           </button>
-                          {/* Hard Delete Button */}
-                          <button
-                            onClick={() => onHardDeleteEmployee?.(user)}
-                            disabled={loadingEmployeeOperations?.[user.id]}
-                            className="text-red-600 hover:text-red-900 mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Permanently delete employee"
-                          >
-                            {loadingEmployeeOperations?.[user.id] ? (
-                              <Loader className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                          {/* Terminate/Rehire Button */}
-                          {user.employeeStatus === 'terminated' ? (
-                            <button
-                              onClick={() => onRehireEmployee?.(user)}
-                              disabled={loadingEmployeeOperations?.[user.id]}
-                              className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Rehire employee"
-                            >
-                              {loadingEmployeeOperations?.[user.id] ? (
-                                <Loader className="w-4 h-4 animate-spin" />
+                          {/* Only show delete buttons if this is not the current user */}
+                          {currentUser && currentUser.id !== user.id && (
+                            <>
+                              {/* Soft Delete/Restore Button */}
+                              <button
+                                onClick={() => {
+                                  console.log('🖱️ Soft delete button clicked for:', user.employeeNumber, user.firstName, user.lastName);
+                                  console.log('Current user.softDelete:', user.softDelete);
+                                  console.log('Full user object:', user);
+                                  onSoftDeleteEmployee?.(user);
+                                }}
+                                disabled={loadingEmployeeOperations?.[user.id]}
+                                className={`mr-2 ${user.softDelete ? 'text-green-600 hover:text-green-900' : 'text-orange-600 hover:text-orange-900'} disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title={user.softDelete ? "Restore employee" : "Soft delete employee"}
+                              >
+                                {loadingEmployeeOperations?.[user.id] ? (
+                                  <Loader className="w-4 h-4 animate-spin" />
+                                ) : user.softDelete ? (
+                                  <Undo2 className="w-4 h-4" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                              {/* Hard Delete Button */}
+                              <button
+                                onClick={() => onHardDeleteEmployee?.(user)}
+                                disabled={loadingEmployeeOperations?.[user.id]}
+                                className="text-red-600 hover:text-red-900 mr-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Permanently delete employee"
+                              >
+                                {loadingEmployeeOperations?.[user.id] ? (
+                                  <Loader className="w-4 h-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="w-4 h-4" />
+                                )}
+                              </button>
+                              {/* Terminate/Rehire Button */}
+                              {user.employeeStatus === 'terminated' ? (
+                                <button
+                                  onClick={() => onRehireEmployee?.(user)}
+                                  disabled={loadingEmployeeOperations?.[user.id]}
+                                  className="text-green-600 hover:text-green-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Rehire employee"
+                                >
+                                  {loadingEmployeeOperations?.[user.id] ? (
+                                    <Loader className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <UserCheck className="w-4 h-4" />
+                                  )}
+                                </button>
                               ) : (
-                                <UserCheck className="w-4 h-4" />
+                                <button
+                                  onClick={() => onTerminateEmployee?.(user)}
+                                  disabled={loadingEmployeeOperations?.[user.id]}
+                                  className="text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  title="Terminate employee"
+                                >
+                                  {loadingEmployeeOperations?.[user.id] ? (
+                                    <Loader className="w-4 h-4 animate-spin" />
+                                  ) : (
+                                    <UserX className="w-4 h-4" />
+                                  )}
+                                </button>
                               )}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => onTerminateEmployee?.(user)}
-                              disabled={loadingEmployeeOperations?.[user.id]}
-                              className="text-gray-600 hover:text-gray-900 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Terminate employee"
-                            >
-                              {loadingEmployeeOperations?.[user.id] ? (
-                                <Loader className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <UserX className="w-4 h-4" />
-                              )}
-                            </button>
+                            </>
                           )}
                         </>
                       )}
@@ -1465,8 +1490,8 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
               </div>
             </div>
 
-            {/* Control buttons */}
-            {user.userType === 'employee' && user.isActive && (
+            {/* Control buttons - only show for users with permission or if viewing self */}
+            {user.userType === 'employee' && user.isActive && (canModifyOthers || user.id === authUser?.id) && (
               <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-200 dark:border-gray-700">
                 <span className={`text-xs ${themeClasses.text.muted}`}>Quick Actions:</span>
                 <button
@@ -1510,22 +1535,25 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
 
             {/* Action buttons */}
             <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => toggleUserStatus(user.id, 'active')}
-                  className={`px-3 py-2 rounded-md text-sm font-medium ${
-                    user.isActive
-                      ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
-                      : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                  }`}
-                >
-                  {user.isActive ? (
-                    <><ToggleRight className="w-4 h-4 inline mr-1" /> Active</>
-                  ) : (
-                    <><ToggleLeft className="w-4 h-4 inline mr-1" /> Inactive</>
-                  )}
-                </button>
-              </div>
+              {/* Only show active/inactive toggle for users with permission or if viewing self */}
+              {(canModifyOthers || user.id === authUser?.id) && (
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => toggleUserStatus(user.id, 'active')}
+                    className={`px-3 py-2 rounded-md text-sm font-medium ${
+                      user.isActive
+                        ? 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'
+                        : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {user.isActive ? (
+                      <><ToggleRight className="w-4 h-4 inline mr-1" /> Active</>
+                    ) : (
+                      <><ToggleLeft className="w-4 h-4 inline mr-1" /> Inactive</>
+                    )}
+                  </button>
+                </div>
+              )}
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => handleViewEmployee(user)}
@@ -1534,31 +1562,36 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
                 >
                   <Eye className="w-5 h-5" />
                 </button>
-                <button
-                  onClick={() => handleEditEmployee(user)}
-                  className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
-                  title="Edit employee"
-                >
-                  <Edit className="w-5 h-5" />
-                </button>
-                {currentUser && currentUser.id !== user.id && (
+                {/* Users can edit themselves, or users with modify others permission can edit anyone */}
+                {(canModifyOthers || user.id === authUser?.id) && (
                   <>
                     <button
-                      onClick={() => {
-                        onSoftDeleteEmployee?.(user);
-                      }}
-                      disabled={loadingEmployeeOperations?.[user.id]}
-                      className={`p-2 ${user.softDelete ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'} disabled:opacity-50`}
-                      title={user.softDelete ? "Restore employee" : "Soft delete employee"}
+                      onClick={() => handleEditEmployee(user)}
+                      className="p-2 text-blue-600 hover:text-blue-900 dark:text-blue-400"
+                      title="Edit employee"
                     >
-                      {loadingEmployeeOperations?.[user.id] ? (
-                        <Loader className="w-5 h-5 animate-spin" />
-                      ) : user.softDelete ? (
-                        <Undo2 className="w-5 h-5" />
-                      ) : (
-                        <Trash2 className="w-5 h-5" />
-                      )}
+                      <Edit className="w-5 h-5" />
                     </button>
+                    {currentUser && currentUser.id !== user.id && (
+                      <>
+                        <button
+                          onClick={() => {
+                            onSoftDeleteEmployee?.(user);
+                          }}
+                          disabled={loadingEmployeeOperations?.[user.id]}
+                          className={`p-2 ${user.softDelete ? 'text-green-600 dark:text-green-400' : 'text-orange-600 dark:text-orange-400'} disabled:opacity-50`}
+                          title={user.softDelete ? "Restore employee" : "Soft delete employee"}
+                        >
+                          {loadingEmployeeOperations?.[user.id] ? (
+                            <Loader className="w-5 h-5 animate-spin" />
+                          ) : user.softDelete ? (
+                            <Undo2 className="w-5 h-5" />
+                          ) : (
+                            <Trash2 className="w-5 h-5" />
+                          )}
+                        </button>
+                      </>
+                    )}
                   </>
                 )}
               </div>

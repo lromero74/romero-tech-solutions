@@ -748,6 +748,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 }
 
                 // Filter by show soft deleted toggle
+                // Always filter soft-deleted if toggle is off
                 if (!externalShowSoftDeletedEmployees && employee.softDelete) {
                   return false;
                 }
@@ -1135,7 +1136,6 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
               // First apply the hook's filtering logic to ENHANCED data
               const hookFiltered = businessFilters.getFilteredAndSortedBusinesses(enhancedBusinesses, clients);
 
-
               // Then apply the toggle filters
               const finalFiltered = hookFiltered.filter(business => {
                 // Filter by show inactive toggle
@@ -1144,6 +1144,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
                 }
 
                 // Filter by show soft deleted toggle
+                // Always filter soft-deleted if toggle is off
                 if (!showSoftDeletedBusinesses && business.softDelete) {
                   return false;
                 }

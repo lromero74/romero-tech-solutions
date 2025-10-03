@@ -116,13 +116,22 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       });
 
     } catch (err: any) {
-      console.error('❌ Error loading permissions:', err);
-      setError(err.message || 'Failed to load permissions');
+      // If it's a permission error (403), silently set empty permissions (user has no permissions)
+      if (err.message?.includes('Insufficient permissions') || err.message?.includes('403')) {
+        console.log('ℹ️ User has no permissions configured (403)');
+        setPermissions([]);
+        setRoles([]);
+        setIsExecutive(false);
+        setError(null); // Don't show error for permission-less users
+      } else {
+        console.error('❌ Error loading permissions:', err);
+        setError(err.message || 'Failed to load permissions');
 
-      // On error, set empty permissions (fail-safe)
-      setPermissions([]);
-      setRoles([]);
-      setIsExecutive(false);
+        // On other errors, set empty permissions (fail-safe)
+        setPermissions([]);
+        setRoles([]);
+        setIsExecutive(false);
+      }
     } finally {
       setLoading(false);
     }

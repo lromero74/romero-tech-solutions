@@ -19,6 +19,35 @@ const AdminDashboardContent: React.FC = () => {
   const { refreshAllData, serviceLocations, employees } = useAdminData();
   const { toggleTheme, isDark } = useTheme();
 
+  // Helper function to get role display name
+  const getRoleDisplayName = (role: string | undefined): string => {
+    if (!role) return 'User';
+
+    const roleMap: Record<string, string> = {
+      'executive': 'Executive',
+      'admin': 'Administrator',
+      'sales': 'Sales',
+      'technician': 'Technician',
+      'client': 'Client'
+    };
+
+    return roleMap[role.toLowerCase()] || role;
+  };
+
+  // Get dashboard title based on role
+  const getDashboardTitle = (role: string | undefined): string => {
+    if (!role) return 'Dashboard';
+
+    const roleLower = role.toLowerCase();
+    if (roleLower === 'technician') {
+      return 'Technician Dashboard';
+    } else if (roleLower === 'sales') {
+      return 'Sales Dashboard';
+    }
+
+    return 'Admin Dashboard';
+  };
+
   // Load session config when dashboard mounts (same time as other dashboard data)
   // Always load from database to ensure fresh values, regardless of cached config
   useEffect(() => {
@@ -32,8 +61,13 @@ const AdminDashboardContent: React.FC = () => {
             // Update the context with the loaded config (use the full config, not partial)
             await updateSessionConfig(config);
           }
-        } catch (error) {
-          console.error('❌ [AdminDashboard] Failed to load session config:', error);
+        } catch (error: any) {
+          // If permission denied (403), silently skip loading (use defaults)
+          if (error.message?.includes('Insufficient permissions') || error.message?.includes('403')) {
+            console.log('ℹ️ Cannot load session config (insufficient permissions), using defaults');
+          } else {
+            console.error('❌ [AdminDashboard] Failed to load session config:', error);
+          }
         }
       }
     };
@@ -352,7 +386,7 @@ const AdminDashboardContent: React.FC = () => {
                     <h1 className="text-xl font-semibold text-gray-900 dark:text-white">
                       Romero Tech Solutions
                     </h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Admin Dashboard</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{getDashboardTitle(user?.role)}</p>
                   </div>
                 </div>
               </div>
@@ -384,7 +418,7 @@ const AdminDashboardContent: React.FC = () => {
                       >
                         <div className="text-right">
                           <p className="text-sm font-medium text-gray-900 dark:text-white">{user.name}</p>
-                          <p className="text-xs text-gray-500 dark:text-gray-400">Administrator</p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">{getRoleDisplayName(user.role)}</p>
                         </div>
                         {currentEmployee?.photo ? (
                           <div

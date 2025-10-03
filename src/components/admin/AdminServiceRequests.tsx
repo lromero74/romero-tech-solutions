@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
+import { usePermission } from '../../hooks/usePermission';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
 import {
@@ -42,7 +43,8 @@ import {
 const AdminServiceRequests: React.FC = () => {
   const { isDark } = useTheme();
   const { user } = useEnhancedAuth();
-  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
+  const { checkPermission } = usePermission();
+  const canViewCosts = checkPermission('view.service_request_costs.enable');
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
@@ -1332,8 +1334,8 @@ const AdminServiceRequests: React.FC = () => {
                       {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
                     </div>
 
-                    {/* Cost Information - Only for Admin/Executive */}
-                    {isExecutiveOrAdmin && selectedRequest.cost && (
+                    {/* Cost Information - Only for users with permission */}
+                    {canViewCosts && selectedRequest.cost && (
                       <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
                         <div className={`text-sm ${themeClasses.text.secondary}`}>
                           Base Rate: ${selectedRequest.cost.baseRate}/hr

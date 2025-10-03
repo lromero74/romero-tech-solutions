@@ -86,7 +86,12 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       }
 
       return false;
-    } catch (error) {
+    } catch (error: any) {
+      // If permission denied (403), default to false (no MFA required)
+      if (error.message?.includes('Insufficient permissions') || error.message?.includes('403')) {
+        console.log('ℹ️ Cannot check MFA settings (insufficient permissions), defaulting to no MFA');
+        return false;
+      }
       console.error('Error checking MFA requirement:', error);
       // Default to requiring MFA for admin users for security (fallback)
       return user.role === 'admin';

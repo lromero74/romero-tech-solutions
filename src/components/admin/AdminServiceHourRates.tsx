@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, Save, X } from 'lucide-react';
+import { Clock, Save, X, AlertCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
+import { usePermissionContext } from '../../contexts/PermissionContext';
+import { usePermission } from '../../hooks/usePermission';
 import apiService from '../../services/apiService';
 
 interface ServiceHourRateTier {
@@ -37,6 +39,25 @@ const formatHour = (hour: number): string => {
 
 const AdminServiceHourRates: React.FC = () => {
   const { user } = useEnhancedAuth();
+  const { hasPermission } = usePermissionContext();
+
+  // Permission check
+  if (!hasPermission('view.service_hour_rates.enable')) {
+    return (
+      <div className={`p-8 ${themeClasses.bg.primary}`}>
+        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
+          <AlertCircle className={`w-12 h-12 ${themeClasses.text.warning} mx-auto mb-4`} />
+          <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
+            Access Denied
+          </h3>
+          <p className={themeClasses.text.secondary}>
+            You do not have permission to view service hour rates.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [rateTiers, setRateTiers] = useState<ServiceHourRateTier[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
@@ -50,8 +71,9 @@ const AdminServiceHourRates: React.FC = () => {
     3: 2.0   // Emergency default
   });
 
-  // Check if user has executive role
-  const isExecutive = user?.role === 'executive';
+  // Permission check
+  const { checkPermission } = usePermission();
+  const canModifyRates = checkPermission('modify.service_hour_rates.enable');
 
   useEffect(() => {
     loadRateTiers();
@@ -114,7 +136,7 @@ const AdminServiceHourRates: React.FC = () => {
 
   // Handle cell click
   const handleCellClick = (day: number, hour: number) => {
-    if (!isExecutive) return;
+    if (!canModifyRates) return;
 
     // If active tier is set, apply it immediately
     if (activeTierLevel !== null) {
@@ -246,7 +268,7 @@ const AdminServiceHourRates: React.FC = () => {
               <div>
                 <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Service Hour Rate Tiers</h1>
                 <p className={`${themeClasses.text.secondary}`}>
-                  {isExecutive
+                  {canModifyRates
                     ? activeTierLevel !== null
                       ? `Paint mode: Click cells to apply ${TIER_LEVELS_BASE.find(t => t.value === activeTierLevel)?.label} tier (${customMultipliers[activeTierLevel]}x)`
                       : 'Set custom multipliers, select a tier, then click cells to paint the schedule'
@@ -264,9 +286,9 @@ const AdminServiceHourRates: React.FC = () => {
           <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-4`}>
             <div className="flex items-center justify-between mb-3">
               <h3 className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                {isExecutive ? 'Select Rate Tier (Click to Paint)' : 'Rate Tier Legend'}
+                {canModifyRates ? 'Select Rate Tier (Click to Paint)' : 'Rate Tier Legend'}
               </h3>
-              {isExecutive && activeTierLevel !== null && (
+              {canModifyRates && activeTierLevel !== null && (
                 <button
                   onClick={() => setActiveTierLevel(null)}
                   className="text-xs px-3 py-1 rounded bg-gray-200 hover:bg-gray-300 dark:bg-gray-700 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300"
@@ -293,10 +315,10 @@ const AdminServiceHourRates: React.FC = () => {
                     }}
                   >
                     <button
-                      onClick={() => isExecutive && setActiveTierLevel(tier.value)}
-                      disabled={!isExecutive}
+                      onClick={() => canModifyRates && setActiveTierLevel(tier.value)}
+                      disabled={!canModifyRates}
                       className={`flex items-center space-x-3 ${
-                        isExecutive ? 'cursor-pointer' : 'cursor-default'
+                        canModifyRates ? 'cursor-pointer' : 'cursor-default'
                       }`}
                     >
                       <div
@@ -313,7 +335,7 @@ const AdminServiceHourRates: React.FC = () => {
                       )}
                     </button>
 
-                    {isExecutive ? (
+                    {canModifyRates ? (
                       <div className="flex items-center space-x-2">
                         <input
                           type="number"
@@ -344,7 +366,7 @@ const AdminServiceHourRates: React.FC = () => {
                 );
               })}
             </div>
-            {isExecutive && (
+            {canModifyRates && (
               <p className={`text-xs ${themeClasses.text.muted} mt-3`}>
                 {activeTierLevel !== null
                   ? '✓ Click cells to apply selected tier. Click "Clear Selection" to choose different tiers for each cell.'
@@ -402,7 +424,7 @@ const AdminServiceHourRates: React.FC = () => {
                                 key={dayIndex}
                                 onClick={() => handleCellClick(dayIndex, hour)}
                                 className={`p-2 border ${themeClasses.border.primary} text-center transition-all flex-1 min-w-[80px] ${
-                                  isExecutive ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-inset' : ''
+                                  canModifyRates ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-inset' : ''
                                 } ${isUnassigned ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
                                 style={{
                                   backgroundColor: isUnassigned ? undefined : `${bgColor}40`,
@@ -442,8 +464,8 @@ const AdminServiceHourRates: React.FC = () => {
               <li>• Each cell represents one hour on a specific day of the week</li>
               <li>• Color-coded cells show which rate tier applies to that time slot</li>
               <li>• S = Standard, P = Premium, E = Emergency (with custom multipliers)</li>
-              {isExecutive && <li>• Click any cell to change the rate tier for that hour</li>}
-              {isExecutive && <li>• Adjust multipliers above, then paint cells to apply custom rates</li>}
+              {canModifyRates && <li>• Click any cell to change the rate tier for that hour</li>}
+              {canModifyRates && <li>• Adjust multipliers above, then paint cells to apply custom rates</li>}
               <li>• Gray cells are unassigned (default to standard rate)</li>
               <li>• Rate multipliers are applied when clients schedule appointments</li>
             </ul>
@@ -452,7 +474,7 @@ const AdminServiceHourRates: React.FC = () => {
       </div>
 
       {/* Tier Selection Modal */}
-      {selectedCell && isExecutive && (
+      {selectedCell && canModifyRates && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
             {/* Background overlay */}

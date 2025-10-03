@@ -14,6 +14,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
+import { usePermissionContext } from '../../contexts/PermissionContext';
 import apiService from '../../services/apiService';
 
 interface InvoiceSummary {
@@ -91,6 +92,7 @@ interface Filters {
 
 const AdminInvoices: React.FC = () => {
   const { isDark } = useTheme();
+  const { hasPermission } = usePermissionContext();
 
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -115,6 +117,23 @@ const AdminInvoices: React.FC = () => {
 
   const [sortBy, setSortBy] = useState('issue_date');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
+
+  // Permission check
+  if (!hasPermission('view.invoices.enable')) {
+    return (
+      <div className={`p-8 ${themeClasses.bg.primary}`}>
+        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
+          <AlertCircle className={`w-12 h-12 ${themeClasses.text.warning} mx-auto mb-4`} />
+          <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
+            Access Denied
+          </h3>
+          <p className={themeClasses.text.secondary}>
+            You do not have permission to view invoices.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Invoice viewer state
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);

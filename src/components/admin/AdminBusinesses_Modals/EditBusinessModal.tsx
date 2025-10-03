@@ -6,6 +6,7 @@ import { PhotoUploadInterface } from '../../shared/PhotoUploadInterface';
 import ServiceAreaValidator from '../../shared/ServiceAreaValidator';
 import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplete';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import { usePermission } from '../../../hooks/usePermission';
 import apiService from '../../../services/apiService';
 // Removed unused imports: validateServiceAreaField, AlertModal
 
@@ -78,7 +79,8 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
   businesses = []
 }) => {
   const { user } = useEnhancedAuth();
-  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
+  const { checkPermission } = usePermission();
+  const canViewRateCategories = checkPermission('view.business_rate_categories.enable');
 
   const [formData, setFormData] = useState({
     businessName: '',
@@ -495,7 +497,7 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
               </div>
 
               {/* Rate Category Selection */}
-              {isExecutiveOrAdmin && rateCategories.length > 0 && (
+              {canViewRateCategories && rateCategories.length > 0 && (
                 <div className="md:col-span-2">
                   <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
                     Hourly Rate Category

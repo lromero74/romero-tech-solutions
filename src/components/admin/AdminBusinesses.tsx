@@ -106,6 +106,8 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
   const canModify = checkPermission('modify.businesses.enable');
   const canSoftDelete = checkPermission('softDelete.businesses.enable');
   const canHardDelete = checkPermission('hardDelete.businesses.enable');
+  const canViewSoftDeleted = checkPermission('view.soft_deleted_businesses.enable');
+  const canViewStats = checkPermission('view.business_stats.enable');
 
   // Permission denied modal state
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -198,40 +200,42 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
         )}
       </div>
 
-      {/* Summary Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Businesses</div>
-          <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{filteredBusinesses.filter(b => !b.softDelete).length}</div>
-          <div className={`text-xs ${themeClasses.text.muted}`}>of {businesses.filter(b => !b.softDelete).length} total</div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Active Businesses</div>
-          <div className="text-2xl font-bold text-green-600">
-            {filteredBusinesses.filter(b => b.isActive && !b.softDelete).length}
+      {/* Summary Stats - Hidden from users without permission */}
+      {canViewStats && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Businesses</div>
+            <div className={`text-2xl font-bold ${themeClasses.text.primary}`}>{filteredBusinesses.filter(b => !b.softDelete).length}</div>
+            <div className={`text-xs ${themeClasses.text.muted}`}>of {businesses.filter(b => !b.softDelete).length} total</div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Active Businesses</div>
+            <div className="text-2xl font-bold text-green-600">
+              {filteredBusinesses.filter(b => b.isActive && !b.softDelete).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Inactive Businesses</div>
+            <div className="text-2xl font-bold text-red-600">
+              {filteredBusinesses.filter(b => !b.isActive && !b.softDelete).length}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Clients</div>
+            <div className="text-2xl font-bold text-blue-600">
+              {filteredBusinesses.reduce((total, business) => {
+                return total + getClientsForBusiness(business.businessName).length;
+              }, 0)}
+            </div>
+          </div>
+          <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
+            <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Soft Deleted</div>
+            <div className="text-2xl font-bold text-orange-600">
+              {businesses.filter(b => b.softDelete).length}
+            </div>
           </div>
         </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Inactive Businesses</div>
-          <div className="text-2xl font-bold text-red-600">
-            {filteredBusinesses.filter(b => !b.isActive && !b.softDelete).length}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Clients</div>
-          <div className="text-2xl font-bold text-blue-600">
-            {filteredBusinesses.reduce((total, business) => {
-              return total + getClientsForBusiness(business.businessName).length;
-            }, 0)}
-          </div>
-        </div>
-        <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-          <div className={`text-sm font-medium ${themeClasses.text.secondary}`}>Soft Deleted</div>
-          <div className="text-2xl font-bold text-orange-600">
-            {businesses.filter(b => b.softDelete).length}
-          </div>
-        </div>
-      </div>
+      )}
 
       {/* Business Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
@@ -262,21 +266,24 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
               />
             </button>
           </div>
-          <div>
-            <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
-            <button
-              onClick={toggleShowSoftDeletedBusinesses}
-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                showSoftDeletedBusinesses ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
-              }`}
-            >
-              <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                  showSoftDeletedBusinesses ? 'translate-x-6' : 'translate-x-1'
+          {/* Show Soft Deleted toggle - only visible to users with permission */}
+          {canViewSoftDeleted && (
+            <div>
+              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>Show Soft Deleted</label>
+              <button
+                onClick={toggleShowSoftDeletedBusinesses}
+                className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                  showSoftDeletedBusinesses ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-700'
                 }`}
-              />
-            </button>
-          </div>
+              >
+                <span
+                  className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                    showSoftDeletedBusinesses ? 'translate-x-6' : 'translate-x-1'
+                  }`}
+                />
+              </button>
+            </div>
+          )}
           <div className="flex items-end">
             <button
               onClick={clearBusinessFilters}
@@ -522,122 +529,127 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                       </span>
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium border-r ${themeClasses.border.primary}`}>
-                      <div className="flex items-center space-x-2">
-                        {/* Edit Button */}
-                        {canModify ? (
-                          <button
-                            onClick={() => onEditBusiness?.(business)}
-                            className="text-blue-600 hover:text-blue-900"
-                            title="Edit business"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setPermissionDenied({
-                              show: true,
-                              action: 'Edit Business',
-                              requiredPermission: 'modify.businesses.enable',
-                              message: 'You do not have permission to modify businesses'
-                            })}
-                            disabled
-                            className="text-gray-300 cursor-not-allowed opacity-50"
-                            title="Sales, Admin, or Executive role required"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
+                      {/* Show actions based on permissions */}
+                      {(canModify || canSoftDelete || canHardDelete) ? (
+                        <div className="flex items-center space-x-2">
+                          {/* Edit Button */}
+                          {canModify ? (
+                            <button
+                              onClick={() => onEditBusiness?.(business)}
+                              className="text-blue-600 hover:text-blue-900"
+                              title="Edit business"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setPermissionDenied({
+                                show: true,
+                                action: 'Edit Business',
+                                requiredPermission: 'modify.businesses.enable',
+                                message: 'You do not have permission to modify businesses'
+                              })}
+                              disabled
+                              className="text-gray-300 cursor-not-allowed opacity-50"
+                              title="Sales, Admin, or Executive role required"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          )}
 
-                        {/* Toggle Active/Inactive Button */}
-                        {canModify ? (
-                          <button
-                            onClick={() => toggleBusinessStatus?.(business.id, business.isActive ? 'inactive' : 'active')}
-                            disabled={loadingBusinessOperations[business.id]}
-                            className={`${business.isActive ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            title={loadingBusinessOperations[business.id] ? "Processing..." : business.isActive ? "Deactivate business" : "Activate business"}
-                          >
-                            {loadingBusinessOperations[business.id] ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
+                          {/* Toggle Active/Inactive Button */}
+                          {canModify ? (
+                            <button
+                              onClick={() => toggleBusinessStatus?.(business.id, business.isActive ? 'inactive' : 'active')}
+                              disabled={loadingBusinessOperations[business.id]}
+                              className={`${business.isActive ? 'text-green-600 hover:text-green-700' : 'text-gray-400 hover:text-gray-600'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={loadingBusinessOperations[business.id] ? "Processing..." : business.isActive ? "Deactivate business" : "Activate business"}
+                            >
+                              {loadingBusinessOperations[business.id] ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Power className="w-4 h-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              disabled
+                              className="text-gray-300 cursor-not-allowed opacity-50"
+                              title="Sales, Admin, or Executive role required"
+                            >
                               <Power className="w-4 h-4" />
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            disabled
-                            className="text-gray-300 cursor-not-allowed opacity-50"
-                            title="Sales, Admin, or Executive role required"
-                          >
-                            <Power className="w-4 h-4" />
-                          </button>
-                        )}
+                            </button>
+                          )}
 
-                        {/* Soft Delete/Restore Button */}
-                        {canSoftDelete ? (
-                          <button
-                            onClick={() => onSoftDeleteBusiness?.(business)}
-                            disabled={loadingBusinessOperations[business.id]}
-                            className={`${business.softDelete ? 'text-blue-600 hover:text-blue-900' : 'text-orange-600 hover:text-orange-900'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            title={loadingBusinessOperations[business.id] ? "Processing..." : business.softDelete ? "Restore business" : "Soft delete business"}
-                          >
-                            {loadingBusinessOperations[business.id] ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : business.softDelete ? (
-                              <Undo2 className="w-4 h-4" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setPermissionDenied({
-                              show: true,
-                              action: business.softDelete ? 'Restore Business' : 'Soft Delete Business',
-                              requiredPermission: 'softDelete.businesses.enable',
-                              message: 'You do not have permission to soft delete businesses'
-                            })}
-                            disabled
-                            className="text-gray-300 cursor-not-allowed opacity-50"
-                            title="Admin or Executive role required"
-                          >
-                            {business.softDelete ? (
-                              <Undo2 className="w-4 h-4" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        )}
+                          {/* Soft Delete/Restore Button */}
+                          {canSoftDelete ? (
+                            <button
+                              onClick={() => onSoftDeleteBusiness?.(business)}
+                              disabled={loadingBusinessOperations[business.id]}
+                              className={`${business.softDelete ? 'text-blue-600 hover:text-blue-900' : 'text-orange-600 hover:text-orange-900'} ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={loadingBusinessOperations[business.id] ? "Processing..." : business.softDelete ? "Restore business" : "Soft delete business"}
+                            >
+                              {loadingBusinessOperations[business.id] ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : business.softDelete ? (
+                                <Undo2 className="w-4 h-4" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setPermissionDenied({
+                                show: true,
+                                action: business.softDelete ? 'Restore Business' : 'Soft Delete Business',
+                                requiredPermission: 'softDelete.businesses.enable',
+                                message: 'You do not have permission to soft delete businesses'
+                              })}
+                              disabled
+                              className="text-gray-300 cursor-not-allowed opacity-50"
+                              title="Admin or Executive role required"
+                            >
+                              {business.softDelete ? (
+                                <Undo2 className="w-4 h-4" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
 
-                        {/* Hard Delete Button */}
-                        {canHardDelete ? (
-                          <button
-                            onClick={() => onDeleteBusiness?.(business)}
-                            disabled={loadingBusinessOperations[business.id]}
-                            className={`text-red-600 hover:text-red-900 ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            title={loadingBusinessOperations[business.id] ? "Processing..." : "Permanently delete business"}
-                          >
-                            {loadingBusinessOperations[business.id] ? (
-                              <Loader2 className="w-4 h-4 animate-spin" />
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => setPermissionDenied({
-                              show: true,
-                              action: 'Permanently Delete Business',
-                              requiredPermission: 'hardDelete.businesses.enable',
-                              message: 'You do not have permission to permanently delete businesses'
-                            })}
-                            disabled
-                            className="text-gray-300 cursor-not-allowed opacity-50"
-                            title="Executive role required"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
+                          {/* Hard Delete Button */}
+                          {canHardDelete ? (
+                            <button
+                              onClick={() => onDeleteBusiness?.(business)}
+                              disabled={loadingBusinessOperations[business.id]}
+                              className={`text-red-600 hover:text-red-900 ${loadingBusinessOperations[business.id] ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              title={loadingBusinessOperations[business.id] ? "Processing..." : "Permanently delete business"}
+                            >
+                              {loadingBusinessOperations[business.id] ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => setPermissionDenied({
+                                show: true,
+                                action: 'Permanently Delete Business',
+                                requiredPermission: 'hardDelete.businesses.enable',
+                                message: 'You do not have permission to permanently delete businesses'
+                              })}
+                              disabled
+                              className="text-gray-300 cursor-not-allowed opacity-50"
+                              title="Executive role required"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div className={`text-xs ${themeClasses.text.muted} text-center`}>-</div>
+                      )}
                     </td>
                   </tr>
                 );

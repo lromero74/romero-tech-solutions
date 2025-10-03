@@ -24,24 +24,24 @@ class PermissionService {
     this.permissionCache = new Map();
     this.CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-    // Role inheritance hierarchy
-    // Each role inherits permissions from roles listed in its 'inherits' array
+    // Role hierarchy (inheritance disabled - each role has explicit permissions)
+    // Executive role always has all permissions (enforced separately)
     this.roleHierarchy = {
       'executive': {
         level: 4,
-        inherits: ['admin', 'sales', 'technician'] // Executive has all permissions
+        inherits: [] // No inheritance - executive gets all permissions via code
       },
       'admin': {
         level: 3,
-        inherits: ['technician'] // Admin inherits technician permissions
+        inherits: [] // No inheritance - explicit permissions only
       },
       'sales': {
         level: 2,
-        inherits: [] // Sales is independent, no inheritance
+        inherits: [] // No inheritance - explicit permissions only
       },
       'technician': {
         level: 1,
-        inherits: [] // Technician is base level
+        inherits: [] // No inheritance - explicit permissions only
       }
     };
   }

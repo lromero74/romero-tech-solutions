@@ -32,25 +32,39 @@ router.use(authMiddleware);
 // Service requests routes - accessible by all employees
 router.use('/', requireEmployee, serviceRequestsRoutes);
 
+// Employees routes - accessible by all employees (with permission checks inside routes)
+router.use('/', requireEmployee, employeesRoutes);
+
+// Employee Calendar routes - accessible by all employees
+router.use('/', requireEmployee, employeeCalendarRoutes);
+
+// Businesses routes - accessible by all employees (with permission checks inside routes)
+router.use('/', requireEmployee, businessesRoutes);
+
+// Permissions routes - user-permissions endpoint needs to be accessible by all employees
+router.use('/', requireEmployee, permissionsRoutes);
+
+// Users (Clients) routes - accessible by all employees (with permission checks inside routes)
+router.use('/', requireEmployee, usersRoutes);
+
+// Service Locations routes - accessible by all employees (with permission checks inside routes)
+router.use('/', requireEmployee, serviceLocationsRoutes);
+
+// Location Contacts routes - accessible by all employees (needed for service locations table)
+router.use('/', requireEmployee, locationContactsRoutes);
+
 // All other admin routes - require admin/executive role
 router.use(requireAdmin);
 
 // Mount modular routes
 router.use('/', dashboardRoutes);
-router.use('/', usersRoutes);
-router.use('/', employeesRoutes);
 router.use('/', servicesRoutes);
 router.use('/', rolesRoutes);
-router.use('/', businessesRoutes);
-router.use('/', serviceLocationsRoutes);
 router.use('/', passwordComplexityRoutes);
-router.use('/', locationContactsRoutes);
 router.use('/', systemSettingsRoutes);
 router.use('/', serviceAreasRoutes);
 router.use('/', locationTypesRoutes);
 router.use('/closure-reasons', closureReasonsRoutes);
-router.use('/', employeeCalendarRoutes);
-router.use('/', permissionsRoutes);
 router.use('/permission-audit-log', permissionAuditLogRoutes);
 router.use('/service-hour-rates', serviceHourRatesRoutes);
 router.use('/hourly-rate-categories', hourlyRateCategoriesRoutes);

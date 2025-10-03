@@ -8,6 +8,7 @@ import AddressFormWithAutoComplete from '../../shared/AddressFormWithAutoComplet
 import { validateDomain } from '../../../utils/domainValidation';
 import AlertModal from '../../shared/AlertModal';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import { usePermission } from '../../../hooks/usePermission';
 import apiService from '../../../services/apiService';
 
 interface AuthorizedDomain {
@@ -69,7 +70,8 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
   onOpenServiceLocationModal
 }) => {
   const { user } = useEnhancedAuth();
-  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
+  const { checkPermission } = usePermission();
+  const canViewRateCategories = checkPermission('view.business_rate_categories.enable');
 
   // State declarations first
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -582,7 +584,7 @@ const AddBusinessModal: React.FC<AddBusinessModalProps> = ({
           />
 
           {/* Rate Category Selection */}
-          {isExecutiveOrAdmin && rateCategories.length > 0 && (
+          {canViewRateCategories && rateCategories.length > 0 && (
             <div>
               <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
                 Hourly Rate Category

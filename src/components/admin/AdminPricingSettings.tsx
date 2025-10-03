@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Save, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
+import { DollarSign, Save, Plus, Edit2, Trash2, Check, X, AlertCircle } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import apiService from '../../services/apiService';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
+import { usePermissionContext } from '../../contexts/PermissionContext';
+import { usePermission } from '../../hooks/usePermission';
 
 interface RateCategory {
   id: string;
@@ -16,6 +18,29 @@ interface RateCategory {
 
 const AdminPricingSettings: React.FC = () => {
   const { user } = useEnhancedAuth();
+  const { hasPermission } = usePermissionContext();
+  const { checkPermission } = usePermission();
+
+  // Permission checks
+  const canModifyPricingSettings = checkPermission('modify.pricing_settings.enable');
+
+  // Permission check
+  if (!hasPermission('view.pricing_settings.enable')) {
+    return (
+      <div className={`p-8 ${themeClasses.bg.primary}`}>
+        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
+          <AlertCircle className={`w-12 h-12 ${themeClasses.text.warning} mx-auto mb-4`} />
+          <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
+            Access Denied
+          </h3>
+          <p className={themeClasses.text.secondary}>
+            You do not have permission to view pricing settings.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const [categories, setCategories] = useState<RateCategory[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,8 +54,6 @@ const AdminPricingSettings: React.FC = () => {
     baseHourlyRate: 75,
     description: ''
   });
-
-  const isExecutiveOrAdmin = user?.role === 'executive' || user?.role === 'admin';
 
   useEffect(() => {
     loadCategories();
@@ -152,7 +175,7 @@ const AdminPricingSettings: React.FC = () => {
               </p>
             </div>
           </div>
-          {isExecutiveOrAdmin && !isAddingNew && (
+          {canModifyPricingSettings && !isAddingNew && (
             <button
               onClick={handleAddNew}
               className="flex items-center px-4 py-2 bg-indigo-600 hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-600 text-white rounded-md text-sm font-medium"
@@ -270,7 +293,7 @@ const AdminPricingSettings: React.FC = () => {
                       </p>
                     )}
                   </div>
-                  {isExecutiveOrAdmin && (
+                  {canModifyPricingSettings && (
                     <div className="flex space-x-2">
                       <button
                         onClick={() => handleEdit(category)}
