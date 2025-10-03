@@ -114,8 +114,20 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [isFirstTimer, setIsFirstTimer] = useState<boolean>(false);
+  const [is24HourFormat, setIs24HourFormat] = useState<boolean>(false); // Default to 12-hour format
 
   const BUFFER_HOURS = 1;
+
+  // Helper function to format time based on 24-hour or 12-hour preference
+  const formatTime = (hour: number, minute: number): string => {
+    if (is24HourFormat) {
+      return `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`;
+    } else {
+      const period = hour >= 12 ? 'PM' : 'AM';
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      return `${hour12}:${String(minute).padStart(2, '0')} ${period}`;
+    }
+  };
 
   // Helper function to find rate tier for a given time
   const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
@@ -323,7 +335,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         const rateTier = findRateTierForTime(hour, minute, dayOfWeek);
 
         slots.push({
-          time: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`,
+          time: formatTime(hour, minute),
           hour,
           minute,
           isAvailable: !isPast,
@@ -335,7 +347,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     }
 
     return slots;
-  }, [selectedDate, rateTiers]);
+  }, [selectedDate, rateTiers, is24HourFormat]);
 
   // Load rate tiers and existing bookings
   useEffect(() => {
@@ -890,7 +902,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             </button>
           </div>
 
-          {/* Duration Selector and Auto-Suggest */}
+          {/* Duration Selector, Time Format Toggle, and Auto-Suggest */}
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mt-4">
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.duration', 'Duration:')}</label>
@@ -927,6 +939,22 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
                 <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
               </select>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.timeFormat', 'Time:')}</label>
+              <button
+                type="button"
+                onClick={() => setIs24HourFormat(!is24HourFormat)}
+                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors ${
+                  isDarkMode
+                    ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600'
+                    : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
+                }`}
+                title={is24HourFormat ? t('scheduler.switchTo12Hour', 'Switch to 12-hour format') : t('scheduler.switchTo24Hour', 'Switch to 24-hour format')}
+              >
+                {is24HourFormat ? '24h' : '12h'}
+              </button>
             </div>
 
             <div className="flex gap-2">
@@ -1194,9 +1222,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             title={t('scheduler.dragToMove', 'Drag to move appointment')}
                           >
                             <div className="text-center pointer-events-none">
-                              <div>{selectedStartTime.toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                              <div>{formatTime(selectedStartTime.getHours(), selectedStartTime.getMinutes())}</div>
                               <div className="text-[10px]">{t('scheduler.to', 'to')}</div>
-                              <div>{selectedEndTime.toLocaleTimeString(language === 'es' ? 'es-ES' : 'en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}</div>
+                              <div>{formatTime(selectedEndTime.getHours(), selectedEndTime.getMinutes())}</div>
                             </div>
                           </div>
 
