@@ -1807,7 +1807,13 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
   try {
     const pool = await getPool();
     const { requestId, fileId } = req.params;
-    const { deletedBy } = req.body;
+
+    // Support both body and query params for deletedBy
+    const deletedBy = req.body.deletedBy || {
+      id: req.query.updatedById,
+      name: req.query.updatedByName,
+      type: req.query.updatedByType
+    };
 
     if (!deletedBy || !deletedBy.id || !deletedBy.name || !deletedBy.type) {
       return res.status(400).json({

@@ -16,172 +16,28 @@ import {
   MapPin,
   Phone,
   Mail,
-  Download,
-  RefreshCw
+  RefreshCw,
+  Edit2,
+  Check,
+  X as XIcon
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
-
-interface ServiceRequest {
-  id: string;
-  request_number: string;
-  title: string;
-  description: string;
-  status: string;
-  status_color: string;
-  urgency: string;
-  urgency_color: string;
-  priority: string;
-  priority_color: string;
-  service_type: string;
-  business_name: string;
-  location_name: string;
-  client_name: string;
-  client_email: string;
-  client_phone: string;
-  technician_name: string | null;
-  requested_date: string;
-  requested_time_start: string | null;
-  requested_time_end: string | null;
-  scheduled_date: string | null;
-  scheduled_time_start: string | null;
-  scheduled_time_end: string | null;
-  created_at: string;
-  updated_at: string;
-  acknowledged_at: string | null;
-  started_at: string | null;
-  total_work_duration_minutes: number | null;
-  file_count?: number;
-  invoice_id?: string | null;
-  invoice_number?: string | null;
-  invoice_total?: number | null;
-  invoice_payment_status?: string | null;
-  locationDetails?: {
-    name: string;
-    street_address_1: string;
-    street_address_2: string | null;
-    city: string;
-    state: string;
-    zip_code: string;
-    contact_phone: string | null;
-    contact_person: string | null;
-    contact_email: string | null;
-  } | null;
-  cost?: {
-    baseRate: number;
-    durationHours: number;
-    total: number;
-  } | null;
-}
-
-interface Filters {
-  search: string;
-  status: string;
-  urgency: string;
-  priority: string;
-  business: string;
-  technician: string;
-}
-
-interface Technician {
-  id: string;
-  first_name: string;
-  last_name: string;
-  full_name: string;
-  email: string;
-  working_status: string;
-  working_status_display: string;
-  active_requests: number;
-}
-
-interface Status {
-  id: string;
-  name: string;
-  description: string;
-  color_code: string;
-  sort_order: number;
-  is_final_status: boolean;
-  requires_technician: boolean;
-}
-
-interface ClosureReason {
-  id: string;
-  reason: string;
-  description: string;
-  requires_follow_up: boolean;
-  is_active: boolean;
-}
-
-interface ServiceRequestFile {
-  id: string;
-  original_filename: string;
-  stored_filename: string;
-  file_size_bytes: number;
-  content_type: string;
-  description: string;
-  created_at: string;
-}
-
-interface ServiceRequestNote {
-  id: string;
-  note_text: string;
-  note_type: string;
-  created_by_type: string;
-  created_by_name: string;
-  created_at: string;
-}
-
-interface Invoice {
-  id: string;
-  invoice_number: string;
-  issue_date: string;
-  due_date: string;
-  payment_date: string | null;
-  payment_status: string;
-  base_hourly_rate: number;
-  standard_hours: number;
-  standard_rate: number;
-  standard_cost: number;
-  premium_hours: number;
-  premium_rate: number;
-  premium_cost: number;
-  emergency_hours: number;
-  emergency_rate: number;
-  emergency_cost: number;
-  waived_hours: number;
-  is_first_service_request: boolean;
-  subtotal: number;
-  tax_rate: number;
-  tax_amount: number;
-  total_amount: number;
-  work_description: string | null;
-  notes: string | null;
-  business_name: string;
-  primary_contact_name: string;
-  primary_contact_email: string;
-  primary_contact_phone: string;
-  street_address: string;
-  city: string;
-  state: string;
-  zip_code: string;
-  request_number: string;
-  service_title: string;
-  service_created_at: string;
-  service_completed_at: string;
-}
-
-interface CompanyInfo {
-  company_name: string;
-  company_address_line1: string;
-  company_address_line2: string;
-  company_city: string;
-  company_state: string;
-  company_zip: string;
-  company_phone: string;
-  company_email: string;
-}
+import {
+  ServiceRequest,
+  Filters,
+  Technician,
+  Status,
+  ClosureReason,
+  ServiceRequestFile,
+  ServiceRequestNote,
+  Invoice,
+  CompanyInfo,
+  ServiceRequestNotesSection,
+  ServiceRequestFilesSection
+} from './AdminServiceRequests_Modals';
 
 const AdminServiceRequests: React.FC = () => {
   const { isDark } = useTheme();
@@ -235,6 +91,16 @@ const AdminServiceRequests: React.FC = () => {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+
+  // Inline editing state
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDescription, setEditedDescription] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -673,13 +539,205 @@ const AdminServiceRequests: React.FC = () => {
     }
   };
 
-  // Format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  // Handle title/description editing
+  const startEditTitle = () => {
+    if (selectedRequest) {
+      setEditedTitle(selectedRequest.title);
+      setEditingTitle(true);
+    }
+  };
+
+  const startEditDescription = () => {
+    if (selectedRequest) {
+      setEditedDescription(selectedRequest.description || '');
+      setEditingDescription(true);
+    }
+  };
+
+  const cancelEditTitle = () => {
+    setEditingTitle(false);
+    setEditedTitle('');
+  };
+
+  const cancelEditDescription = () => {
+    setEditingDescription(false);
+    setEditedDescription('');
+  };
+
+  const saveTitle = async () => {
+    if (!selectedRequest || !editedTitle.trim() || !user) return;
+    if (editedTitle === selectedRequest.title) {
+      cancelEditTitle();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const response = await apiService.patch(
+        `/admin/service-requests/${selectedRequest.id}/details`,
+        {
+          title: editedTitle.trim(),
+          updatedBy: {
+            id: user.id,
+            name: user.name,
+            type: 'employee'
+          }
+        }
+      );
+
+      if (response.success) {
+        // Update the request in state
+        setSelectedRequest({ ...selectedRequest, title: editedTitle.trim() });
+        setServiceRequests(prev =>
+          prev.map(req => req.id === selectedRequest.id ? { ...req, title: editedTitle.trim() } : req)
+        );
+        // Refresh notes to show the change
+        fetchRequestNotes(selectedRequest.id);
+        cancelEditTitle();
+      } else {
+        throw new Error(response.message || 'Failed to update title');
+      }
+    } catch (err) {
+      console.error('Error updating title:', err);
+      alert('Failed to update title. Please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const saveDescription = async () => {
+    if (!selectedRequest || !user) return;
+    if (editedDescription === (selectedRequest.description || '')) {
+      cancelEditDescription();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const response = await apiService.patch(
+        `/admin/service-requests/${selectedRequest.id}/details`,
+        {
+          description: editedDescription.trim() || null,
+          updatedBy: {
+            id: user.id,
+            name: user.name,
+            type: 'employee'
+          }
+        }
+      );
+
+      if (response.success) {
+        // Update the request in state
+        setSelectedRequest({ ...selectedRequest, description: editedDescription.trim() || '' });
+        setServiceRequests(prev =>
+          prev.map(req => req.id === selectedRequest.id ? { ...req, description: editedDescription.trim() } : req)
+        );
+        // Refresh notes to show the change
+        fetchRequestNotes(selectedRequest.id);
+        cancelEditDescription();
+      } else {
+        throw new Error(response.message || 'Failed to update description');
+      }
+    } catch (err) {
+      console.error('Error updating description:', err);
+      alert('Failed to update description. Please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Handle file operations
+  const startRenameFile = (file: ServiceRequestFile) => {
+    setRenamingFileId(file.id);
+    setNewFileName(file.original_filename);
+  };
+
+  const cancelRenameFile = () => {
+    setRenamingFileId(null);
+    setNewFileName('');
+  };
+
+  const saveFileName = async (fileId: string) => {
+    if (!selectedRequest || !newFileName.trim() || !user) return;
+
+    const currentFile = requestFiles.find(f => f.id === fileId);
+    if (currentFile && newFileName === currentFile.original_filename) {
+      cancelRenameFile();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const response = await apiService.patch(
+        `/admin/service-requests/${selectedRequest.id}/files/${fileId}/rename`,
+        {
+          newFilename: newFileName.trim(),
+          updatedBy: {
+            id: user.id,
+            name: user.name,
+            type: 'employee'
+          }
+        }
+      );
+
+      if (response.success) {
+        // Update file in state
+        setRequestFiles(prev =>
+          prev.map(f => f.id === fileId ? { ...f, original_filename: newFileName.trim() } : f)
+        );
+        // Refresh notes to show the change
+        fetchRequestNotes(selectedRequest.id);
+        cancelRenameFile();
+      } else {
+        throw new Error(response.message || 'Failed to rename file');
+      }
+    } catch (err) {
+      console.error('Error renaming file:', err);
+      alert('Failed to rename file. Please try again.');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteFile = async (fileId: string) => {
+    if (!selectedRequest || !user) return;
+
+    const confirmDelete = window.confirm('Are you sure you want to delete this file? This action cannot be undone.');
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingFileId(fileId);
+
+      // For DELETE requests, we can't send a body, so we'll use query params
+      const response = await apiService.delete(
+        `/admin/service-requests/${selectedRequest.id}/files/${fileId}?updatedById=${user.id}&updatedByName=${encodeURIComponent(user.name)}&updatedByType=employee`
+      );
+
+      if (response.success) {
+        // Remove file from state
+        setRequestFiles(prev => prev.filter(f => f.id !== fileId));
+        // Update file count
+        if (selectedRequest.file_count) {
+          const newFileCount = selectedRequest.file_count - 1;
+          setSelectedRequest({ ...selectedRequest, file_count: newFileCount });
+          setServiceRequests(prev =>
+            prev.map(req => req.id === selectedRequest.id ? { ...req, file_count: newFileCount } : req)
+          );
+        }
+        // Refresh notes to show the change
+        fetchRequestNotes(selectedRequest.id);
+      } else {
+        throw new Error(response.message || 'Failed to delete file');
+      }
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      alert('Failed to delete file. Please try again.');
+    } finally {
+      setDeletingFileId(null);
+    }
   };
 
   // Format full address
@@ -1145,10 +1203,52 @@ const AdminServiceRequests: React.FC = () => {
           <div className={`${themeClasses.bg.card} rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto`}>
             <div className="p-6">
               <div className="flex justify-between items-start mb-6">
-                <div>
-                  <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>
-                    {selectedRequest.title}
-                  </h2>
+                <div className="flex-1 mr-4">
+                  {editingTitle ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={editedTitle}
+                        onChange={(e) => setEditedTitle(e.target.value)}
+                        className={`flex-1 px-3 py-2 rounded-md text-2xl font-bold ${themeClasses.input}`}
+                        disabled={savingEdit}
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') saveTitle();
+                          if (e.key === 'Escape') cancelEditTitle();
+                        }}
+                      />
+                      <button
+                        onClick={saveTitle}
+                        disabled={savingEdit || !editedTitle.trim()}
+                        className="p-2 text-green-600 hover:text-green-700 disabled:opacity-50"
+                        title="Save"
+                      >
+                        {savingEdit ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+                      </button>
+                      <button
+                        onClick={cancelEditTitle}
+                        disabled={savingEdit}
+                        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                        title="Cancel"
+                      >
+                        <XIcon className="h-5 w-5" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>
+                        {selectedRequest.title}
+                      </h2>
+                      <button
+                        onClick={startEditTitle}
+                        className={`p-1 ${themeClasses.text.muted} hover:text-blue-600`}
+                        title="Edit title"
+                      >
+                        <Edit2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                   <p className={`text-lg ${themeClasses.text.secondary} mt-1 font-mono`}>
                     {selectedRequest.request_number}
                   </p>
@@ -1364,122 +1464,87 @@ const AdminServiceRequests: React.FC = () => {
               )}
 
               {/* Description */}
-              {selectedRequest.description && (
-                <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                  <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Description</h4>
-                  <p className={`${themeClasses.text.primary} whitespace-pre-wrap text-sm`}>
-                    {selectedRequest.description}
-                  </p>
-                </div>
-              )}
-
-              {/* Notes Section */}
               <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Notes</h4>
-
-                {/* Add Note Form */}
-                <div className="mb-4">
-                  <textarea
-                    value={newNoteText}
-                    onChange={(e) => setNewNoteText(e.target.value)}
-                    placeholder="Add a note..."
-                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} resize-none`}
-                    rows={3}
-                    disabled={submittingNote}
-                  />
-                  <div className="mt-2 flex justify-end">
+                <div className="flex items-center justify-between mb-2">
+                  <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>Description</h4>
+                  {!editingDescription && (
                     <button
-                      onClick={submitNote}
-                      disabled={!newNoteText.trim() || submittingNote}
-                      className={`px-4 py-2 rounded-md text-white ${
-                        !newNoteText.trim() || submittingNote
-                          ? 'bg-gray-400 cursor-not-allowed'
-                          : 'bg-blue-600 hover:bg-blue-700'
-                      } transition-colors text-sm`}
+                      onClick={startEditDescription}
+                      className={`p-1 ${themeClasses.text.muted} hover:text-blue-600`}
+                      title="Edit description"
                     >
-                      {submittingNote ? (
-                        <span className="flex items-center gap-2">
-                          <RefreshCw className="h-4 w-4 animate-spin" />
-                          Submitting...
-                        </span>
-                      ) : (
-                        'Add Note'
-                      )}
+                      <Edit2 className="h-4 w-4" />
                     </button>
-                  </div>
+                  )}
                 </div>
-
-                {/* Notes List */}
-                {loadingNotes ? (
-                  <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
-                    <RefreshCw className="h-4 w-4 animate-spin" />
-                    <span>Loading notes...</span>
-                  </div>
-                ) : requestNotes.length > 0 ? (
-                  <div className="space-y-3">
-                    {requestNotes.map((note, index) => (
-                      <div key={note.id}>
-                        {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
-                        <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
-                          <span className="font-medium">{note.created_by_name}</span>
-                          {' • '}
-                          <span>{new Date(note.created_at).toLocaleString()}</span>
-                        </div>
-                        <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
-                          {note.note_text}
-                        </p>
-                      </div>
-                    ))}
+                {editingDescription ? (
+                  <div>
+                    <textarea
+                      value={editedDescription}
+                      onChange={(e) => setEditedDescription(e.target.value)}
+                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} resize-none`}
+                      rows={5}
+                      disabled={savingEdit}
+                      autoFocus
+                      placeholder="Enter description..."
+                    />
+                    <div className="mt-2 flex justify-end gap-2">
+                      <button
+                        onClick={cancelEditDescription}
+                        disabled={savingEdit}
+                        className="px-3 py-1 rounded-md text-sm bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveDescription}
+                        disabled={savingEdit}
+                        className="px-3 py-1 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {savingEdit ? (
+                          <>
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                            Saving...
+                          </>
+                        ) : (
+                          'Save'
+                        )}
+                      </button>
+                    </div>
                   </div>
                 ) : (
-                  <p className={`text-sm ${themeClasses.text.muted}`}>No notes yet</p>
+                  <p className={`${themeClasses.text.primary} whitespace-pre-wrap text-sm`}>
+                    {selectedRequest.description || <span className={themeClasses.text.muted}>No description</span>}
+                  </p>
                 )}
               </div>
 
+              {/* Notes Section */}
+              <ServiceRequestNotesSection
+                notes={requestNotes}
+                loading={loadingNotes}
+                newNoteText={newNoteText}
+                submittingNote={submittingNote}
+                onNewNoteChange={setNewNoteText}
+                onSubmitNote={submitNote}
+              />
+
               {/* Files Section */}
-              {selectedRequest.file_count && selectedRequest.file_count > 0 && (
-                <div className="mb-4">
-                  <h4 className={`font-medium ${themeClasses.text.secondary} mb-2`}>
-                    Attachments ({selectedRequest.file_count})
-                  </h4>
-                  {loadingFiles ? (
-                    <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
-                      <RefreshCw className="h-4 w-4 animate-spin" />
-                      <span>Loading files...</span>
-                    </div>
-                  ) : requestFiles.length > 0 ? (
-                    <div className="space-y-2">
-                      {requestFiles.map((file) => (
-                        <div key={file.id} className={`flex items-center justify-between p-3 ${themeClasses.bg.secondary} rounded-md`}>
-                          <div className="flex items-center gap-3">
-                            <FileText className="h-5 w-5 text-gray-400" />
-                            <div>
-                              <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                                {file.original_filename}
-                              </p>
-                              <p className={`text-xs ${themeClasses.text.muted}`}>
-                                {formatFileSize(file.file_size_bytes)} • {new Date(file.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          <button
-                            onClick={() => {
-                              // Handle file download
-                              window.open(`${API_BASE_URL}/admin/files/${file.id}/download`, '_blank');
-                            }}
-                            className={`p-2 ${themeClasses.text.muted} hover:text-gray-600 dark:hover:text-gray-300`}
-                            title="Download file"
-                          >
-                            <Download className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className={`${themeClasses.text.muted} text-sm`}>No files available</p>
-                  )}
-                </div>
-              )}
+              <ServiceRequestFilesSection
+                files={requestFiles}
+                loading={loadingFiles}
+                fileCount={selectedRequest.file_count || 0}
+                renamingFileId={renamingFileId}
+                newFileName={newFileName}
+                savingEdit={savingEdit}
+                deletingFileId={deletingFileId}
+                apiBaseUrl={API_BASE_URL}
+                onStartRename={startRenameFile}
+                onCancelRename={cancelRenameFile}
+                onSaveFileName={saveFileName}
+                onDeleteFile={deleteFile}
+                onFileNameChange={setNewFileName}
+              />
 
               {/* Display error if any */}
               {actionError && (

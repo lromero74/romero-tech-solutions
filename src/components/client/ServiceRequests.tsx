@@ -23,7 +23,10 @@ import {
   Eye,
   Download,
   ExternalLink,
-  X
+  X,
+  Edit2,
+  Trash2,
+  Check
 } from 'lucide-react';
 
 interface ServiceRequest {
@@ -98,6 +101,12 @@ const ServiceRequests: React.FC = () => {
   const { t, language } = useClientLanguage();
   const { addServiceRequestChange } = useNotifications();
 
+  // Get current client user for change tracking
+  const authUser = React.useMemo(() => {
+    const storedUser = RoleBasedStorage.getItem('authUser');
+    return storedUser ? JSON.parse(storedUser) : null;
+  }, []);
+
   const themeClasses = {
     background: isDarkMode ? 'bg-gray-800' : 'bg-white',
     border: isDarkMode ? 'border-gray-700' : 'border-gray-200',
@@ -141,6 +150,16 @@ const ServiceRequests: React.FC = () => {
   const [cancellationReason, setCancellationReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Inline editing state
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
+  const [editedDescription, setEditedDescription] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
+  const [newFileName, setNewFileName] = useState('');
+  const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
 
   // Status color mapping
   const getStatusColor = (status: string) => {
@@ -383,6 +402,252 @@ const ServiceRequests: React.FC = () => {
       alert(t('serviceRequests.noteSubmitError', undefined, 'Failed to submit note. Please try again.'));
     } finally {
       setSubmittingNote(false);
+    }
+  };
+
+  // Handle title/description editing
+  const startEditTitle = () => {
+    if (selectedRequest) {
+      setEditedTitle(selectedRequest.title);
+      setEditingTitle(true);
+    }
+  };
+
+  const startEditDescription = () => {
+    if (selectedRequest) {
+      setEditedDescription(selectedRequest.description || '');
+      setEditingDescription(true);
+    }
+  };
+
+  const cancelEditTitle = () => {
+    setEditingTitle(false);
+    setEditedTitle('');
+  };
+
+  const cancelEditDescription = () => {
+    setEditingDescription(false);
+    setEditedDescription('');
+  };
+
+  const saveTitle = async () => {
+    if (!selectedRequest || !editedTitle.trim() || !authUser) return;
+    if (editedTitle === selectedRequest.title) {
+      cancelEditTitle();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) throw new Error('No session token found');
+
+      const csrfToken = await apiService.getToken();
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/details`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          title: editedTitle.trim(),
+          updatedBy: {
+            id: authUser.id,
+            name: authUser.name,
+            type: 'client'
+          }
+        })
+      });
+
+      if (!response.ok) throw new Error(`Failed to update title: ${response.statusText}`);
+
+      const data = await response.json();
+      if (data.success) {
+        setSelectedRequest({ ...selectedRequest, title: editedTitle.trim() });
+        setServiceRequests(prev =>
+          prev.map(req => req.id === selectedRequest.id ? { ...req, title: editedTitle.trim() } : req)
+        );
+        fetchRequestNotes(selectedRequest.id);
+        cancelEditTitle();
+      } else {
+        throw new Error(data.message || 'Failed to update title');
+      }
+    } catch (err) {
+      console.error('Error updating title:', err);
+      alert(t('serviceRequests.updateError', undefined, 'Failed to update title. Please try again.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const saveDescription = async () => {
+    if (!selectedRequest || !authUser) return;
+    if (editedDescription === (selectedRequest.description || '')) {
+      cancelEditDescription();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) throw new Error('No session token found');
+
+      const csrfToken = await apiService.getToken();
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/details`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          description: editedDescription.trim() || null,
+          updatedBy: {
+            id: authUser.id,
+            name: authUser.name,
+            type: 'client'
+          }
+        })
+      });
+
+      if (!response.ok) throw new Error(`Failed to update description: ${response.statusText}`);
+
+      const data = await response.json();
+      if (data.success) {
+        setSelectedRequest({ ...selectedRequest, description: editedDescription.trim() || '' });
+        setServiceRequests(prev =>
+          prev.map(req => req.id === selectedRequest.id ? { ...req, description: editedDescription.trim() } : req)
+        );
+        fetchRequestNotes(selectedRequest.id);
+        cancelEditDescription();
+      } else {
+        throw new Error(data.message || 'Failed to update description');
+      }
+    } catch (err) {
+      console.error('Error updating description:', err);
+      alert(t('serviceRequests.updateError', undefined, 'Failed to update description. Please try again.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  // Handle file operations
+  const startRenameFile = (file: ServiceRequestFile) => {
+    setRenamingFileId(file.id);
+    setNewFileName(file.originalFilename);
+  };
+
+  const cancelRenameFile = () => {
+    setRenamingFileId(null);
+    setNewFileName('');
+  };
+
+  const saveFileName = async (fileId: string) => {
+    if (!selectedRequest || !newFileName.trim() || !authUser) return;
+
+    const currentFile = requestFiles.find(f => f.id === fileId);
+    if (currentFile && newFileName === currentFile.originalFilename) {
+      cancelRenameFile();
+      return;
+    }
+
+    try {
+      setSavingEdit(true);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) throw new Error('No session token found');
+
+      const csrfToken = await apiService.getToken();
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/files/${fileId}/rename`, {
+        method: 'PATCH',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'Content-Type': 'application/json',
+          'x-csrf-token': csrfToken
+        },
+        credentials: 'include',
+        body: JSON.stringify({
+          newFilename: newFileName.trim(),
+          updatedBy: {
+            id: authUser.id,
+            name: authUser.name,
+            type: 'client'
+          }
+        })
+      });
+
+      if (!response.ok) throw new Error(`Failed to rename file: ${response.statusText}`);
+
+      const data = await response.json();
+      if (data.success) {
+        setRequestFiles(prev =>
+          prev.map(f => f.id === fileId ? { ...f, originalFilename: newFileName.trim() } : f)
+        );
+        fetchRequestNotes(selectedRequest.id);
+        cancelRenameFile();
+      } else {
+        throw new Error(data.message || 'Failed to rename file');
+      }
+    } catch (err) {
+      console.error('Error renaming file:', err);
+      alert(t('serviceRequests.fileRenameError', undefined, 'Failed to rename file. Please try again.'));
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  const deleteFile = async (fileId: string) => {
+    if (!selectedRequest || !authUser) return;
+
+    const confirmDelete = window.confirm(t('serviceRequests.confirmFileDelete', undefined, 'Are you sure you want to delete this file? This action cannot be undone.'));
+    if (!confirmDelete) return;
+
+    try {
+      setDeletingFileId(fileId);
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) throw new Error('No session token found');
+
+      const csrfToken = await apiService.getToken();
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/files/${fileId}?updatedById=${authUser.id}&updatedByName=${encodeURIComponent(authUser.name)}&updatedByType=client`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'x-csrf-token': csrfToken
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) throw new Error(`Failed to delete file: ${response.statusText}`);
+
+      const data = await response.json();
+      if (data.success) {
+        setRequestFiles(prev => prev.filter(f => f.id !== fileId));
+        if (selectedRequest.fileCount) {
+          const newFileCount = selectedRequest.fileCount - 1;
+          setSelectedRequest({ ...selectedRequest, fileCount: newFileCount });
+          setServiceRequests(prev =>
+            prev.map(req => req.id === selectedRequest.id ? { ...req, fileCount: newFileCount } : req)
+          );
+        }
+        fetchRequestNotes(selectedRequest.id);
+      } else {
+        throw new Error(data.message || 'Failed to delete file');
+      }
+    } catch (err) {
+      console.error('Error deleting file:', err);
+      alert(t('serviceRequests.fileDeleteError', undefined, 'Failed to delete file. Please try again.'));
+    } finally {
+      setDeletingFileId(null);
     }
   };
 
@@ -872,9 +1137,53 @@ const ServiceRequests: React.FC = () => {
             <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
                 <div className="flex items-start justify-between mb-4">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
-                    {selectedRequest.title}
-                  </h3>
+                  <div className="flex-1 mr-4">
+                    {editingTitle ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={editedTitle}
+                          onChange={(e) => setEditedTitle(e.target.value)}
+                          className="flex-1 px-3 py-2 rounded-md text-lg font-medium bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-white"
+                          disabled={savingEdit}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') saveTitle();
+                            if (e.key === 'Escape') cancelEditTitle();
+                          }}
+                        />
+                        <button
+                          onClick={saveTitle}
+                          disabled={savingEdit || !editedTitle.trim()}
+                          className="p-2 text-green-600 hover:text-green-700 disabled:opacity-50"
+                          title="Save"
+                        >
+                          {savingEdit ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
+                        </button>
+                        <button
+                          onClick={cancelEditTitle}
+                          disabled={savingEdit}
+                          className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                          title="Cancel"
+                        >
+                          <X className="h-5 w-5" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white">
+                          {selectedRequest.title}
+                        </h3>
+                        <button
+                          onClick={startEditTitle}
+                          className="p-1 text-gray-400 hover:text-blue-600"
+                          title="Edit title"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
                   <button
                     onClick={() => setSelectedRequest(null)}
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
@@ -1037,14 +1346,60 @@ const ServiceRequests: React.FC = () => {
                     </div>
                   )}
 
-                  {selectedRequest.description && (
-                    <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">{t('serviceRequests.description', undefined, 'Description')}</h4>
-                      <p className="text-gray-900 dark:text-white whitespace-pre-wrap text-sm">
-                        {selectedRequest.description}
-                      </p>
+                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{t('serviceRequests.description', undefined, 'Description')}</h4>
+                      {!editingDescription && (
+                        <button
+                          onClick={startEditDescription}
+                          className="p-1 text-gray-400 hover:text-blue-600"
+                          title="Edit description"
+                        >
+                          <Edit2 className="h-4 w-4" />
+                        </button>
+                      )}
                     </div>
-                  )}
+                    {editingDescription ? (
+                      <div>
+                        <textarea
+                          value={editedDescription}
+                          onChange={(e) => setEditedDescription(e.target.value)}
+                          className={`w-full px-3 py-2 border ${themeClasses.border} rounded-md ${themeClasses.background} ${themeClasses.text} focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none`}
+                          rows={5}
+                          disabled={savingEdit}
+                          autoFocus
+                          placeholder={t('serviceRequests.descriptionPlaceholder', undefined, 'Enter description...')}
+                        />
+                        <div className="mt-2 flex justify-end gap-2">
+                          <button
+                            onClick={cancelEditDescription}
+                            disabled={savingEdit}
+                            className="px-3 py-1 rounded-md text-sm bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
+                          >
+                            {t('common.cancel', undefined, 'Cancel')}
+                          </button>
+                          <button
+                            onClick={saveDescription}
+                            disabled={savingEdit}
+                            className="px-3 py-1 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
+                          >
+                            {savingEdit ? (
+                              <>
+                                <RefreshCw className="h-4 w-4 animate-spin" />
+                                {t('common.saving', undefined, 'Saving...')}
+                              </>
+                            ) : (
+                              t('common.save', undefined, 'Save')
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-gray-900 dark:text-white whitespace-pre-wrap text-sm">
+                        {selectedRequest.description || <span className="text-gray-500 dark:text-gray-400">{t('serviceRequests.noDescription', undefined, 'No description')}</span>}
+                      </p>
+                    )}
+                  </div>
 
                   {/* Notes Section */}
                   <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
@@ -1124,28 +1479,87 @@ const ServiceRequests: React.FC = () => {
                         <div className="space-y-2">
                           {requestFiles.map((file) => (
                             <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
-                              <div className="flex items-center gap-3">
-                                <FileText className="h-5 w-5 text-gray-400" />
-                                <div>
-                                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                                    {file.originalFilename}
-                                  </p>
-                                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                                    {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()}
-                                  </p>
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  {renamingFileId === file.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={newFileName}
+                                        onChange={(e) => setNewFileName(e.target.value)}
+                                        className="flex-1 px-2 py-1 rounded text-sm bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 text-gray-900 dark:text-white"
+                                        disabled={savingEdit}
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveFileName(file.id);
+                                          if (e.key === 'Escape') cancelRenameFile();
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => saveFileName(file.id)}
+                                        disabled={savingEdit || !newFileName.trim()}
+                                        className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                                        title="Save"
+                                      >
+                                        {savingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                      </button>
+                                      <button
+                                        onClick={cancelRenameFile}
+                                        disabled={savingEdit}
+                                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                                        title="Cancel"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                        {file.originalFilename}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()}
+                                      </p>
+                                    </>
+                                  )}
                                 </div>
                               </div>
-                              <button
-                                onClick={() => {
-                                  // Handle file download
-                                  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-                                  window.open(`${apiBaseUrl}/client/files/${file.id}/download`, '_blank');
-                                }}
-                                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-                                title={t('serviceRequests.downloadFile', undefined, 'Download file')}
-                              >
-                                <Download className="h-4 w-4" />
-                              </button>
+                              {renamingFileId !== file.id && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={() => startRenameFile(file)}
+                                    className="p-2 text-gray-400 hover:text-blue-600"
+                                    title={t('serviceRequests.renameFile', undefined, 'Rename file')}
+                                    disabled={!!renamingFileId || !!deletingFileId}
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+                                      window.open(`${apiBaseUrl}/client/files/${file.id}/download`, '_blank');
+                                    }}
+                                    className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                                    title={t('serviceRequests.downloadFile', undefined, 'Download file')}
+                                    disabled={!!renamingFileId || !!deletingFileId}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteFile(file.id)}
+                                    className="p-2 text-gray-400 hover:text-red-600"
+                                    title={t('serviceRequests.deleteFile', undefined, 'Delete file')}
+                                    disabled={!!renamingFileId || deletingFileId === file.id}
+                                  >
+                                    {deletingFileId === file.id ? (
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
