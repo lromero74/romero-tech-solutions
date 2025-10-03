@@ -139,11 +139,16 @@ const ClientSettings: React.FC = () => {
 
       // Load contact info
       const contactData = await apiService.get('/client/profile');
+
+      // Format the phone number if it exists
+      const rawPhone = contactData.data.phone || '';
+      const formattedPhone = rawPhone ? formatPhoneNumber(rawPhone) : '';
+
       const info = {
         firstName: contactData.data.firstName || '',
         lastName: contactData.data.lastName || '',
         email: contactData.data.email || authUser.email || '',
-        phone: contactData.data.phone || '',
+        phone: formattedPhone,
         timeFormatPreference: (contactData.data.timeFormatPreference || '12h') as '12h' | '24h'
       };
       setContactInfo(info);
