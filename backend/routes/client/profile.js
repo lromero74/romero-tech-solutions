@@ -21,6 +21,7 @@ router.get('/', authenticateClient, async (req, res) => {
         last_name as "lastName",
         email,
         phone,
+        time_format_preference as "timeFormatPreference",
         created_at as "createdAt"
       FROM users
       WHERE id = $1 AND role = 'client' AND soft_delete = false
@@ -52,7 +53,7 @@ router.put('/', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
     const clientId = req.user.clientId;
-    const { firstName, lastName, email, phone } = req.body;
+    const { firstName, lastName, email, phone, timeFormatPreference } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email) {
@@ -68,6 +69,14 @@ router.put('/', authenticateClient, async (req, res) => {
       return res.status(400).json({
         success: false,
         message: 'Invalid email format'
+      });
+    }
+
+    // Validate time format preference if provided
+    if (timeFormatPreference && !['12h', '24h'].includes(timeFormatPreference)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid time format preference. Must be "12h" or "24h"'
       });
     }
 
@@ -93,10 +102,11 @@ router.put('/', authenticateClient, async (req, res) => {
         last_name = $2,
         email = $3,
         phone = $4,
+        time_format_preference = $5,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $5 AND role = 'client' AND soft_delete = false
-      RETURNING first_name as "firstName", last_name as "lastName", email, phone
-    `, [firstName, lastName, email, phone, clientId]);
+      WHERE id = $6 AND role = 'client' AND soft_delete = false
+      RETURNING first_name as "firstName", last_name as "lastName", email, phone, time_format_preference as "timeFormatPreference"
+    `, [firstName, lastName, email, phone, timeFormatPreference || '12h', clientId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({

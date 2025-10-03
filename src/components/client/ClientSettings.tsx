@@ -18,7 +18,8 @@ import {
   AlertTriangle,
   Save,
   RefreshCw,
-  Smartphone
+  Smartphone,
+  Clock
 } from 'lucide-react';
 
 interface ContactInfo {
@@ -26,6 +27,7 @@ interface ContactInfo {
   lastName: string;
   email: string;
   phone: string;
+  timeFormatPreference: '12h' | '24h';
 }
 
 interface MFASettings {
@@ -54,13 +56,15 @@ const ClientSettings: React.FC = () => {
     firstName: '',
     lastName: '',
     email: '',
-    phone: ''
+    phone: '',
+    timeFormatPreference: '12h'
   });
   const [originalContactInfo, setOriginalContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
     email: '',
-    phone: ''
+    phone: '',
+    timeFormatPreference: '12h'
   });
 
   // Password State
@@ -139,7 +143,8 @@ const ClientSettings: React.FC = () => {
         firstName: contactData.data.firstName || '',
         lastName: contactData.data.lastName || '',
         email: contactData.data.email || authUser.email || '',
-        phone: contactData.data.phone || ''
+        phone: contactData.data.phone || '',
+        timeFormatPreference: (contactData.data.timeFormatPreference || '12h') as '12h' | '24h'
       };
       setContactInfo(info);
       setOriginalContactInfo(info);
@@ -401,6 +406,21 @@ const ClientSettings: React.FC = () => {
                   className={`w-full px-3 py-2 border rounded-md ${themeClasses.input}`}
                   placeholder={t('settings.profile.phonePlaceholder')}
                 />
+              </div>
+
+              <div>
+                <label className={`block text-sm font-medium mb-2 ${themeClasses.text}`}>
+                  <Clock className="h-4 w-4 inline mr-1" />
+                  {t('settings.profile.timeFormat')}
+                </label>
+                <select
+                  value={contactInfo.timeFormatPreference}
+                  onChange={(e) => setContactInfo(prev => ({ ...prev, timeFormatPreference: e.target.value as '12h' | '24h' }))}
+                  className={`w-full px-3 py-2 border rounded-md ${themeClasses.input}`}
+                >
+                  <option value="12h">{t('settings.profile.timeFormat12h')}</option>
+                  <option value="24h">{t('settings.profile.timeFormat24h')}</option>
+                </select>
               </div>
             </div>
 
