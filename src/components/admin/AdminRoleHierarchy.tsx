@@ -22,7 +22,6 @@ interface Permission {
 interface RoleWithPermissions {
   role: Role;
   permissions: Permission[];
-  inheritedFrom: string[];
 }
 
 const AdminRoleHierarchy: React.FC = () => {
@@ -54,21 +53,13 @@ const AdminRoleHierarchy: React.FC = () => {
   };
 
   const buildHierarchy = (roles: any[]): RoleWithPermissions[] => {
-    // Define inheritance structure
-    const inheritanceMap: Record<string, string[]> = {
-      'executive': ['admin', 'sales', 'technician'],
-      'admin': ['technician'],
-      'sales': [],
-      'technician': []
-    };
-
-    // Sort roles by hierarchy level (top to bottom)
-    const roleOrder = ['executive', 'admin', 'sales', 'technician'];
+    // Sort roles by privilege level (top to bottom)
+    const roleOrder = ['executive', 'admin', 'manager', 'sales', 'technician'];
     const sortedRoles = roles.sort((a, b) => {
       return roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name);
     });
 
-    // Convert flat structure to expected format with inheritance information
+    // Convert flat structure to expected format
     return sortedRoles.map(roleData => ({
       role: {
         id: roleData.id,
@@ -76,8 +67,7 @@ const AdminRoleHierarchy: React.FC = () => {
         description: roleData.description,
         is_active: roleData.isActive
       },
-      permissions: roleData.permissions || [],
-      inheritedFrom: inheritanceMap[roleData.name] || []
+      permissions: roleData.permissions || []
     }));
   };
 
@@ -225,12 +215,9 @@ const AdminRoleHierarchy: React.FC = () => {
                 <p className={`text-sm ${themeClasses.text.secondary} mb-3`}>
                   {roleData.role.description}
                 </p>
-                {roleData.inheritedFrom.length > 0 && (
-                  <div className={`text-xs ${themeClasses.text.tertiary} flex items-center gap-1`}>
-                    <ArrowDown className="w-3 h-3" />
-                    <span>Inherits from: {roleData.inheritedFrom.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join(', ')}</span>
-                  </div>
-                )}
+                <div className={`text-xs ${themeClasses.text.tertiary}`}>
+                  {roleData.permissions.length} permissions
+                </div>
               </div>
             </div>
 
@@ -284,69 +271,10 @@ const AdminRoleHierarchy: React.FC = () => {
                     </div>
                   ))}
 
-                  {/* Show Inherited Permissions */}
-                  {roleData.inheritedFrom.length > 0 && (
-                    <div className="mt-6 pt-6 border-t border-gray-300 dark:border-gray-700">
-                      <h4 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
-                        Inherited Permissions
-                      </h4>
-                      <div className="space-y-4">
-                        {roleData.inheritedFrom.map(inheritedRoleName => {
-                          const inheritedRole = rolesData.find(rd => rd.role.name === inheritedRoleName);
-                          if (!inheritedRole) return null;
-
-                          const inheritedCategories = getPermissionsByCategory(inheritedRole.permissions);
-
-                          return (
-                            <div key={inheritedRoleName} className={`p-4 ${themeClasses.bg.hover} rounded-lg`}>
-                              <p className={`text-sm font-semibold ${themeClasses.text.secondary} mb-3`}>
-                                From {inheritedRoleName.charAt(0).toUpperCase() + inheritedRoleName.slice(1)}:
-                              </p>
-                              {Object.entries(inheritedCategories).map(([category, perms]) => (
-                                <div key={category} className="mb-3">
-                                  <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
-                                    {formatResourceName(category)}
-                                  </p>
-                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                    {perms.map(perm => (
-                                      <div
-                                        key={perm.id}
-                                        className={`p-2 ${themeClasses.bg.secondary} rounded border ${themeClasses.border.primary} opacity-75`}
-                                      >
-                                        <p className={`text-xs font-medium ${themeClasses.text.secondary}`}>
-                                          {formatActionType(perm.action_type)}
-                                        </p>
-                                        <code className={`text-xs ${themeClasses.text.tertiary}`}>
-                                          {perm.permission_key}
-                                        </code>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
-
                   {/* Total Count */}
                   <div className={`mt-6 p-4 ${themeClasses.bg.hover} rounded-lg text-center`}>
                     <p className={`text-sm ${themeClasses.text.primary}`}>
-                      <strong>Total Permissions:</strong>{' '}
-                      {roleData.permissions.length +
-                        roleData.inheritedFrom.reduce((sum, inheritedRoleName) => {
-                          const inheritedRole = rolesData.find(rd => rd.role.name === inheritedRoleName);
-                          return sum + (inheritedRole?.permissions.length || 0);
-                        }, 0)}
-                      {' '}
-                      ({roleData.permissions.length} direct + {
-                        roleData.inheritedFrom.reduce((sum, inheritedRoleName) => {
-                          const inheritedRole = rolesData.find(rd => rd.role.name === inheritedRoleName);
-                          return sum + (inheritedRole?.permissions.length || 0);
-                        }, 0)
-                      } inherited)
+                      <strong>Total Permissions:</strong> {roleData.permissions.length}
                     </p>
                   </div>
                 </div>

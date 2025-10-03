@@ -50,7 +50,6 @@ interface Role {
   name: string;
   display_name: string;
   permissions: Set<string>; // permission_keys
-  inheritedPermissions: Set<string>; // permission_keys inherited from other roles
 }
 
 interface PermissionCategory {
@@ -96,15 +95,6 @@ const AdminPermissionManager: React.FC = () => {
   const [errorModal, setErrorModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
   const [successModal, setSuccessModal] = useState<{ show: boolean; message: string }>({ show: false, message: '' });
 
-  // Role inheritance map (matches backend)
-  const roleInheritance: { [key: string]: string[] } = {
-    executive: ['admin', 'manager', 'sales', 'technician'],
-    admin: ['technician'],
-    manager: ['technician'],
-    sales: [],
-    technician: []
-  };
-
   // Role display order (highest to lowest privilege)
   const roleOrder = ['executive', 'admin', 'manager', 'sales', 'technician'];
 
@@ -144,37 +134,18 @@ const AdminPermissionManager: React.FC = () => {
       const rolesWithPerms: Role[] = [];
 
       for (const roleData of (rolesData?.roles || [])) {
-        // Use permissions already in roleData instead of fetching again
-        const directPermissions = new Set(
+        // Get all permissions directly assigned to this role
+        const rolePermissions = new Set(
           (roleData.permissions || [])
             .filter((p: any) => p.is_granted)
             .map((p: any) => p.permission_key)
         );
 
-        // Calculate inherited permissions
-        const inheritedPerms = new Set<string>();
-        const inheritedFrom = roleInheritance[roleData.name] || [];
-
-        for (const inheritedRoleName of inheritedFrom) {
-          const inheritedRole = (rolesData?.roles || []).find((r: any) => r.name === inheritedRoleName);
-          if (inheritedRole) {
-            // Use permissions already in inheritedRole instead of fetching again
-            (inheritedRole.permissions || [])
-              .filter((p: any) => p.is_granted)
-              .forEach((p: any) => {
-                if (!directPermissions.has(p.permission_key)) {
-                  inheritedPerms.add(p.permission_key);
-                }
-              });
-          }
-        }
-
         rolesWithPerms.push({
           id: roleData.id.toString(),
           name: roleData.name,
           display_name: roleData.displayName || roleData.display_name || roleData.name,
-          permissions: directPermissions,
-          inheritedPermissions: inheritedPerms
+          permissions: rolePermissions
         });
       }
 
@@ -337,14 +308,8 @@ const AdminPermissionManager: React.FC = () => {
     setHasChanges(true);
   };
 
-  const hasPermission = (role: Role, permissionKey: string): { has: boolean; inherited: boolean } => {
-    if (role.permissions.has(permissionKey)) {
-      return { has: true, inherited: false };
-    }
-    if (role.inheritedPermissions.has(permissionKey)) {
-      return { has: true, inherited: true };
-    }
-    return { has: false, inherited: false };
+  const hasPermission = (role: Role, permissionKey: string): boolean => {
+    return role.permissions.has(permissionKey);
   };
 
   const handleSave = async () => {
@@ -389,12 +354,10 @@ const AdminPermissionManager: React.FC = () => {
       const newRoles = prevRoles.map(role => {
         if (role.id === roleId) {
           if (enable) {
-            // Add all non-inherited permissions
-            const allPerms = new Set(role.permissions);
+            // Add all permissions
+            const allPerms = new Set<string>();
             permissions.forEach(p => {
-              if (!role.inheritedPermissions.has(p.permission_key)) {
-                allPerms.add(p.permission_key);
-              }
+              allPerms.add(p.permission_key);
             });
             return { ...role, permissions: allPerms };
           } else {
@@ -603,7 +566,7 @@ const AdminPermissionManager: React.FC = () => {
               <li>Click folder icons to expand/collapse permission groups</li>
               <li>Check/uncheck boxes to grant or revoke permissions for each role</li>
               <li>Use column header buttons to select/deselect all permissions for a role</li>
-              <li>Grayed checkboxes with lock icons are inherited from other roles</li>
+              <li>Executive role permissions are locked and cannot be modified</li>
               <li>Changes are highlighted - click "Save Changes" when ready</li>
             </ul>
           </div>
@@ -662,13 +625,8 @@ const AdminPermissionManager: React.FC = () => {
                       </div>
                       <div className="text-xs font-normal">
                         <span className={themeClasses.text.success}>
-                          {role.permissions.size}
+                          {role.permissions.size} permissions
                         </span>
-                        {role.inheritedPermissions.size > 0 && (
-                          <span className={themeClasses.text.tertiary}>
-                            {' '}+ {role.inheritedPermissions.size} inherited
-                          </span>
-                        )}
                       </div>
                       {role.name !== 'executive' && (
                         <div className="flex gap-1">
@@ -828,9 +786,7 @@ const AdminPermissionManager: React.FC = () => {
 
                                     {/* Role Checkboxes */}
                                     {roles.map(role => {
-                                      const permState = hasPermission(role, permission.permission_key);
-                                      const isInherited = permState.inherited;
-                                      const isChecked = permState.has;
+                                      const isChecked = hasPermission(role, permission.permission_key);
                                       const isExecutive = role.name === 'executive';
 
                                       return (
@@ -844,11 +800,6 @@ const AdminPermissionManager: React.FC = () => {
                                             <div className="flex items-center justify-center gap-1" title="Executive role always has all permissions (read-only)">
                                               <CheckSquare className={`w-5 h-5 text-blue-500 opacity-60`} />
                                               <Lock className={`w-3 h-3 text-blue-500`} />
-                                            </div>
-                                          ) : isInherited ? (
-                                            <div className="flex items-center justify-center gap-1" title="Inherited from other role">
-                                              <CheckSquare className={`w-5 h-5 ${themeClasses.text.accent} opacity-50`} />
-                                              <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
                                             </div>
                                           ) : (
                                             <button
@@ -892,28 +843,21 @@ const AdminPermissionManager: React.FC = () => {
       {/* Legend */}
       <div className={`mt-4 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
         <h4 className={`text-sm font-semibold ${themeClasses.text.secondary} mb-2`}>Legend:</h4>
-        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 text-sm ${themeClasses.text.tertiary}`}>
+        <div className={`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm ${themeClasses.text.tertiary}`}>
           <div className="flex items-center gap-2">
             <CheckSquare className={`w-4 h-4 ${themeClasses.text.success}`} />
-            <span>Direct permission (can be changed)</span>
+            <span>Permission granted (can be changed)</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1">
-              <CheckSquare className={`w-4 h-4 ${themeClasses.text.accent} opacity-50`} />
-              <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
-            </div>
-            <span>Inherited permission (automatic)</span>
+            <Square className={`w-4 h-4 ${themeClasses.text.muted}`} />
+            <span>Permission not granted</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="flex items-center gap-1">
               <CheckSquare className={`w-4 h-4 text-blue-500 opacity-60`} />
               <Lock className={`w-3 h-3 text-blue-500`} />
             </div>
-            <span>Executive role (read-only, has all)</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Square className={`w-4 h-4 ${themeClasses.text.muted}`} />
-            <span>No permission</span>
+            <span>Executive role (read-only, immutable)</span>
           </div>
         </div>
       </div>

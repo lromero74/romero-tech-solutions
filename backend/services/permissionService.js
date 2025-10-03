@@ -24,48 +24,15 @@ class PermissionService {
     this.permissionCache = new Map();
     this.CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-    // Role hierarchy (inheritance disabled - each role has explicit permissions)
+    // Role privilege levels (for reference only - no inheritance)
     // Executive role always has all permissions (enforced separately)
-    this.roleHierarchy = {
-      'executive': {
-        level: 4,
-        inherits: [] // No inheritance - executive gets all permissions via code
-      },
-      'admin': {
-        level: 3,
-        inherits: [] // No inheritance - explicit permissions only
-      },
-      'sales': {
-        level: 2,
-        inherits: [] // No inheritance - explicit permissions only
-      },
-      'technician': {
-        level: 1,
-        inherits: [] // No inheritance - explicit permissions only
-      }
+    this.roleLevels = {
+      'executive': 5,
+      'admin': 4,
+      'manager': 3,
+      'sales': 2,
+      'technician': 1
     };
-  }
-
-  /**
-   * Get all roles that should be checked for permissions (including inherited roles)
-   * @param {string} roleName - Role name (e.g., 'admin')
-   * @returns {string[]} - Array of role names including inherited roles
-   */
-  _getRolesWithInheritance(roleName) {
-    const roleConfig = this.roleHierarchy[roleName];
-    if (!roleConfig) {
-      return [roleName]; // Unknown role, just return itself
-    }
-
-    const roles = [roleName]; // Start with the role itself
-
-    // Add all inherited roles recursively
-    for (const inheritedRole of roleConfig.inherits) {
-      roles.push(...this._getRolesWithInheritance(inheritedRole));
-    }
-
-    // Remove duplicates and return
-    return [...new Set(roles)];
   }
 
   /**
@@ -161,15 +128,12 @@ class PermissionService {
       return false;
     }
 
-    // Get all roles to check (including inherited roles)
-    const rolesToCheck = [];
-    for (const userRole of userRoles) {
-      rolesToCheck.push(...this._getRolesWithInheritance(userRole.name));
-    }
+    // Get all roles to check (explicit permissions only, no inheritance)
+    const rolesToCheck = userRoles.map(r => r.name);
 
     console.log(`🔍 Checking permission ${permissionKey} for roles: ${rolesToCheck.join(', ')}`);
 
-    // Query database with inherited roles
+    // Query database for explicitly granted permissions
     const result = await query(`
       SELECT COUNT(*) as count
       FROM roles r
@@ -193,7 +157,7 @@ class PermissionService {
   }
 
   /**
-   * Get all permissions for an employee (including inherited permissions)
+   * Get all permissions for an employee (explicit permissions only)
    * @param {string} employeeId - Employee UUID
    * @returns {Promise<string[]>} - Array of permission keys
    */
@@ -215,15 +179,12 @@ class PermissionService {
         return [];
       }
 
-      // Get all roles to check (including inherited roles)
-      const rolesToCheck = [];
-      for (const userRole of userRoles) {
-        rolesToCheck.push(...this._getRolesWithInheritance(userRole.name));
-      }
+      // Get all roles to check (explicit permissions only, no inheritance)
+      const rolesToCheck = userRoles.map(r => r.name);
 
       console.log(`📋 Fetching permissions for roles: ${rolesToCheck.join(', ')}`);
 
-      // Query employee's permissions including inherited roles
+      // Query employee's explicitly granted permissions
       const result = await query(`
         SELECT DISTINCT p.permission_key
         FROM roles r
