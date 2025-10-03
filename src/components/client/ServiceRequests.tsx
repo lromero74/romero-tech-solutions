@@ -62,6 +62,7 @@ interface ServiceRequest {
   updatedAt: string;
   cost?: {
     baseRate: number;
+    rateCategoryName?: string;
     durationHours: number;
     total: number;
     subtotal?: number;
@@ -1022,52 +1023,58 @@ const ServiceRequests: React.FC = () => {
                     </p>
                   )}
 
-                  {/* Cost Summary */}
+                  {/* Date and Time Block */}
                   {request.cost && request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd && (
                     <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                      <div className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.scheduledDateTime', undefined, 'Scheduled Date & Time')}</h4>
+                      <div className="text-sm text-blue-800 dark:text-blue-200 mb-1">
                         {formatLongDate(new Date(request.requestedDate), t, language)}
                       </div>
                       <div className="text-sm text-blue-800 dark:text-blue-200">
                         {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
                       </div>
-                      <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
-                        <div className="text-xs text-blue-700 dark:text-blue-300 mb-1">
-                          {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
+                    </div>
+                  )}
+
+                  {/* Cost Estimate Block */}
+                  {request.cost && (
+                    <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <h4 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">{t('serviceRequests.costEstimate', undefined, 'Cost Estimate')}</h4>
+                      <div className="text-xs text-green-700 dark:text-green-300 mb-1">
+                        {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate')} ({request.cost.rateCategoryName || 'Standard'}): ${request.cost.baseRate}/hr
+                      </div>
+                      {/* Tier Breakdown */}
+                      {request.cost.breakdown && request.cost.breakdown.map((block, idx) => (
+                        <div key={idx} className="text-xs text-green-700 dark:text-green-300">
+                          {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
                         </div>
-                        {/* Tier Breakdown */}
-                        {request.cost.breakdown && request.cost.breakdown.map((block, idx) => (
-                          <div key={idx} className="text-xs text-blue-700 dark:text-blue-300">
-                            {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                      ))}
+                      {/* First Hour Discount */}
+                      {request.cost.firstHourDiscount && request.cost.firstHourDiscount > 0 && (
+                        <>
+                          <div className="text-xs text-green-700 dark:text-green-300 mt-1 pt-1 border-t border-green-200 dark:border-green-700">
+                            {t('serviceRequests.subtotal', 'Subtotal')}: ${request.cost.subtotal?.toFixed(2)}
                           </div>
-                        ))}
-                        {/* First Hour Discount */}
-                        {request.cost.firstHourDiscount && request.cost.firstHourDiscount > 0 && (
-                          <>
-                            <div className="text-xs text-blue-700 dark:text-blue-300 mt-1 pt-1 border-t border-blue-200 dark:border-blue-700">
-                              {t('serviceRequests.subtotal', 'Subtotal')}: ${request.cost.subtotal?.toFixed(2)}
+                          <div className="text-xs text-green-700 dark:text-green-300 font-medium mb-1">
+                            🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                          </div>
+                          {request.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
+                            <div key={idx} className="text-xs text-green-700 dark:text-green-300 ml-4">
+                              • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
                             </div>
-                            <div className="text-xs text-green-700 dark:text-green-300 font-medium mb-1">
-                              🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                          ))}
+                          {request.cost.firstHourCompBreakdown && request.cost.firstHourCompBreakdown.length > 1 && (
+                            <div className="text-xs text-green-700 dark:text-green-300 font-medium ml-4">
+                              {t('serviceRequests.totalDiscount', 'Total Discount')}: -${request.cost.firstHourDiscount.toFixed(2)}
                             </div>
-                            {request.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
-                              <div key={idx} className="text-xs text-green-700 dark:text-green-300 ml-4">
-                                • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
-                              </div>
-                            ))}
-                            {request.cost.firstHourCompBreakdown && request.cost.firstHourCompBreakdown.length > 1 && (
-                              <div className="text-xs text-green-700 dark:text-green-300 font-medium ml-4">
-                                {t('serviceRequests.totalDiscount', 'Total Discount')}: -${request.cost.firstHourDiscount.toFixed(2)}
-                              </div>
-                            )}
-                          </>
-                        )}
-                        <div className="mt-1 pt-1 border-t border-blue-200 dark:border-blue-700 text-sm font-semibold text-blue-900 dark:text-blue-100">
-                          {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
-                        </div>
-                        <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
-                          * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
-                        </div>
+                          )}
+                        </>
+                      )}
+                      <div className="mt-1 pt-1 border-t border-green-200 dark:border-green-700 text-sm font-semibold text-green-900 dark:text-green-100">
+                        {t('serviceRequests.totalEstimate', { total: request.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
+                      </div>
+                      <div className="text-xs text-green-600 dark:text-green-400 mt-1 italic">
+                        * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
                       </div>
                     </div>
                   )}
@@ -1252,58 +1259,66 @@ const ServiceRequests: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Cost Summary & Location Side-by-Side on larger screens */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
-                    {/* Cost Summary in Modal */}
-                    {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
-                      <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                        <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
-                        <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                          {formatLongDate(new Date(selectedRequest.requestedDate), t, language)}
+                  {/* Date & Time Block */}
+                  {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
+                    <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
+                      <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                        {formatLongDate(new Date(selectedRequest.requestedDate), t, language)}
+                      </div>
+                      <div className="text-base text-blue-800 dark:text-blue-200">
+                        {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Cost Estimate Block */}
+                  {selectedRequest.cost && (
+                    <div className="mb-4 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                      <h4 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">{t('serviceRequests.costEstimate', undefined, 'Cost Estimate')}</h4>
+                      <div className="space-y-1">
+                        <div className="text-sm text-green-700 dark:text-green-300">
+                          {t('serviceRequests.baseRatePerHour', { rate: String(selectedRequest.cost.baseRate) }, 'Base Rate')} ({selectedRequest.cost.rateCategoryName || 'Standard'}): ${selectedRequest.cost.baseRate}/hr
                         </div>
-                        <div className="text-base text-blue-800 dark:text-blue-200 mb-3">
-                          {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
-                        </div>
-                        <div className="pt-3 border-t border-blue-200 dark:border-blue-700 space-y-1">
-                          <div className="text-sm text-blue-700 dark:text-blue-300">
-                            {t('serviceRequests.baseRatePerHour', { rate: String(selectedRequest.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')}
+                        {/* Tier Breakdown */}
+                        {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block, idx) => (
+                          <div key={idx} className="text-sm text-green-700 dark:text-green-300">
+                            {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
                           </div>
-                          {/* Tier Breakdown */}
-                          {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block, idx) => (
-                            <div key={idx} className="text-sm text-blue-700 dark:text-blue-300">
-                              {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                        ))}
+                        {/* First Hour Discount */}
+                        {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
+                          <>
+                            <div className="text-sm text-green-700 dark:text-green-300 mt-1 pt-1 border-t border-green-200 dark:border-green-700">
+                              {t('serviceRequests.subtotal', 'Subtotal')}: ${selectedRequest.cost.subtotal?.toFixed(2)}
                             </div>
-                          ))}
-                          {/* First Hour Discount */}
-                          {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
-                            <>
-                              <div className="text-sm text-blue-700 dark:text-blue-300 mt-1 pt-1 border-t border-blue-200 dark:border-blue-700">
-                                {t('serviceRequests.subtotal', 'Subtotal')}: ${selectedRequest.cost.subtotal?.toFixed(2)}
+                            <div className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">
+                              🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                            </div>
+                            {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
+                              <div key={idx} className="text-sm text-green-700 dark:text-green-300 ml-4">
+                                • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
                               </div>
-                              <div className="text-sm text-green-700 dark:text-green-300 font-medium mb-1">
-                                🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                            ))}
+                            {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
+                              <div className="text-sm text-green-700 dark:text-green-300 font-medium ml-4">
+                                {t('serviceRequests.totalDiscount', 'Total Discount')}: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
                               </div>
-                              {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
-                                <div key={idx} className="text-sm text-green-700 dark:text-green-300 ml-4">
-                                  • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
-                                </div>
-                              ))}
-                              {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
-                                <div className="text-sm text-green-700 dark:text-green-300 font-medium ml-4">
-                                  {t('serviceRequests.totalDiscount', 'Total Discount')}: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
-                                </div>
-                              )}
-                            </>
-                          )}
-                          <div className="text-base font-semibold text-blue-900 dark:text-blue-100 mt-2 pt-1 border-t border-blue-200 dark:border-blue-700">
-                            {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
-                          </div>
-                          <div className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
-                            * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
-                          </div>
+                            )}
+                          </>
+                        )}
+                        <div className="text-base font-semibold text-green-900 dark:text-green-100 mt-2 pt-1 border-t border-green-200 dark:border-green-700">
+                          {t('serviceRequests.totalEstimate', { total: selectedRequest.cost.total.toFixed(2) }, 'Total*: ${{total}}')}
+                        </div>
+                        <div className="text-xs text-green-600 dark:text-green-400 mt-1 italic">
+                          * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
                         </div>
                       </div>
-                    )}
+                    </div>
+                  )}
+
+                  {/* Location & Contact Information Side-by-Side on larger screens */}
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-4">
 
                     {/* Location & Contact Information */}
                     {selectedRequest.locationDetails && (

@@ -291,13 +291,16 @@ router.get('/', async (req, res) => {
 
     // Fetch business-specific base hourly rate from rate category
     let baseHourlyRate = 75; // Fallback default
+    let rateCategoryName = 'Standard'; // Fallback default
     try {
       const rateResult = await pool.query(`
         SELECT
           b.id,
           b.rate_category_id,
           rc.base_hourly_rate as category_rate,
-          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate
+          rc.category_name as category_name,
+          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate,
+          (SELECT category_name FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_category_name
         FROM businesses b
         LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
         WHERE b.id = $1
@@ -307,6 +310,7 @@ router.get('/', async (req, res) => {
         const business = rateResult.rows[0];
         // Use business category rate if assigned, otherwise use default category rate
         baseHourlyRate = parseFloat(business.category_rate || business.default_rate || 75);
+        rateCategoryName = business.category_name || business.default_category_name || 'Standard';
       }
     } catch (error) {
       console.error('Error fetching base hourly rate, using fallback:', error);
@@ -322,7 +326,7 @@ router.get('/', async (req, res) => {
     const isFirstServiceRequest = parseInt(firstServiceRequestCheck.rows[0].request_count) === 1;
 
     // Helper function to calculate estimated cost with first-hour waiver for new clients
-    const calculateCost = async (date, timeStart, timeEnd, baseRate, isFirstRequest) => {
+    const calculateCost = async (date, timeStart, timeEnd, baseRate, isFirstRequest, categoryName) => {
       if (!date || !timeStart || !timeEnd || !baseRate) return null;
 
       // Parse times
@@ -436,6 +440,7 @@ router.get('/', async (req, res) => {
 
       return {
         baseRate,
+        rateCategoryName: categoryName,
         durationHours,
         total: finalTotal,
         subtotal: totalCost,
@@ -455,7 +460,8 @@ router.get('/', async (req, res) => {
           row.requested_time_start,
           row.requested_time_end,
           baseHourlyRate,
-          isFirstServiceRequest
+          isFirstServiceRequest,
+          rateCategoryName
         );
 
         // Check if we have any location data (address or contact info)

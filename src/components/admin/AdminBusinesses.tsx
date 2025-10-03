@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Briefcase, Edit, Trash2, Users, Building, X, MapPin, Undo2, Power, Loader2 } from 'lucide-react';
+import { Briefcase, Edit, Trash2, Users, Building, X, MapPin, Undo2, Power, Loader2, User } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
@@ -18,12 +18,15 @@ interface Business {
   locationCount: number;
   isActive: boolean;
   softDelete?: boolean;
+  isIndividual?: boolean;
   createdAt: string;
   logo?: string;
   logoPositionX?: number;
   logoPositionY?: number;
   logoScale?: number;
   logoBackgroundColor?: string;
+  rateCategoryName?: string;
+  baseHourlyRate?: number;
 }
 
 interface Client {
@@ -108,6 +111,7 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
   const canHardDelete = checkPermission('hardDelete.businesses.enable');
   const canViewSoftDeleted = checkPermission('view.soft_deleted_businesses.enable');
   const canViewStats = checkPermission('view.business_stats.enable');
+  const canViewRateCategories = checkPermission('view.business_rate_categories.enable');
 
   // Permission denied modal state
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -351,6 +355,9 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   </select>
                 </th>
                 <th className={`px-6 py-2 border-r ${themeClasses.border.primary}`}>
+                  {/* No filter for Rate Category */}
+                </th>
+                <th className={`px-6 py-2 border-r ${themeClasses.border.primary}`}>
                   {/* No filter for Actions */}
                 </th>
               </tr>
@@ -405,6 +412,9 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   </button>
                 </th>
                 <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  Hourly Rate
+                </th>
+                <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                   Actions
                 </th>
               </tr>
@@ -439,12 +449,20 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                                 }}
                               />
                               <div className="hidden h-10 w-10 rounded-full bg-purple-500 items-center justify-center">
-                                <Building className="h-6 w-6 text-white" />
+                                {business.isIndividual ? (
+                                  <User className="h-6 w-6 text-white" />
+                                ) : (
+                                  <Building className="h-6 w-6 text-white" />
+                                )}
                               </div>
                             </div>
                           ) : (
-                            <div className="h-10 w-10 rounded-full bg-purple-500 flex items-center justify-center">
-                              <Building className="h-6 w-6 text-white" />
+                            <div className={`h-10 w-10 rounded-full ${business.isIndividual ? 'bg-blue-500' : 'bg-purple-500'} flex items-center justify-center`}>
+                              {business.isIndividual ? (
+                                <User className="h-6 w-6 text-white" />
+                              ) : (
+                                <Building className="h-6 w-6 text-white" />
+                              )}
                             </div>
                           )}
                         </div>
@@ -527,6 +545,16 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                       }`}>
                         {business.isActive ? 'Active' : 'Inactive'}
                       </span>
+                    </td>
+                    <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <div className={`text-sm ${themeClasses.text.primary}`}>
+                        {canViewRateCategories && (
+                          <div className="font-medium">{business.rateCategoryName || 'Standard'}</div>
+                        )}
+                        <div className={`${canViewRateCategories ? 'text-xs' : 'text-sm font-medium'} ${themeClasses.text.secondary}`}>
+                          ${business.baseHourlyRate || 75}/hr
+                        </div>
+                      </div>
                     </td>
                     <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium border-r ${themeClasses.border.primary}`}>
                       {/* Show actions based on permissions */}
@@ -733,12 +761,20 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                           }}
                         />
                         <div className="hidden h-12 w-12 rounded-full bg-purple-500 items-center justify-center">
-                          <Building className="h-6 w-6 text-white" />
+                          {business.isIndividual ? (
+                            <User className="h-6 w-6 text-white" />
+                          ) : (
+                            <Building className="h-6 w-6 text-white" />
+                          )}
                         </div>
                       </div>
                     ) : (
-                      <div className="h-12 w-12 rounded-full bg-purple-500 flex items-center justify-center">
-                        <Building className="h-6 w-6 text-white" />
+                      <div className={`h-12 w-12 rounded-full ${business.isIndividual ? 'bg-blue-500' : 'bg-purple-500'} flex items-center justify-center`}>
+                        {business.isIndividual ? (
+                          <User className="h-6 w-6 text-white" />
+                        ) : (
+                          <Building className="h-6 w-6 text-white" />
+                        )}
                       </div>
                     )}
                   </div>
@@ -824,6 +860,19 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                       {businessClients.filter(c => c.isActive).length} active
                     </div>
                   )}
+                </div>
+                <div>
+                  <span className={`text-xs ${themeClasses.text.muted}`}>Hourly Rate</span>
+                  <div className="mt-1">
+                    {canViewRateCategories && (
+                      <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                        {business.rateCategoryName || 'Standard'}
+                      </div>
+                    )}
+                    <div className={`${canViewRateCategories ? 'text-xs' : 'text-sm font-medium'} ${themeClasses.text.secondary}`}>
+                      ${business.baseHourlyRate || 75}/hr
+                    </div>
+                  </div>
                 </div>
               </div>
 

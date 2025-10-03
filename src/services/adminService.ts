@@ -253,6 +253,12 @@ export class AdminService {
   // Update business
   async updateBusiness(businessId: string, data: {
     businessName: string;
+    authorizedDomains?: Array<{
+      id?: string;
+      domain: string;
+      description?: string;
+      is_active?: boolean;
+    }>;
     address: {
       street: string;
       city: string;
@@ -264,6 +270,8 @@ export class AdminService {
     logoPositionX?: number;
     logoPositionY?: number;
     logoScale?: number;
+    logoBackgroundColor?: string;
+    rateCategoryId?: string;
   }): Promise<{ business: Business }> {
     try {
       const apiService = await this.getApiService();

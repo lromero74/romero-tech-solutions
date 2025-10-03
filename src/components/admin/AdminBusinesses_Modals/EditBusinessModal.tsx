@@ -45,6 +45,7 @@ interface Business {
   logoScale?: number;
   logoBackgroundColor?: string;
   rateCategoryId?: string;
+  isIndividual?: boolean;
 }
 
 interface EditBusinessModalProps {
@@ -173,6 +174,12 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         const response = await apiService.get<{ success: boolean; data: RateCategory[] }>('/admin/hourly-rate-categories');
         if (response.success && response.data) {
           setRateCategories(response.data);
+
+          // Auto-select default category if no category is currently selected
+          const defaultCategory = response.data.find(cat => cat.isDefault);
+          if (defaultCategory && !selectedRateCategoryId) {
+            setSelectedRateCategoryId(defaultCategory.id);
+          }
         }
       } catch (error) {
         console.error('Failed to load rate categories:', error);
@@ -234,7 +241,12 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         zipCode: business.address.zipCode,
         country: 'USA'
       });
-      setSelectedRateCategoryId(business.rateCategoryId || '');
+
+      // Set rate category ID - use business's category or will auto-select default when categories load
+      if (business.rateCategoryId) {
+        setSelectedRateCategoryId(business.rateCategoryId);
+      }
+
       setOriginalBusiness(business);
     }
   }, [business]);
@@ -332,22 +344,27 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
       return;
     }
 
-    if (authorizedDomains.length === 0) {
-      setError('At least one authorized domain is required');
-      setLoading(false);
-      return;
-    }
-
-    // Validate domains
-    for (const domain of authorizedDomains) {
-      if (!domain.domain.trim()) {
-        setError('All domains must be filled out');
+    // Only require authorized domains for regular businesses (not Individual accounts)
+    if (!business.isIndividual) {
+      if (authorizedDomains.length === 0) {
+        setError('At least one authorized domain is required');
         setLoading(false);
         return;
+      }
+
+      // Validate domains
+      for (const domain of authorizedDomains) {
+        if (!domain.domain.trim()) {
+          setError('All domains must be filled out');
+          setLoading(false);
+          return;
+        }
       }
     }
 
     try {
+      console.log('🔄 Submitting business update with rate category:', selectedRateCategoryId);
+
       await onSubmit(business.id, {
         businessName: formData.businessName,
         authorizedDomains: authorizedDomains,
@@ -366,11 +383,14 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
         rateCategoryId: selectedRateCategoryId || undefined
       });
 
+      console.log('✅ Business update successful');
+
       // Close modal after successful save
       resetAndClose();
     } catch (error) {
-      console.error('Error updating business:', error);
-      setError('Failed to update business. Please try again.');
+      console.error('❌ Error updating business:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to update business. Please try again.';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -507,7 +527,6 @@ const EditBusinessModal: React.FC<EditBusinessModalProps> = ({
                     onChange={(e) => setSelectedRateCategoryId(e.target.value)}
                     className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:ring-2 focus:ring-blue-500 focus:border-blue-500`}
                   >
-                    <option value="">Use Default Category</option>
                     {rateCategories.map((category) => (
                       <option key={category.id} value={category.id}>
                         {category.categoryName} (${category.baseHourlyRate}/hr)

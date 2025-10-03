@@ -81,6 +81,7 @@ router.get('/businesses', async (req, res) => {
         b.is_active,
         b.rate_category_id,
         COALESCE(b.soft_delete, false) as soft_delete,
+        COALESCE(b.is_individual, false) as is_individual,
         b.created_at,
         -- Get rate category info
         rc.category_name as rate_category_name,
@@ -131,6 +132,7 @@ router.get('/businesses', async (req, res) => {
           locationCount: parseInt(business.location_count) || 0,
           isActive: business.is_active,
           softDelete: business.soft_delete,
+          isIndividual: business.is_individual,
           createdAt: business.created_at
         }))
       }

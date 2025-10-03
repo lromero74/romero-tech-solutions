@@ -120,7 +120,9 @@ router.get('/base-hourly-rate', async (req, res) => {
           b.id,
           b.rate_category_id,
           rc.base_hourly_rate as category_rate,
-          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate
+          rc.category_name as category_name,
+          (SELECT base_hourly_rate FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_rate,
+          (SELECT category_name FROM hourly_rate_categories WHERE is_default = true LIMIT 1) as default_category_name
         FROM businesses b
         LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
         WHERE b.id = $1
@@ -130,11 +132,13 @@ router.get('/base-hourly-rate', async (req, res) => {
         const business = businessResult.rows[0];
         // Use business category rate if assigned, otherwise use default category rate
         const baseRate = business.category_rate || business.default_rate || 75;
+        const categoryName = business.category_name || business.default_category_name || 'Standard';
 
         return res.json({
           success: true,
           data: {
             baseHourlyRate: parseFloat(baseRate),
+            rateCategoryName: categoryName,
             source: business.category_rate ? 'business_category' : 'default_category'
           }
         });
@@ -143,7 +147,7 @@ router.get('/base-hourly-rate', async (req, res) => {
 
     // Fallback: Get default category rate
     const defaultResult = await query(`
-      SELECT base_hourly_rate
+      SELECT base_hourly_rate, category_name
       FROM hourly_rate_categories
       WHERE is_default = true
       LIMIT 1
@@ -154,6 +158,7 @@ router.get('/base-hourly-rate', async (req, res) => {
         success: true,
         data: {
           baseHourlyRate: parseFloat(defaultResult.rows[0].base_hourly_rate),
+          rateCategoryName: defaultResult.rows[0].category_name,
           source: 'default_category'
         }
       });

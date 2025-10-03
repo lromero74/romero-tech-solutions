@@ -48,6 +48,7 @@ interface CostBreakdown {
     discount: number;
   }[];
   baseHourlyRate: number;
+  rateCategoryName?: string;
   breakdown: {
     tierName: string;
     multiplier: number;
@@ -112,6 +113,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
   const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
   const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
+  const [rateCategoryName, setRateCategoryName] = useState<string>('Standard'); // Default category name
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [isFirstTimer, setIsFirstTimer] = useState<boolean>(false);
   const [is24HourFormat, setIs24HourFormat] = useState<boolean>(false); // Default to 12-hour format
@@ -364,7 +366,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             const rateData = await rateResponse.json();
             if (rateData.success && rateData.data.baseHourlyRate) {
               setBaseHourlyRate(rateData.data.baseHourlyRate);
-              console.log(`💰 Loaded base hourly rate for business: $${rateData.data.baseHourlyRate}/hr (source: ${rateData.data.source || 'unknown'})`);
+              if (rateData.data.rateCategoryName) {
+                setRateCategoryName(rateData.data.rateCategoryName);
+              }
+              console.log(`💰 Loaded base hourly rate for business: $${rateData.data.baseHourlyRate}/hr (${rateData.data.rateCategoryName || 'Standard'}) (source: ${rateData.data.source || 'unknown'})`);
             }
           }
         } catch (error) {
@@ -824,6 +829,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         firstHourDiscount: estimatedCost.firstHourDiscount,
         firstHourCompBreakdown: estimatedCost.firstHourCompBreakdown,
         baseHourlyRate,
+        rateCategoryName,
         breakdown: estimatedCost.breakdown,
         isFirstTimer: estimatedCost.isFirstTimer
       };
@@ -1341,7 +1347,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 <div className="flex flex-col px-3 sm:px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
                   {/* Base Rate */}
                   <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                    {t('scheduler.baseRate', 'Base Rate')}: ${baseHourlyRate}/hr
+                    {t('scheduler.baseRate', 'Base Rate')} ({rateCategoryName}): ${baseHourlyRate}/hr
                   </div>
                   {/* Breakdown */}
                   {estimatedCost.breakdown.map((block, idx) => {

@@ -154,15 +154,16 @@ router.get('/service-requests', async (req, res) => {
       }
 
       try {
-        // Get default base rate from hourly_rate_categories
+        // Get business's assigned rate category, or default if none assigned
         const rateQuery = `
-          SELECT base_hourly_rate
-          FROM hourly_rate_categories
-          WHERE is_active = true AND is_default = true
-          ORDER BY created_at DESC
+          SELECT COALESCE(hrc_business.base_hourly_rate, hrc_default.base_hourly_rate, 75) as base_hourly_rate
+          FROM businesses b
+          LEFT JOIN hourly_rate_categories hrc_business ON b.rate_category_id = hrc_business.id
+          LEFT JOIN hourly_rate_categories hrc_default ON hrc_default.is_default = true AND hrc_default.is_active = true
+          WHERE b.id = $1
           LIMIT 1
         `;
-        const rateResult = await pool.query(rateQuery);
+        const rateResult = await pool.query(rateQuery, [businessId]);
         const baseRate = rateResult.rows[0]?.base_hourly_rate || 75;
 
         // Check if this is the client's first service request
