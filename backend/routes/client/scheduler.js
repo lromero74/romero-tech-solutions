@@ -100,6 +100,43 @@ router.get('/rate-tiers', async (req, res) => {
 });
 
 /**
+ * GET /api/client/is-first-timer
+ * Check if this is the client's first service request (for first hour comp)
+ */
+router.get('/is-first-timer', clientContextMiddleware, requireClientAccess(['business', 'location']), async (req, res) => {
+  try {
+    const clientId = req.user.id;
+    const pool = await getPool();
+
+    // Count existing service requests for this client
+    const result = await pool.query(`
+      SELECT COUNT(*) as request_count
+      FROM service_requests
+      WHERE created_by_user_id = $1 AND (soft_delete = false OR soft_delete IS NULL)
+    `, [clientId]);
+
+    const requestCount = parseInt(result.rows[0].request_count);
+    const isFirstTimer = requestCount === 0;
+
+    res.json({
+      success: true,
+      data: {
+        isFirstTimer,
+        requestCount,
+        firstHourComped: isFirstTimer
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error checking first-timer status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check first-timer status'
+    });
+  }
+});
+
+/**
  * GET /api/client/resources
  * Get available resources (service locations) for scheduling
  */

@@ -49,8 +49,17 @@ const ServiceScheduler: React.FC = () => {
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
   const [costBreakdown, setCostBreakdown] = useState<{
     total: number;
+    subtotal?: number;
+    firstHourDiscount?: number;
+    firstHourCompBreakdown?: {
+      tierName: string;
+      multiplier: number;
+      hours: number;
+      discount: number;
+    }[];
     baseHourlyRate: number;
     breakdown: { tierName: string; multiplier: number; hours: number; cost: number; }[];
+    isFirstTimer?: boolean;
   } | null>(null);
 
   // Data state
@@ -684,6 +693,31 @@ const ServiceScheduler: React.FC = () => {
                         </div>
                       );
                     })}
+                    {/* First Hour Discount */}
+                    {costBreakdown.firstHourDiscount && costBreakdown.firstHourDiscount > 0 && (
+                      <>
+                        <div className="text-xs text-green-700 dark:text-green-400 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
+                          {t('scheduler.subtotal', 'Subtotal')}: ${costBreakdown.subtotal?.toFixed(2)}
+                        </div>
+                        <div className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">
+                          🎁 {t('scheduler.firstHourComp', 'First Hour Comp (New Client)')}:
+                        </div>
+                        {costBreakdown.firstHourCompBreakdown?.map((compBlock, idx) => {
+                          const tierKey = `scheduler.tier.${compBlock.tierName.toLowerCase()}`;
+                          const translatedTierName = t(tierKey, compBlock.tierName);
+                          return (
+                            <div key={idx} className="text-xs text-green-700 dark:text-green-400 ml-4">
+                              • {compBlock.hours}h {translatedTierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                            </div>
+                          );
+                        })}
+                        {costBreakdown.firstHourCompBreakdown && costBreakdown.firstHourCompBreakdown.length > 1 && (
+                          <div className="text-xs text-green-700 dark:text-green-400 font-medium ml-4">
+                            {t('scheduler.totalDiscount', 'Total Discount')}: -${costBreakdown.firstHourDiscount.toFixed(2)}
+                          </div>
+                        )}
+                      </>
+                    )}
                     {/* Total */}
                     <div className="text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
                       {t('scheduler.total', 'Total')}*: ${costBreakdown.total.toFixed(2)}

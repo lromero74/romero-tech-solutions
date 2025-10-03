@@ -39,6 +39,14 @@ interface ExistingBooking {
 
 interface CostBreakdown {
   total: number;
+  subtotal?: number;
+  firstHourDiscount?: number;
+  firstHourCompBreakdown?: {
+    tierName: string;
+    multiplier: number;
+    hours: number;
+    discount: number;
+  }[];
   baseHourlyRate: number;
   breakdown: {
     tierName: string;
@@ -46,6 +54,7 @@ interface CostBreakdown {
     hours: number;
     cost: number;
   }[];
+  isFirstTimer?: boolean;
 }
 
 interface ResourceTimeSlotSchedulerProps {
@@ -104,6 +113,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
   const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
+  const [isFirstTimer, setIsFirstTimer] = useState<boolean>(false);
 
   const BUFFER_HOURS = 1;
 
@@ -174,6 +184,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     if (!selectedStartTime || !selectedEndTime) return null;
 
     const dayOfWeek = selectedStartTime.getDay();
+    const durationMs = selectedEndTime.getTime() - selectedStartTime.getTime();
+    const totalHours = durationMs / (1000 * 60 * 60);
     let totalCost = 0;
 
     // Track tier blocks (contiguous periods of same tier)
@@ -232,10 +244,47 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       });
     }
 
+    // Apply first-hour comp for first-time clients
+    interface FirstHourCompBreakdown {
+      tierName: string;
+      multiplier: number;
+      hours: number;
+      discount: number;
+    }
+    let firstHourDiscount = 0;
+    const firstHourCompBreakdown: FirstHourCompBreakdown[] = [];
+
+    if (isFirstTimer && totalHours >= 1) {
+      // Calculate the cost of the first hour, broken down by tier
+      let hoursAccounted = 0;
+      for (const block of tierBlocks) {
+        if (hoursAccounted >= 1) break;
+
+        const hoursInThisBlock = Math.min(block.hours, 1 - hoursAccounted);
+        const discountForThisBlock = hoursInThisBlock * baseHourlyRate * block.multiplier;
+
+        firstHourCompBreakdown.push({
+          tierName: block.tierName,
+          multiplier: block.multiplier,
+          hours: hoursInThisBlock,
+          discount: discountForThisBlock
+        });
+
+        firstHourDiscount += discountForThisBlock;
+        hoursAccounted += hoursInThisBlock;
+      }
+    }
+
+    const finalTotal = Math.max(0, totalCost - firstHourDiscount);
+
     return {
-      total: totalCost,
-      hourly: totalCost / ((selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60)),
-      breakdown: tierBlocks
+      total: finalTotal,
+      subtotal: totalCost,
+      firstHourDiscount: firstHourDiscount > 0 ? firstHourDiscount : undefined,
+      firstHourCompBreakdown: firstHourCompBreakdown.length > 0 ? firstHourCompBreakdown : undefined,
+      hourly: totalCost / totalHours,
+      breakdown: tierBlocks,
+      isFirstTimer
     };
   };
 
@@ -310,6 +359,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           console.error('Failed to load base hourly rate, using default:', error);
         }
 
+        // Check if client is a first-timer (for first hour comp)
+        try {
+          const firstTimerResult = await apiService.get<{ success: boolean; data: { isFirstTimer: boolean } }>(
+            '/client/is-first-timer'
+          );
+          if (firstTimerResult.success) {
+            setIsFirstTimer(firstTimerResult.data.isFirstTimer);
+            console.log(`🎁 First-timer status: ${firstTimerResult.data.isFirstTimer ? 'YES - First hour will be comped!' : 'No'}`);
+          }
+        } catch (error) {
+          console.error('Failed to load first-timer status:', error);
+        }
+
         // Load rate tiers
         const tiersResult = await apiService.get<{ success: boolean; data: RateTier[] }>(
           '/client/rate-tiers'
@@ -374,6 +436,25 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       }
     }, 150);
   }, [loading, selectedDate]); // Only trigger on loading completion or date change
+
+  // ESC key handler to close modal
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' || event.key === 'Esc') {
+        event.preventDefault();
+        event.stopPropagation();
+        onClose();
+      }
+    };
+
+    // Add event listener
+    document.addEventListener('keydown', handleEscKey);
+
+    // Cleanup on unmount
+    return () => {
+      document.removeEventListener('keydown', handleEscKey);
+    };
+  }, [onClose]);
 
   // Check if a time slot is blocked
   const checkIfSlotBlocked = (slotTime: Date, durationHours: number = selectedDuration): { isBlocked: boolean; reason?: string } => {
@@ -727,8 +808,12 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       // Prepare cost breakdown data
       const costBreakdown: CostBreakdown = {
         total: estimatedCost.total,
+        subtotal: estimatedCost.subtotal,
+        firstHourDiscount: estimatedCost.firstHourDiscount,
+        firstHourCompBreakdown: estimatedCost.firstHourCompBreakdown,
         baseHourlyRate,
-        breakdown: estimatedCost.breakdown
+        breakdown: estimatedCost.breakdown,
+        isFirstTimer: estimatedCost.isFirstTimer
       };
 
       // Use first service location as resourceId (simplified - you may want to add location selector)
@@ -762,8 +847,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
-      <div className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4"
+      onClick={(e) => {
+        // Close modal if clicking on backdrop (not on modal content)
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div
+        className={`bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-7xl w-full max-h-[95vh] sm:max-h-[90vh] overflow-hidden flex flex-col ${isDarkMode ? 'text-white' : 'text-gray-900'}`}
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start sm:items-center justify-between gap-2">
@@ -779,10 +875,18 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </p>
             </div>
             <button
-              onClick={onClose}
-              className="flex-shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg"
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('X button clicked - closing modal');
+                onClose();
+              }}
+              className="flex-shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
+              aria-label={t('scheduler.close', 'Close scheduler')}
+              title="Close"
             >
-              <X className="h-5 w-5 sm:h-6 sm:w-6" />
+              <X className="h-5 w-5 sm:h-6 sm:w-6 pointer-events-none" />
             </button>
           </div>
 
@@ -1204,40 +1308,81 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               </div>
             </div>
 
-            {selectedStartTime && selectedEndTime && !isSelectedDateInPast && (
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-end gap-3 sm:gap-4">
-                {estimatedCost && (
-                  <div className="flex flex-col px-3 sm:px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
-                    {/* Base Rate */}
-                    <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                      {t('scheduler.baseRate', 'Base Rate')}: ${baseHourlyRate}/hr
-                    </div>
-                    {/* Breakdown */}
-                    {estimatedCost.breakdown.map((block, idx) => {
-                      // Translate tier name
-                      const tierKey = `scheduler.tier.${block.tierName.toLowerCase()}`;
-                      const translatedTierName = t(tierKey, block.tierName);
-
-                      return (
-                        <div key={idx} className="text-xs text-green-700 dark:text-green-400">
-                          {block.hours}h {translatedTierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
-                        </div>
-                      );
-                    })}
-                    {/* Total */}
-                    <div className="text-xs sm:text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
-                      {t('scheduler.total', 'Total')}: ${estimatedCost.total.toFixed(2)}
-                    </div>
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
+              {selectedStartTime && selectedEndTime && !isSelectedDateInPast && estimatedCost && (
+                <div className="flex flex-col px-3 sm:px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
+                  {/* Base Rate */}
+                  <div className="text-xs text-green-600 dark:text-green-500 mb-1">
+                    {t('scheduler.baseRate', 'Base Rate')}: ${baseHourlyRate}/hr
                   </div>
-                )}
+                  {/* Breakdown */}
+                  {estimatedCost.breakdown.map((block, idx) => {
+                    // Translate tier name
+                    const tierKey = `scheduler.tier.${block.tierName.toLowerCase()}`;
+                    const translatedTierName = t(tierKey, block.tierName);
+
+                    return (
+                      <div key={idx} className="text-xs text-green-700 dark:text-green-400">
+                        {block.hours}h {translatedTierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                      </div>
+                    );
+                  })}
+                  {/* First Hour Discount */}
+                  {estimatedCost.firstHourDiscount && estimatedCost.firstHourDiscount > 0 && (
+                    <>
+                      <div className="text-xs text-green-700 dark:text-green-400 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
+                        {t('scheduler.subtotal', 'Subtotal')}: ${estimatedCost.subtotal?.toFixed(2)}
+                      </div>
+                      <div className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">
+                        🎁 {t('scheduler.firstHourComp', 'First Hour Comp (New Client)')}:
+                      </div>
+                      {estimatedCost.firstHourCompBreakdown?.map((compBlock, idx) => {
+                        const tierKey = `scheduler.tier.${compBlock.tierName.toLowerCase()}`;
+                        const translatedTierName = t(tierKey, compBlock.tierName);
+                        return (
+                          <div key={idx} className="text-xs text-green-700 dark:text-green-400 ml-4">
+                            • {compBlock.hours}h {translatedTierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                          </div>
+                        );
+                      })}
+                      {estimatedCost.firstHourCompBreakdown && estimatedCost.firstHourCompBreakdown.length > 1 && (
+                        <div className="text-xs text-green-700 dark:text-green-400 font-medium ml-4">
+                          {t('scheduler.totalDiscount', 'Total Discount')}: -${estimatedCost.firstHourDiscount.toFixed(2)}
+                        </div>
+                      )}
+                    </>
+                  )}
+                  {/* Total */}
+                  <div className="text-xs sm:text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
+                    {t('scheduler.total', 'Total')}: ${estimatedCost.total.toFixed(2)}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-3">
                 <button
-                  onClick={handleConfirmBooking}
-                  className="w-full sm:w-auto px-6 py-3 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    onClose();
+                  }}
+                  className="flex-1 sm:flex-initial px-6 py-3 sm:py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 font-medium transition-colors"
                 >
-                  {t('scheduler.selectTimeslot', 'Select Timeslot')}
+                  {t('scheduler.cancel', 'Cancel')}
                 </button>
+
+                {selectedStartTime && selectedEndTime && !isSelectedDateInPast && (
+                  <button
+                    type="button"
+                    onClick={handleConfirmBooking}
+                    className="flex-1 sm:flex-initial px-6 py-3 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors"
+                  >
+                    {t('scheduler.selectTimeslot', 'Select Timeslot')}
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
       </div>
