@@ -204,10 +204,10 @@ router.patch('/invoices/:id/payment-status', async (req, res) => {
     const { paymentStatus, paymentDate, notes } = req.body;
     const pool = await getPool();
 
-    if (!paymentStatus || !['due', 'overdue', 'paid', 'comped'].includes(paymentStatus)) {
+    if (!paymentStatus || !['due', 'pending', 'paid', 'failed', 'overdue', 'comped'].includes(paymentStatus)) {
       return res.status(400).json({
         success: false,
-        message: 'Valid payment status is required (due, overdue, paid, comped)'
+        message: 'Valid payment status is required (due, pending, paid, failed, overdue, comped)'
       });
     }
 

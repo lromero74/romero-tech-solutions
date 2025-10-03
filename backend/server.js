@@ -23,6 +23,8 @@ import clientProfileRoutes from './routes/client/profile.js';
 import clientMfaRoutes from './routes/client/mfa.js';
 import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
 import clientSchedulerRoutes from './routes/client/scheduler.js';
+import clientPaymentRoutes, { webhookRouter } from './routes/client/payments.js';
+import clientInvoiceRoutes from './routes/client/invoices.js';
 import translationsRoutes from './routes/translations.js';
 import trustedDevicesRoutes from './routes/trustedDevices.js';
 import serviceAreasRoutes from './routes/serviceAreas.js';
@@ -173,6 +175,10 @@ app.use('/api', apiVersioningMiddleware('1.0', ['1.0']));
 
 // Input sanitization middleware
 app.use(sanitizeInputMiddleware);
+
+// IMPORTANT: Stripe webhook must be registered BEFORE body parsing
+// It needs access to raw request body for signature verification
+app.use('/api/client/payments', webhookRouter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
@@ -371,6 +377,8 @@ app.use('/api/client/service-requests', generalLimiter, doubleCsrfProtection, cl
 app.use('/api/client', generalLimiter, doubleCsrfProtection, clientSchedulerRoutes); // Client scheduler + CSRF
 app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfileRoutes); // Client profile + CSRF
 app.use('/api/client/mfa', generalLimiter, methodBasedCsrfProtection, clientMfaRoutes); // Client MFA (CSRF skipped for GET)
+app.use('/api/client/payments', generalLimiter, doubleCsrfProtection, clientPaymentRoutes); // Client payments (Stripe) + CSRF
+app.use('/api/client/invoices', generalLimiter, methodBasedCsrfProtection, clientInvoiceRoutes); // Client invoices (CSRF skipped for GET)
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
 app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD

@@ -7,6 +7,7 @@ import { RoleBasedStorage } from '../utils/roleBasedStorage';
 import ServiceScheduler from '../components/client/ServiceScheduler';
 import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
+import { InvoicesList } from '../components/client/InvoicesList';
 import LanguageSelector from '../components/client/LanguageSelector';
 import AddServiceLocationForm from '../components/client/AddServiceLocationForm';
 import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
@@ -31,7 +32,8 @@ import {
   Menu,
   X,
   Edit,
-  Trash2
+  Trash2,
+  DollarSign
 } from 'lucide-react';
 
 interface User {
@@ -632,6 +634,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
               { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
               { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
+              { id: 'invoices', label: t('dashboard.nav.invoices', 'Invoices'), icon: DollarSign },
               { id: 'files', label: t('dashboard.nav.files', 'File Storage'), icon: FileText },
               { id: 'settings', label: t('dashboard.nav.settings', 'Settings'), icon: Settings },
             ].map((item) => {
@@ -682,6 +685,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
                   { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
                   { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
+                  { id: 'invoices', label: t('dashboard.nav.invoices', 'Invoices'), icon: DollarSign },
                   { id: 'files', label: t('dashboard.nav.files', 'File Storage'), icon: FileText },
                   { id: 'settings', label: t('dashboard.nav.settings', 'Settings'), icon: Settings },
                 ].map((item) => {
@@ -962,8 +966,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               <ServiceRequests />
             )}
 
+            {/* Invoices Tab */}
+            {activeTab === 'invoices' && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <InvoicesList />
+              </div>
+            )}
+
             {/* Placeholder for other tabs */}
-            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && activeTab !== 'requests' && (
+            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && activeTab !== 'requests' && activeTab !== 'invoices' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-4 capitalize">
                   {activeTab.replace(/([A-Z])/g, ' $1').trim()}
