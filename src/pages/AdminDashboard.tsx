@@ -39,13 +39,29 @@ const AdminDashboardContent: React.FC = () => {
     if (!role) return 'Dashboard';
 
     const roleLower = role.toLowerCase();
-    if (roleLower === 'technician') {
+    if (roleLower === 'executive') {
+      return 'Executive Dashboard';
+    } else if (roleLower === 'technician') {
       return 'Technician Dashboard';
     } else if (roleLower === 'sales') {
       return 'Sales Dashboard';
     }
 
     return 'Admin Dashboard';
+  };
+
+  // Get shield background color based on role
+  const getShieldColor = (role: string | undefined): string => {
+    if (!role) return 'bg-blue-600';
+
+    const roleColorMap: Record<string, string> = {
+      'executive': 'bg-black',
+      'admin': 'bg-red-600',
+      'sales': 'bg-green-600',
+      'technician': 'bg-blue-600'
+    };
+
+    return roleColorMap[role.toLowerCase()] || 'bg-blue-600';
   };
 
   // Load session config when dashboard mounts (same time as other dashboard data)
@@ -379,7 +395,7 @@ const AdminDashboardContent: React.FC = () => {
 
                 {/* Logo and Title */}
                 <div className="flex items-center">
-                  <div className="flex-shrink-0 h-8 w-8 bg-blue-600 rounded-lg flex items-center justify-center">
+                  <div className={`flex-shrink-0 h-8 w-8 ${getShieldColor(user?.role)} rounded-lg flex items-center justify-center`}>
                     <Shield className="h-5 w-5 text-white" />
                   </div>
                   <div className="ml-3 hidden sm:block">
