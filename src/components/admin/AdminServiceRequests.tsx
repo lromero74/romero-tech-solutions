@@ -26,6 +26,7 @@ import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { usePermission } from '../../hooks/usePermission';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
+import { websocketService } from '../../services/websocketService';
 import {
   ServiceRequest,
   Filters,
@@ -103,6 +104,9 @@ const AdminServiceRequests: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  // Presence tracking
+  const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
 
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -198,6 +202,52 @@ const AdminServiceRequests: React.FC = () => {
     fetchStatuses();
     fetchClosureReasons();
   }, []);
+
+  // Listen for websocket note updates
+  useEffect(() => {
+    const handleEntityChange = (change: any) => {
+      // If a service request was updated with a note added, and it's the currently selected request
+      if (change.entityType === 'serviceRequest' && change.noteAdded && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log('📝 Note added to current service request, refreshing notes...');
+        fetchRequestNotes(selectedRequest.id);
+      }
+    };
+
+    websocketService.onEntityDataChange(handleEntityChange);
+
+    return () => {
+      // Cleanup: remove listener when component unmounts or selectedRequest changes
+      websocketService.onEntityDataChange(() => {});
+    };
+  }, [selectedRequest]);
+
+  // Track viewers of the selected service request
+  useEffect(() => {
+    if (!selectedRequest) {
+      setOtherViewers([]);
+      return;
+    }
+
+    // Notify server that we're viewing this request
+    websocketService.startViewingRequest(selectedRequest.id);
+
+    // Listen for viewer updates
+    const handleViewersUpdate = (update: any) => {
+      if (update.serviceRequestId === selectedRequest.id) {
+        console.log(`👁️  Other viewers for request ${selectedRequest.id}:`, update.viewers);
+        setOtherViewers(update.viewers);
+      }
+    };
+
+    websocketService.onServiceRequestViewersChange(handleViewersUpdate);
+
+    return () => {
+      // Notify server that we stopped viewing this request
+      websocketService.stopViewingRequest(selectedRequest.id);
+      websocketService.onServiceRequestViewersChange(() => {});
+      setOtherViewers([]);
+    };
+  }, [selectedRequest]);
 
   // Fetch technicians
   const fetchTechnicians = async () => {
@@ -1558,6 +1608,7 @@ const AdminServiceRequests: React.FC = () => {
                 submittingNote={submittingNote}
                 onNewNoteChange={setNewNoteText}
                 onSubmitNote={submitNote}
+                otherViewers={otherViewers}
               />
 
               {/* Files Section */}

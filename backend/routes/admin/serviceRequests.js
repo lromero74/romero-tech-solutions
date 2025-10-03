@@ -1,6 +1,7 @@
 import express from 'express';
 import { getPool } from '../../config/database.js';
 import { sendEmployeeNoteNotificationToClient } from '../../services/emailService.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -933,6 +934,9 @@ router.post('/service-requests/:id/notes', async (req, res) => {
         console.error('❌ Failed to send employee note email notification:', err);
       });
     }
+
+    // Broadcast service request update via websocket for real-time note updates
+    websocketService.broadcastServiceRequestUpdate(id, 'updated', { noteAdded: true });
 
     res.json({
       success: true,

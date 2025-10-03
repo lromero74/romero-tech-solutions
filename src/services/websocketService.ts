@@ -36,10 +36,22 @@ interface EntityDataChanged {
   timestamp: string;
 }
 
+interface ServiceRequestViewer {
+  userId: string;
+  userName: string;
+  userType: string;
+}
+
+interface ServiceRequestViewersUpdate {
+  serviceRequestId: string;
+  viewers: ServiceRequestViewer[];
+}
+
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
 type EmployeeLoginCallback = (change: EmployeeLoginChange) => void;
 type AuthErrorCallback = (error: { message: string }) => void;
 type EntityDataChangedCallback = (change: EntityDataChanged) => void;
+type ServiceRequestViewersCallback = (update: ServiceRequestViewersUpdate) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -53,6 +65,7 @@ class WebSocketService {
   private onEmployeeLoginChange: EmployeeLoginCallback | null = null;
   private onAuthError: AuthErrorCallback | null = null;
   private onEntityDataChanged: EntityDataChangedCallback | null = null;
+  private onServiceRequestViewers: ServiceRequestViewersCallback | null = null;
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -93,6 +106,10 @@ class WebSocketService {
           console.log('🔐 Admin WebSocket authenticated:', data.email);
         });
 
+        this.socket.on('client-authenticated', (data) => {
+          console.log('🔐 Client WebSocket authenticated:', data.email);
+        });
+
         this.socket.on('auth-error', (error) => {
           console.error('❌ WebSocket auth error:', error);
           if (this.onAuthError) {
@@ -121,6 +138,13 @@ class WebSocketService {
           }
         });
 
+        this.socket.on('service-request-viewers', (update: ServiceRequestViewersUpdate) => {
+          console.log(`👁️  Service request ${update.serviceRequestId} viewers:`, update.viewers.length);
+          if (this.onServiceRequestViewers) {
+            this.onServiceRequestViewers(update);
+          }
+        });
+
         this.socket.on('error', (error) => {
           console.error('❌ WebSocket error:', error);
         });
@@ -140,6 +164,16 @@ class WebSocketService {
 
     console.log('🔐 Authenticating admin WebSocket connection...');
     this.socket.emit('admin-authenticate', { sessionToken });
+  }
+
+  authenticateClient(sessionToken: string): void {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ Cannot authenticate: WebSocket not connected');
+      return;
+    }
+
+    console.log('🔐 Authenticating client WebSocket connection...');
+    this.socket.emit('client-authenticate', { sessionToken });
   }
 
   disconnect(): void {
@@ -166,6 +200,29 @@ class WebSocketService {
 
   onAuthenticationError(callback: AuthErrorCallback): void {
     this.onAuthError = callback;
+  }
+
+  onServiceRequestViewersChange(callback: ServiceRequestViewersCallback): void {
+    this.onServiceRequestViewers = callback;
+  }
+
+  // Service request viewing events
+  startViewingRequest(serviceRequestId: string): void {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ Cannot emit start-viewing-request: WebSocket not connected');
+      return;
+    }
+    console.log(`👁️  Starting to view service request ${serviceRequestId}`);
+    this.socket.emit('start-viewing-request', { serviceRequestId });
+  }
+
+  stopViewingRequest(serviceRequestId: string): void {
+    if (!this.socket || !this.isConnected) {
+      console.error('❌ Cannot emit stop-viewing-request: WebSocket not connected');
+      return;
+    }
+    console.log(`👁️  Stopping viewing service request ${serviceRequestId}`);
+    this.socket.emit('stop-viewing-request', { serviceRequestId });
   }
 
   // Status getters

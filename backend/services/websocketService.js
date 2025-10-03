@@ -7,6 +7,8 @@ class WebSocketService {
     this.io = null;
     this.connectedUsers = new Map(); // Map of userId -> socketId
     this.adminSockets = new Set(); // Set of admin socket IDs
+    this.clientSockets = new Map(); // Map of clientId -> socketId for client users
+    this.serviceRequestViewers = new Map(); // Map of serviceRequestId -> Set of { socketId, userId, userName, userType }
   }
 
   initialize(httpServer) {
@@ -98,6 +100,58 @@ class WebSocketService {
         }
       });
 
+      // Handle client authentication
+      socket.on('client-authenticate', async (data) => {
+        try {
+          console.log('🔐 WebSocket client authentication attempt');
+          const { sessionToken } = data;
+          if (!sessionToken) {
+            console.log('❌ No session token provided in WebSocket auth');
+            socket.emit('auth-error', { message: 'No session token provided' });
+            return;
+          }
+
+          // Validate session and get user info
+          const session = await sessionService.validateSession(sessionToken);
+          if (!session || !session.userEmail) {
+            socket.emit('auth-error', { message: 'Invalid session' });
+            return;
+          }
+
+          // Check if user is a client
+          const userResult = await query(
+            'SELECT id, email, first_name, last_name FROM users WHERE email = $1 AND role = $2 AND soft_delete = false',
+            [session.userEmail, 'client']
+          );
+
+          if (userResult.rows.length === 0) {
+            socket.emit('auth-error', { message: 'User not found' });
+            return;
+          }
+
+          const user = userResult.rows[0];
+
+          // Store client socket
+          this.clientSockets.set(user.id, socket.id);
+          socket.clientId = user.id;
+          socket.userId = user.id;  // Also set userId for consistency with admin sockets
+          socket.userEmail = user.email;
+          socket.userRole = 'client';
+
+          console.log(`🔐 Client authenticated: ${user.email} (${user.id}) (${socket.id})`);
+          socket.emit('client-authenticated', {
+            message: 'Successfully authenticated',
+            userId: user.id,
+            email: user.email,
+            role: 'client'
+          });
+
+        } catch (error) {
+          console.error('❌ Client authentication error:', error);
+          socket.emit('auth-error', { message: 'Authentication failed' });
+        }
+      });
+
       // Handle user login status tracking
       socket.on('user-login', (data) => {
         const { userId, email } = data;
@@ -112,12 +166,63 @@ class WebSocketService {
         }
       });
 
+      // Handle start viewing service request
+      socket.on('start-viewing-request', (data) => {
+        const { serviceRequestId } = data;
+        if (!serviceRequestId || !socket.userId || !socket.userEmail) {
+          console.log('❌ Invalid start-viewing-request data');
+          return;
+        }
+
+        // Determine user type and name
+        const userType = socket.userRole || 'unknown';
+        const userName = socket.userEmail;
+
+        // Add viewer to tracking
+        if (!this.serviceRequestViewers.has(serviceRequestId)) {
+          this.serviceRequestViewers.set(serviceRequestId, new Set());
+        }
+
+        const viewer = {
+          socketId: socket.id,
+          userId: socket.userId,
+          userName: userName,
+          userType: userType
+        };
+
+        this.serviceRequestViewers.get(serviceRequestId).add(viewer);
+        console.log(`👁️  ${userName} (${userType}) started viewing service request ${serviceRequestId}`);
+
+        // Notify other viewers
+        this.broadcastViewerUpdate(serviceRequestId);
+      });
+
+      // Handle stop viewing service request
+      socket.on('stop-viewing-request', (data) => {
+        const { serviceRequestId } = data;
+        if (!serviceRequestId) {
+          console.log('❌ Invalid stop-viewing-request data');
+          return;
+        }
+
+        this.removeViewerFromRequest(socket.id, serviceRequestId);
+      });
+
       // Handle disconnect
       socket.on('disconnect', () => {
         console.log('🔌 WebSocket client disconnected:', socket.id);
 
         // Remove from admin sockets
         this.adminSockets.delete(socket.id);
+
+        // Remove from client sockets
+        if (socket.clientId) {
+          this.clientSockets.delete(socket.clientId);
+          console.log(`👤 Client disconnected: ${socket.userEmail} (${socket.clientId})`);
+        }
+
+        // Remove from all service request viewers
+        this.removeViewerFromAllRequests(socket.id);
 
         // Handle user logout
         if (socket.userId) {
@@ -263,8 +368,38 @@ class WebSocketService {
     this.broadcastEntityUpdate('service', serviceId, action, additionalData);
   }
 
-  broadcastServiceRequestUpdate(serviceRequestId, action = 'updated', additionalData = {}) {
+  async broadcastServiceRequestUpdate(serviceRequestId, action = 'updated', additionalData = {}) {
+    // Broadcast to all admins/employees
     this.broadcastEntityUpdate('serviceRequest', serviceRequestId, action, additionalData);
+
+    // Also broadcast to the specific client who owns this service request
+    try {
+      const result = await query(
+        'SELECT client_id FROM service_requests WHERE id = $1',
+        [serviceRequestId]
+      );
+
+      if (result.rows.length > 0 && result.rows[0].client_id) {
+        const clientId = result.rows[0].client_id;
+        const clientSocketId = this.clientSockets.get(clientId);
+
+        if (clientSocketId) {
+          const socket = this.io.sockets.sockets.get(clientSocketId);
+          if (socket) {
+            socket.emit('entity-data-changed', {
+              entityType: 'serviceRequest',
+              entityId: serviceRequestId,
+              action,
+              timestamp: new Date().toISOString(),
+              ...additionalData
+            });
+            console.log(`📡 Broadcasted service request ${action} to client ${clientId}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error broadcasting to client:', error);
+    }
   }
 
   broadcastServiceLocationUpdate(serviceLocationId, action = 'updated', additionalData = {}) {
@@ -342,6 +477,84 @@ class WebSocketService {
   // Get admin socket count
   getAdminSocketCount() {
     return this.adminSockets.size;
+  }
+
+  /**
+   * Remove a viewer from a specific service request and notify others
+   */
+  removeViewerFromRequest(socketId, serviceRequestId) {
+    if (!this.serviceRequestViewers.has(serviceRequestId)) {
+      return;
+    }
+
+    const viewers = this.serviceRequestViewers.get(serviceRequestId);
+    const viewerToRemove = Array.from(viewers).find(v => v.socketId === socketId);
+
+    if (viewerToRemove) {
+      viewers.delete(viewerToRemove);
+      console.log(`👁️  ${viewerToRemove.userName} (${viewerToRemove.userType}) stopped viewing service request ${serviceRequestId}`);
+
+      // Clean up empty viewer sets
+      if (viewers.size === 0) {
+        this.serviceRequestViewers.delete(serviceRequestId);
+      }
+
+      // Notify other viewers
+      this.broadcastViewerUpdate(serviceRequestId);
+    }
+  }
+
+  /**
+   * Remove a viewer from all service requests (used on disconnect)
+   */
+  removeViewerFromAllRequests(socketId) {
+    for (const [serviceRequestId, viewers] of this.serviceRequestViewers.entries()) {
+      const viewerToRemove = Array.from(viewers).find(v => v.socketId === socketId);
+      if (viewerToRemove) {
+        viewers.delete(viewerToRemove);
+        console.log(`👁️  ${viewerToRemove.userName} stopped viewing service request ${serviceRequestId} (disconnect)`);
+
+        // Clean up empty viewer sets
+        if (viewers.size === 0) {
+          this.serviceRequestViewers.delete(serviceRequestId);
+        } else {
+          // Notify remaining viewers
+          this.broadcastViewerUpdate(serviceRequestId);
+        }
+      }
+    }
+  }
+
+  /**
+   * Broadcast current viewer list to all viewers of a service request
+   */
+  broadcastViewerUpdate(serviceRequestId) {
+    const viewers = this.serviceRequestViewers.get(serviceRequestId);
+    if (!viewers || viewers.size === 0) {
+      return;
+    }
+
+    // Convert Set to Array for easier consumption
+    const viewerList = Array.from(viewers).map(v => ({
+      userId: v.userId,
+      userName: v.userName,
+      userType: v.userType
+    }));
+
+    console.log(`📡 Broadcasting viewer update for service request ${serviceRequestId}: ${viewerList.length} viewer(s)`);
+
+    // Send to each viewer
+    viewers.forEach(viewer => {
+      const socket = this.io.sockets.sockets.get(viewer.socketId);
+      if (socket) {
+        // Send list of OTHER viewers (exclude self)
+        const otherViewers = viewerList.filter(v => v.userId !== viewer.userId);
+        socket.emit('service-request-viewers', {
+          serviceRequestId,
+          viewers: otherViewers
+        });
+      }
+    });
   }
 }
 

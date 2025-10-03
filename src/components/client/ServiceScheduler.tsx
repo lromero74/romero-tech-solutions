@@ -74,6 +74,92 @@ const ServiceScheduler: React.FC = () => {
     setUploadedFiles(prev => [...prev, ...files]);
   };
 
+  // Phone number formatting utilities
+  const formatPhoneNumber = (value: string): string => {
+    // Remove all non-digits
+    const digits = value.replace(/\D/g, '');
+
+    // Apply progressive formatting
+    if (digits.length === 0) return '';
+    if (digits.length <= 3) return `(${digits}`;
+    if (digits.length <= 6) return `(${digits.slice(0, 3)}) ${digits.slice(3)}`;
+    if (digits.length <= 10) return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+
+    // Fallback (should not reach here)
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6, 10)}`;
+  };
+
+  const handlePhoneChange = (value: string, isBackspace = false) => {
+    // Only allow digits and formatting characters
+    const digits = value.replace(/\D/g, '');
+
+    // Special handling for backspace - allow deletion through formatting
+    if (isBackspace) {
+      const formattedValue = formatPhoneNumber(digits);
+      setContactPhone(formattedValue);
+      return;
+    }
+
+    // Limit to 10 digits for regular typing
+    if (digits.length <= 10) {
+      const formattedValue = formatPhoneNumber(value);
+      setContactPhone(formattedValue);
+    }
+  };
+
+  // Handle backspace/delete key specifically
+  const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const target = e.currentTarget;
+    const cursorPos = target.selectionStart || 0;
+    const currentValue = target.value;
+
+    if (e.key === 'Backspace' && cursorPos > 0) {
+      e.preventDefault();
+
+      // Find the previous digit position
+      let posToRemove = cursorPos - 1;
+      while (posToRemove >= 0 && !/\d/.test(currentValue[posToRemove])) {
+        posToRemove--;
+      }
+
+      if (posToRemove >= 0) {
+        // Remove that digit
+        const newValue = currentValue.slice(0, posToRemove) + currentValue.slice(posToRemove + 1);
+        handlePhoneChange(newValue, true);
+
+        // Set cursor position after formatting
+        setTimeout(() => {
+          const digits = newValue.replace(/\D/g, '');
+          const formattedValue = formatPhoneNumber(digits);
+          let newCursorPos = Math.min(posToRemove, formattedValue.length);
+          target.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+      }
+    } else if (e.key === 'Delete' && cursorPos < currentValue.length) {
+      e.preventDefault();
+
+      // Find the next digit position
+      let posToRemove = cursorPos;
+      while (posToRemove < currentValue.length && !/\d/.test(currentValue[posToRemove])) {
+        posToRemove++;
+      }
+
+      if (posToRemove < currentValue.length) {
+        // Remove that digit
+        const newValue = currentValue.slice(0, posToRemove) + currentValue.slice(posToRemove + 1);
+        handlePhoneChange(newValue, true);
+
+        // Set cursor position after formatting
+        setTimeout(() => {
+          const digits = newValue.replace(/\D/g, '');
+          const formattedValue = formatPhoneNumber(digits);
+          let newCursorPos = Math.min(cursorPos, formattedValue.length);
+          target.setSelectionRange(newCursorPos, newCursorPos);
+        }, 0);
+      }
+    }
+  };
+
   // Load client data and accessible locations
   useEffect(() => {
     const loadClientData = () => {
@@ -123,10 +209,48 @@ const ServiceScheduler: React.FC = () => {
 
             fetchLocations();
 
-            // Pre-fill contact info from auth user data
-            setContactName(authUser.name || 'Client User');
-            setContactEmail(authUser.email);
-            setContactPhone('(619) 555-0123'); // Mock phone since not in auth data
+            // Fetch user profile to get phone number
+            const fetchUserProfile = async () => {
+              try {
+                const sessionToken = RoleBasedStorage.getItem('sessionToken');
+                const headers: HeadersInit = {
+                  'Content-Type': 'application/json'
+                };
+
+                if (sessionToken) {
+                  headers['Authorization'] = `Bearer ${sessionToken}`;
+                }
+
+                const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile`, {
+                  credentials: 'include',
+                  headers
+                });
+
+                if (response.ok) {
+                  const result = await response.json();
+                  if (result.success && result.data) {
+                    const userData = result.data;
+                    // Pre-fill contact info with actual user data
+                    setContactName(`${userData.firstName} ${userData.lastName}`);
+                    setContactEmail(userData.email);
+                    setContactPhone(userData.phone ? formatPhoneNumber(userData.phone) : '');
+                  }
+                } else {
+                  // Fallback to auth user data if profile fetch fails
+                  setContactName(authUser.name || 'Client User');
+                  setContactEmail(authUser.email);
+                  setContactPhone('');
+                }
+              } catch (error) {
+                console.error('Error fetching user profile:', error);
+                // Fallback to auth user data
+                setContactName(authUser.name || 'Client User');
+                setContactEmail(authUser.email);
+                setContactPhone('');
+              }
+            };
+
+            fetchUserProfile();
             return;
           }
         } catch (error) {
@@ -144,7 +268,7 @@ const ServiceScheduler: React.FC = () => {
           // Pre-fill contact info from user data
           setContactName(`${data.user.firstName} ${data.user.lastName}`);
           setContactEmail(data.user.email);
-          setContactPhone(data.user.phone || '');
+          setContactPhone(data.user.phone ? formatPhoneNumber(data.user.phone) : '');
         } catch (error) {
           console.error('Failed to parse client data:', error);
         }
@@ -876,12 +1000,15 @@ const ServiceScheduler: React.FC = () => {
               <input
                 type="tel"
                 value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
+                onChange={(e) => handlePhoneChange(e.target.value)}
+                onKeyDown={handlePhoneKeyDown}
                 className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   isDarkMode
                     ? 'bg-gray-700 border-gray-600 text-white'
                     : 'bg-white border-gray-300 text-gray-900'
                 }`}
+                placeholder="(555) 123-4567"
+                maxLength={14}
                 required
               />
             </div>

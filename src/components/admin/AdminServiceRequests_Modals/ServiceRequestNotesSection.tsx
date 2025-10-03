@@ -10,6 +10,7 @@ interface ServiceRequestNotesSectionProps {
   submittingNote: boolean;
   onNewNoteChange: (text: string) => void;
   onSubmitNote: () => void;
+  otherViewers?: Array<{userId: string; userName: string; userType: string}>;
 }
 
 const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
@@ -18,11 +19,22 @@ const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
   newNoteText,
   submittingNote,
   onNewNoteChange,
-  onSubmitNote
+  onSubmitNote,
+  otherViewers = []
 }) => {
   return (
     <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-      <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Notes</h4>
+      <div className="flex items-center gap-2 mb-3">
+        <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>Notes</h4>
+        {otherViewers.length > 0 && (
+          <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-full">
+            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-xs font-medium text-green-700 dark:text-green-300">
+              {otherViewers[0].userName}
+            </span>
+          </div>
+        )}
+      </div>
 
       {/* Add Note Form */}
       <div className="mb-4">

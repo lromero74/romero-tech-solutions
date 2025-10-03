@@ -5,6 +5,7 @@ import { useNotifications } from '../../contexts/NotificationContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
 import { formatLongDate } from '../../utils/dateFormatter';
+import { websocketService } from '../../services/websocketService';
 import {
   Clock,
   Calendar,
@@ -173,6 +174,9 @@ const ServiceRequests: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  // Presence tracking
+  const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
 
   // Status color mapping
   const getStatusColor = (status: string) => {
@@ -865,6 +869,50 @@ const ServiceRequests: React.FC = () => {
     fetchServiceRequests();
   }, []);
 
+  // Connect to websocket for real-time updates
+  useEffect(() => {
+    const initializeWebSocket = async () => {
+      try {
+        const sessionToken = RoleBasedStorage.getItem('sessionToken');
+        if (!sessionToken) {
+          console.log('🔌 No session token available for WebSocket connection');
+          return;
+        }
+
+        // Connect to WebSocket server
+        const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+        let websocketUrl;
+        if (apiBaseUrl.includes('api.romerotechsolutions.com')) {
+          websocketUrl = 'https://api.romerotechsolutions.com';
+        } else if (apiBaseUrl.includes('44.211.124.33:3001')) {
+          websocketUrl = 'http://44.211.124.33:3001';
+        } else if (apiBaseUrl.includes('localhost') || apiBaseUrl.includes('127.0.0.1')) {
+          websocketUrl = 'http://localhost:3001';
+        } else {
+          websocketUrl = apiBaseUrl.replace('/api', '').replace(/\/$/, '');
+        }
+
+        console.log('🔌 Client connecting to WebSocket server:', websocketUrl);
+        await websocketService.connect(websocketUrl);
+
+        // Authenticate as client
+        console.log('🔐 Attempting client WebSocket authentication');
+        websocketService.authenticateClient(sessionToken);
+
+        console.log('✅ Client WebSocket initialized');
+      } catch (error) {
+        console.error('❌ Failed to initialize client WebSocket:', error);
+      }
+    };
+
+    initializeWebSocket();
+
+    return () => {
+      console.log('🧹 Cleaning up client WebSocket connection...');
+      websocketService.disconnect();
+    };
+  }, []);
+
   // Set up periodic polling for service request changes
   useEffect(() => {
     const pollInterval = setInterval(() => {
@@ -873,6 +921,52 @@ const ServiceRequests: React.FC = () => {
 
     return () => clearInterval(pollInterval);
   }, [pagination.page]);
+
+  // Listen for websocket note updates
+  useEffect(() => {
+    const handleEntityChange = (change: any) => {
+      // If a service request was updated with a note added, and it's the currently selected request
+      if (change.entityType === 'serviceRequest' && change.noteAdded && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log('📝 Note added to current service request, refreshing notes...');
+        fetchRequestNotes(selectedRequest.id);
+      }
+    };
+
+    websocketService.onEntityDataChange(handleEntityChange);
+
+    return () => {
+      // Cleanup: remove listener when component unmounts or selectedRequest changes
+      websocketService.onEntityDataChange(() => {});
+    };
+  }, [selectedRequest]);
+
+  // Track viewers of the selected service request
+  useEffect(() => {
+    if (!selectedRequest) {
+      setOtherViewers([]);
+      return;
+    }
+
+    // Notify server that we're viewing this request
+    websocketService.startViewingRequest(selectedRequest.id);
+
+    // Listen for viewer updates
+    const handleViewersUpdate = (update: any) => {
+      if (update.serviceRequestId === selectedRequest.id) {
+        console.log(`👁️  Other viewers for request ${selectedRequest.id}:`, update.viewers);
+        setOtherViewers(update.viewers);
+      }
+    };
+
+    websocketService.onServiceRequestViewersChange(handleViewersUpdate);
+
+    return () => {
+      // Notify server that we stopped viewing this request
+      websocketService.stopViewingRequest(selectedRequest.id);
+      websocketService.onServiceRequestViewersChange(() => {});
+      setOtherViewers([]);
+    };
+  }, [selectedRequest]);
 
   if (loading && serviceRequests.length === 0) {
     return (
@@ -1462,7 +1556,17 @@ const ServiceRequests: React.FC = () => {
 
                   {/* Notes Section */}
                   <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                    <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">{t('serviceRequests.notes', undefined, 'Notes')}</h4>
+                    <div className="flex items-center gap-2 mb-3">
+                      <h4 className="text-sm font-semibold text-gray-900 dark:text-white">{t('serviceRequests.notes', undefined, 'Notes')}</h4>
+                      {otherViewers.length > 0 && (
+                        <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-full">
+                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                            {otherViewers[0].userName}
+                          </span>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Add Note Form */}
                     <div className="mb-4">

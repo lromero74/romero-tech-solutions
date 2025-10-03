@@ -6,6 +6,7 @@ import { getPool } from '../../config/database.js';
 import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
 import { initializeServiceRequestWorkflow } from '../../services/workflowService.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -787,6 +788,9 @@ router.post('/:id/notes', async (req, res) => {
         console.error('❌ Failed to send note addition email notifications:', err);
       });
     }
+
+    // Broadcast service request update via websocket for real-time note updates
+    websocketService.broadcastServiceRequestUpdate(id, 'updated', { noteAdded: true });
 
     res.json({
       success: true,
