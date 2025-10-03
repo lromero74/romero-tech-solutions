@@ -91,7 +91,7 @@ async function addTranslations() {
         if (existingTranslation.rows.length > 0) {
           await pool.query(`
             UPDATE t_translations
-            SET value = $1, updated_at = CURRENT_TIMESTAMP
+            SET value = $1, is_approved = true, updated_at = CURRENT_TIMESTAMP
             WHERE key_id = $2 AND language_id = $3
           `, [text, keyId, languageId]);
           console.log(`  Updated ${langCode}: ${text}`);
