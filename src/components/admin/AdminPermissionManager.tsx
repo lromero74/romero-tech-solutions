@@ -65,12 +65,30 @@ interface PermissionGroup {
   expanded: boolean;
 }
 
+interface LogicalGroup {
+  groupName: string;
+  permissionGroups: PermissionGroup[];
+}
+
 const AdminPermissionManager: React.FC = () => {
   const { isExecutive, loading: permissionLoading } = usePermission();
   const [roles, setRoles] = useState<Role[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
-  const [permissionGroups, setPermissionGroups] = useState<PermissionGroup[]>([]);
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
+  const [logicalGroups, setLogicalGroups] = useState<LogicalGroup[]>([]);
+
+  // Load expansion state from localStorage, defaulting to all collapsed
+  const [expandedLogicalGroups, setExpandedLogicalGroups] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('permissionManager_expandedLogicalGroups');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [expandedResourceGroups, setExpandedResourceGroups] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('permissionManager_expandedResourceGroups');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(() => {
+    const saved = localStorage.getItem('permissionManager_expandedCategories');
+    return saved ? new Set(JSON.parse(saved)) : new Set();
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -80,14 +98,28 @@ const AdminPermissionManager: React.FC = () => {
 
   // Role inheritance map (matches backend)
   const roleInheritance: { [key: string]: string[] } = {
-    executive: ['admin', 'sales', 'technician'],
+    executive: ['admin', 'manager', 'sales', 'technician'],
     admin: ['technician'],
+    manager: ['technician'],
     sales: [],
     technician: []
   };
 
-  // Role display order
-  const roleOrder = ['executive', 'admin', 'sales', 'technician'];
+  // Role display order (highest to lowest privilege)
+  const roleOrder = ['executive', 'admin', 'manager', 'sales', 'technician'];
+
+  // Save expansion state to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('permissionManager_expandedLogicalGroups', JSON.stringify(Array.from(expandedLogicalGroups)));
+  }, [expandedLogicalGroups]);
+
+  useEffect(() => {
+    localStorage.setItem('permissionManager_expandedResourceGroups', JSON.stringify(Array.from(expandedResourceGroups)));
+  }, [expandedResourceGroups]);
+
+  useEffect(() => {
+    localStorage.setItem('permissionManager_expandedCategories', JSON.stringify(Array.from(expandedCategories)));
+  }, [expandedCategories]);
 
   // Load initial data
   useEffect(() => {
@@ -150,19 +182,11 @@ const AdminPermissionManager: React.FC = () => {
       rolesWithPerms.sort((a, b) => roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name));
       setRoles(rolesWithPerms);
 
-      // Group permissions by resource type
+      // Group permissions by logical groups
       const groups = groupPermissions(allPermissions);
-      setPermissionGroups(groups);
+      setLogicalGroups(groups);
 
-      // Expand all groups by default
-      const allExpanded = new Set<string>();
-      groups.forEach(group => {
-        allExpanded.add(group.resourceType);
-        group.categories.forEach(category => {
-          allExpanded.add(`${group.resourceType}:${category.categoryName}`);
-        });
-      });
-      setExpandedCategories(allExpanded);
+      // Don't modify expansion state on load - preserve user's preferences from localStorage
 
       setHasChanges(false);
     } catch (error) {
@@ -183,13 +207,41 @@ const AdminPermissionManager: React.FC = () => {
     return 'Other Operations';
   };
 
-  const groupPermissions = (perms: Permission[]): PermissionGroup[] => {
+  const groupPermissions = (perms: Permission[]): LogicalGroup[] => {
     if (!perms || !Array.isArray(perms)) {
       return [];
     }
 
-    const resourceGroups: { [key: string]: Permission[] } = {};
+    // Define logical groupings matching the sidebar structure
+    const groupDefinitions = [
+      {
+        groupName: 'People & HR',
+        resourceTypes: ['employees']
+      },
+      {
+        groupName: 'Business Management',
+        resourceTypes: ['businesses', 'service_locations', 'clients', 'users']
+      },
+      {
+        groupName: 'Service Operations',
+        resourceTypes: ['services', 'service_requests', 'workflow_configuration', 'closure_reasons']
+      },
+      {
+        groupName: 'Billing & Finance',
+        resourceTypes: ['invoices', 'service_hour_rates', 'pricing_settings']
+      },
+      {
+        groupName: 'Security & Permissions',
+        resourceTypes: ['roles', 'permissions', 'role_hierarchy', 'role_permissions', 'permission_audit_log', 'password_complexity']
+      },
+      {
+        groupName: 'Administration',
+        resourceTypes: ['reports', 'settings']
+      }
+    ];
 
+    // Group permissions by resource type first
+    const resourceGroups: { [key: string]: Permission[] } = {};
     perms.forEach(perm => {
       if (!resourceGroups[perm.resource_type]) {
         resourceGroups[perm.resource_type] = [];
@@ -197,11 +249,20 @@ const AdminPermissionManager: React.FC = () => {
       resourceGroups[perm.resource_type].push(perm);
     });
 
-    return Object.entries(resourceGroups)
-      .map(([resourceType, resourcePerms]) => {
+    // Create logical groups with nested permission groups
+    const result: LogicalGroup[] = [];
+
+    groupDefinitions.forEach(groupDef => {
+      const permissionGroups: PermissionGroup[] = [];
+
+      groupDef.resourceTypes.forEach(resourceType => {
+        const resourcePerms = resourceGroups[resourceType];
+        if (!resourcePerms || resourcePerms.length === 0) {
+          return; // Skip if no permissions for this resource
+        }
+
         // Group by action category
         const categoryGroups: { [key: string]: Permission[] } = {};
-
         resourcePerms.forEach(perm => {
           const category = getActionCategory(perm.action_type);
           if (!categoryGroups[category]) {
@@ -220,14 +281,24 @@ const AdminPermissionManager: React.FC = () => {
         const categoryOrder = ['View Operations', 'Add Operations', 'Modify Operations', 'Delete Operations', 'Other Operations'];
         categories.sort((a, b) => categoryOrder.indexOf(a.categoryName) - categoryOrder.indexOf(b.categoryName));
 
-        return {
-          resourceType,
+        permissionGroups.push({
+          resourceType: resourceType,
           resourceName: formatResourceName(resourceType),
           categories,
           expanded: true
-        };
-      })
-      .sort((a, b) => a.resourceName.localeCompare(b.resourceName));
+        });
+      });
+
+      // Only add logical group if it has permission groups
+      if (permissionGroups.length > 0) {
+        result.push({
+          groupName: groupDef.groupName,
+          permissionGroups
+        });
+      }
+    });
+
+    return result;
   };
 
   const formatResourceName = (resourceType: string): string => {
@@ -338,27 +409,47 @@ const AdminPermissionManager: React.FC = () => {
     setHasChanges(true);
   };
 
-  const toggleResourceGroup = (resourceType: string) => {
-    setExpandedCategories(prev => {
+  const toggleLogicalGroup = (groupName: string) => {
+    setExpandedLogicalGroups(prev => {
       const newSet = new Set(prev);
-      if (newSet.has(resourceType)) {
-        newSet.delete(resourceType);
-        // Also collapse all categories under this resource
-        const group = permissionGroups.find(g => g.resourceType === resourceType);
-        if (group) {
-          group.categories.forEach(cat => {
-            newSet.delete(`${resourceType}:${cat.categoryName}`);
-          });
-        }
+      if (newSet.has(groupName)) {
+        newSet.delete(groupName);
       } else {
-        newSet.add(resourceType);
+        newSet.add(groupName);
       }
       return newSet;
     });
   };
 
-  const toggleCategory = (resourceType: string, categoryName: string) => {
-    const key = `${resourceType}:${categoryName}`;
+  const toggleResourceGroup = (logicalGroupName: string, resourceType: string) => {
+    const resourceKey = `${logicalGroupName}:${resourceType}`;
+    setExpandedResourceGroups(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(resourceKey)) {
+        newSet.delete(resourceKey);
+        // Also collapse all categories under this resource
+        setExpandedCategories(catPrev => {
+          const newCatSet = new Set(catPrev);
+          const logicalGroup = logicalGroups.find(g => g.groupName === logicalGroupName);
+          if (logicalGroup) {
+            const permGroup = logicalGroup.permissionGroups.find(pg => pg.resourceType === resourceType);
+            if (permGroup) {
+              permGroup.categories.forEach(cat => {
+                newCatSet.delete(`${resourceKey}:${cat.categoryName}`);
+              });
+            }
+          }
+          return newCatSet;
+        });
+      } else {
+        newSet.add(resourceKey);
+      }
+      return newSet;
+    });
+  };
+
+  const toggleCategory = (logicalGroupName: string, resourceType: string, categoryName: string) => {
+    const key = `${logicalGroupName}:${resourceType}:${categoryName}`;
     setExpandedCategories(prev => {
       const newSet = new Set(prev);
       if (newSet.has(key)) {
@@ -371,38 +462,56 @@ const AdminPermissionManager: React.FC = () => {
   };
 
   const expandAll = () => {
-    const allExpanded = new Set<string>();
-    permissionGroups.forEach(group => {
-      allExpanded.add(group.resourceType);
-      group.categories.forEach(category => {
-        allExpanded.add(`${group.resourceType}:${category.categoryName}`);
+    const expandedLogical = new Set<string>();
+    const expandedResources = new Set<string>();
+    const expandedCats = new Set<string>();
+
+    logicalGroups.forEach(logicalGroup => {
+      expandedLogical.add(logicalGroup.groupName);
+      logicalGroup.permissionGroups.forEach(permGroup => {
+        const resourceKey = `${logicalGroup.groupName}:${permGroup.resourceType}`;
+        expandedResources.add(resourceKey);
+        permGroup.categories.forEach(category => {
+          expandedCats.add(`${resourceKey}:${category.categoryName}`);
+        });
       });
     });
-    setExpandedCategories(allExpanded);
+
+    setExpandedLogicalGroups(expandedLogical);
+    setExpandedResourceGroups(expandedResources);
+    setExpandedCategories(expandedCats);
   };
 
   const collapseAll = () => {
+    setExpandedLogicalGroups(new Set());
+    setExpandedResourceGroups(new Set());
     setExpandedCategories(new Set());
   };
 
   // Filter permissions by search
-  const filteredGroups = permissionGroups
-    .map(group => ({
-      ...group,
-      categories: group.categories
-        .map(category => ({
-          ...category,
-          permissions: category.permissions.filter(perm =>
-            searchQuery === '' ||
-            perm.action_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            perm.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            group.resourceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            category.categoryName.toLowerCase().includes(searchQuery.toLowerCase())
-          )
+  const filteredLogicalGroups = logicalGroups
+    .map(logicalGroup => ({
+      ...logicalGroup,
+      permissionGroups: logicalGroup.permissionGroups
+        .map(permGroup => ({
+          ...permGroup,
+          categories: permGroup.categories
+            .map(category => ({
+              ...category,
+              permissions: category.permissions.filter(perm =>
+                searchQuery === '' ||
+                perm.action_type.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                perm.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                permGroup.resourceName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                logicalGroup.groupName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                category.categoryName.toLowerCase().includes(searchQuery.toLowerCase())
+              )
+            }))
+            .filter(category => category.permissions.length > 0)
         }))
-        .filter(category => category.permissions.length > 0)
+        .filter(permGroup => permGroup.categories.length > 0)
     }))
-    .filter(group => group.categories.length > 0);
+    .filter(logicalGroup => logicalGroup.permissionGroups.length > 0);
 
   if (permissionLoading) {
     return (
@@ -592,136 +701,175 @@ const AdminPermissionManager: React.FC = () => {
 
             {/* Table Body */}
             <tbody>
-              {filteredGroups.map((group) => {
-                const isResourceExpanded = expandedCategories.has(group.resourceType);
-                const totalPermissions = group.categories.reduce((sum, cat) => sum + cat.permissions.length, 0);
+              {filteredLogicalGroups.map((logicalGroup) => {
+                const isLogicalGroupExpanded = expandedLogicalGroups.has(logicalGroup.groupName);
+                const totalLogicalPermissions = logicalGroup.permissionGroups.reduce(
+                  (sum, pg) => sum + pg.categories.reduce((catSum, cat) => catSum + cat.permissions.length, 0),
+                  0
+                );
 
                 return (
-                  <React.Fragment key={group.resourceType}>
-                    {/* Resource Group Header */}
-                    <tr className={`${themeClasses.bg.secondary} border-t-2 ${themeClasses.border.primary}`}>
+                  <React.Fragment key={logicalGroup.groupName}>
+                    {/* Logical Group Header (Level 1: People & HR, Business Management, etc.) */}
+                    <tr className={`${themeClasses.bg.secondary} border-t-4 ${themeClasses.border.primary}`}>
                       <td
                         colSpan={roles.length + 1}
-                        className="px-4 py-2"
+                        className="px-4 py-3"
                       >
                         <button
-                          onClick={() => toggleResourceGroup(group.resourceType)}
+                          onClick={() => toggleLogicalGroup(logicalGroup.groupName)}
                           className="flex items-center gap-2 w-full hover:opacity-75 transition-opacity"
                         >
-                          {isResourceExpanded ? (
-                            <FolderOpen className={`w-5 h-5 ${themeClasses.text.accent}`} />
+                          {isLogicalGroupExpanded ? (
+                            <ChevronDown className={`w-6 h-6 ${themeClasses.text.accent}`} />
                           ) : (
-                            <Folder className={`w-5 h-5 ${themeClasses.text.accent}`} />
+                            <ChevronRight className={`w-6 h-6 ${themeClasses.text.accent}`} />
                           )}
-                          {isResourceExpanded ? (
-                            <ChevronDown className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
-                          ) : (
-                            <ChevronRight className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
-                          )}
-                          <span className={`font-semibold ${themeClasses.text.primary}`}>
-                            {group.resourceName}
+                          <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
+                            {logicalGroup.groupName}
                           </span>
                           <span className={`text-sm ${themeClasses.text.tertiary}`}>
-                            ({totalPermissions} permissions)
+                            ({totalLogicalPermissions} permissions)
                           </span>
                         </button>
                       </td>
                     </tr>
 
-                    {/* Categories and Permissions */}
-                    {isResourceExpanded && group.categories.map((category) => {
-                      const categoryKey = `${group.resourceType}:${category.categoryName}`;
-                      const isCategoryExpanded = expandedCategories.has(categoryKey);
+                    {/* Resource Groups (Level 2: Employees, Businesses, etc.) */}
+                    {isLogicalGroupExpanded && logicalGroup.permissionGroups.map((permGroup) => {
+                      const resourceKey = `${logicalGroup.groupName}:${permGroup.resourceType}`;
+                      const isResourceExpanded = expandedResourceGroups.has(resourceKey);
+                      const totalPermissions = permGroup.categories.reduce((sum, cat) => sum + cat.permissions.length, 0);
 
                       return (
-                        <React.Fragment key={categoryKey}>
-                          {/* Category Header */}
-                          <tr className={`${themeClasses.bg.tertiary} border-t ${themeClasses.border.primary}`}>
+                        <React.Fragment key={resourceKey}>
+                          {/* Resource Group Header */}
+                          <tr className={`${themeClasses.bg.tertiary} border-t-2 ${themeClasses.border.primary}`}>
                             <td
                               colSpan={roles.length + 1}
-                              className="px-4 py-2 pl-12"
+                              className="px-4 py-2 pl-8"
                             >
                               <button
-                                onClick={() => toggleCategory(group.resourceType, category.categoryName)}
+                                onClick={() => toggleResourceGroup(logicalGroup.groupName, permGroup.resourceType)}
                                 className="flex items-center gap-2 w-full hover:opacity-75 transition-opacity"
                               >
-                                {isCategoryExpanded ? (
-                                  <ChevronDown className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                {isResourceExpanded ? (
+                                  <FolderOpen className={`w-5 h-5 ${themeClasses.text.accent}`} />
                                 ) : (
-                                  <ChevronRight className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                  <Folder className={`w-5 h-5 ${themeClasses.text.accent}`} />
                                 )}
-                                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
-                                  {category.categoryName}
+                                {isResourceExpanded ? (
+                                  <ChevronDown className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
+                                ) : (
+                                  <ChevronRight className={`w-5 h-5 ${themeClasses.text.tertiary}`} />
+                                )}
+                                <span className={`font-semibold ${themeClasses.text.primary}`}>
+                                  {permGroup.resourceName}
                                 </span>
-                                <span className={`text-xs ${themeClasses.text.tertiary}`}>
-                                  ({category.permissions.length})
+                                <span className={`text-sm ${themeClasses.text.tertiary}`}>
+                                  ({totalPermissions} permissions)
                                 </span>
                               </button>
                             </td>
                           </tr>
 
-                          {/* Permission Rows */}
-                          {isCategoryExpanded && category.permissions.map((permission) => (
-                            <tr
-                              key={permission.id}
-                              className={`border-t ${themeClasses.border.primary} hover:${themeClasses.bg.hover} transition-colors`}
-                            >
-                              {/* Permission Name & Description */}
-                              <td className={`px-4 py-3 pl-20 border-r ${themeClasses.border.primary}`}>
-                                <div>
-                                  <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                                    {formatActionName(permission.action_type)}
-                                  </div>
-                                  <div className={`text-xs ${themeClasses.text.tertiary} mt-0.5`}>
-                                    {permission.description}
-                                  </div>
-                                  <code className={`text-xs ${themeClasses.text.muted} mt-1 block`}>
-                                    {permission.permission_key}
-                                  </code>
-                                </div>
-                              </td>
+                          {/* Categories (Level 3: View Operations, Add Operations, etc.) */}
+                          {isResourceExpanded && permGroup.categories.map((category) => {
+                            const categoryKey = `${resourceKey}:${category.categoryName}`;
+                            const isCategoryExpanded = expandedCategories.has(categoryKey);
 
-                              {/* Role Checkboxes */}
-                              {roles.map(role => {
-                                const permState = hasPermission(role, permission.permission_key);
-                                const isInherited = permState.inherited;
-                                const isChecked = permState.has;
-                                const isExecutive = role.name === 'executive';
-
-                                return (
+                            return (
+                              <React.Fragment key={categoryKey}>
+                                {/* Category Header */}
+                                <tr className={`${themeClasses.bg.hover} border-t ${themeClasses.border.primary}`}>
                                   <td
-                                    key={role.id}
-                                    className={`px-4 py-3 text-center border-r ${themeClasses.border.primary} ${
-                                      isExecutive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
-                                    }`}
+                                    colSpan={roles.length + 1}
+                                    className="px-4 py-2 pl-16"
                                   >
-                                    {isExecutive ? (
-                                      <div className="flex items-center justify-center gap-1" title="Executive role always has all permissions (read-only)">
-                                        <CheckSquare className={`w-5 h-5 text-blue-500 opacity-60`} />
-                                        <Lock className={`w-3 h-3 text-blue-500`} />
-                                      </div>
-                                    ) : isInherited ? (
-                                      <div className="flex items-center justify-center gap-1" title="Inherited from other role">
-                                        <CheckSquare className={`w-5 h-5 ${themeClasses.text.accent} opacity-50`} />
-                                        <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
-                                      </div>
-                                    ) : (
-                                      <button
-                                        onClick={() => togglePermission(role.id, permission.permission_key)}
-                                        className="mx-auto hover:scale-110 transition-transform"
-                                      >
-                                        {isChecked ? (
-                                          <CheckSquare className={`w-5 h-5 ${themeClasses.text.success} hover:text-green-800 dark:hover:text-green-600`} />
-                                        ) : (
-                                          <Square className={`w-5 h-5 ${themeClasses.text.muted} hover:${themeClasses.text.secondary}`} />
-                                        )}
-                                      </button>
-                                    )}
+                                    <button
+                                      onClick={() => toggleCategory(logicalGroup.groupName, permGroup.resourceType, category.categoryName)}
+                                      className="flex items-center gap-2 w-full hover:opacity-75 transition-opacity"
+                                    >
+                                      {isCategoryExpanded ? (
+                                        <ChevronDown className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                      ) : (
+                                        <ChevronRight className={`w-4 h-4 ${themeClasses.text.tertiary}`} />
+                                      )}
+                                      <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+                                        {category.categoryName}
+                                      </span>
+                                      <span className={`text-xs ${themeClasses.text.tertiary}`}>
+                                        ({category.permissions.length})
+                                      </span>
+                                    </button>
                                   </td>
-                                );
-                              })}
-                            </tr>
-                          ))}
+                                </tr>
+
+                                {/* Permission Rows (Level 4: Individual permissions) */}
+                                {isCategoryExpanded && category.permissions.map((permission) => (
+                                  <tr
+                                    key={permission.id}
+                                    className={`border-t ${themeClasses.border.primary} hover:${themeClasses.bg.hover} transition-colors`}
+                                  >
+                                    {/* Permission Name & Description */}
+                                    <td className={`px-4 py-3 pl-24 border-r ${themeClasses.border.primary}`}>
+                                      <div>
+                                        <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                          {formatActionName(permission.action_type)}
+                                        </div>
+                                        <div className={`text-xs ${themeClasses.text.tertiary} mt-0.5`}>
+                                          {permission.description}
+                                        </div>
+                                        <code className={`text-xs ${themeClasses.text.muted} mt-1 block`}>
+                                          {permission.permission_key}
+                                        </code>
+                                      </div>
+                                    </td>
+
+                                    {/* Role Checkboxes */}
+                                    {roles.map(role => {
+                                      const permState = hasPermission(role, permission.permission_key);
+                                      const isInherited = permState.inherited;
+                                      const isChecked = permState.has;
+                                      const isExecutive = role.name === 'executive';
+
+                                      return (
+                                        <td
+                                          key={role.id}
+                                          className={`px-4 py-3 text-center border-r ${themeClasses.border.primary} ${
+                                            isExecutive ? 'bg-blue-50 dark:bg-blue-900/20' : ''
+                                          }`}
+                                        >
+                                          {isExecutive ? (
+                                            <div className="flex items-center justify-center gap-1" title="Executive role always has all permissions (read-only)">
+                                              <CheckSquare className={`w-5 h-5 text-blue-500 opacity-60`} />
+                                              <Lock className={`w-3 h-3 text-blue-500`} />
+                                            </div>
+                                          ) : isInherited ? (
+                                            <div className="flex items-center justify-center gap-1" title="Inherited from other role">
+                                              <CheckSquare className={`w-5 h-5 ${themeClasses.text.accent} opacity-50`} />
+                                              <Lock className={`w-3 h-3 ${themeClasses.text.accent}`} />
+                                            </div>
+                                          ) : (
+                                            <button
+                                              onClick={() => togglePermission(role.id, permission.permission_key)}
+                                              className="mx-auto hover:scale-110 transition-transform"
+                                            >
+                                              {isChecked ? (
+                                                <CheckSquare className={`w-5 h-5 ${themeClasses.text.success} hover:text-green-800 dark:hover:text-green-600`} />
+                                              ) : (
+                                                <Square className={`w-5 h-5 ${themeClasses.text.muted} hover:${themeClasses.text.secondary}`} />
+                                              )}
+                                            </button>
+                                          )}
+                                        </td>
+                                      );
+                                    })}
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
                         </React.Fragment>
                       );
                     })}
@@ -729,7 +877,7 @@ const AdminPermissionManager: React.FC = () => {
                 );
               })}
 
-              {filteredGroups.length === 0 && (
+              {filteredLogicalGroups.length === 0 && (
                 <tr>
                   <td colSpan={roles.length + 1} className={`px-4 py-12 text-center ${themeClasses.text.tertiary}`}>
                     No permissions found matching "{searchQuery}"
