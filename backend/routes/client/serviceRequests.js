@@ -937,4 +937,361 @@ router.post('/:id/cancel', async (req, res) => {
   }
 });
 
+/**
+ * DELETE /api/client/service-requests/:requestId/files/:fileId
+ * Delete a file attachment with note logging
+ */
+router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { requestId, fileId } = req.params;
+    const { deletedBy } = req.body;
+    const userId = req.user.id;
+
+    if (!deletedBy || !deletedBy.id || !deletedBy.name || !deletedBy.type) {
+      return res.status(400).json({
+        success: false,
+        message: 'deletedBy information is required (id, name, type)'
+      });
+    }
+
+    // Verify ownership
+    const ownerCheck = await pool.query(
+      'SELECT id FROM service_requests WHERE id = $1 AND user_id = $2',
+      [requestId, userId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found or access denied'
+      });
+    }
+
+    // Get file info before deletion
+    const fileResult = await pool.query(
+      'SELECT file_name FROM service_request_files WHERE id = $1 AND service_request_id = $2',
+      [fileId, requestId]
+    );
+
+    if (fileResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    const fileName = fileResult.rows[0].file_name;
+
+    // Delete the file
+    await pool.query(
+      'DELETE FROM service_request_files WHERE id = $1',
+      [fileId]
+    );
+
+    // Create note entry
+    const noteText = `**${deletedBy.name}** removed file attachment: **${fileName}**`;
+
+    await pool.query(`
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      requestId,
+      noteText,
+      'file_change',
+      deletedBy.type,
+      deletedBy.id,
+      deletedBy.name,
+      true
+    ]);
+
+    res.json({
+      success: true,
+      message: `File "${fileName}" deleted successfully`
+    });
+
+  } catch (error) {
+    console.error('Error deleting file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete file',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * PATCH /api/client/service-requests/:requestId/files/:fileId/rename
+ * Rename a file attachment with note logging
+ */
+router.patch('/service-requests/:requestId/files/:fileId/rename', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { requestId, fileId } = req.params;
+    const { newFileName, renamedBy } = req.body;
+    const userId = req.user.id;
+
+    if (!newFileName) {
+      return res.status(400).json({
+        success: false,
+        message: 'newFileName is required'
+      });
+    }
+
+    if (!renamedBy || !renamedBy.id || !renamedBy.name || !renamedBy.type) {
+      return res.status(400).json({
+        success: false,
+        message: 'renamedBy information is required (id, name, type)'
+      });
+    }
+
+    // Verify ownership
+    const ownerCheck = await pool.query(
+      'SELECT id FROM service_requests WHERE id = $1 AND user_id = $2',
+      [requestId, userId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found or access denied'
+      });
+    }
+
+    // Get current file info
+    const fileResult = await pool.query(
+      'SELECT file_name FROM service_request_files WHERE id = $1 AND service_request_id = $2',
+      [fileId, requestId]
+    );
+
+    if (fileResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'File not found'
+      });
+    }
+
+    const oldFileName = fileResult.rows[0].file_name;
+
+    if (oldFileName === newFileName) {
+      return res.json({
+        success: true,
+        message: 'No change in filename'
+      });
+    }
+
+    // Update the filename
+    await pool.query(
+      'UPDATE service_request_files SET file_name = $1 WHERE id = $2',
+      [newFileName, fileId]
+    );
+
+    // Create note entry
+    const noteText = `**${renamedBy.name}** renamed file attachment:\n- **${oldFileName}**\n+ **${newFileName}**`;
+
+    await pool.query(`
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [
+      requestId,
+      noteText,
+      'file_change',
+      renamedBy.type,
+      renamedBy.id,
+      renamedBy.name,
+      true
+    ]);
+
+    res.json({
+      success: true,
+      message: 'File renamed successfully',
+      data: { oldFileName, newFileName }
+    });
+
+  } catch (error) {
+    console.error('Error renaming file:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to rename file',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * PATCH /api/client/service-requests/:id/details
+ * Update title and/or description with change tracking
+ */
+router.patch('/service-requests/:id/details', async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { id } = req.params;
+    const { title, description, updatedBy } = req.body;
+    const userId = req.user.id; // From auth middleware
+
+    // Validate input
+    if (!title && !description) {
+      return res.status(400).json({
+        success: false,
+        message: 'At least one field (title or description) must be provided'
+      });
+    }
+
+    if (!updatedBy || !updatedBy.id || !updatedBy.name || !updatedBy.type) {
+      return res.status(400).json({
+        success: false,
+        message: 'updatedBy information is required (id, name, type)'
+      });
+    }
+
+    // Verify the service request belongs to this user
+    const ownerCheck = await pool.query(
+      'SELECT id, title, description FROM service_requests WHERE id = $1 AND user_id = $2',
+      [id, userId]
+    );
+
+    if (ownerCheck.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found or access denied'
+      });
+    }
+
+    const current = ownerCheck.rows[0];
+    const updates = [];
+    const params = [];
+    let paramIndex = 1;
+    const changes = [];
+
+    // Helper function to generate unified diff
+    const generateDiff = (oldText, newText, fieldName) => {
+      const oldLines = (oldText || '').split('\n');
+      const newLines = (newText || '').split('\n');
+
+      let diff = `--- ${fieldName} (before)\n+++ ${fieldName} (after)\n`;
+
+      const maxLines = Math.max(oldLines.length, newLines.length);
+      for (let i = 0; i < maxLines; i++) {
+        const oldLine = oldLines[i] || '';
+        const newLine = newLines[i] || '';
+
+        if (oldLine !== newLine) {
+          if (oldLine) diff += `- ${oldLine}\n`;
+          if (newLine) diff += `+ ${newLine}\n`;
+        } else if (oldLine) {
+          diff += `  ${oldLine}\n`;
+        }
+      }
+
+      return diff;
+    };
+
+    // Track title changes
+    if (title !== undefined && title !== current.title) {
+      updates.push(`title = $${paramIndex}`);
+      params.push(title);
+      paramIndex++;
+
+      const diff = generateDiff(current.title, title, 'Title');
+      changes.push({
+        field: 'title',
+        oldValue: current.title,
+        newValue: title,
+        diff
+      });
+    }
+
+    // Track description changes
+    if (description !== undefined && description !== current.description) {
+      updates.push(`description = $${paramIndex}`);
+      params.push(description);
+      paramIndex++;
+
+      const diff = generateDiff(current.description, description, 'Description');
+      changes.push({
+        field: 'description',
+        oldValue: current.description,
+        newValue: description,
+        diff
+      });
+    }
+
+    // If no changes detected
+    if (updates.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No changes detected',
+        data: current
+      });
+    }
+
+    // Update the service request
+    updates.push(`updated_at = NOW()`);
+    params.push(id);
+
+    const updateQuery = `
+      UPDATE service_requests
+      SET ${updates.join(', ')}
+      WHERE id = $${paramIndex}
+      RETURNING *
+    `;
+
+    const updateResult = await pool.query(updateQuery, params);
+
+    // Create note entries for each change
+    for (const change of changes) {
+      const noteText = `**${updatedBy.name}** updated the **${change.field}**:\n\n${change.diff}`;
+
+      await pool.query(`
+        INSERT INTO service_request_notes (
+          service_request_id,
+          note_text,
+          note_type,
+          created_by_type,
+          created_by_id,
+          created_by_name,
+          is_visible_to_client
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        id,
+        noteText,
+        'field_change',
+        updatedBy.type, // 'client'
+        updatedBy.id,
+        updatedBy.name,
+        true // Visible to client
+      ]);
+    }
+
+    res.json({
+      success: true,
+      message: `Successfully updated ${changes.map(c => c.field).join(' and ')}`,
+      data: updateResult.rows[0],
+      changes: changes.map(c => ({ field: c.field, diff: c.diff }))
+    });
+
+  } catch (error) {
+    console.error('Error updating service request details:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update service request details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
 export default router;
