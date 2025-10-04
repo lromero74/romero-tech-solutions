@@ -31,10 +31,32 @@ const PushNotificationManager: React.FC = () => {
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [isIOSInstructions, setIsIOSInstructions] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
+  const [isEmployee, setIsEmployee] = useState(false);
 
   useEffect(() => {
     checkNotificationStatus();
+    // Check if user is an employee (either traditional or AWS Amplify auth)
+    checkEmployeeStatus();
   }, []);
+
+  const checkEmployeeStatus = async () => {
+    // Check for traditional auth
+    if (localStorage.getItem('sessionToken')) {
+      setIsEmployee(true);
+      return;
+    }
+
+    // Check for AWS Amplify auth
+    try {
+      const { getCurrentUser } = await import('aws-amplify/auth');
+      const user = await getCurrentUser();
+      if (user) {
+        setIsEmployee(true);
+      }
+    } catch (e) {
+      // Not authenticated with AWS Amplify
+    }
+  };
 
   const checkNotificationStatus = async () => {
     try {
@@ -408,7 +430,7 @@ const PushNotificationManager: React.FC = () => {
         </div>
 
         {/* Test Notification Button (for admin/employee users) */}
-        {isSubscribed && (localStorage.getItem('sessionToken') || localStorage.getItem('authUser')) && (
+        {isSubscribed && isEmployee && (
           <div className="mt-4 pt-4 border-t">
             <button
               onClick={handleTestNotification}
