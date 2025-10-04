@@ -40,9 +40,16 @@ const PushNotificationManager: React.FC = () => {
   }, []);
 
   const checkEmployeeStatus = async () => {
+    console.log('🔍 Checking employee status...');
+
     // Check for traditional auth
-    if (localStorage.getItem('sessionToken')) {
+    const sessionToken = localStorage.getItem('sessionToken');
+    console.log('Traditional sessionToken:', sessionToken ? 'Found' : 'Not found');
+    if (sessionToken) {
       setIsEmployee(true);
+      console.log('✅ Employee detected via traditional auth');
+      // Update debug info
+      setDebugInfo(prev => prev + `Employee Status: Yes (Traditional Auth)\n`);
       return;
     }
 
@@ -50,11 +57,18 @@ const PushNotificationManager: React.FC = () => {
     try {
       const { getCurrentUser } = await import('aws-amplify/auth');
       const user = await getCurrentUser();
+      console.log('AWS Amplify user:', user);
       if (user) {
         setIsEmployee(true);
+        console.log('✅ Employee detected via AWS Amplify');
+        // Update debug info
+        setDebugInfo(prev => prev + `Employee Status: Yes (AWS Amplify)\n`);
+      } else {
+        setDebugInfo(prev => prev + `Employee Status: No (No AWS user)\n`);
       }
     } catch (e) {
-      // Not authenticated with AWS Amplify
+      console.log('❌ Not authenticated with AWS Amplify:', e);
+      setDebugInfo(prev => prev + `Employee Status: No (AWS Error)\n`);
     }
   };
 
@@ -112,6 +126,8 @@ const PushNotificationManager: React.FC = () => {
       setIsSupported(supported);
 
       debugMsg += `\nSupported Check: ${supported ? 'Yes' : 'No'}\n`;
+      debugMsg += `Employee Status: Checking...\n`;
+      debugMsg += `Test Button Shows When: isSubscribed=${isSubscribed} && isEmployee=${isEmployee}\n`;
       setDebugInfo(debugMsg);
 
       if (supported || isPWA) {  // Allow for iOS PWAs even if not fully supported yet
@@ -435,10 +451,17 @@ const PushNotificationManager: React.FC = () => {
             <button
               onClick={handleTestNotification}
               disabled={isLoading}
-              className="px-3 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md text-sm transition-colors"
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
             >
-              Send Test Notification
+              📱 Send Test Notification
             </button>
+          </div>
+        )}
+
+        {/* Debug: Show button status */}
+        {isSubscribed && !isEmployee && (
+          <div className="mt-4 pt-4 border-t text-sm text-gray-500">
+            ⚠️ Test button hidden: Not detected as employee
           </div>
         )}
       </div>
