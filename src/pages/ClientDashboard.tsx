@@ -96,7 +96,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const { isDarkMode, toggleTheme } = useClientTheme();
   const { t } = useClientLanguage();
   const { signOut } = useEnhancedAuth();
-  const { hasNotifications, unseenServiceRequestChanges, startViewTimer, clearViewTimer } = useNotifications();
+  const { hasNotifications, unseenServiceRequestChanges, unseenInvoiceChanges, startViewTimer, clearViewTimer } = useNotifications();
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
   // Initialize activeTab from localStorage or default to 'dashboard'
@@ -664,6 +664,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                         {unseenServiceRequestChanges > 99 ? '99+' : unseenServiceRequestChanges}
                       </span>
                     )}
+                    {item.id === 'invoices' && unseenInvoiceChanges > 0 && (
+                      <span className="bg-yellow-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse">
+                        {unseenInvoiceChanges > 99 ? '99+' : unseenInvoiceChanges}
+                      </span>
+                    )}
                   </button>
                 </li>
               );
@@ -710,6 +715,11 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                         {item.id === 'requests' && unseenServiceRequestChanges > 0 && (
                           <span className="bg-red-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse">
                             {unseenServiceRequestChanges > 99 ? '99+' : unseenServiceRequestChanges}
+                          </span>
+                        )}
+                        {item.id === 'invoices' && unseenInvoiceChanges > 0 && (
+                          <span className="bg-yellow-500 text-white text-xs rounded-full h-5 w-5 flex items-center justify-center font-medium animate-pulse">
+                            {unseenInvoiceChanges > 99 ? '99+' : unseenInvoiceChanges}
                           </span>
                         )}
                       </button>

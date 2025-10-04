@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   FileText,
   DollarSign,
@@ -15,6 +15,8 @@ import { apiService } from '../../services/apiService';
 import { InvoicePaymentModal } from './InvoicePaymentModal';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { useNotifications } from '../../contexts/NotificationContext';
+import { websocketService } from '../../services/websocketService';
 
 interface Invoice {
   id: string;
@@ -37,6 +39,7 @@ interface InvoicesListProps {
 export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }) => {
   const { isDarkMode } = useClientTheme();
   const { t } = useClientLanguage();
+  const { addInvoiceChange, markInvoiceChangesSeen, startViewTimer, clearViewTimer } = useNotifications();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +49,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [invoiceDetail, setInvoiceDetail] = useState<any>(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
+  const previousInvoicesRef = useRef<Invoice[]>([]);
 
   const fetchInvoices = async () => {
     console.log('📋 [InvoicesList] Fetching invoices...');
@@ -74,7 +78,16 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
 
       if (response.success) {
         console.log('📋 [InvoicesList] Setting invoices:', response.data.invoices);
-        setInvoices(response.data.invoices);
+        const newInvoices = response.data.invoices;
+
+        // Detect changes and trigger notification if needed
+        if (detectInvoiceChanges(newInvoices)) {
+          addInvoiceChange();
+        }
+
+        // Update state and store reference for future comparisons
+        setInvoices(newInvoices);
+        previousInvoicesRef.current = newInvoices;
       }
     } catch (err) {
       console.error('❌ [InvoicesList] Error fetching invoices:', err);
@@ -84,8 +97,58 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
     }
   };
 
+  // Detect changes in invoices
+  const detectInvoiceChanges = (newInvoices: Invoice[]): boolean => {
+    const previous = previousInvoicesRef.current;
+
+    // If this is the first load, don't trigger notification
+    if (previous.length === 0) {
+      return false;
+    }
+
+    // Check for new invoices or status changes
+    const hasNewInvoices = newInvoices.length > previous.length;
+    const hasStatusChanges = newInvoices.some(newInv => {
+      const oldInv = previous.find(p => p.id === newInv.id);
+      return oldInv && oldInv.payment_status !== newInv.payment_status;
+    });
+
+    return hasNewInvoices || hasStatusChanges;
+  };
+
+  // Mark notifications as seen when viewing invoices list
   useEffect(() => {
-    fetchInvoices();
+    // Start timer to auto-clear notifications after 4 seconds of viewing
+    startViewTimer();
+
+    return () => {
+      clearViewTimer();
+    };
+  }, []);
+
+  // WebSocket listener for invoice updates
+  useEffect(() => {
+    const socket = websocketService.getSocket();
+    if (!socket) return;
+
+    const handleInvoiceUpdate = (data: any) => {
+      console.log('📬 Invoice update received:', data);
+      // Refresh invoices to get latest data
+      fetchInvoices();
+    };
+
+    socket.on('invoice-updated', handleInvoiceUpdate);
+
+    return () => {
+      socket.off('invoice-updated', handleInvoiceUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadInvoices = async () => {
+      await fetchInvoices();
+    };
+    loadInvoices();
   }, [refreshTrigger, filterStatus]);
 
   const fetchInvoiceDetail = async (invoiceId: string) => {
