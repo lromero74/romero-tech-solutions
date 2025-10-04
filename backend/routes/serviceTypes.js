@@ -7,6 +7,7 @@ import express from 'express';
 import pool from '../config/database.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
+import { websocketService } from '../services/websocketService.js';
 
 const router = express.Router();
 
@@ -197,6 +198,9 @@ router.post('/', authMiddleware, requirePermission('modify.service_types.enable'
       [serviceTypeId]
     );
 
+    // Broadcast service type creation to all admin clients
+    websocketService.broadcastEntityUpdate('serviceType', serviceTypeId, 'created', { serviceType: createdType.rows[0] });
+
     res.status(201).json({
       success: true,
       message: 'Service type created successfully',
@@ -287,6 +291,9 @@ router.put('/:id', authMiddleware, requirePermission('modify.service_types.enabl
       [id]
     );
 
+    // Broadcast service type update to all admin clients
+    websocketService.broadcastEntityUpdate('serviceType', id, 'updated', { serviceType: updatedType.rows[0] });
+
     res.json({
       success: true,
       message: 'Service type updated successfully',
@@ -336,6 +343,9 @@ router.patch('/:id/toggle', authMiddleware, requirePermission('modify.service_ty
        RETURNING *`,
       [req.user.id, id]
     );
+
+    // Broadcast service type update to all admin clients
+    websocketService.broadcastEntityUpdate('serviceType', id, 'updated', { serviceType: result.rows[0] });
 
     res.json({
       success: true,
@@ -401,6 +411,9 @@ router.delete('/:id', authMiddleware, requirePermission('reorder.service_types.e
       'DELETE FROM service_types WHERE id = $1',
       [id]
     );
+
+    // Broadcast service type deletion to all admin clients
+    websocketService.broadcastEntityUpdate('serviceType', id, 'deleted');
 
     res.json({
       success: true,

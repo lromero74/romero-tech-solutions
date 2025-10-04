@@ -1,5 +1,6 @@
 import express from 'express';
 import { passwordComplexityService } from '../../services/passwordComplexityService.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -68,6 +69,9 @@ router.put('/password-complexity', async (req, res) => {
 
     const updatedRequirements = await passwordComplexityService.updatePasswordComplexityRequirements(requirements, userId);
 
+    // Broadcast password policy update to all admin clients
+    websocketService.broadcastEntityUpdate('passwordPolicy', 'global', 'updated', { passwordPolicy: updatedRequirements });
+
     res.status(200).json({
       success: true,
       message: 'Password complexity requirements updated successfully',
@@ -110,6 +114,9 @@ router.post('/password-complexity', async (req, res) => {
     const userId = req.user?.id || null;
 
     const newRequirements = await passwordComplexityService.createPasswordComplexityRequirements(requirements, userId);
+
+    // Broadcast password policy creation to all admin clients
+    websocketService.broadcastEntityUpdate('passwordPolicy', 'global', 'created', { passwordPolicy: newRequirements });
 
     res.status(201).json({
       success: true,

@@ -1,5 +1,6 @@
 import express from 'express';
 import { query } from '../../config/database.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -64,9 +65,14 @@ router.post('/roles', async (req, res) => {
       RETURNING *
     `, [name, displayName, description, textColor, backgroundColor, borderColor, sortOrder]);
 
+    const newRole = result.rows[0];
+
+    // Broadcast role creation to all admin clients
+    websocketService.broadcastEntityUpdate('role', newRole.id, 'created', { role: newRole });
+
     res.status(201).json({
       success: true,
-      data: result.rows[0],
+      data: newRole,
       message: 'Role created successfully'
     });
 
@@ -139,9 +145,14 @@ router.put('/roles/:id', async (req, res) => {
       RETURNING *
     `, [name, displayName, description, textColor, backgroundColor, borderColor, isActive, sortOrder, id]);
 
+    const updatedRole = result.rows[0];
+
+    // Broadcast role update to all admin clients
+    websocketService.broadcastEntityUpdate('role', updatedRole.id, 'updated', { role: updatedRole });
+
     res.status(200).json({
       success: true,
-      data: result.rows[0],
+      data: updatedRole,
       message: 'Role updated successfully'
     });
 
@@ -188,6 +199,9 @@ router.delete('/roles/:id', async (req, res) => {
 
     // Soft delete the role
     await query('UPDATE roles SET is_active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1', [id]);
+
+    // Broadcast role deletion to all admin clients
+    websocketService.broadcastEntityUpdate('role', id, 'deleted');
 
     res.status(200).json({
       success: true,

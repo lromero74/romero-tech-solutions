@@ -110,6 +110,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     services,
     serviceRequests,
     serviceLocations,
+    roles,
+    permissions,
+    serviceTypes,
+    closureReasons,
+    passwordPolicy,
     loading,
     error,
     refreshAllData,
@@ -117,6 +122,11 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     refreshClients,
     refreshBusinesses,
     refreshOnlineStatus,
+    refreshRoles,
+    refreshPermissions,
+    refreshServiceTypes,
+    refreshClosureReasons,
+    refreshPasswordPolicy,
     setEmployees,
     // availableRoles
   } = useAdminData();
@@ -1286,7 +1296,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return <AdminInvoices />;
 
       case 'closure-reasons':
-        return <AdminClosureReasons />;
+        return (
+          <AdminClosureReasons
+            closureReasons={closureReasons}
+            onRefresh={refreshClosureReasons}
+          />
+        );
 
       case 'service-locations':
         return (
@@ -1485,14 +1500,21 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return (
           <AdminRoles
             employees={employees}
+            roles={roles}
             loading={loading}
             error={error}
-            onRefresh={refreshAllData}
+            onRefresh={refreshRoles}
           />
         );
 
       case 'permissions':
-        return <AdminPermissionManager />;
+        return (
+          <AdminPermissionManager
+            roles={roles}
+            permissions={permissions}
+            onRefresh={refreshPermissions}
+          />
+        );
 
       case 'permission-audit-log':
         return <AdminPermissionAuditLog />;
@@ -1534,9 +1556,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
       case 'password-complexity':
         return (
           <AdminPasswordComplexity
+            passwordPolicy={passwordPolicy}
             loading={loading}
             error={error}
-            onRefresh={refreshAllData}
+            onRefresh={refreshPasswordPolicy}
           />
         );
 

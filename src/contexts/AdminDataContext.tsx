@@ -3,6 +3,9 @@ import { adminService } from '../services/adminService';
 import { websocketService } from '../services/websocketService';
 import { useEnhancedAuth } from './EnhancedAuthContext';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
+import { Role } from '../types/database';
+import { Permission, permissionService } from '../services/permissionService';
+import apiService from '../services/apiService';
 
 export interface Employee {
   id: string;
@@ -125,6 +128,11 @@ interface AdminDataContextType {
   services: Service[];
   serviceRequests: ServiceRequest[];
   serviceLocations: ServiceLocation[];
+  roles: Role[];
+  permissions: Permission[];
+  serviceTypes: any[];
+  closureReasons: any[];
+  passwordPolicy: any | null;
 
   // Loading and error states
   loading: boolean;
@@ -140,6 +148,11 @@ interface AdminDataContextType {
   refreshServiceRequests: () => Promise<void>;
   refreshServiceLocations: () => Promise<void>;
   refreshOnlineStatus: () => Promise<void>;
+  refreshRoles: () => Promise<void>;
+  refreshPermissions: () => Promise<void>;
+  refreshServiceTypes: () => Promise<void>;
+  refreshClosureReasons: () => Promise<void>;
+  refreshPasswordPolicy: () => Promise<void>;
 
   // Data setters (for optimistic updates)
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
@@ -148,6 +161,11 @@ interface AdminDataContextType {
   setServices: React.Dispatch<React.SetStateAction<Service[]>>;
   setServiceRequests: React.Dispatch<React.SetStateAction<ServiceRequest[]>>;
   setServiceLocations: React.Dispatch<React.SetStateAction<ServiceLocation[]>>;
+  setRoles: React.Dispatch<React.SetStateAction<Role[]>>;
+  setPermissions: React.Dispatch<React.SetStateAction<Permission[]>>;
+  setServiceTypes: React.Dispatch<React.SetStateAction<any[]>>;
+  setClosureReasons: React.Dispatch<React.SetStateAction<any[]>>;
+  setPasswordPolicy: React.Dispatch<React.SetStateAction<any | null>>;
 }
 
 const AdminDataContext = createContext<AdminDataContextType | null>(null);
@@ -172,6 +190,11 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
   const [services, setServices] = useState<Service[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [serviceLocations, setServiceLocations] = useState<ServiceLocation[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [serviceTypes, setServiceTypes] = useState<any[]>([]);
+  const [closureReasons, setClosureReasons] = useState<any[]>([]);
+  const [passwordPolicy, setPasswordPolicy] = useState<any | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -297,6 +320,56 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     } catch (err) {
       console.error('Error fetching service locations:', err);
       setError('Failed to fetch service locations');
+    }
+  };
+
+  const refreshRoles = async () => {
+    try {
+      const data = await adminService.getRoles();
+      setRoles(data || []);
+    } catch (err) {
+      console.error('Error fetching roles:', err);
+      setError('Failed to fetch roles');
+    }
+  };
+
+  const refreshPermissions = async () => {
+    try {
+      const data = await permissionService.getAllPermissions();
+      setPermissions(data || []);
+    } catch (err) {
+      console.error('Error fetching permissions:', err);
+      setError('Failed to fetch permissions');
+    }
+  };
+
+  const refreshServiceTypes = async () => {
+    try {
+      const response = await apiService.get('/admin/service-types');
+      setServiceTypes(response.serviceTypes || []);
+    } catch (err) {
+      console.error('Error fetching service types:', err);
+      setError('Failed to fetch service types');
+    }
+  };
+
+  const refreshClosureReasons = async () => {
+    try {
+      const response = await apiService.get('/admin/closure-reasons');
+      setClosureReasons(response.closureReasons || []);
+    } catch (err) {
+      console.error('Error fetching closure reasons:', err);
+      setError('Failed to fetch closure reasons');
+    }
+  };
+
+  const refreshPasswordPolicy = async () => {
+    try {
+      const response = await apiService.get('/admin/password-policy');
+      setPasswordPolicy(response.passwordPolicy || null);
+    } catch (err) {
+      console.error('Error fetching password policy:', err);
+      setError('Failed to fetch password policy');
     }
   };
 
@@ -613,6 +686,31 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
               await refreshBusinesses();
             }
           }
+
+          // Handle role changes
+          if (change.entityType === 'role') {
+            await refreshRoles();
+          }
+
+          // Handle permission changes (note: permissions use a different broadcast pattern)
+          if (change.entityType === 'permission') {
+            await refreshPermissions();
+          }
+
+          // Handle service type changes
+          if (change.entityType === 'serviceType') {
+            await refreshServiceTypes();
+          }
+
+          // Handle closure reason changes
+          if (change.entityType === 'closureReason') {
+            await refreshClosureReasons();
+          }
+
+          // Handle password policy changes
+          if (change.entityType === 'passwordPolicy') {
+            await refreshPasswordPolicy();
+          }
         });
 
         websocketService.onAuthenticationError((error) => {
@@ -651,6 +749,11 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     services,
     serviceRequests,
     serviceLocations,
+    roles,
+    permissions,
+    serviceTypes,
+    closureReasons,
+    passwordPolicy,
 
     // Loading and error states
     loading,
@@ -666,6 +769,11 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     refreshServiceRequests,
     refreshServiceLocations,
     refreshOnlineStatus,
+    refreshRoles,
+    refreshPermissions,
+    refreshServiceTypes,
+    refreshClosureReasons,
+    refreshPasswordPolicy,
 
     // Data setters
     setEmployees,
@@ -673,7 +781,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     setBusinesses,
     setServices,
     setServiceRequests,
-    setServiceLocations
+    setServiceLocations,
+    setRoles,
+    setPermissions,
+    setServiceTypes,
+    setClosureReasons,
+    setPasswordPolicy
   };
 
   return (

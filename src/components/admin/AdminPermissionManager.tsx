@@ -69,10 +69,20 @@ interface LogicalGroup {
   permissionGroups: PermissionGroup[];
 }
 
-const AdminPermissionManager: React.FC = () => {
+interface AdminPermissionManagerProps {
+  roles?: Role[];
+  permissions?: Permission[];
+  onRefresh?: () => Promise<void>;
+}
+
+const AdminPermissionManager: React.FC<AdminPermissionManagerProps> = ({
+  roles: rolesProp = [],
+  permissions: permissionsProp = [],
+  onRefresh
+}) => {
   const { isExecutive, loading: permissionLoading } = usePermission();
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [permissions, setPermissions] = useState<Permission[]>([]);
+  const [roles, setRoles] = useState<Role[]>(rolesProp);
+  const [permissions, setPermissions] = useState<Permission[]>(permissionsProp);
   const [logicalGroups, setLogicalGroups] = useState<LogicalGroup[]>([]);
 
   // Load expansion state from localStorage, defaulting to all collapsed
@@ -111,64 +121,58 @@ const AdminPermissionManager: React.FC = () => {
     localStorage.setItem('permissionManager_expandedCategories', JSON.stringify(Array.from(expandedCategories)));
   }, [expandedCategories]);
 
-  // Load initial data
+  // Update data when props change
   useEffect(() => {
-    if (!permissionLoading && isExecutive) {
-      loadData();
-    }
-  }, [permissionLoading, isExecutive]);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-
-      // Load all permissions and roles with their permissions in parallel (faster!)
-      const [allPermissions, rolesData] = await Promise.all([
-        permissionService.getAllPermissions(),
-        permissionService.getRolesWithPermissions()
-      ]);
-
-      setPermissions(allPermissions || []);
-
-      // Build role data structure using data already in rolesData (no additional API calls needed!)
-      const rolesWithPerms: Role[] = [];
-
-      for (const roleData of (rolesData?.roles || [])) {
-        // Get all permissions directly assigned to this role
-        const rolePermissions = new Set(
-          (roleData.permissions || [])
-            .filter((p: any) => p.is_granted)
-            .map((p: any) => p.permission_key)
-        );
-
-        rolesWithPerms.push({
-          id: roleData.id.toString(),
-          name: roleData.name,
-          display_name: roleData.displayName || roleData.display_name || roleData.name,
-          permissions: rolePermissions
-        });
-      }
-
-      // Sort roles by hierarchy
-      rolesWithPerms.sort((a, b) => roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name));
-      setRoles(rolesWithPerms);
+    if (permissionsProp.length > 0 || rolesProp.length > 0) {
+      setPermissions(permissionsProp);
 
       // Group permissions by logical groups
-      const groups = groupPermissions(allPermissions);
+      const groups = groupPermissions(permissionsProp);
       setLogicalGroups(groups);
 
-      // Don't modify expansion state on load - preserve user's preferences from localStorage
-
-      setHasChanges(false);
-    } catch (error) {
-      setErrorModal({
-        show: true,
-        message: error instanceof Error ? error.message : 'Failed to load permission data'
-      });
-    } finally {
       setLoading(false);
+      setHasChanges(false);
     }
-  };
+  }, [permissionsProp, rolesProp]);
+
+  // Update roles when they change - need to process them to add permission sets
+  useEffect(() => {
+    const processRoles = async () => {
+      if (rolesProp.length > 0) {
+        try {
+          // Get roles with permissions
+          const rolesData = await permissionService.getRolesWithPermissions();
+
+          // Build role data structure
+          const rolesWithPerms: Role[] = [];
+
+          for (const roleData of (rolesData?.roles || [])) {
+            // Get all permissions directly assigned to this role
+            const rolePermissions = new Set(
+              (roleData.permissions || [])
+                .filter((p: any) => p.is_granted)
+                .map((p: any) => p.permission_key)
+            );
+
+            rolesWithPerms.push({
+              id: roleData.id.toString(),
+              name: roleData.name,
+              display_name: roleData.displayName || roleData.display_name || roleData.name,
+              permissions: rolePermissions
+            });
+          }
+
+          // Sort roles by hierarchy
+          rolesWithPerms.sort((a, b) => roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name));
+          setRoles(rolesWithPerms);
+        } catch (error) {
+          console.error('Error processing roles:', error);
+        }
+      }
+    };
+
+    processRoles();
+  }, [rolesProp, roleOrder]);
 
   const getActionCategory = (actionType: string): string => {
     if (actionType.includes('view') || actionType.includes('View')) return 'View Operations';
@@ -333,7 +337,9 @@ const AdminPermissionManager: React.FC = () => {
       setHasChanges(false);
 
       // Reload to refresh inherited permissions
-      await loadData();
+      if (onRefresh) {
+        await onRefresh();
+      }
     } catch (error) {
       setErrorModal({
         show: true,
@@ -344,8 +350,10 @@ const AdminPermissionManager: React.FC = () => {
     }
   };
 
-  const handleReset = () => {
-    loadData();
+  const handleReset = async () => {
+    if (onRefresh) {
+      await onRefresh();
+    }
     setHasChanges(false);
   };
 

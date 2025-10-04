@@ -9,7 +9,7 @@ import {
   Settings,
   Users
 } from 'lucide-react';
-import { Role } from '../../types/database';
+import { Role, Employee } from '../../types/database';
 import { themeClasses, useTheme } from '../../contexts/ThemeContext';
 import { adminService } from '../../services/adminService';
 import { applyDarkModeMuting } from '../../utils/colorUtils';
@@ -24,11 +24,25 @@ interface EditingRole extends Partial<Role> {
   sort_order: number;
 }
 
-const AdminRoles: React.FC = () => {
+interface AdminRolesProps {
+  employees?: Employee[];
+  roles: Role[];
+  loading?: boolean;
+  error?: string | null;
+  onRefresh?: () => Promise<void>;
+}
+
+const AdminRoles: React.FC<AdminRolesProps> = ({
+  employees = [],
+  roles: rolesProp = [],
+  loading: loadingProp = false,
+  error: errorProp = null,
+  onRefresh
+}) => {
   const { theme } = useTheme();
-  const [roles, setRoles] = useState<Role[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [roles, setRoles] = useState<Role[]>(rolesProp);
+  const [loading, setLoading] = useState(loadingProp);
+  const [error, setError] = useState<string | null>(errorProp);
   const [isCreating, setIsCreating] = useState(false);
   const [editingRole, setEditingRole] = useState<EditingRole | null>(null);
   const [deletingRole, setDeletingRole] = useState<Role | null>(null);
@@ -49,23 +63,12 @@ const AdminRoles: React.FC = () => {
     sort_order: 99
   };
 
-  // Load roles on component mount
+  // Update local state when props change
   useEffect(() => {
-    loadRoles();
-  }, []);
-
-  const loadRoles = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await adminService.getRoles();
-      setRoles(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load roles');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setRoles(rolesProp);
+    setLoading(loadingProp);
+    setError(errorProp);
+  }, [rolesProp, loadingProp, errorProp]);
 
   const handleCreate = () => {
     setEditingRole(defaultRoleValues);

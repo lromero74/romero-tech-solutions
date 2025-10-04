@@ -86,7 +86,17 @@ interface AvailabilityData {
   };
 }
 
-const AdminEmployeeCalendar: React.FC = () => {
+interface AdminEmployeeCalendarProps {
+  loading?: boolean;
+  error?: string | null;
+  onRefresh?: () => Promise<void>;
+}
+
+const AdminEmployeeCalendar: React.FC<AdminEmployeeCalendarProps> = ({
+  loading: externalLoading,
+  error: externalError,
+  onRefresh
+}) => {
   const { isDark } = useTheme();
   const { sessionToken } = useEnhancedAuth();
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -94,6 +104,7 @@ const AdminEmployeeCalendar: React.FC = () => {
   const [availabilityData, setAvailabilityData] = useState<AvailabilityData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [lastFetchTime, setLastFetchTime] = useState<number>(0);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [view, setView] = useState<'day' | 'week' | 'month'>('week');
   const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
@@ -219,10 +230,25 @@ const AdminEmployeeCalendar: React.FC = () => {
     }
   };
 
+  // Manual refresh handler (bypasses stale-time check)
+  const handleManualRefresh = async () => {
+    setLastFetchTime(0); // Reset to force fetch
+    await fetchCalendarData();
+    await fetchAvailabilityData();
+    setLastFetchTime(Date.now());
+  };
+
   useEffect(() => {
     if (sessionToken) {
-      fetchCalendarData();
-      fetchAvailabilityData();
+      // Only refetch if data is stale (older than 30 seconds)
+      const now = Date.now();
+      const STALE_TIME = 30000; // 30 seconds
+
+      if (now - lastFetchTime > STALE_TIME) {
+        fetchCalendarData();
+        fetchAvailabilityData();
+        setLastFetchTime(now);
+      }
     }
   }, [selectedDate, view, selectedEmployee, sessionToken]);
 
@@ -369,7 +395,7 @@ const AdminEmployeeCalendar: React.FC = () => {
             </button>
 
             <button
-              onClick={fetchCalendarData}
+              onClick={handleManualRefresh}
               disabled={loading}
               className={`flex items-center px-4 py-2 rounded-lg ${themeClasses.bg.accent} text-white transition-colors hover:opacity-90 disabled:opacity-50`}
             >

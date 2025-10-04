@@ -1,5 +1,6 @@
 import express from 'express';
 import { getPool } from '../../config/database.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -74,10 +75,15 @@ router.post('/', async (req, res) => {
       RETURNING id, reason_name, reason_description, is_active, created_at, updated_at
     `, [reason_name, reason_description, is_active]);
 
+    const newReason = result.rows[0];
+
+    // Broadcast closure reason creation to all admin clients
+    websocketService.broadcastEntityUpdate('closureReason', newReason.id, 'created', { closureReason: newReason });
+
     res.status(201).json({
       success: true,
       message: 'Closure reason created successfully',
-      data: result.rows[0]
+      data: newReason
     });
   } catch (error) {
     console.error('Error creating closure reason:', error);
@@ -151,10 +157,15 @@ router.put('/:id', async (req, res) => {
       RETURNING id, reason_name, reason_description, is_active, created_at, updated_at
     `, [reason_name, reason_description, is_active, id]);
 
+    const updatedReason = result.rows[0];
+
+    // Broadcast closure reason update to all admin clients
+    websocketService.broadcastEntityUpdate('closureReason', id, 'updated', { closureReason: updatedReason });
+
     res.json({
       success: true,
       message: 'Closure reason updated successfully',
-      data: result.rows[0]
+      data: updatedReason
     });
   } catch (error) {
     console.error('Error updating closure reason:', error);
@@ -200,6 +211,9 @@ router.delete('/:id', async (req, res) => {
 
     await pool.query('DELETE FROM service_request_closure_reasons WHERE id = $1', [id]);
 
+    // Broadcast closure reason deletion to all admin clients
+    websocketService.broadcastEntityUpdate('closureReason', id, 'deleted');
+
     res.json({
       success: true,
       message: `Closure reason "${existingReason.rows[0].reason_name}" deleted successfully`
@@ -243,10 +257,15 @@ router.patch('/:id/toggle-active', async (req, res) => {
       RETURNING id, reason_name, reason_description, is_active, created_at, updated_at
     `, [newStatus, id]);
 
+    const updatedReason = result.rows[0];
+
+    // Broadcast closure reason update to all admin clients
+    websocketService.broadcastEntityUpdate('closureReason', id, 'updated', { closureReason: updatedReason });
+
     res.json({
       success: true,
       message: `Closure reason "${existingReason.rows[0].reason_name}" ${newStatus ? 'activated' : 'deactivated'} successfully`,
-      data: result.rows[0]
+      data: updatedReason
     });
   } catch (error) {
     console.error('Error toggling closure reason status:', error);
