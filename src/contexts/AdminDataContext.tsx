@@ -440,7 +440,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         }
       };
 
-      // Fetch all data in parallel
+      // Fetch all data in parallel (including roles, permissions, service types, etc.)
       const [
         dashboardResult,
         employeesResult,
@@ -448,7 +448,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         serviceLocationsResult,
         clientsResult,
         servicesResult,
-        serviceRequestsResult
+        serviceRequestsResult,
+        rolesResult,
+        permissionsResult,
+        serviceTypesResult,
+        closureReasonsResult,
+        passwordPolicyResult
       ] = await Promise.all([
         safeFetch(() => adminService.getDashboardData(), { employees: 0, businesses: 0, services: 0, clients: 0, serviceRequests: 0 }),
         safeFetch(() => adminService.getEmployeesWithLoginStatus(), { employees: [] }),
@@ -456,7 +461,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         safeFetch(() => adminService.getServiceLocations(), { serviceLocations: [] }),
         safeFetch(() => adminService.getUsers({ role: 'client', limit: 1000 }), { users: [] }),
         safeFetch(() => adminService.getServices(), { services: [] }),
-        safeFetch(() => adminService.getServiceRequests(), { serviceRequests: [] })
+        safeFetch(() => adminService.getServiceRequests(), { serviceRequests: [] }),
+        safeFetch(() => adminService.getRoles(), []),
+        safeFetch(() => permissionService.getAllPermissions(), []),
+        safeFetch(() => apiService.get('/admin/service-types'), { serviceTypes: [] }),
+        safeFetch(() => apiService.get('/admin/closure-reasons'), { closureReasons: [] }),
+        safeFetch(() => apiService.get('/admin/password-complexity'), { requirements: null })
       ]);
 
       // Set the data
@@ -475,6 +485,13 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
       setServices(servicesResult.services || []);
       setServiceRequests(serviceRequestsResult.serviceRequests || []);
+
+      // Set the new admin tab data
+      setRoles(rolesResult || []);
+      setPermissions(permissionsResult || []);
+      setServiceTypes(serviceTypesResult.serviceTypes || []);
+      setClosureReasons(closureReasonsResult.closureReasons || closureReasonsResult.data || []);
+      setPasswordPolicy(passwordPolicyResult.requirements || null);
 
     } catch (err) {
       console.error('Error fetching admin data:', err);
