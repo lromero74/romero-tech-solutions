@@ -154,14 +154,26 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
   // Helper function to find rate tier for a given time
   const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
-    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    // Create a Date object for the selected time in local timezone
+    const localDate = new Date(selectedDate);
+    localDate.setHours(hour, minute, 0, 0);
 
-    // Find ALL matching tiers for this day and time (handle overlapping ranges)
+    // Convert local time to UTC to match the database storage
+    const utcDate = new Date(localDate.toISOString());
+    const utcDayOfWeek = utcDate.getUTCDay();
+    const utcHour = utcDate.getUTCHours();
+    const utcMinute = utcDate.getUTCMinutes();
+    const utcTimeString = `${String(utcHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}:00`;
+
+    // Find ALL matching tiers for this UTC day and time (handle overlapping ranges)
     const matchingTiers = rateTiers.filter(tier => {
-      if (tier.dayOfWeek !== dayOfWeek) return false;
+      if (tier.dayOfWeek !== utcDayOfWeek) return false;
 
-      // Compare time strings
-      return timeString >= tier.timeStart && timeString < tier.timeEnd;
+      // Handle midnight crossing: if timeEnd is "00:00:00", treat it as "24:00:00"
+      const adjustedTimeEnd = tier.timeEnd === '00:00:00' ? '24:00:00' : tier.timeEnd;
+
+      // Compare UTC time strings (both are now in UTC)
+      return utcTimeString >= tier.timeStart && utcTimeString < adjustedTimeEnd;
     });
 
     // If multiple tiers match (overlapping ranges), return the highest priority tier
@@ -178,7 +190,6 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const getSelectedTimeRateInfo = () => {
     if (!selectedStartTime || !selectedEndTime) return null;
 
-    const dayOfWeek = selectedStartTime.getDay();
     let hasEmergency = false;
     let hasPremium = false;
     let hasStandard = false;
@@ -190,7 +201,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       const tier = findRateTierForTime(
         currentTime.getHours(),
         currentTime.getMinutes(),
-        dayOfWeek
+        currentTime.getDay()  // Pass the current time's day, not just the start time's day
       );
 
       if (tier) {
@@ -218,7 +229,6 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const calculateEstimatedCost = () => {
     if (!selectedStartTime || !selectedEndTime) return null;
 
-    const dayOfWeek = selectedStartTime.getDay();
     const durationMs = selectedEndTime.getTime() - selectedStartTime.getTime();
     const totalHours = durationMs / (1000 * 60 * 60);
     let totalCost = 0;
@@ -239,7 +249,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       const tier = findRateTierForTime(
         currentTime.getHours(),
         currentTime.getMinutes(),
-        dayOfWeek
+        currentTime.getDay()  // Use the current time's day, not just the start time's day
       );
 
       const tierName = tier?.tierName || 'Standard';
