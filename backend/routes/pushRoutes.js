@@ -6,7 +6,7 @@
 import express from 'express';
 import webpush from 'web-push';
 import { getPool } from '../config/database.js';
-import { authMiddleware as authenticateSession } from '../middleware/authMiddleware.js';
+import { unifiedAuthMiddleware as authenticateSession } from '../middleware/unifiedAuthMiddleware.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
