@@ -15,8 +15,8 @@ const router = express.Router();
 
 // Configure web-push with VAPID keys
 // Generate these with: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BL8PyLcC9UqHHmLBGfPxkYYPyuHvZRDHMwmW2cPpxQztLRQxPBVmkQO0Vo-A8v_5_B5UdeKnJioZogkpFN5gJGo';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'WPcGU8YPmFjbsLQYfLGKXK_p7byvzMAcLeKYVqp_T3o';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BFC_fY801d4N8P58IPlWxWQQIeaxPqFwKLxk2JRo4dBRuuNncHKXLZ5IYO5__XgzEeOmR8XeeRMw5UyVbdFt9Vo';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '8zFrMeVFuMhKcxJQd_p_jia1wZuMkCkMM5pCr-7QnYM';
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:info@romerotechsolutions.com';
 
 webpush.setVapidDetails(
