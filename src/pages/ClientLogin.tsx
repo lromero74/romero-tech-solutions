@@ -6,6 +6,8 @@ import SimplifiedClientRegistration from '../components/SimplifiedClientRegistra
 import TrustedDevicePrompt from '../components/TrustedDevicePrompt';
 import { authService } from '../services/authService';
 import { trustedDeviceService } from '../services/trustedDeviceService';
+import { useFormPersistence } from '../utils/formStatePersistence';
+import { iosKeepAlive } from '../utils/iosKeepAlive';
 
 interface ClientLoginProps {
   onSuccess: () => void;
@@ -31,6 +33,43 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
   const { signIn, sendAdminMfaCode, verifyAdminMfaCode, verifyClientMfaCode, setUserFromTrustedDevice } = useEnhancedAuth();
   const { t } = useLanguage();
   const backgroundImageUrl = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-4.0.3&ixid=M3wxMJA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2344&q=80';
+
+  // Initialize form persistence for client login
+  const formPersistence = useFormPersistence('client-login');
+
+  // Restore saved form data on mount
+  useEffect(() => {
+    const savedData = formPersistence.restoreFormData();
+    if (savedData) {
+      setEmail(savedData.email || '');
+      setPassword(savedData.password || '');
+      setMfaCode(savedData.mfaCode || '');
+      setMfaEmail(savedData.mfaEmail || '');
+      setMfaPassword(savedData.mfaPassword || '');
+      setShowMfaVerification(savedData.showMfaVerification || false);
+      console.log('📱 Restored form data after app switch');
+    }
+
+    // Start iOS keep-alive if on iOS
+    if (iosKeepAlive.isPWA()) {
+      iosKeepAlive.start();
+    }
+
+    // Setup auto-save when switching apps
+    const cleanup = formPersistence.setupAutoSave(() => ({
+      email,
+      password,
+      mfaCode,
+      mfaEmail,
+      mfaPassword,
+      showMfaVerification
+    }));
+
+    return () => {
+      cleanup();
+      iosKeepAlive.stop();
+    };
+  }, []);
 
   // Cleanup timers on component unmount
   useEffect(() => {
@@ -128,6 +167,9 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
           const sessionToken = trustedLoginResult.session?.sessionToken;
           await setUserFromTrustedDevice(trustedLoginResult.user, sessionToken);
           console.log('✅ [Client] setUserFromTrustedDevice() completed');
+
+          // Clear saved form data after successful login
+          formPersistence.clearFormData();
 
           console.log('🔄 [Client] Calling onSuccess() to redirect to dashboard...');
           onSuccess();

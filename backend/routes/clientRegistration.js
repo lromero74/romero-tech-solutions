@@ -4,6 +4,7 @@ import bcrypt from 'bcryptjs';
 import { clientRegistrationService } from '../services/clientRegistrationService.js';
 import { query } from '../config/database.js';
 import { sessionService } from '../services/sessionService.js';
+import { sendNotificationToEmployees } from './pushRoutes.js';
 
 const router = express.Router();
 
@@ -114,6 +115,35 @@ router.post('/register', async (req, res) => {
     };
     console.log('🔍 Route sending to service:', JSON.stringify(registrationPayload, null, 2));
     const result = await clientRegistrationService.registerClient(registrationPayload);
+
+    // Send push notification to admin and managers about new client signup
+    try {
+      const notificationData = {
+        title: '🎉 New Client Signup!',
+        body: `${value.businessName} has registered as a new client`,
+        icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+        badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+        vibrate: [200, 100, 200],
+        data: {
+          type: 'new_client_signup',
+          businessId: result.businessId,
+          businessName: value.businessName,
+          contactName: value.contactName,
+          timestamp: Date.now(),
+          url: '/admin/businesses'
+        }
+      };
+
+      await sendNotificationToEmployees(
+        'new_client_signup',
+        notificationData,
+        'view.businesses.enable'  // Use existing permission for those who can view businesses
+      );
+      console.log('✅ Push notification sent for new client signup');
+    } catch (notificationError) {
+      console.error('⚠️ Failed to send push notification:', notificationError);
+      // Don't fail the registration if notification fails
+    }
 
     res.status(201).json({
       success: true,

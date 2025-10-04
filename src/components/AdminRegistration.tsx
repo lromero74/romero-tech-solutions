@@ -5,6 +5,8 @@ import { Shield, User, Mail, Lock, CheckCircle, AlertCircle, Key, ArrowLeft, Key
 import { AppPage } from '../constants/config';
 import { trustedDeviceService } from '../services/trustedDeviceService';
 import apiService from '../services/apiService';
+import { useFormPersistence } from '../utils/formStatePersistence';
+import { iosKeepAlive } from '../utils/iosKeepAlive';
 
 interface AdminRegistrationProps {
   onSuccess: () => void;
@@ -47,8 +49,47 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
   const confirmPasswordTimerRef = useRef<NodeJS.Timeout | null>(null);
   const formClearTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Initialize form persistence for employee login
+  const formPersistence = useFormPersistence('employee-login');
+
   useEffect(() => {
     checkAdminExists();
+
+    // Restore saved form data on mount
+    const savedData = formPersistence.restoreFormData();
+    if (savedData) {
+      setFormData(savedData.formData || { name: '', email: '', password: '', confirmPassword: '' });
+      setMfaCode(savedData.mfaCode || '');
+      setMfaEmail(savedData.mfaEmail || '');
+      setMfaPassword(savedData.mfaPassword || '');
+      setMfaPhoneNumber(savedData.mfaPhoneNumber || '');
+      setShowMfaVerification(savedData.showMfaVerification || false);
+      setPendingEmail(savedData.pendingEmail || '');
+      setIsSignUp(savedData.isSignUp !== undefined ? savedData.isSignUp : true);
+      console.log('📱 Restored form data after app switch');
+    }
+
+    // Start iOS keep-alive if on iOS PWA
+    if (iosKeepAlive.isPWA()) {
+      iosKeepAlive.start();
+    }
+
+    // Setup auto-save when switching apps
+    const cleanup = formPersistence.setupAutoSave(() => ({
+      formData,
+      mfaCode,
+      mfaEmail,
+      mfaPassword,
+      mfaPhoneNumber,
+      showMfaVerification,
+      pendingEmail,
+      isSignUp
+    }));
+
+    return () => {
+      cleanup();
+      iosKeepAlive.stop();
+    };
   }, []);
 
   // Cleanup timers on component unmount

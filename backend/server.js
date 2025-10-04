@@ -33,6 +33,7 @@ import emailValidationRoutes from './routes/emailValidation.js';
 import serviceRequestWorkflowRoutes from './routes/serviceRequestWorkflow.js';
 import employeeServiceRequestWorkflowRoutes from './routes/employee/serviceRequestWorkflow.js';
 import serviceTypesRoutes from './routes/serviceTypes.js';
+import pushRoutes from './routes/pushRoutes.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -420,6 +421,7 @@ app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service ar
 app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD
 app.use('/api/service-request-workflow', generalLimiter, doubleCsrfProtection, serviceRequestWorkflowRoutes); // Service request workflow + CSRF
 app.use('/api/employee/service-requests', generalLimiter, doubleCsrfProtection, employeeServiceRequestWorkflowRoutes); // Employee workflow actions (acknowledge, start, close) + CSRF
+app.use('/api/push', generalLimiter, pushRoutes); // Push notification subscription management (auth handled per route)
 app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 app.use('/api', emailValidationRoutes); // Email domain validation proxy (no auth required)
 

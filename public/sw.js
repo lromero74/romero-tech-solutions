@@ -206,3 +206,106 @@ self.addEventListener('message', (event) => {
     self.skipWaiting();
   }
 });
+
+// Push notification event handlers
+self.addEventListener('push', (event) => {
+  console.log('SW: Push notification received');
+
+  let notificationData = {
+    title: 'Romero Tech Solutions',
+    body: 'You have a new notification',
+    icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+    badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+    vibrate: [200, 100, 200],
+    data: {
+      dateOfArrival: Date.now(),
+      primaryKey: 1
+    },
+    actions: [
+      { action: 'view', title: 'View Details' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
+  };
+
+  // Try to get notification data from the push event
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        ...notificationData,
+        ...payload
+      };
+    } catch (e) {
+      // If JSON parsing fails, use text as body
+      notificationData.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, notificationData)
+  );
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', (event) => {
+  console.log('SW: Notification clicked:', event.action);
+
+  event.notification.close();
+
+  if (event.action === 'dismiss') {
+    return;
+  }
+
+  // Open the app or focus existing window
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then((windowClients) => {
+      // Check if there's already a window/tab open
+      for (let client of windowClients) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      // If no window is open, open a new one
+      if (clients.openWindow) {
+        const urlToOpen = event.notification.data?.url || '/';
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// Background sync for offline push subscription
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-push-subscription') {
+    console.log('SW: Syncing push subscription');
+    event.waitUntil(syncPushSubscription());
+  }
+});
+
+async function syncPushSubscription() {
+  try {
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (subscription) {
+      // Send subscription to server
+      const response = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(subscription)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync subscription');
+      }
+
+      console.log('SW: Push subscription synced successfully');
+    }
+  } catch (error) {
+    console.error('SW: Failed to sync push subscription:', error);
+    throw error; // Retry later
+  }
+}

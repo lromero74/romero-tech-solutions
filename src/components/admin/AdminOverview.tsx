@@ -6,9 +6,11 @@ import {
   Settings,
   FileText,
   BarChart3,
-  Plus
+  Plus,
+  Bell
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
+import PushNotificationManager from '../PushNotificationManager';
 
 type AdminView = 'overview' | 'employees' | 'clients' | 'services' | 'service-requests' | 'reports';
 
@@ -122,6 +124,15 @@ const AdminOverview: React.FC<AdminOverviewProps> = ({
             Manage Clients
           </button>
         </div>
+      </div>
+
+      {/* Push Notification Settings */}
+      <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
+        <h2 className={`text-lg font-medium ${themeClasses.text.primary} mb-4 flex items-center gap-2`}>
+          <Bell className="w-5 h-5" />
+          Push Notifications
+        </h2>
+        <PushNotificationManager />
       </div>
     </div>
   );

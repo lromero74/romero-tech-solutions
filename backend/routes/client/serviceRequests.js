@@ -7,6 +7,7 @@ import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
 import { initializeServiceRequestWorkflow } from '../../services/workflowService.js';
 import { websocketService } from '../../services/websocketService.js';
+import { sendNotificationToEmployees } from '../pushRoutes.js';
 
 const router = express.Router();
 
@@ -207,6 +208,50 @@ router.post('/', async (req, res) => {
 
     // Initialize workflow asynchronously (don't await - don't block response)
     initializeWorkflow();
+
+    // Send push notification for new service request
+    const sendPushNotification = async () => {
+      try {
+        // Get business name for notification
+        const businessQuery = await pool.query(
+          'SELECT name FROM businesses WHERE id = $1',
+          [businessId]
+        );
+        const businessName = businessQuery.rows[0]?.name || 'Unknown Business';
+
+        const notificationData = {
+          title: '🔧 New Service Request',
+          body: `${businessName} submitted: ${title || 'Service Request'} #${requestNumber}`,
+          icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          vibrate: [200, 100, 200],
+          data: {
+            type: 'new_service_request',
+            serviceRequestId: serviceRequestId,
+            requestNumber: requestNumber,
+            businessId: businessId,
+            businessName: businessName,
+            title: title || 'Service Request',
+            urgency: urgencyLevelId === 3 ? 'urgent' : urgencyLevelId === 2 ? 'high' : 'normal',
+            timestamp: Date.now(),
+            url: `/admin/service-requests/${serviceRequestId}`
+          }
+        };
+
+        await sendNotificationToEmployees(
+          'new_service_request',
+          notificationData,
+          'view.service_requests.enable'  // Use existing permission for those who can view service requests
+        );
+        console.log('✅ Push notification sent for new service request');
+      } catch (notificationError) {
+        console.error('⚠️ Failed to send push notification:', notificationError);
+        // Don't fail the request if notification fails
+      }
+    };
+
+    // Send push notification asynchronously
+    sendPushNotification();
 
     res.status(201).json({
       success: true,

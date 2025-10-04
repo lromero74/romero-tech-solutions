@@ -4,6 +4,8 @@ import App from './App.tsx';
 import './index.css';
 import { checkFirefoxCompatibility, firefoxDebugLog, detectBrowser } from './utils/browserSupport';
 import { registerSW } from './utils/serviceWorker';
+// Import form persistence to enable scroll preservation globally
+import './utils/formStatePersistence';
 
 const compatibility = checkFirefoxCompatibility();
 if (!compatibility.compatible) {

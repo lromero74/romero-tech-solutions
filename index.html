@@ -61,9 +61,51 @@
     <link rel="apple-touch-icon" href="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" />
 
-    <!-- Web App Manifest -->
-    <link rel="manifest" href="/site.webmanifest" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Dynamic Web App Manifest - Selected based on current path -->
+    <script>
+      (function() {
+        const path = window.location.pathname;
+        let manifestPath = '/site.webmanifest';
+        let appTitle = 'Romero Tech Solutions';
+
+        // Select appropriate manifest based on portal
+        if (path.includes('/employee')) {
+          manifestPath = '/employee.webmanifest';
+          appTitle = 'RTS Employee';
+        } else if (path.includes('/clogin')) {
+          manifestPath = '/client.webmanifest';
+          appTitle = 'RTS Client';
+        }
+
+        // Create and insert the manifest link
+        const manifestLink = document.createElement('link');
+        manifestLink.rel = 'manifest';
+        manifestLink.href = manifestPath;
+        document.head.appendChild(manifestLink);
+
+        // Add iOS-specific meta tags
+        const metaTitle = document.createElement('meta');
+        metaTitle.name = 'apple-mobile-web-app-title';
+        metaTitle.content = appTitle;
+        document.head.appendChild(metaTitle);
+
+        const metaCapable = document.createElement('meta');
+        metaCapable.name = 'apple-mobile-web-app-capable';
+        metaCapable.content = 'yes';
+        document.head.appendChild(metaCapable);
+
+        const metaStatus = document.createElement('meta');
+        metaStatus.name = 'apple-mobile-web-app-status-bar-style';
+        metaStatus.content = 'default';
+        document.head.appendChild(metaStatus);
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+
+    <!-- iOS-specific meta tags to improve PWA behavior -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-touch-fullscreen" content="yes">
+    <meta name="format-detection" content="telephone=no">
 
     <!-- Structured Data (JSON-LD) for Local Business -->
     <script type="application/ld+json">

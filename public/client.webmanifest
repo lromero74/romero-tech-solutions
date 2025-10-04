@@ -1,7 +1,7 @@
 {
-  "name": "Romero Tech Solutions",
-  "short_name": "RomeroTech",
-  "description": "Professional IT Support & Computer Repair Services",
+  "name": "RomeroTech Client Portal",
+  "short_name": "RTS Client",
+  "description": "Client Portal - Professional IT Support & Computer Repair Services",
   "icons": [
     {
       "src": "/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
@@ -20,7 +20,7 @@
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": "/",
+  "start_url": "/clogin",
   "scope": "/",
   "categories": ["business", "productivity", "utilities"]
 }
