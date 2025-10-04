@@ -92,7 +92,7 @@ interface Filters {
 
 const AdminInvoices: React.FC = () => {
   const { isDark } = useTheme();
-  const { hasPermission } = usePermissionContext();
+  const { hasPermission, loading: permissionsLoading } = usePermissionContext();
 
   const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,23 +118,6 @@ const AdminInvoices: React.FC = () => {
   const [sortBy, setSortBy] = useState('issue_date');
   const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
 
-  // Permission check
-  if (!hasPermission('view.invoices.enable')) {
-    return (
-      <div className={`p-8 ${themeClasses.bg.primary}`}>
-        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
-          <AlertCircle className={`w-12 h-12 ${themeClasses.text.warning} mx-auto mb-4`} />
-          <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
-            Access Denied
-          </h3>
-          <p className={themeClasses.text.secondary}>
-            You do not have permission to view invoices.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   // Invoice viewer state
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -149,7 +132,7 @@ const AdminInvoices: React.FC = () => {
   const [paymentNotes, setPaymentNotes] = useState<string>('');
   const [updatingPayment, setUpdatingPayment] = useState(false);
 
-  // Fetch invoices
+  // Fetch invoices (must be defined before useEffect)
   const fetchInvoices = async () => {
     try {
       setLoading(true);
@@ -188,9 +171,61 @@ const AdminInvoices: React.FC = () => {
     }
   };
 
+  // useEffect must be called before any conditional returns
+  // Fetch invoices when permissions are loaded and user has permission
   useEffect(() => {
-    fetchInvoices();
-  }, [pagination.page, sortBy, sortOrder, filters.paymentStatus, filters.dueDateFrom, filters.dueDateTo, filters.paymentDateFrom, filters.paymentDateTo]);
+    if (!permissionsLoading && hasPermission('view.invoices.enable')) {
+      fetchInvoices();
+    }
+  }, [pagination.page, sortBy, sortOrder, filters.paymentStatus, filters.dueDateFrom, filters.dueDateTo, filters.paymentDateFrom, filters.paymentDateTo, permissionsLoading]);
+
+  // Handle Escape key to close invoice modal
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape' && showInvoiceModal) {
+        setShowInvoiceModal(false);
+        setSelectedInvoiceId(null);
+        setInvoiceData(null);
+      }
+    };
+
+    if (showInvoiceModal) {
+      document.addEventListener('keydown', handleEscapeKey);
+      return () => {
+        document.removeEventListener('keydown', handleEscapeKey);
+      };
+    }
+  }, [showInvoiceModal]);
+
+  // Permission check (AFTER all hooks)
+  // Wait for permissions to load before checking
+  if (permissionsLoading) {
+    return (
+      <div className={`p-8 ${themeClasses.bg.primary}`}>
+        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
+          <div className={`text-lg ${themeClasses.text.secondary}`}>Loading permissions...</div>
+        </div>
+      </div>
+    );
+  }
+
+  const canViewInvoices = hasPermission('view.invoices.enable');
+
+  if (!canViewInvoices) {
+    return (
+      <div className={`p-8 ${themeClasses.bg.primary}`}>
+        <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center`}>
+          <AlertCircle className={`w-12 h-12 ${themeClasses.text.warning} mx-auto mb-4`} />
+          <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-2`}>
+            Access Denied
+          </h3>
+          <p className={themeClasses.text.secondary}>
+            You do not have permission to view invoices.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Fetch invoice details
   const fetchInvoice = async (invoiceId: string) => {
@@ -551,7 +586,7 @@ const AdminInvoices: React.FC = () => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <div className={`text-sm font-semibold ${themeClasses.text.primary}`}>
-                          ${invoice.total_amount.toFixed(2)}
+                          ${parseFloat(invoice.total_amount).toFixed(2)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -705,293 +740,555 @@ const AdminInvoices: React.FC = () => {
                 <p className={`mt-4 ${themeClasses.text.secondary}`}>Loading invoice...</p>
               </div>
             ) : invoiceData ? (
-              <div className="p-8" id="invoice-content">
+              <div className="p-6">
                 {/* Header with Close Button */}
-                <div className="flex justify-between items-start mb-6">
-                  <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>Invoice</h2>
+                <div className="flex items-center justify-between mb-6 pb-4 border-b">
+                  <h2 className={`text-2xl font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                    Invoice #{invoiceData.invoice.invoice_number}
+                  </h2>
                   <button
                     onClick={() => {
                       setShowInvoiceModal(false);
                       setSelectedInvoiceId(null);
                       setInvoiceData(null);
                     }}
-                    className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
+                    className={`p-2 rounded-lg transition-colors ${
+                      isDark
+                        ? 'hover:bg-gray-700 text-gray-400'
+                        : 'hover:bg-gray-100 text-gray-600'
+                    }`}
                   >
                     <XCircle className="h-6 w-6" />
                   </button>
                 </div>
 
-                {/* Company Letterhead */}
-                <div className="mb-8 pb-6 border-b-2 border-gray-300 dark:border-gray-600">
-                  <h1 className={`text-3xl font-bold ${themeClasses.text.primary} mb-2`}>
-                    {invoiceData.companyInfo.company_name}
-                  </h1>
-                  <div className={`text-sm ${themeClasses.text.secondary}`}>
-                    <p>{invoiceData.companyInfo.company_address_line1}</p>
-                    <p>{invoiceData.companyInfo.company_address_line2}</p>
-                    <p>
-                      {invoiceData.companyInfo.company_city}, {invoiceData.companyInfo.company_state}{' '}
-                      {invoiceData.companyInfo.company_zip}
-                    </p>
-                    <p className="mt-2">Phone: {invoiceData.companyInfo.company_phone}</p>
-                    <p>Email: {invoiceData.companyInfo.company_email}</p>
-                  </div>
-                </div>
+                {/* Invoice Details */}
+                <div className="space-y-6">
+                  {/* From and Bill To */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Company Info */}
+                    {invoiceData.companyInfo && (
+                      <div>
+                        <h3 className={`font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          From:
+                        </h3>
+                        <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                          <p className="font-medium">{invoiceData.companyInfo.company_name}</p>
+                          <p>{invoiceData.companyInfo.company_address}</p>
+                          <p>{invoiceData.companyInfo.company_city}, {invoiceData.companyInfo.company_state} {invoiceData.companyInfo.company_zip}</p>
+                          <p>{invoiceData.companyInfo.company_phone}</p>
+                          <p>{invoiceData.companyInfo.company_email}</p>
+                        </div>
+                      </div>
+                    )}
 
-                {/* Invoice Details & Client Info Side by Side */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                  {/* Invoice Details */}
-                  <div>
-                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Invoice Details</h3>
-                    <div className={`space-y-2 text-sm ${themeClasses.text.secondary}`}>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Invoice Number:</span>
-                        <span className="font-mono">{invoiceData.invoice.invoice_number}</span>
+                    {/* Bill To */}
+                    <div>
+                      <h3 className={`font-semibold mb-2 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        Bill To:
+                      </h3>
+                      <div className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {invoiceData.invoice.primary_contact_name && (
+                          <p>{invoiceData.invoice.primary_contact_name}</p>
+                        )}
+                        {invoiceData.invoice.street_address && (
+                          <p>{invoiceData.invoice.street_address}</p>
+                        )}
+                        {(invoiceData.invoice.city || invoiceData.invoice.state || invoiceData.invoice.zip_code) && (
+                          <p>
+                            {invoiceData.invoice.city}
+                            {invoiceData.invoice.city && (invoiceData.invoice.state || invoiceData.invoice.zip_code) && ', '}
+                            {invoiceData.invoice.state} {invoiceData.invoice.zip_code}
+                          </p>
+                        )}
+                        {invoiceData.invoice.primary_contact_phone && (
+                          <p className="mt-2">
+                            {(() => {
+                              const phone = invoiceData.invoice.primary_contact_phone.replace(/\D/g, '');
+                              if (phone.length === 10) {
+                                return `(${phone.slice(0, 3)}) ${phone.slice(3, 6)}-${phone.slice(6)}`;
+                              }
+                              return invoiceData.invoice.primary_contact_phone;
+                            })()}
+                          </p>
+                        )}
                       </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Issue Date:</span>
-                        <span>{formatDate(invoiceData.invoice.issue_date)}</span>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className={`border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
+                  {/* Service Information */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Service Request</p>
+                      <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {invoiceData.invoice.request_number}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>SR Title</p>
+                      <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {invoiceData.invoice.service_title}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Service Type</p>
+                      <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        N/A
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Payment Status</p>
+                      <div className="mt-1">
+                        {getPaymentStatusBadge(invoiceData.invoice.payment_status)}
                       </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Due Date:</span>
-                        <span className="font-semibold">{formatDate(invoiceData.invoice.due_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Payment Status:</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                            invoiceData.invoice.payment_status === 'paid'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                              : invoiceData.invoice.payment_status === 'overdue'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                          }`}
-                        >
-                          {invoiceData.invoice.payment_status.toUpperCase()}
-                        </span>
-                      </div>
-                      {invoiceData.invoice.payment_date && (
-                        <div className="flex justify-between">
-                          <span className="font-medium">Payment Date:</span>
-                          <span>{formatDate(invoiceData.invoice.payment_date)}</span>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Issue Date</p>
+                      <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {formatDate(invoiceData.invoice.issue_date)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className={`text-sm ${isDark ? 'text-gray-400' : 'text-gray-600'}`}>Due Date</p>
+                      <p className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {formatDate(invoiceData.invoice.due_date)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Divider */}
+                  <div className={`border-t ${isDark ? 'border-gray-700' : 'border-gray-200'}`}></div>
+
+                  {/* Service Description */}
+                  {invoiceData.invoice.service_description && (
+                    <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                      <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        Service Description
+                      </h3>
+                      <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {invoiceData.invoice.service_description}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Resolution Summary */}
+                  {invoiceData.invoice.resolution_summary && (
+                    <div className={`p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                      <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        Resolution Summary
+                      </h3>
+                      <p className={`text-sm whitespace-pre-wrap ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                        {invoiceData.invoice.resolution_summary}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Actual Hours Breakdown (Before Rounding) */}
+                  {(invoiceData as any).actualHoursBreakdown && (
+                    <div className={`mt-6 p-4 rounded-lg border ${
+                      isDark
+                        ? 'bg-blue-900/20 border-blue-800'
+                        : 'bg-blue-50 border-blue-200'
+                    }`}>
+                      <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-blue-100' : 'text-blue-900'}`}>
+                        True Hours Worked (Before Rounding)
+                      </h3>
+
+                      {/* Time Entries */}
+                      {(invoiceData as any).actualHoursBreakdown.timeEntries && (invoiceData as any).actualHoursBreakdown.timeEntries.length > 0 && (
+                        <div className={`mb-4 pb-4 border-b ${isDark ? 'border-blue-700' : 'border-blue-300'}`}>
+                          <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
+                            Work Sessions:
+                          </h4>
+                          <div className="space-y-1">
+                            {(invoiceData as any).actualHoursBreakdown.timeEntries.map((entry: any, idx: number) => {
+                              const startDate = new Date(entry.startTime);
+                              const endDate = new Date(entry.endTime);
+                              const durationMinutes = Math.round((endDate.getTime() - startDate.getTime()) / 60000);
+                              const hours = Math.floor(durationMinutes / 60);
+                              const minutes = durationMinutes % 60;
+
+                              return (
+                                <div key={idx} className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                                  <span className="font-medium">
+                                    {startDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                  </span>
+                                  {' • '}
+                                  <span>
+                                    {startDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                    {' - '}
+                                    {endDate.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', hour12: true })}
+                                  </span>
+                                  <span className={`ml-2 ${isDark ? 'text-blue-400' : 'text-blue-600'}`}>
+                                    ({hours > 0 ? `${hours}h ` : ''}{minutes}m)
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
                       )}
-                    </div>
-                  </div>
 
-                  {/* Bill To */}
-                  <div>
-                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Bill To</h3>
-                    <div className={`text-sm ${themeClasses.text.secondary}`}>
-                      <p className="font-semibold text-base">{invoiceData.invoice.business_name}</p>
-                      <p className="mt-2">{invoiceData.invoice.primary_contact_name}</p>
-                      <p>{invoiceData.invoice.street_address}</p>
-                      <p>
-                        {invoiceData.invoice.city}, {invoiceData.invoice.state} {invoiceData.invoice.zip_code}
-                      </p>
-                      <p className="mt-2">{invoiceData.invoice.primary_contact_phone}</p>
-                      <p>{invoiceData.invoice.primary_contact_email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Service Request Details */}
-                <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
-                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Service Request</h3>
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 text-sm ${themeClasses.text.secondary}`}>
-                    <div>
-                      <span className="font-medium">Request Number:</span>
-                      <span className="ml-2 font-mono">{invoiceData.invoice.request_number}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service:</span>
-                      <span className="ml-2">{invoiceData.invoice.service_title}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service Started:</span>
-                      <span className="ml-2">{formatDate(invoiceData.invoice.service_created_at)}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service Completed:</span>
-                      <span className="ml-2">{formatDate(invoiceData.invoice.service_completed_at)}</span>
-                    </div>
-                  </div>
-                  {invoiceData.invoice.work_description && (
-                    <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                      <p className="font-medium text-sm mb-1">Work Description:</p>
-                      <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
-                        {invoiceData.invoice.work_description}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Billable Hours Breakdown */}
-                <div className="mb-6">
-                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Time & Cost Breakdown</h3>
-
-                  {/* First-time Client Discount */}
-                  {invoiceData.invoice.is_first_service_request && invoiceData.invoice.waived_hours > 0 && (
-                    <div className={`mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg`}>
-                      <div className="flex justify-between items-center">
-                        <span className={`font-medium ${themeClasses.text.primary}`}>
-                          New Client Assessment - Waived
-                        </span>
-                        <span className={`font-semibold text-green-600 dark:text-green-400`}>
-                          {invoiceData.invoice.waived_hours.toFixed(2)} hours
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Billable Hours Table */}
-                  <div className={`overflow-hidden border ${themeClasses.border} rounded-lg`}>
-                    <table className="w-full">
-                      <thead className={`${themeClasses.bg.secondary}`}>
-                        <tr>
-                          <th className={`px-4 py-3 text-left text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Rate Tier
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Hours
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Rate
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Amount
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${themeClasses.border}`}>
+                      <div className="space-y-2">
                         {/* Standard Hours */}
-                        {invoiceData.invoice.standard_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                        {parseFloat((invoiceData as any).actualHoursBreakdown.standard?.actualHours || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className={`text-sm ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
                               Standard (1.0x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Mon-Fri 8am-5pm</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.standard_hours.toFixed(1)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.standard_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.standard_cost.toFixed(2)}
-                            </td>
-                          </tr>
+                            </span>
+                            <div className="text-right">
+                              <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                                {(invoiceData as any).actualHoursBreakdown.standard.actualHours} hrs (worked)
+                              </div>
+                            </div>
+                          </div>
                         )}
 
                         {/* Premium Hours */}
-                        {invoiceData.invoice.premium_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                        {parseFloat((invoiceData as any).actualHoursBreakdown.premium?.actualHours || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className={`text-sm ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
                               Premium (1.5x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Weekends</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.premium_hours.toFixed(1)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.premium_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.premium_cost.toFixed(2)}
-                            </td>
-                          </tr>
+                            </span>
+                            <div className="text-right">
+                              <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                                {(invoiceData as any).actualHoursBreakdown.premium.actualHours} hrs (worked)
+                              </div>
+                            </div>
+                          </div>
                         )}
 
                         {/* Emergency Hours */}
-                        {invoiceData.invoice.emergency_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                        {parseFloat((invoiceData as any).actualHoursBreakdown.emergency?.actualHours || 0) > 0 && (
+                          <div className="flex justify-between items-center">
+                            <span className={`text-sm ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
                               Emergency (2.0x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Late night/overnight</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.emergency_hours.toFixed(1)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.emergency_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.emergency_cost.toFixed(2)}
-                            </td>
-                          </tr>
+                            </span>
+                            <div className="text-right">
+                              <div className={`text-sm ${isDark ? 'text-blue-300' : 'text-blue-700'}`}>
+                                {(invoiceData as any).actualHoursBreakdown.emergency.actualHours} hrs (worked)
+                              </div>
+                            </div>
+                          </div>
                         )}
-                      </tbody>
-                    </table>
-                  </div>
+                      </div>
 
-                  <div className={`text-xs ${themeClasses.text.muted} mt-2 italic`}>
-                    * Hours rounded up to nearest 0.5 hour per rate tier
-                  </div>
-                </div>
+                      <div className={`text-xs mt-3 pt-2 border-t italic ${
+                        isDark ? 'text-blue-400 border-blue-700' : 'text-blue-600 border-blue-300'
+                      }`}>
+                        * All start/pause/resume times are actual. Final end time rounded up to nearest 15 minutes.
+                      </div>
+                    </div>
+                  )}
 
-                {/* Totals */}
-                <div className="mb-6">
-                  <div className={`max-w-sm ml-auto space-y-2 text-sm`}>
-                    <div className="flex justify-between">
-                      <span className={`${themeClasses.text.secondary}`}>Subtotal:</span>
-                      <span className={`${themeClasses.text.primary} font-semibold`}>
-                        ${invoiceData.invoice.subtotal.toFixed(2)}
+                  {/* Original Schedule & Cost Estimate */}
+                  {(invoiceData.invoice.requested_date || (invoiceData as any).costEstimate) && (
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {/* Scheduled Date & Time */}
+                      {invoiceData.invoice.requested_date && invoiceData.invoice.requested_time_start && invoiceData.invoice.requested_time_end && (
+                        <div className={`p-3 rounded-lg border ${
+                          isDark
+                            ? 'bg-blue-900/20 border-blue-800'
+                            : 'bg-blue-50 border-blue-200'
+                        }`}>
+                          <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-blue-100' : 'text-blue-900'}`}>
+                            Original Scheduled Date & Time
+                          </h4>
+                          <div className={`text-sm mb-1 ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
+                            {formatDate(invoiceData.invoice.requested_date)}
+                          </div>
+                          <div className={`text-sm ${isDark ? 'text-blue-200' : 'text-blue-800'}`}>
+                            {invoiceData.invoice.requested_time_start.substring(0, 5)} - {invoiceData.invoice.requested_time_end.substring(0, 5)}
+                            {(invoiceData as any).costEstimate && ` (${(invoiceData as any).costEstimate.durationHours}h)`}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Cost Estimate */}
+                      {(invoiceData as any).costEstimate && (
+                        <div className={`p-3 rounded-lg border ${
+                          isDark
+                            ? 'bg-green-900/20 border-green-800'
+                            : 'bg-green-50 border-green-200'
+                        }`}>
+                          <h4 className={`text-sm font-semibold mb-2 ${isDark ? 'text-green-100' : 'text-green-900'}`}>
+                            Original Cost Estimate
+                          </h4>
+                          <div className={`text-xs mb-1 ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                            Base Rate ({(invoiceData as any).costEstimate.rateCategoryName || 'Standard'}): ${(invoiceData as any).costEstimate.baseRate}/hr
+                          </div>
+                          {/* Tier Breakdown */}
+                          {(invoiceData as any).costEstimate.breakdown && (invoiceData as any).costEstimate.breakdown.map((block: any, idx: number) => (
+                            <div key={idx} className={`text-xs ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                              {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
+                            </div>
+                          ))}
+                          {/* First Hour Discount */}
+                          {(invoiceData as any).costEstimate.firstHourDiscount && (invoiceData as any).costEstimate.firstHourDiscount > 0 && (
+                            <>
+                              <div className={`text-xs mt-1 pt-1 border-t ${
+                                isDark ? 'text-green-300 border-green-700' : 'text-green-700 border-green-200'
+                              }`}>
+                                Subtotal: ${(invoiceData as any).costEstimate.subtotal?.toFixed(2)}
+                              </div>
+                              <div className={`text-xs font-medium mb-1 ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                                🎁 First Hour Comp (New Client):
+                              </div>
+                              {(invoiceData as any).costEstimate.firstHourCompBreakdown?.map((compBlock: any, idx: number) => (
+                                <div key={idx} className={`text-xs ml-4 ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                                  • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
+                                </div>
+                              ))}
+                              {(invoiceData as any).costEstimate.firstHourCompBreakdown && (invoiceData as any).costEstimate.firstHourCompBreakdown.length > 1 && (
+                                <div className={`text-xs font-medium ml-4 ${isDark ? 'text-green-300' : 'text-green-700'}`}>
+                                  Total Discount: -${(invoiceData as any).costEstimate.firstHourDiscount.toFixed(2)}
+                                </div>
+                              )}
+                            </>
+                          )}
+                          <div className={`mt-1 pt-1 border-t text-sm font-semibold ${
+                            isDark ? 'text-green-100 border-green-700' : 'text-green-900 border-green-200'
+                          }`}>
+                            Estimated Total*: ${(invoiceData as any).costEstimate.total.toFixed(2)}
+                          </div>
+                          <div className={`text-xs mt-1 italic ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                            * Actual cost may vary based on time required to complete the service
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Actual Billable Hours Summary */}
+                  <div className={`mt-6 p-4 rounded-lg border ${
+                    isDark
+                      ? 'bg-purple-900/20 border-purple-800'
+                      : 'bg-purple-50 border-purple-200'
+                  }`}>
+                    <h3 className={`text-sm font-semibold mb-3 ${isDark ? 'text-purple-100' : 'text-purple-900'}`}>
+                      Actual Billable Hours
+                    </h3>
+
+                    {/* First-time Client Discount */}
+                    {invoiceData.invoice.is_first_service_request && parseFloat(invoiceData.invoice.waived_hours || 0) > 0 && (
+                      <div className={`mb-3 pb-3 border-b ${isDark ? 'border-purple-700' : 'border-purple-300'}`}>
+                        <p className={`text-xs mb-1 ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>
+                          First Service Request Discount:
+                        </p>
+                        <p className={`text-sm font-medium ${isDark ? 'text-green-400' : 'text-green-600'}`}>
+                          New Client Assessment - Waived: {parseFloat(invoiceData.invoice.waived_hours).toFixed(2)} hours
+                        </p>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-3 gap-2 text-xs">
+                      <div className="text-center">
+                        <div className={`mb-1 ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>Standard</div>
+                        <div className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {parseFloat(invoiceData.invoice.standard_hours || 0).toFixed(2)} hrs
+                        </div>
+                        <div className={`text-xs ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>1.0x rate</div>
+                      </div>
+                      <div className="text-center">
+                        <div className={`mb-1 ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>Premium</div>
+                        <div className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {parseFloat(invoiceData.invoice.premium_hours || 0).toFixed(2)} hrs
+                        </div>
+                        <div className={`text-xs ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>1.5x rate</div>
+                      </div>
+                      <div className="text-center">
+                        <div className={`mb-1 ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>Emergency</div>
+                        <div className={`font-bold text-lg ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          {parseFloat(invoiceData.invoice.emergency_hours || 0).toFixed(2)} hrs
+                        </div>
+                        <div className={`text-xs ${isDark ? 'text-purple-400' : 'text-purple-600'}`}>2.0x rate</div>
+                      </div>
+                    </div>
+                    <div className={`mt-2 pt-2 border-t text-center ${isDark ? 'border-purple-700' : 'border-purple-300'}`}>
+                      <span className={`text-xs ${isDark ? 'text-purple-300' : 'text-purple-700'}`}>Total Billable: </span>
+                      <span className={`text-sm font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                        {(parseFloat(invoiceData.invoice.standard_hours || 0) +
+                          parseFloat(invoiceData.invoice.premium_hours || 0) +
+                          parseFloat(invoiceData.invoice.emergency_hours || 0)).toFixed(2)} hours
                       </span>
                     </div>
-                    {invoiceData.invoice.tax_rate > 0 && (
+                  </div>
+
+                  {/* Time & Cost Breakdown */}
+                  <div className={`mt-6 p-4 rounded-lg ${isDark ? 'bg-gray-700/50' : 'bg-gray-50'}`}>
+                    <h3 className={`text-lg font-semibold mb-3 ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                      Cost Breakdown by Rate Tier
+                    </h3>
+
+                    {/* Billable Hours Table */}
+                    <div className={`overflow-hidden border rounded-lg ${
+                      isDark ? 'border-gray-600' : 'border-gray-200'
+                    }`}>
+                      <table className="w-full">
+                        <thead className={isDark ? 'bg-gray-700' : 'bg-gray-100'}>
+                          <tr>
+                            <th className={`px-4 py-3 text-left text-sm font-semibold ${
+                              isDark ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              Rate Tier
+                            </th>
+                            <th className={`px-4 py-3 text-right text-sm font-semibold ${
+                              isDark ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              Hours
+                            </th>
+                            <th className={`px-4 py-3 text-right text-sm font-semibold ${
+                              isDark ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              Rate
+                            </th>
+                            <th className={`px-4 py-3 text-right text-sm font-semibold ${
+                              isDark ? 'text-white' : 'text-gray-900'
+                            }`}>
+                              Amount
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className={`divide-y ${isDark ? 'divide-gray-600' : 'divide-gray-200'}`}>
+                          {/* Standard Hours */}
+                          {parseFloat(invoiceData.invoice.standard_hours || 0) > 0 && (
+                            <tr className={isDark ? 'bg-gray-800' : 'bg-white'}>
+                              <td className={`px-4 py-3 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                Standard (1.0x)
+                                <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Mon-Fri 8am-5pm
+                                </div>
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {parseFloat(invoiceData.invoice.standard_hours).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                ${parseFloat(invoiceData.invoice.standard_rate).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                                isDark ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                ${parseFloat(invoiceData.invoice.standard_cost).toFixed(2)}
+                              </td>
+                            </tr>
+                          )}
+
+                          {/* Premium Hours */}
+                          {parseFloat(invoiceData.invoice.premium_hours || 0) > 0 && (
+                            <tr className={isDark ? 'bg-gray-800' : 'bg-white'}>
+                              <td className={`px-4 py-3 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                Premium (1.5x)
+                                <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Weekends
+                                </div>
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {parseFloat(invoiceData.invoice.premium_hours).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                ${parseFloat(invoiceData.invoice.premium_rate).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                                isDark ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                ${parseFloat(invoiceData.invoice.premium_cost).toFixed(2)}
+                              </td>
+                            </tr>
+                          )}
+
+                          {/* Emergency Hours */}
+                          {parseFloat(invoiceData.invoice.emergency_hours || 0) > 0 && (
+                            <tr className={isDark ? 'bg-gray-800' : 'bg-white'}>
+                              <td className={`px-4 py-3 text-sm ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                Emergency (2.0x)
+                                <div className={`text-xs ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                                  Late night/overnight
+                                </div>
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                {parseFloat(invoiceData.invoice.emergency_hours).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                                ${parseFloat(invoiceData.invoice.emergency_rate).toFixed(2)}
+                              </td>
+                              <td className={`px-4 py-3 text-sm text-right font-semibold ${
+                                isDark ? 'text-white' : 'text-gray-900'
+                              }`}>
+                                ${parseFloat(invoiceData.invoice.emergency_cost).toFixed(2)}
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div className={`text-xs mt-2 italic ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                      * Final end time rounded up to nearest 15 minutes. Exact hours billed per tier.
+                    </div>
+                  </div>
+
+                  {/* Totals */}
+                  <div className="mb-6">
+                    <div className="max-w-sm ml-auto space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className={`${themeClasses.text.secondary}`}>
-                          Tax ({(invoiceData.invoice.tax_rate * 100).toFixed(2)}%):
+                        <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>Subtotal:</span>
+                        <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          ${parseFloat(invoiceData.invoice.subtotal).toFixed(2)}
                         </span>
-                        <span className={`${themeClasses.text.primary} font-semibold`}>
-                          ${invoiceData.invoice.tax_amount.toFixed(2)}
+                      </div>
+                      {invoiceData.invoice.tax_rate > 0 && (
+                        <div className="flex justify-between">
+                          <span className={isDark ? 'text-gray-400' : 'text-gray-600'}>
+                            Tax ({(invoiceData.invoice.tax_rate * 100).toFixed(2)}%):
+                          </span>
+                          <span className={`font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                            ${parseFloat(invoiceData.invoice.tax_amount).toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                      <div className={`flex justify-between pt-2 border-t-2 ${isDark ? 'border-gray-600' : 'border-gray-300'}`}>
+                        <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>Total Due:</span>
+                        <span className={`text-lg font-bold ${isDark ? 'text-white' : 'text-gray-900'}`}>
+                          ${parseFloat(invoiceData.invoice.total_amount).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Payment Terms */}
+                  <div className={`text-xs text-center ${isDark ? 'text-gray-400' : 'text-gray-500'}`}>
+                    <p>Payment due within 30 days of invoice date.</p>
+                    <p className="mt-1">Thank you for your business!</p>
+                  </div>
+
+                  {/* Payment Status - Bottom Left */}
+                  <div className="mt-6">
+                    <div className="flex items-center gap-2">
+                      <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Payment Status:</span>
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
+                          invoiceData.invoice.payment_status === 'paid' || invoiceData.invoice.payment_status === 'comped'
+                            ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                            : invoiceData.invoice.payment_status === 'overdue' || invoiceData.invoice.payment_status === 'failed'
+                            ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
+                            : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                        }`}
+                      >
+                        {invoiceData.invoice.payment_status.toUpperCase()}
+                      </span>
+                    </div>
+                    {invoiceData.invoice.payment_date && (
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className={`font-medium ${isDark ? 'text-white' : 'text-gray-900'}`}>Payment Date:</span>
+                        <span className={isDark ? 'text-gray-300' : 'text-gray-600'}>
+                          {formatDate(invoiceData.invoice.payment_date)}
                         </span>
                       </div>
                     )}
-                    <div className={`flex justify-between pt-2 border-t-2 border-gray-300 dark:border-gray-600`}>
-                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>Total Due:</span>
-                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
-                        ${invoiceData.invoice.total_amount.toFixed(2)}
-                      </span>
-                    </div>
                   </div>
-                </div>
-
-                {/* Notes */}
-                {invoiceData.invoice.notes && (
-                  <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
-                    <h3 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Notes</h3>
-                    <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
-                      {invoiceData.invoice.notes}
-                    </p>
-                  </div>
-                )}
-
-                {/* Payment Terms */}
-                <div className={`text-xs ${themeClasses.text.muted} text-center`}>
-                  <p>Payment due within 30 days of invoice date.</p>
-                  <p className="mt-1">Thank you for your business!</p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-8 flex justify-end space-x-3">
-                  <button
-                    onClick={() => window.print()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Print / Save PDF
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowInvoiceModal(false);
-                      setSelectedInvoiceId(null);
-                      setInvoiceData(null);
-                    }}
-                    className={`px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80`}
-                  >
-                    Close
-                  </button>
                 </div>
               </div>
             ) : null}

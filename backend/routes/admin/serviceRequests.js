@@ -344,8 +344,8 @@ router.get('/service-requests/closure-reasons', async (req, res) => {
     const query = `
       SELECT
         id,
-        reason_name,
-        reason_description,
+        reason_name AS reason,
+        reason_description AS description,
         is_active
       FROM service_request_closure_reasons
       WHERE is_active = true
@@ -412,17 +412,35 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
+    // Round start time DOWN to nearest 5 minutes, end time UP to nearest 30 minutes
     const timeEntriesQuery = `
       SELECT
         id,
         start_time,
+        -- Round start time DOWN to nearest 5 minutes
+        date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5) as rounded_start_time,
+        -- Round end time UP to nearest 30 minutes
         CASE
-          WHEN end_time IS NULL THEN NOW()  -- Use current time for active entries
+          WHEN end_time IS NULL THEN
+            date_trunc('hour', NOW()) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM NOW()) / 30)
+          ELSE
+            date_trunc('hour', end_time) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM end_time) / 30)
+        END as rounded_end_time,
+        CASE
+          WHEN end_time IS NULL THEN NOW()
           ELSE end_time
         END as end_time,
         CASE
-          WHEN end_time IS NULL THEN EXTRACT(EPOCH FROM (NOW() - start_time))/60  -- Calculate duration for active entries
-          ELSE duration_minutes
+          WHEN end_time IS NULL THEN
+            EXTRACT(EPOCH FROM (
+              (date_trunc('hour', NOW()) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM NOW()) / 30)) -
+              (date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5))
+            )) / 60
+          ELSE
+            EXTRACT(EPOCH FROM (
+              (date_trunc('hour', end_time) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM end_time) / 30)) -
+              (date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5))
+            )) / 60
         END as duration_minutes
       FROM service_request_time_entries
       WHERE service_request_id = $1
@@ -473,16 +491,36 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const chronologicalMinutes = [];
 
     // Process each time entry
-    for (const entry of timeEntriesResult.rows) {
+    for (let i = 0; i < timeEntriesResult.rows.length; i++) {
+      const entry = timeEntriesResult.rows[i];
+      const isLastEntry = i === timeEntriesResult.rows.length - 1;
+
+      // Start time is always actual (no rounding)
       const startTime = new Date(entry.start_time);
-      const endTime = new Date(entry.end_time);
+      const rawEndTime = new Date(entry.end_time);
+
+      // Only round the FINAL end time up to nearest 15 minutes
+      let endTime = rawEndTime;
+      if (isLastEntry) {
+        const endMinutes = rawEndTime.getUTCMinutes();
+        const roundedUpMinutes = Math.ceil(endMinutes / 15) * 15;
+        endTime = new Date(rawEndTime);
+        if (roundedUpMinutes === 60) {
+          endTime.setUTCHours(endTime.getUTCHours() + 1);
+          endTime.setUTCMinutes(0, 0, 0);
+        } else {
+          endTime.setUTCMinutes(roundedUpMinutes, 0, 0);
+        }
+      }
 
       console.log('⏱️  Processing entry:', {
         start_time: entry.start_time,
         end_time: entry.end_time,
         duration_minutes: entry.duration_minutes,
         startTime: startTime.toISOString(),
-        endTime: endTime.toISOString(),
+        rawEndTime: rawEndTime.toISOString(),
+        finalEndTime: endTime.toISOString(),
+        isLastEntry,
         isValidEndTime: !isNaN(endTime.getTime())
       });
 
@@ -546,17 +584,10 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
       }
     }
 
-    // Helper function to round up to nearest half hour
-    const roundUpToNearestHalfHour = (minutes) => {
-      if (minutes === 0) return 0;
-      const hours = minutes / 60;
-      return Math.ceil(hours * 2) / 2; // Round up to nearest 0.5
-    };
-
-    // Calculate billable hours (rounded up to nearest half hour per tier)
-    const standardBillableHours = roundUpToNearestHalfHour(standardMinutes);
-    const premiumBillableHours = roundUpToNearestHalfHour(premiumMinutes);
-    const emergencyBillableHours = roundUpToNearestHalfHour(emergencyMinutes);
+    // Convert minutes to hours (no additional rounding - end time already rounded)
+    const standardBillableHours = standardMinutes / 60;
+    const premiumBillableHours = premiumMinutes / 60;
+    const emergencyBillableHours = emergencyMinutes / 60;
     const totalBillableHours = standardBillableHours + premiumBillableHours + emergencyBillableHours;
 
     res.json({
@@ -900,39 +931,45 @@ router.post('/service-requests/:id/notes', async (req, res) => {
     const details = await pool.query(detailsQuery, [id, employeeId]);
     const serviceRequest = details.rows[0];
 
-    // Send email notification to client (non-blocking)
-    if (serviceRequest && serviceRequest.client_email) {
-      sendEmployeeNoteNotificationToClient({
-        serviceRequest: {
-          requestNumber: serviceRequest.request_number,
-          title: serviceRequest.title,
-          status: serviceRequest.status,
-          locationName: serviceRequest.location_name,
-          locationAddress: {
-            street1: serviceRequest.street_address_1,
-            street2: serviceRequest.street_address_2,
-            city: serviceRequest.city,
-            state: serviceRequest.state,
-            zip: serviceRequest.zip_code
+    // Send email notification to client (non-blocking) - only if client is NOT actively viewing
+    if (serviceRequest && serviceRequest.client_email && serviceRequest.client_id) {
+      const isClientViewing = websocketService.isClientViewingRequest(serviceRequest.client_id, id);
+
+      if (isClientViewing) {
+        console.log(`📧 Skipping email notification - client is actively viewing service request ${id}`);
+      } else {
+        sendEmployeeNoteNotificationToClient({
+          serviceRequest: {
+            requestNumber: serviceRequest.request_number,
+            title: serviceRequest.title,
+            status: serviceRequest.status,
+            locationName: serviceRequest.location_name,
+            locationAddress: {
+              street1: serviceRequest.street_address_1,
+              street2: serviceRequest.street_address_2,
+              city: serviceRequest.city,
+              state: serviceRequest.state,
+              zip: serviceRequest.zip_code
+            }
+          },
+          note: {
+            noteText: newNote.note_text,
+            createdAt: newNote.created_at
+          },
+          employee: {
+            name: `${serviceRequest.employee_first_name} ${serviceRequest.employee_last_name}`.trim() || employeeName,
+            email: serviceRequest.employee_email,
+            phone: serviceRequest.employee_phone
+          },
+          client: {
+            email: serviceRequest.client_email,
+            firstName: serviceRequest.client_first_name,
+            lastName: serviceRequest.client_last_name
           }
-        },
-        note: {
-          noteText: newNote.note_text,
-          createdAt: newNote.created_at
-        },
-        employee: {
-          name: `${serviceRequest.employee_first_name} ${serviceRequest.employee_last_name}`.trim() || employeeName,
-          email: serviceRequest.employee_email,
-          phone: serviceRequest.employee_phone
-        },
-        client: {
-          email: serviceRequest.client_email,
-          firstName: serviceRequest.client_first_name,
-          lastName: serviceRequest.client_last_name
-        }
-      }).catch(err => {
-        console.error('❌ Failed to send employee note email notification:', err);
-      });
+        }).catch(err => {
+          console.error('❌ Failed to send employee note email notification:', err);
+        });
+      }
     }
 
     // Broadcast service request update via websocket for real-time note updates
@@ -1053,7 +1090,7 @@ router.get('/service-requests/:id', async (req, res) => {
 router.put('/service-requests/:id/assign', async (req, res) => {
   try {
     const { id } = req.params;
-    const { technicianId } = req.body;
+    const { technicianId, assumeOwnership } = req.body;
     const pool = await getPool();
 
     if (!technicianId) {
@@ -1062,6 +1099,16 @@ router.put('/service-requests/:id/assign', async (req, res) => {
         message: 'Technician ID is required'
       });
     }
+
+    // Get the previous assignment for logging
+    const previousQuery = `
+      SELECT assigned_to_employee_id,
+             (SELECT name FROM employees WHERE id = assigned_to_employee_id) as previous_tech_name
+      FROM service_requests
+      WHERE id = $1 AND soft_delete = false
+    `;
+    const previousResult = await pool.query(previousQuery, [id]);
+    const previousTechnicianId = previousResult.rows[0]?.assigned_to_employee_id;
 
     // Update service request
     const updateQuery = `
@@ -1096,9 +1143,37 @@ router.put('/service-requests/:id/assign', async (req, res) => {
 
     await pool.query(assignmentQuery, [id, technicianId]);
 
+    // If this is an ownership assumption, create an automatic note
+    if (assumeOwnership) {
+      const newTechQuery = await pool.query('SELECT name FROM employees WHERE id = $1', [technicianId]);
+      const newTechName = newTechQuery.rows[0]?.name || 'Unknown';
+      const previousTechName = previousResult.rows[0]?.previous_tech_name;
+
+      let noteText;
+      if (previousTechnicianId) {
+        noteText = `${newTechName} assumed ownership of this service request from ${previousTechName}`;
+      } else {
+        noteText = `${newTechName} assumed ownership of this unassigned service request`;
+      }
+
+      // Get system note type ID
+      const noteTypeQuery = await pool.query(`
+        SELECT id FROM service_request_note_types WHERE type_name = 'system' LIMIT 1
+      `);
+      const noteTypeId = noteTypeQuery.rows[0]?.id;
+
+      if (noteTypeId) {
+        await pool.query(`
+          INSERT INTO service_request_notes (
+            service_request_id, note_text, note_type_id, created_by_employee_id, is_internal, created_at
+          ) VALUES ($1, $2, $3, $4, true, NOW())
+        `, [id, noteText, noteTypeId, technicianId]);
+      }
+    }
+
     res.json({
       success: true,
-      message: 'Service request assigned successfully',
+      message: assumeOwnership ? 'Ownership assumed successfully' : 'Service request assigned successfully',
       data: result.rows[0]
     });
 
@@ -1462,6 +1537,134 @@ router.put('/service-requests/:id/status', async (req, res) => {
 });
 
 /**
+ * Calculate cost estimate for a service request
+ */
+const calculateCost = async (pool, date, timeStart, timeEnd, baseRate, isFirstRequest, categoryName) => {
+  if (!date || !timeStart || !timeEnd || !baseRate) return null;
+
+  // Parse times
+  const [startHour, startMin] = timeStart.split(':').map(Number);
+  const [endHour, endMin] = timeEnd.split(':').map(Number);
+
+  // Calculate duration in hours
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+  const durationHours = (endMinutes - startMinutes) / 60;
+
+  // Get day of week from date
+  const requestDate = new Date(date);
+  const dayOfWeek = requestDate.getDay();
+
+  // Load rate tiers for this day
+  const tiersQuery = `
+    SELECT tier_name, tier_level, time_start, time_end, rate_multiplier
+    FROM service_hour_rate_tiers
+    WHERE is_active = true AND day_of_week = $1
+    ORDER BY tier_level DESC
+  `;
+  const tiersResult = await pool.query(tiersQuery, [dayOfWeek]);
+  const rateTiers = tiersResult.rows;
+
+  // Helper to find rate tier for a specific time
+  const findRateTier = (hour, minute) => {
+    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    const matchingTier = rateTiers.find(tier =>
+      timeString >= tier.time_start && timeString < tier.time_end
+    );
+    return matchingTier ? {
+      tierName: matchingTier.tier_name,
+      multiplier: parseFloat(matchingTier.rate_multiplier)
+    } : { tierName: 'Standard', multiplier: 1.0 };
+  };
+
+  // Calculate cost by 30-minute increments
+  let totalCost = 0;
+  const tierBlocks = [];
+  let currentBlock = null;
+
+  let currentHour = startHour;
+  let currentMinute = startMin;
+
+  while (currentHour < endHour || (currentHour === endHour && currentMinute < endMin)) {
+    const tier = findRateTier(currentHour, currentMinute);
+    const incrementCost = (baseRate * tier.multiplier) / 2; // Half-hour rate
+    totalCost += incrementCost;
+
+    // Group contiguous blocks of same tier
+    if (currentBlock && currentBlock.tierName === tier.tierName && currentBlock.multiplier === tier.multiplier) {
+      currentBlock.halfHourCount += 1;
+    } else {
+      if (currentBlock) {
+        const hours = currentBlock.halfHourCount / 2;
+        tierBlocks.push({
+          tierName: currentBlock.tierName,
+          multiplier: currentBlock.multiplier,
+          hours,
+          cost: hours * baseRate * currentBlock.multiplier
+        });
+      }
+      currentBlock = { tierName: tier.tierName, multiplier: tier.multiplier, halfHourCount: 1 };
+    }
+
+    // Advance by 30 minutes
+    currentMinute += 30;
+    if (currentMinute >= 60) {
+      currentMinute = 0;
+      currentHour += 1;
+    }
+  }
+
+  // Save final block
+  if (currentBlock) {
+    const hours = currentBlock.halfHourCount / 2;
+    tierBlocks.push({
+      tierName: currentBlock.tierName,
+      multiplier: currentBlock.multiplier,
+      hours,
+      cost: hours * baseRate * currentBlock.multiplier
+    });
+  }
+
+  // Apply first-hour comp for first-time clients
+  let firstHourDiscount = 0;
+  const firstHourCompBreakdown = [];
+
+  if (isFirstRequest && durationHours >= 1) {
+    let hoursAccounted = 0;
+    for (const block of tierBlocks) {
+      if (hoursAccounted >= 1) break;
+
+      const hoursInThisBlock = Math.min(block.hours, 1 - hoursAccounted);
+      const discountForThisBlock = hoursInThisBlock * baseRate * block.multiplier;
+
+      firstHourCompBreakdown.push({
+        tierName: block.tierName,
+        multiplier: block.multiplier,
+        hours: hoursInThisBlock,
+        discount: discountForThisBlock
+      });
+
+      firstHourDiscount += discountForThisBlock;
+      hoursAccounted += hoursInThisBlock;
+    }
+  }
+
+  const finalTotal = Math.max(0, totalCost - firstHourDiscount);
+
+  return {
+    baseRate,
+    rateCategoryName: categoryName,
+    durationHours,
+    total: finalTotal,
+    subtotal: totalCost,
+    firstHourDiscount: firstHourDiscount > 0 ? firstHourDiscount : undefined,
+    firstHourCompBreakdown: firstHourCompBreakdown.length > 0 ? firstHourCompBreakdown : undefined,
+    breakdown: tierBlocks,
+    isFirstRequest
+  };
+};
+
+/**
  * PUT /api/admin/service-requests/:id/close
  * Close/complete a service request with closure reason and resolution summary
  */
@@ -1488,10 +1691,10 @@ router.put('/service-requests/:id/close', async (req, res) => {
       });
     }
 
-    // Get the "Completed" status ID
+    // Get the "Closed" status ID
     const statusQuery = `
       SELECT id FROM service_request_statuses
-      WHERE LOWER(name) = 'completed'
+      WHERE LOWER(name) = 'closed'
       LIMIT 1
     `;
     const statusResult = await pool.query(statusQuery);
@@ -1499,7 +1702,7 @@ router.put('/service-requests/:id/close', async (req, res) => {
     if (statusResult.rows.length === 0) {
       return res.status(500).json({
         success: false,
-        message: 'Completed status not found in database'
+        message: 'Closed status not found in database'
       });
     }
 
@@ -1540,13 +1743,27 @@ router.put('/service-requests/:id/close', async (req, res) => {
       });
     }
 
+    const closedAt = result.rows[0].closed_at;
+
+    // Close any open time entries (set end_time to the closure time)
+    const closeTimeEntriesQuery = `
+      UPDATE service_request_time_entries
+      SET end_time = $1, updated_at = NOW()
+      WHERE service_request_id = $2 AND end_time IS NULL
+    `;
+    const closeTimeEntriesResult = await pool.query(closeTimeEntriesQuery, [closedAt, id]);
+
+    if (closeTimeEntriesResult.rowCount > 0) {
+      console.log(`⏱️ Closed ${closeTimeEntriesResult.rowCount} open time entries for service request ${id}`);
+    }
+
     // Log closure in history
     const historyQuery = `
       INSERT INTO service_request_history (
         service_request_id,
-        changed_by_user_id,
-        change_type,
-        change_description,
+        changed_by_employee_id,
+        action_type,
+        notes,
         created_at
       ) VALUES ($1, $2, 'closure', $3, NOW())
     `;
@@ -1567,11 +1784,16 @@ router.put('/service-requests/:id/close', async (req, res) => {
         sr.business_id,
         sr.created_at as service_start_date,
         sr.closed_at,
+        sr.requested_date,
+        sr.requested_time_start,
+        sr.requested_time_end,
         b.business_name,
-        hrc.base_hourly_rate
+        b.rate_category_id,
+        hrc.base_hourly_rate,
+        hrc.category_name as rate_category_name
       FROM service_requests sr
       JOIN businesses b ON sr.business_id = b.id
-      LEFT JOIN hourly_rate_categories hrc ON b.hourly_rate_category_id = hrc.id
+      LEFT JOIN hourly_rate_categories hrc ON b.rate_category_id = hrc.id
       WHERE sr.id = $1
     `;
     const srDetails = await pool.query(srDetailsQuery, [id]);
@@ -1613,17 +1835,35 @@ router.put('/service-requests/:id/close', async (req, res) => {
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
+    // Round start time DOWN to nearest 5 minutes, end time UP to nearest 30 minutes
     const timeEntriesQuery = `
       SELECT
         id,
         start_time,
+        -- Round start time DOWN to nearest 5 minutes
+        date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5) as rounded_start_time,
+        -- Round end time UP to nearest 30 minutes
         CASE
-          WHEN end_time IS NULL THEN NOW()  -- Use current time for active entries
+          WHEN end_time IS NULL THEN
+            date_trunc('hour', NOW()) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM NOW()) / 30)
+          ELSE
+            date_trunc('hour', end_time) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM end_time) / 30)
+        END as rounded_end_time,
+        CASE
+          WHEN end_time IS NULL THEN NOW()
           ELSE end_time
         END as end_time,
         CASE
-          WHEN end_time IS NULL THEN EXTRACT(EPOCH FROM (NOW() - start_time))/60  -- Calculate duration for active entries
-          ELSE duration_minutes
+          WHEN end_time IS NULL THEN
+            EXTRACT(EPOCH FROM (
+              (date_trunc('hour', NOW()) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM NOW()) / 30)) -
+              (date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5))
+            )) / 60
+          ELSE
+            EXTRACT(EPOCH FROM (
+              (date_trunc('hour', end_time) + INTERVAL '30 min' * CEIL(EXTRACT(minute FROM end_time) / 30)) -
+              (date_trunc('hour', start_time) + INTERVAL '5 min' * FLOOR(EXTRACT(minute FROM start_time) / 5))
+            )) / 60
         END as duration_minutes
       FROM service_request_time_entries
       WHERE service_request_id = $1
@@ -1649,9 +1889,28 @@ router.put('/service-requests/:id/close', async (req, res) => {
 
     // Build chronological array of minutes
     const chronologicalMinutes = [];
-    for (const entry of timeEntriesResult.rows) {
+    for (let i = 0; i < timeEntriesResult.rows.length; i++) {
+      const entry = timeEntriesResult.rows[i];
+      const isLastEntry = i === timeEntriesResult.rows.length - 1;
+
+      // Start time is always actual (no rounding)
       const startTime = new Date(entry.start_time);
-      const endTime = new Date(entry.end_time);
+      const rawEndTime = new Date(entry.end_time);
+
+      // Only round the FINAL end time up to nearest 15 minutes
+      let endTime = rawEndTime;
+      if (isLastEntry) {
+        const endMinutes = rawEndTime.getUTCMinutes();
+        const roundedUpMinutes = Math.ceil(endMinutes / 15) * 15;
+        endTime = new Date(rawEndTime);
+        if (roundedUpMinutes === 60) {
+          endTime.setUTCHours(endTime.getUTCHours() + 1);
+          endTime.setUTCMinutes(0, 0, 0);
+        } else {
+          endTime.setUTCMinutes(roundedUpMinutes, 0, 0);
+        }
+      }
+
       let currentTime = new Date(startTime);
 
       while (currentTime < endTime) {
@@ -1696,16 +1955,10 @@ router.put('/service-requests/:id/close', async (req, res) => {
       else if (minute.tier === 'Emergency') emergencyMinutes++;
     }
 
-    // Round up to nearest half hour
-    const roundUpToNearestHalfHour = (minutes) => {
-      if (minutes === 0) return 0;
-      const hours = minutes / 60;
-      return Math.ceil(hours * 2) / 2;
-    };
-
-    const standardBillableHours = roundUpToNearestHalfHour(standardMinutes);
-    const premiumBillableHours = roundUpToNearestHalfHour(premiumMinutes);
-    const emergencyBillableHours = roundUpToNearestHalfHour(emergencyMinutes);
+    // Convert minutes to hours (no additional rounding - end time already rounded)
+    const standardBillableHours = standardMinutes / 60;
+    const premiumBillableHours = premiumMinutes / 60;
+    const emergencyBillableHours = emergencyMinutes / 60;
 
     // Calculate costs
     const standardRate = baseRate * 1.0;
@@ -1743,7 +1996,44 @@ router.put('/service-requests/:id/close', async (req, res) => {
     const dueDate = new Date(invoiceDate);
     dueDate.setDate(dueDate.getDate() + dueDays);
 
-    // Insert invoice
+    // Calculate original cost estimate (snapshot at invoice time)
+    let originalCostEstimate = null;
+    if (serviceRequest.requested_date && serviceRequest.requested_time_start && serviceRequest.requested_time_end) {
+      originalCostEstimate = await calculateCost(
+        pool,
+        serviceRequest.requested_date,
+        serviceRequest.requested_time_start,
+        serviceRequest.requested_time_end,
+        baseRate,
+        isFirstServiceRequest,
+        serviceRequest.rate_category_name || 'Standard'
+      );
+    }
+
+    // Build actual hours breakdown from time entries
+    const actualHoursBreakdown = {
+      timeEntries: timeEntriesResult.rows.map(entry => ({
+        startTime: entry.start_time,
+        endTime: entry.end_time
+      })),
+      standard: {
+        actualMinutes: chronologicalMinutes.filter(m => m.tier === 'Standard').length,
+        actualHours: (chronologicalMinutes.filter(m => m.tier === 'Standard').length / 60).toFixed(2),
+        roundedHours: standardBillableHours.toFixed(2)
+      },
+      premium: {
+        actualMinutes: chronologicalMinutes.filter(m => m.tier === 'Premium').length,
+        actualHours: (chronologicalMinutes.filter(m => m.tier === 'Premium').length / 60).toFixed(2),
+        roundedHours: premiumBillableHours.toFixed(2)
+      },
+      emergency: {
+        actualMinutes: chronologicalMinutes.filter(m => m.tier === 'Emergency').length,
+        actualHours: (chronologicalMinutes.filter(m => m.tier === 'Emergency').length / 60).toFixed(2),
+        roundedHours: emergencyBillableHours.toFixed(2)
+      }
+    };
+
+    // Insert invoice with snapshots
     const invoiceQuery = `
       INSERT INTO invoices (
         service_request_id,
@@ -1768,10 +2058,13 @@ router.put('/service-requests/:id/close', async (req, res) => {
         issue_date,
         due_date,
         payment_status,
-        work_description
+        work_description,
+        rate_tiers_snapshot,
+        original_cost_estimate,
+        actual_hours_breakdown
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
-        $16, $17, $18, $19, $20, $21, 'due', $22
+        $16, $17, $18, $19, $20, $21, 'due', $22, $23, $24, $25
       )
       RETURNING id, invoice_number
     `;
@@ -1798,7 +2091,10 @@ router.put('/service-requests/:id/close', async (req, res) => {
       totalAmount,
       invoiceDate,
       dueDate,
-      resolutionSummary
+      resolutionSummary,
+      JSON.stringify(tiers),                    // rate_tiers_snapshot
+      JSON.stringify(originalCostEstimate),     // original_cost_estimate
+      JSON.stringify(actualHoursBreakdown)      // actual_hours_breakdown
     ]);
 
     res.json({
@@ -1815,10 +2111,12 @@ router.put('/service-requests/:id/close', async (req, res) => {
 
   } catch (error) {
     console.error('Error closing service request:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to close service request',
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
 });

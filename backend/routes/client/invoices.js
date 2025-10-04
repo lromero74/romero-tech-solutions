@@ -16,6 +16,8 @@ router.get('/', authenticateClient, async (req, res) => {
   const pool = await getPool();
   const clientId = req.user.clientId;
 
+  console.log('📋 Client invoices request - clientId:', clientId);
+
   try {
 
     const {
@@ -84,6 +86,8 @@ router.get('/', authenticateClient, async (req, res) => {
 
     const result = await pool.query(query, params);
 
+    console.log('📋 Found invoices for client:', result.rows.length);
+
     res.json({
       success: true,
       data: {
@@ -107,6 +111,134 @@ router.get('/', authenticateClient, async (req, res) => {
 });
 
 /**
+ * Calculate cost estimate for a service request
+ */
+const calculateCost = async (pool, date, timeStart, timeEnd, baseRate, isFirstRequest, categoryName) => {
+  if (!date || !timeStart || !timeEnd || !baseRate) return null;
+
+  // Parse times
+  const [startHour, startMin] = timeStart.split(':').map(Number);
+  const [endHour, endMin] = timeEnd.split(':').map(Number);
+
+  // Calculate duration in hours
+  const startMinutes = startHour * 60 + startMin;
+  const endMinutes = endHour * 60 + endMin;
+  const durationHours = (endMinutes - startMinutes) / 60;
+
+  // Get day of week from date
+  const requestDate = new Date(date);
+  const dayOfWeek = requestDate.getDay();
+
+  // Load rate tiers for this day
+  const tiersQuery = `
+    SELECT tier_name, tier_level, time_start, time_end, rate_multiplier
+    FROM service_hour_rate_tiers
+    WHERE is_active = true AND day_of_week = $1
+    ORDER BY tier_level DESC
+  `;
+  const tiersResult = await pool.query(tiersQuery, [dayOfWeek]);
+  const rateTiers = tiersResult.rows;
+
+  // Helper to find rate tier for a specific time
+  const findRateTier = (hour, minute) => {
+    const timeString = `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
+    const matchingTier = rateTiers.find(tier =>
+      timeString >= tier.time_start && timeString < tier.time_end
+    );
+    return matchingTier ? {
+      tierName: matchingTier.tier_name,
+      multiplier: parseFloat(matchingTier.rate_multiplier)
+    } : { tierName: 'Standard', multiplier: 1.0 };
+  };
+
+  // Calculate cost by 30-minute increments
+  let totalCost = 0;
+  const tierBlocks = [];
+  let currentBlock = null;
+
+  let currentHour = startHour;
+  let currentMinute = startMin;
+
+  while (currentHour < endHour || (currentHour === endHour && currentMinute < endMin)) {
+    const tier = findRateTier(currentHour, currentMinute);
+    const incrementCost = (baseRate * tier.multiplier) / 2; // Half-hour rate
+    totalCost += incrementCost;
+
+    // Group contiguous blocks of same tier
+    if (currentBlock && currentBlock.tierName === tier.tierName && currentBlock.multiplier === tier.multiplier) {
+      currentBlock.halfHourCount += 1;
+    } else {
+      if (currentBlock) {
+        const hours = currentBlock.halfHourCount / 2;
+        tierBlocks.push({
+          tierName: currentBlock.tierName,
+          multiplier: currentBlock.multiplier,
+          hours,
+          cost: hours * baseRate * currentBlock.multiplier
+        });
+      }
+      currentBlock = { tierName: tier.tierName, multiplier: tier.multiplier, halfHourCount: 1 };
+    }
+
+    // Advance by 30 minutes
+    currentMinute += 30;
+    if (currentMinute >= 60) {
+      currentMinute = 0;
+      currentHour += 1;
+    }
+  }
+
+  // Save final block
+  if (currentBlock) {
+    const hours = currentBlock.halfHourCount / 2;
+    tierBlocks.push({
+      tierName: currentBlock.tierName,
+      multiplier: currentBlock.multiplier,
+      hours,
+      cost: hours * baseRate * currentBlock.multiplier
+    });
+  }
+
+  // Apply first-hour comp for first-time clients
+  let firstHourDiscount = 0;
+  const firstHourCompBreakdown = [];
+
+  if (isFirstRequest && durationHours >= 1) {
+    let hoursAccounted = 0;
+    for (const block of tierBlocks) {
+      if (hoursAccounted >= 1) break;
+
+      const hoursInThisBlock = Math.min(block.hours, 1 - hoursAccounted);
+      const discountForThisBlock = hoursInThisBlock * baseRate * block.multiplier;
+
+      firstHourCompBreakdown.push({
+        tierName: block.tierName,
+        multiplier: block.multiplier,
+        hours: hoursInThisBlock,
+        discount: discountForThisBlock
+      });
+
+      firstHourDiscount += discountForThisBlock;
+      hoursAccounted += hoursInThisBlock;
+    }
+  }
+
+  const finalTotal = Math.max(0, totalCost - firstHourDiscount);
+
+  return {
+    baseRate,
+    rateCategoryName: categoryName,
+    durationHours,
+    total: finalTotal,
+    subtotal: totalCost,
+    firstHourDiscount: firstHourDiscount > 0 ? firstHourDiscount : undefined,
+    firstHourCompBreakdown: firstHourCompBreakdown.length > 0 ? firstHourCompBreakdown : undefined,
+    breakdown: tierBlocks,
+    isFirstRequest
+  };
+};
+
+/**
  * GET /api/client/invoices/:id
  * Get a single invoice with full details
  */
@@ -121,21 +253,34 @@ router.get('/:id', authenticateClient, async (req, res) => {
         i.*,
         b.business_name,
         b.is_individual,
+        b.rate_category_id,
         sr.request_number,
         sr.title as service_title,
+        sr.description as service_description,
         sr.created_at as service_created_at,
         sr.closed_at as service_completed_at,
-        l.name as location_name,
-        l.street_address_1,
-        l.street_address_2,
-        l.city,
-        l.state,
-        l.zip_code
+        sr.requested_date,
+        sr.requested_time_start,
+        sr.requested_time_end,
+        sr.primary_contact_name,
+        sr.primary_contact_phone,
+        sr.resolution_summary,
+        st.name as service_type,
+        sl.location_name,
+        sl.street_address_1,
+        sl.street_address_2,
+        sl.city,
+        sl.state,
+        sl.zip_code,
+        e.first_name as technician_first_name,
+        e.last_name as technician_last_name
       FROM invoices i
       JOIN businesses b ON i.business_id = b.id
       JOIN users u ON b.id = u.business_id
       JOIN service_requests sr ON i.service_request_id = sr.id
-      LEFT JOIN locations l ON sr.location_id = l.id
+      LEFT JOIN service_types st ON sr.service_type_id = st.id
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
+      LEFT JOIN employees e ON sr.closed_by_employee_id = e.id
       WHERE i.id = $1 AND u.id = $2
     `;
 
@@ -147,6 +292,13 @@ router.get('/:id', authenticateClient, async (req, res) => {
         error: 'Invoice not found',
       });
     }
+
+    const invoiceData = result.rows[0];
+
+    // Use stored snapshots (calculated at invoice generation time)
+    // This ensures historical invoices remain unchanged even if rate schedules are modified
+    const costEstimate = invoiceData.original_cost_estimate || null;
+    const actualHoursBreakdown = invoiceData.actual_hours_breakdown || null;
 
     // Get company settings for invoice header
     const settingsQuery = `
@@ -171,8 +323,10 @@ router.get('/:id', authenticateClient, async (req, res) => {
     res.json({
       success: true,
       data: {
-        invoice: result.rows[0],
+        invoice: invoiceData,
         companyInfo,
+        costEstimate,
+        actualHoursBreakdown,
       },
     });
   } catch (error) {

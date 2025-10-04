@@ -16,13 +16,19 @@ router.get('/invoices/:id', async (req, res) => {
       SELECT
         i.*,
         b.business_name,
-        b.primary_contact_name,
-        b.primary_contact_email,
-        b.primary_contact_phone,
-        b.street_address,
-        b.city,
-        b.state,
-        b.zip_code,
+        b.is_individual,
+        sr.primary_contact_name,
+        sr.primary_contact_email,
+        sr.primary_contact_phone,
+        sr.description as service_description,
+        sr.resolution_summary,
+        sr.requested_date,
+        sr.requested_time_start,
+        sr.requested_time_end,
+        COALESCE(sl.street_address_1, sl.street) as street_address,
+        sl.city,
+        sl.state,
+        sl.zip_code,
         sr.request_number,
         sr.title as service_title,
         sr.created_at as service_created_at,
@@ -30,6 +36,7 @@ router.get('/invoices/:id', async (req, res) => {
       FROM invoices i
       JOIN businesses b ON i.business_id = b.id
       JOIN service_requests sr ON i.service_request_id = sr.id
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
       WHERE i.id = $1
     `;
 
@@ -42,6 +49,13 @@ router.get('/invoices/:id', async (req, res) => {
       });
     }
 
+    const invoiceData = result.rows[0];
+
+    // Use stored snapshots (calculated at invoice generation time)
+    // This ensures historical invoices remain unchanged even if rate schedules are modified
+    const costEstimate = invoiceData.original_cost_estimate || null;
+    const actualHoursBreakdown = invoiceData.actual_hours_breakdown || null;
+
     // Get company settings for invoice header
     const settingsQuery = `SELECT setting_key, setting_value FROM company_settings`;
     const settingsResult = await pool.query(settingsQuery);
@@ -53,8 +67,10 @@ router.get('/invoices/:id', async (req, res) => {
     res.json({
       success: true,
       data: {
-        invoice: result.rows[0],
-        companyInfo
+        invoice: invoiceData,
+        companyInfo,
+        costEstimate,
+        actualHoursBreakdown
       }
     });
 
