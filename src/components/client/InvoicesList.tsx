@@ -489,7 +489,32 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                     <div>
                       <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Payment Status</p>
                       <div className="mt-1">
-                        {getStatusBadge(invoiceDetail.invoice.payment_status)}
+                        {(() => {
+                          const status = invoiceDetail.invoice.payment_status;
+                          const statusLower = status.toLowerCase();
+                          if (statusLower === 'paid' || statusLower === 'comped') {
+                            return (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                {status}
+                              </span>
+                            );
+                          } else if (statusLower === 'overdue') {
+                            return (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                {status}
+                              </span>
+                            );
+                          } else {
+                            return (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                                <Clock className="h-3 w-3 mr-1" />
+                                {status}
+                              </span>
+                            );
+                          }
+                        })()}
                       </div>
                     </div>
                     <div>
