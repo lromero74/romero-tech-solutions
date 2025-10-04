@@ -43,13 +43,18 @@ class PushNotificationService {
   isSupported(): boolean {
     // Check if we're in an iOS PWA (iOS Safari 16.4+ supports push in PWAs)
     if (this.isIOSPWA()) {
-      // iOS PWAs support push notifications from iOS 16.4+
-      // We need to check iOS version
+      // If we're in a PWA with Service Worker and Push Manager, assume iOS 16.4+
+      // (older iOS versions wouldn't have these APIs in PWA mode)
+      if ('serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window) {
+        console.log('📱 iOS PWA with push support detected');
+        return true;
+      }
+      // Fallback: try to check iOS version
       const iOSVersion = this.getIOSVersion();
       if (iOSVersion && iOSVersion >= 16.4) {
         return true;
       }
-      // For older iOS versions, push is not supported
+      // For older iOS versions or if we can't detect, push is not supported
       return false;
     }
 

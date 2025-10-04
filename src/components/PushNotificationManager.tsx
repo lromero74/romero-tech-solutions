@@ -39,7 +39,8 @@ const PushNotificationManager: React.FC = () => {
   const checkNotificationStatus = async () => {
     try {
       // Gather comprehensive debug info
-      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+                   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
       const isPWA = pushNotificationService.isIOSPWA();
       const iOSVersion = (pushNotificationService as any).getIOSVersion?.();
 
@@ -261,7 +262,8 @@ const PushNotificationManager: React.FC = () => {
   );
 
   // Check if it's an iOS device that needs PWA installation
-  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+               (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isPWA = pushNotificationService.isIOSPWA();
 
   // Check for HTTP vs HTTPS issue
