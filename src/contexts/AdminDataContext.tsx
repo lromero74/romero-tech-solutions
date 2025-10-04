@@ -345,8 +345,8 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
   const refreshServiceTypes = async () => {
     try {
-      const response = await apiService.get('/admin/service-types');
-      setServiceTypes(response.serviceTypes || []);
+      const response = await apiService.get('/service-types');
+      setServiceTypes(response.data?.serviceTypes || response.serviceTypes || []);
     } catch (err) {
       console.error('Error fetching service types:', err);
       setError('Failed to fetch service types');
@@ -356,7 +356,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
   const refreshClosureReasons = async () => {
     try {
       const response = await apiService.get('/admin/closure-reasons');
-      setClosureReasons(response.closureReasons || []);
+      setClosureReasons(response.data || response.closureReasons || []);
     } catch (err) {
       console.error('Error fetching closure reasons:', err);
       setError('Failed to fetch closure reasons');
@@ -464,7 +464,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         safeFetch(() => adminService.getServiceRequests(), { serviceRequests: [] }),
         safeFetch(() => adminService.getRoles(), []),
         safeFetch(() => permissionService.getAllPermissions(), []),
-        safeFetch(() => apiService.get('/admin/service-types'), { serviceTypes: [] }),
+        safeFetch(() => apiService.get('/service-types'), { serviceTypes: [] }),
         safeFetch(() => apiService.get('/admin/closure-reasons'), { closureReasons: [] }),
         safeFetch(() => apiService.get('/admin/password-complexity'), { requirements: null })
       ]);
@@ -489,8 +489,8 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
       // Set the new admin tab data
       setRoles(rolesResult || []);
       setPermissions(permissionsResult || []);
-      setServiceTypes(serviceTypesResult.serviceTypes || []);
-      setClosureReasons(closureReasonsResult.closureReasons || closureReasonsResult.data || []);
+      setServiceTypes(serviceTypesResult.data?.serviceTypes || serviceTypesResult.serviceTypes || []);
+      setClosureReasons(closureReasonsResult.data || closureReasonsResult.closureReasons || []);
       setPasswordPolicy(passwordPolicyResult.requirements || null);
 
     } catch (err) {
