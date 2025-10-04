@@ -238,8 +238,7 @@ class PushNotificationService {
    */
   private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
     // Get session token
-    const authUser = localStorage.getItem('authUser') || localStorage.getItem('client_authUser');
-    const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+    const sessionToken = await this.getSessionToken();
 
     if (!sessionToken) {
       throw new Error('No session token found. Please log in.');
@@ -281,8 +280,10 @@ class PushNotificationService {
       // Unsubscribe from push manager
       await this.subscription.unsubscribe();
 
+      // Get session token
+      const sessionToken = await this.getSessionToken();
+
       // Notify server
-      const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
       if (sessionToken) {
         try {
           await fetch(`${API_BASE_URL}/push/unsubscribe`, {
@@ -324,10 +325,29 @@ class PushNotificationService {
   }
 
   /**
+   * Get session token from AWS Amplify or localStorage
+   */
+  private async getSessionToken(): Promise<string | null> {
+    // Check for AWS Amplify authentication (employee login)
+    try {
+      const { fetchAuthSession } = await import('aws-amplify/auth');
+      const session = await fetchAuthSession();
+      if (session?.tokens?.idToken) {
+        return session.tokens.idToken.toString();
+      }
+    } catch (e) {
+      // Not using AWS Amplify
+    }
+
+    // Fallback to traditional session tokens
+    return localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+  }
+
+  /**
    * Get notification preferences
    */
   async getPreferences(): Promise<any> {
-    const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+    const sessionToken = await this.getSessionToken();
 
     if (!sessionToken) {
       throw new Error('No session token found');
@@ -351,7 +371,7 @@ class PushNotificationService {
    * Update notification preferences
    */
   async updatePreferences(preferences: any): Promise<void> {
-    const sessionToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+    const sessionToken = await this.getSessionToken();
 
     if (!sessionToken) {
       throw new Error('No session token found');
@@ -376,7 +396,7 @@ class PushNotificationService {
    * Send test notification (admin only)
    */
   async sendTestNotification(): Promise<void> {
-    const sessionToken = localStorage.getItem('sessionToken');
+    const sessionToken = await this.getSessionToken();
 
     if (!sessionToken) {
       throw new Error('No session token found');
