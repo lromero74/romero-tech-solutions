@@ -446,7 +446,8 @@ const PushNotificationManager: React.FC = () => {
         </div>
 
         {/* Test Notification Button (for admin/employee users) */}
-        {isSubscribed && isEmployee && (
+        {/* TEMPORARY: Always show for testing - Remove after debugging */}
+        {isSubscribed && (isEmployee || true) && (
           <div className="mt-4 pt-4 border-t">
             <button
               onClick={handleTestNotification}
@@ -458,12 +459,6 @@ const PushNotificationManager: React.FC = () => {
           </div>
         )}
 
-        {/* Debug: Show button status */}
-        {isSubscribed && !isEmployee && (
-          <div className="mt-4 pt-4 border-t text-sm text-gray-500">
-            ⚠️ Test button hidden: Not detected as employee
-          </div>
-        )}
       </div>
 
       {/* iOS Installation Instructions */}
