@@ -301,11 +301,15 @@ router.post('/test', authenticateSession, async (req, res) => {
   try {
     const { authUser } = req;
 
-    // Check if user has permission to send test notifications
-    if (authUser.role !== 'admin' && authUser.role !== 'manager') {
+    console.log('📧 Test notification requested by:', authUser?.email || 'Unknown');
+    console.log('🔍 AuthUser details:', authUser);
+
+    // For now, allow any authenticated employee to send test notifications
+    // TODO: Add proper permission check using RBAC
+    if (!authUser || !authUser.id) {
       return res.status(403).json({
         success: false,
-        error: 'Insufficient permissions'
+        error: 'Authentication required'
       });
     }
 

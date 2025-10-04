@@ -4,7 +4,8 @@
  */
 
 import { sessionService } from '../services/sessionService.js';
-import { CognitoJwtVerifier } from 'aws-jwt-verify';
+import pkg from 'aws-jwt-verify';
+const { CognitoJwtVerifier } = pkg;
 import dotenv from 'dotenv';
 import { getPool } from '../config/database.js';
 
@@ -15,11 +16,16 @@ let jwtVerifier = null;
 
 const getJwtVerifier = () => {
   if (!jwtVerifier && process.env.AWS_USER_POOL_ID) {
-    jwtVerifier = CognitoJwtVerifier.create({
-      userPoolId: process.env.AWS_USER_POOL_ID,
-      tokenUse: 'id',
-      clientId: process.env.AWS_USER_POOL_CLIENT_ID,
-    });
+    try {
+      jwtVerifier = CognitoJwtVerifier.create({
+        userPoolId: process.env.AWS_USER_POOL_ID,
+        tokenUse: 'id',
+        clientId: process.env.AWS_USER_POOL_CLIENT_ID,
+      });
+      console.log('✅ Cognito JWT verifier created successfully');
+    } catch (error) {
+      console.error('❌ Failed to create JWT verifier:', error);
+    }
   }
   return jwtVerifier;
 };
@@ -32,6 +38,8 @@ export const unifiedAuthMiddleware = async (req, res, next) => {
     // Extract token from cookie or Authorization header
     const token = req.cookies?.sessionToken || req.headers.authorization?.replace('Bearer ', '');
 
+    console.log(`🔍 [unifiedAuthMiddleware] Token received for ${req.path}:`, token ? `${token.substring(0, 20)}...` : 'None');
+
     if (!token) {
       console.warn(`⚠️ [unifiedAuthMiddleware] No token found for ${req.path}`);
       return res.status(401).json({
@@ -43,17 +51,19 @@ export const unifiedAuthMiddleware = async (req, res, next) => {
 
     // Check if it's a JWT token (AWS Amplify)
     if (token.includes('.')) {
+      console.log('🔑 Detected JWT token format, attempting AWS Amplify verification...');
       // This looks like a JWT token
       try {
         const verifier = getJwtVerifier();
         if (!verifier) {
+          console.error('❌ JWT verifier not configured, falling back to traditional auth');
           throw new Error('Cognito JWT verifier not configured');
         }
 
         // Verify the JWT token
         const payload = await verifier.verify(token);
 
-        console.log(`🔐 AWS Amplify authenticated request from: ${payload.email}`);
+        console.log(`🔐 AWS Amplify authenticated request from: ${payload.email || payload.sub}`);
 
         // Look up the employee by email
         const pool = await getPool();
