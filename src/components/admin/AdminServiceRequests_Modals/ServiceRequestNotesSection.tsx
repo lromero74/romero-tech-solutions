@@ -11,7 +11,43 @@ interface ServiceRequestNotesSectionProps {
   onNewNoteChange: (text: string) => void;
   onSubmitNote: () => void;
   otherViewers?: Array<{userId: string; userName: string; userType: string}>;
+  timeFormatPreference?: '12h' | '24h';
 }
+
+/**
+ * Format a timestamp to show both local time and UTC
+ * @param timestamp - ISO timestamp string
+ * @param timeFormat - '12h' or '24h' format preference (defaults to '12h')
+ */
+const formatTimestampWithUTC = (timestamp: string, timeFormat: '12h' | '24h' = '12h'): { local: string; utc: string } => {
+  const date = new Date(timestamp);
+  const use12Hour = timeFormat === '12h';
+
+  // Format local time
+  const local = date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: use12Hour
+  });
+
+  // Format UTC time
+  const utc = date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: use12Hour,
+    timeZone: 'UTC'
+  });
+
+  return { local, utc };
+};
 
 const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
   notes,
@@ -20,7 +56,8 @@ const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
   submittingNote,
   onNewNoteChange,
   onSubmitNote,
-  otherViewers = []
+  otherViewers = [],
+  timeFormatPreference = '12h'
 }) => {
   return (
     <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
@@ -76,19 +113,26 @@ const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
         </div>
       ) : notes.length > 0 ? (
         <div className="space-y-3">
-          {notes.map((note, index) => (
-            <div key={note.id}>
-              {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
-              <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
-                <span className="font-medium">{note.created_by_name}</span>
-                {' • '}
-                <span>{new Date(note.created_at).toLocaleString()}</span>
+          {notes.map((note, index) => {
+            const timestamps = formatTimestampWithUTC(note.created_at, timeFormatPreference);
+            return (
+              <div key={note.id}>
+                {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
+                <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
+                  <span className="font-medium">{note.created_by_name}</span>
+                  {' • '}
+                  <span className="inline-flex flex-col sm:flex-row sm:gap-1">
+                    <span>{timestamps.local} (Local)</span>
+                    <span className="hidden sm:inline">•</span>
+                    <span>{timestamps.utc} (UTC)</span>
+                  </span>
+                </div>
+                <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
+                  {note.note_text}
+                </p>
               </div>
-              <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
-                {note.note_text}
-              </p>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <p className={`text-sm ${themeClasses.text.muted}`}>No notes yet</p>

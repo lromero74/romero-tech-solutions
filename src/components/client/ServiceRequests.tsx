@@ -110,6 +110,42 @@ interface PaginationInfo {
   totalPages: number;
 }
 
+/**
+ * Format a timestamp to show both local time and UTC
+ * @param timestamp - ISO timestamp string
+ * @param locale - Locale string for formatting
+ * @param timeFormat - '12h' or '24h' format preference (defaults to '12h')
+ */
+const formatTimestampWithUTC = (timestamp: string, locale?: string, timeFormat: '12h' | '24h' = '12h'): { local: string; utc: string } => {
+  const date = new Date(timestamp);
+  const use12Hour = timeFormat === '12h';
+
+  // Format local time
+  const local = date.toLocaleString(locale, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: use12Hour
+  });
+
+  // Format UTC time
+  const utc = date.toLocaleString(locale, {
+    year: 'numeric',
+    month: 'numeric',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: use12Hour,
+    timeZone: 'UTC'
+  });
+
+  return { local, utc };
+};
+
 const ServiceRequests: React.FC = () => {
   const { isDarkMode } = useClientTheme();
   const { t, language } = useClientLanguage();
@@ -174,6 +210,9 @@ const ServiceRequests: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+
+  // Close confirmation state
+  const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
 
   // Presence tracking
   const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
@@ -564,6 +603,26 @@ const ServiceRequests: React.FC = () => {
   const cancelRenameFile = () => {
     setRenamingFileId(null);
     setNewFileName('');
+  };
+
+  // Handle closing detail modal with confirmation if there are pending changes
+  const handleCloseDetailModal = () => {
+    const hasPendingChanges = editingTitle || editingDescription || savingEdit || newNoteText.trim().length > 0;
+
+    if (hasPendingChanges) {
+      setShowCloseConfirmation(true);
+    } else {
+      setSelectedRequest(null);
+    }
+  };
+
+  const confirmCloseDetailModal = () => {
+    setSelectedRequest(null);
+    setShowCloseConfirmation(false);
+    // Clear any pending changes
+    setNewNoteText('');
+    setEditingTitle(false);
+    setEditingDescription(false);
   };
 
   const saveFileName = async (fileId: string) => {
@@ -968,6 +1027,20 @@ const ServiceRequests: React.FC = () => {
     };
   }, [selectedRequest]);
 
+  // Handle ESC key to close the detail modal (only if no edits in progress)
+  useEffect(() => {
+    if (!selectedRequest) return;
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseDetailModal();
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, [selectedRequest, editingTitle, editingDescription, savingEdit, newNoteText]);
+
   if (loading && serviceRequests.length === 0) {
     return (
       <div className={`${themeClasses.background} rounded-lg shadow-sm border ${themeClasses.border} p-6`}>
@@ -1261,7 +1334,7 @@ const ServiceRequests: React.FC = () => {
       {selectedRequest && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setSelectedRequest(null)} />
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleCloseDetailModal} />
 
             <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-2xl sm:w-full">
               <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
@@ -1314,7 +1387,7 @@ const ServiceRequests: React.FC = () => {
                     )}
                   </div>
                   <button
-                    onClick={() => setSelectedRequest(null)}
+                    onClick={handleCloseDetailModal}
                     className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
                   >
                     <ExternalLink className="h-5 w-5 rotate-45" />
@@ -1608,19 +1681,26 @@ const ServiceRequests: React.FC = () => {
                       </div>
                     ) : requestNotes.length > 0 ? (
                       <div className="space-y-3">
-                        {requestNotes.map((note, index) => (
-                          <div key={note.id}>
-                            {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
-                            <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                              <span className="font-medium">{note.createdByName}</span>
-                              {' • '}
-                              <span>{new Date(note.createdAt).toLocaleString(getLocale())}</span>
+                        {requestNotes.map((note, index) => {
+                          const timestamps = formatTimestampWithUTC(note.createdAt, getLocale(), (authUser?.timeFormatPreference as '12h' | '24h') || '12h');
+                          return (
+                            <div key={note.id}>
+                              {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
+                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                <span className="font-medium">{note.createdByName}</span>
+                                {' • '}
+                                <span className="inline-flex flex-col sm:flex-row sm:gap-1">
+                                  <span>{timestamps.local} ({t('serviceRequests.localTime', undefined, 'Local')})</span>
+                                  <span className="hidden sm:inline">•</span>
+                                  <span>{timestamps.utc} (UTC)</span>
+                                </span>
+                              </div>
+                              <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                                {note.noteText}
+                              </p>
                             </div>
-                            <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                              {note.noteText}
-                            </p>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : (
                       <p className="text-sm text-gray-500 dark:text-gray-400">{t('serviceRequests.noNotes', undefined, 'No notes yet')}</p>
@@ -1736,7 +1816,7 @@ const ServiceRequests: React.FC = () => {
 
               <div className="bg-gray-50 dark:bg-gray-700 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
                 <button
-                  onClick={() => setSelectedRequest(null)}
+                  onClick={handleCloseDetailModal}
                   className="w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm"
                 >
                   {t('general.close', undefined, 'Close')}
@@ -1752,6 +1832,42 @@ const ServiceRequests: React.FC = () => {
                     {t('serviceRequests.cancel', undefined, 'Cancel')}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Close Confirmation Modal */}
+      {showCloseConfirmation && (
+        <div className="fixed inset-0 z-[60] overflow-y-auto">
+          <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowCloseConfirmation(false)} />
+
+            <div className="inline-block align-bottom bg-white dark:bg-gray-800 rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
+              <div className="bg-white dark:bg-gray-800 px-4 pt-5 pb-4 sm:p-6">
+                <h3 className="text-lg leading-6 font-medium text-gray-900 dark:text-white mb-4">
+                  {t('serviceRequests.unsavedChanges', undefined, 'Unsaved Changes')}
+                </h3>
+
+                <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+                  {t('serviceRequests.unsavedChangesMessage', undefined, 'You have unsaved changes. Are you sure you want to close this service request? All unsaved changes will be lost.')}
+                </p>
+
+                <div className="sm:flex sm:flex-row-reverse gap-3">
+                  <button
+                    onClick={confirmCloseDetailModal}
+                    className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-red-600 text-base font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm"
+                  >
+                    {t('serviceRequests.discardChanges', undefined, 'Discard Changes')}
+                  </button>
+                  <button
+                    onClick={() => setShowCloseConfirmation(false)}
+                    className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 dark:border-gray-600 shadow-sm px-4 py-2 bg-white dark:bg-gray-700 text-base font-medium text-gray-700 dark:text-white hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:w-auto sm:text-sm"
+                  >
+                    {t('general.cancel', undefined, 'Cancel')}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -126,21 +126,23 @@ router.post('/login', async (req, res) => {
       SELECT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
              es.status_name as employee_status, e.termination_date, null as business_name, 'employee' as user_type,
              COALESCE(array_agg(r.name ORDER BY r.name) FILTER (WHERE r.name IS NOT NULL), ARRAY[]::text[]) as roles,
-             CASE WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin' ELSE 'employee' END as role
+             CASE WHEN 'admin' = ANY(array_agg(r.name)) THEN 'admin' ELSE 'employee' END as role,
+             e.time_format_preference
       FROM employees e
       LEFT JOIN employee_roles er ON e.id = er.employee_id
       LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
       WHERE e.email = $1
       GROUP BY e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
-               es.status_name, e.termination_date
+               es.status_name, e.termination_date, e.time_format_preference
     `, [email]);
 
     // If not found in employees, check users table for clients
     if (userResult.rows.length === 0) {
       userResult = await query(`
         SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
-               b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email
+               b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
+               u.time_format_preference
         FROM users u
         LEFT JOIN businesses b ON u.business_id = b.id
         WHERE u.email = $1
@@ -258,13 +260,21 @@ router.post('/login', async (req, res) => {
           `, [user.email]);
           const userLanguage = languageResult.rows[0]?.language_preference || 'en';
 
-          await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
+          let message = 'Multi-factor authentication required. Please verify with the code sent to your email.';
+
+          // Skip sending email for test accounts
+          if (user.is_test_account) {
+            console.log(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
+            message = `Test account login - MFA code: ${mfaCode}`;
+          } else {
+            await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
+          }
 
           return res.status(200).json({
             success: true,
             requiresMfa: true,
             userType: 'client',
-            message: 'Multi-factor authentication required. Please verify with the code sent to your email.',
+            message,
             email: user.email,
             mfaEmail: user.mfa_email || user.email
           });
@@ -311,6 +321,7 @@ router.post('/login', async (req, res) => {
       role: user.role || 'admin',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: true // For now, default to true
     };
 
@@ -602,7 +613,8 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     // Check employees table for any active employee with any role (unified employee login)
     const userResult = await query(`
       SELECT DISTINCT e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified,
-             e.phone, es.status_name as employee_status, e.termination_date
+             e.phone, es.status_name as employee_status, e.termination_date, e.is_test_account,
+             e.time_format_preference
       FROM employees e
       JOIN employee_roles er ON e.id = er.employee_id
       JOIN roles r ON er.role_id = r.id
@@ -702,7 +714,8 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
             role: roles[0] || 'admin',
             roles: roles,
             userType: 'employee',
-            phone: user.phone
+            phone: user.phone,
+            timeFormatPreference: user.time_format_preference || '12h'
           };
 
           console.log(`✅ Session created for trusted device login: ${sessionData.sessionToken.substring(0, 20)}...`);
@@ -734,39 +747,45 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     // Initialize message variable
     let message = 'Verification code sent. Please check and enter the code to complete login.';
 
-    // Send MFA via both email and SMS
+    // Send MFA via both email and SMS (skip for test accounts)
     try {
-      console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: both`);
-      const deliveryResult = await sendMfaCode({
-        email: user.email,
-        phoneNumber: user.phone, // Use phone from employees table
-        firstName: user.first_name,
-        mfaCode,
-        language: 'en',
-        userType: 'admin',
-        deliveryMethod: 'both', // Send via both email and SMS
-        codeType: 'login'
-      });
-      console.log(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
-
-      // Check if at least one delivery method succeeded
-      if (!deliveryResult.success) {
-        return res.status(500).json({
-          success: false,
-          message: 'Failed to send verification code. Please try again.'
+      if (user.is_test_account) {
+        console.log(`🧪 TEST ACCOUNT: Skipping MFA email/SMS for ${user.email}. Code: ${mfaCode}`);
+        // For test accounts, skip email/SMS but allow login to proceed
+        message = `Test account login - MFA code: ${mfaCode}`;
+      } else {
+        console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: both`);
+        const deliveryResult = await sendMfaCode({
+          email: user.email,
+          phoneNumber: user.phone, // Use phone from employees table
+          firstName: user.first_name,
+          mfaCode,
+          language: 'en',
+          userType: 'admin',
+          deliveryMethod: 'both', // Send via both email and SMS
+          codeType: 'login'
         });
-      }
+        console.log(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
 
-      // Build success message based on which methods succeeded
-      message = 'Verification code sent';
-      const methods = [];
-      if (deliveryResult.email.sent) methods.push('email');
-      if (deliveryResult.sms.sent) methods.push('text message');
+        // Check if at least one delivery method succeeded
+        if (!deliveryResult.success) {
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to send verification code. Please try again.'
+          });
+        }
 
-      if (methods.length > 0) {
-        message += ` to your ${methods.join(' and ')}`;
+        // Build success message based on which methods succeeded
+        message = 'Verification code sent';
+        const methods = [];
+        if (deliveryResult.email.sent) methods.push('email');
+        if (deliveryResult.sms.sent) methods.push('text message');
+
+        if (methods.length > 0) {
+          message += ` to your ${methods.join(' and ')}`;
+        }
+        message += '. Please check and enter the code to complete login.';
       }
-      message += '. Please check and enter the code to complete login.';
 
     } catch (deliveryError) {
       return res.status(500).json({
@@ -852,13 +871,14 @@ router.post('/verify-admin-mfa', async (req, res) => {
                WHEN 'technician' = ANY(array_agg(r.name)) THEN 'technician'
                WHEN 'sales' = ANY(array_agg(r.name)) THEN 'sales'
                ELSE 'employee'
-             END as role
+             END as role,
+             e.time_format_preference
       FROM employees e
       LEFT JOIN employee_roles er ON e.id = er.employee_id
       LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
       WHERE e.id = $1
-      GROUP BY e.id, e.email, e.first_name, e.last_name, e.email_verified, es.status_name
+      GROUP BY e.id, e.email, e.first_name, e.last_name, e.email_verified, es.status_name, e.time_format_preference
     `, [mfaData.user_id]);
 
     if (userResult.rows.length === 0) {
@@ -889,6 +909,7 @@ router.post('/verify-admin-mfa', async (req, res) => {
       role: user.role || 'admin',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: null,
+      timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: true
     };
 
@@ -975,7 +996,7 @@ router.post('/verify-client-mfa', async (req, res) => {
     // Get client user data
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.email_verified,
-             b.business_name, 'client' as user_type
+             b.business_name, 'client' as user_type, u.time_format_preference
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1
@@ -1023,6 +1044,7 @@ router.post('/verify-client-mfa', async (req, res) => {
       role: user.role || 'client',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: false
     };
 
@@ -1477,7 +1499,7 @@ router.post('/resend-client-mfa', async (req, res) => {
 
     // Find client user with MFA enabled
     const clientResult = await query(`
-      SELECT u.id, u.email, u.first_name, u.last_name, u.mfa_enabled, u.mfa_email
+      SELECT u.id, u.email, u.first_name, u.last_name, u.mfa_enabled, u.mfa_email, u.is_test_account
       FROM users u
       WHERE u.email = $1 AND u.mfa_enabled = true
     `, [email]);
@@ -1501,14 +1523,21 @@ router.post('/resend-client-mfa', async (req, res) => {
     `, [user.email]);
     const userLanguage = languageResult.rows[0]?.language_preference || 'en';
 
-    // Send MFA email with user's preferred language
-    await sendMfaEmail(user.email, user.first_name, mfaCode, userLanguage, 'client');
+    let message = 'MFA code resent successfully';
 
-    console.log(`🔐 Client MFA code resent to ${user.email}: ${userLanguage}`);
+    // Skip sending email for test accounts
+    if (user.is_test_account) {
+      console.log(`🧪 TEST ACCOUNT: Skipping MFA email resend for client ${user.email}. Code: ${mfaCode}`);
+      message = `Test account - MFA code: ${mfaCode}`;
+    } else {
+      // Send MFA email with user's preferred language
+      await sendMfaEmail(user.email, user.first_name, mfaCode, userLanguage, 'client');
+      console.log(`🔐 Client MFA code resent to ${user.email}: ${userLanguage}`);
+    }
 
     res.status(200).json({
       success: true,
-      message: 'MFA code resent successfully'
+      message
     });
 
   } catch (error) {
@@ -1947,13 +1976,14 @@ router.post('/trusted-device-login', async (req, res) => {
                WHEN 'sales' = ANY(array_agg(r.name)) THEN 'sales'
                WHEN 'technician' = ANY(array_agg(r.name)) THEN 'technician'
                ELSE 'employee'
-             END as role
+             END as role,
+             e.time_format_preference
       FROM employees e
       LEFT JOIN employee_roles er ON e.id = er.employee_id
       LEFT JOIN roles r ON er.role_id = r.id AND r.is_active = true
       LEFT JOIN employee_employment_statuses es ON e.employee_status_id = es.id
       WHERE e.email = $1
-      GROUP BY e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified, es.status_name
+      GROUP BY e.id, e.email, e.first_name, e.last_name, e.password_hash, e.email_verified, es.status_name, e.time_format_preference
     `, [sanitizedEmail]);
 
     // If not found in employees, check users table for clients
@@ -1961,7 +1991,7 @@ router.post('/trusted-device-login', async (req, res) => {
       userResult = await query(`
         SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.email_verified,
                u.role, b.business_name, 'client' as user_type, null as employee_status,
-               ARRAY[]::text[] as roles
+               ARRAY[]::text[] as roles, u.time_format_preference
         FROM users u
         LEFT JOIN businesses b ON u.business_id = b.id
         WHERE u.email = $1
@@ -2039,7 +2069,8 @@ router.post('/trusted-device-login', async (req, res) => {
       email: user.email,
       role: user.role || (user.user_type === 'client' ? 'client' : 'employee'),
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
-      emailVerified: user.email_verified
+      emailVerified: user.email_verified,
+      timeFormatPreference: user.time_format_preference || '12h'
     };
 
     // Add employee-specific fields
@@ -2119,7 +2150,8 @@ router.post('/client-login', async (req, res) => {
     // Only check users table for clients
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
-             b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email
+             b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
+             u.time_format_preference
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.email = $1
@@ -2169,13 +2201,21 @@ router.post('/client-login', async (req, res) => {
         `, [user.email]);
         const userLanguage = languageResult.rows[0]?.language_preference || 'en';
 
-        await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
+        let message = 'Multi-factor authentication required. Please verify with the code sent to your email.';
+
+        // Skip sending email for test accounts
+        if (user.is_test_account) {
+          console.log(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
+          message = `Test account login - MFA code: ${mfaCode}`;
+        } else {
+          await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
+        }
 
         return res.status(200).json({
           success: true,
           requiresMfa: true,
           userType: 'client',
-          message: 'Multi-factor authentication required. Please verify with the code sent to your email.',
+          message,
           email: user.email,
           mfaEmail: user.mfa_email || user.email
         });
@@ -2221,6 +2261,7 @@ router.post('/client-login', async (req, res) => {
       role: user.role || 'client',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: false
     };
 

@@ -556,6 +556,27 @@ class WebSocketService {
       }
     });
   }
+
+  /**
+   * Check if a client is currently viewing a specific service request
+   * @param {string} clientId - The client's user ID
+   * @param {string} serviceRequestId - The service request ID
+   * @returns {boolean} - True if the client is currently viewing the request
+   */
+  isClientViewingRequest(clientId, serviceRequestId) {
+    const viewers = this.serviceRequestViewers.get(serviceRequestId);
+    if (!viewers || viewers.size === 0) {
+      return false;
+    }
+
+    // Check if any viewer matches the client ID and is a client type
+    const isViewing = Array.from(viewers).some(
+      viewer => viewer.userId === clientId && viewer.userType === 'client'
+    );
+
+    console.log(`👁️  Client ${clientId} ${isViewing ? 'IS' : 'is NOT'} viewing service request ${serviceRequestId}`);
+    return isViewing;
+  }
 }
 
 // Export singleton instance

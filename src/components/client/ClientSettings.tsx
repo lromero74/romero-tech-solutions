@@ -440,10 +440,10 @@ const ClientSettings: React.FC = () => {
         <div className="border-b mb-4 sm:mb-6 overflow-x-auto">
           <nav className="-mb-px flex space-x-4 sm:space-x-8 min-w-max sm:min-w-0">
             {[
-              { id: 'profile', label: t('settings.tabs.profile'), icon: User },
-              { id: 'password', label: t('settings.tabs.password'), icon: Lock },
-              { id: 'security', label: t('settings.tabs.security'), icon: Shield },
-              { id: 'devices', label: t('settings.tabs.trustedDevices'), icon: Smartphone }
+              { id: 'profile', label: t('settings.tabs.profile', 'Profile'), icon: User },
+              { id: 'password', label: t('settings.tabs.password', 'Password'), icon: Lock },
+              { id: 'security', label: t('settings.tabs.security', 'Security'), icon: Shield },
+              { id: 'devices', label: t('settings.tabs.trustedDevices', 'Trusted Devices'), icon: Smartphone }
             ].map(tab => (
               <button
                 key={tab.id}

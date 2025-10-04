@@ -2185,27 +2185,27 @@ const AdminServiceRequests: React.FC = () => {
 
                   {/* Billable hours breakdown */}
                   <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
-                    Billable Hours (Rounded to Nearest 0.5hr):
+                    Billable Hours:
                   </p>
                   <div className="grid grid-cols-3 gap-2 text-xs">
                     <div className="text-center">
                       <div className={`${themeClasses.text.secondary} mb-1`}>Standard</div>
                       <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.standardBillableHours.toFixed(1)} hrs
+                        {timeBreakdown.standardBillableHours.toFixed(2)} hrs
                       </div>
                       <div className={`text-xs ${themeClasses.text.muted}`}>1.0x rate</div>
                     </div>
                     <div className="text-center">
                       <div className={`${themeClasses.text.secondary} mb-1`}>Premium</div>
                       <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.premiumBillableHours.toFixed(1)} hrs
+                        {timeBreakdown.premiumBillableHours.toFixed(2)} hrs
                       </div>
                       <div className={`text-xs ${themeClasses.text.muted}`}>1.5x rate</div>
                     </div>
                     <div className="text-center">
                       <div className={`${themeClasses.text.secondary} mb-1`}>Emergency</div>
                       <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.emergencyBillableHours.toFixed(1)} hrs
+                        {timeBreakdown.emergencyBillableHours.toFixed(2)} hrs
                       </div>
                       <div className={`text-xs ${themeClasses.text.muted}`}>2.0x rate</div>
                     </div>
@@ -2213,7 +2213,7 @@ const AdminServiceRequests: React.FC = () => {
                   <div className={`mt-2 pt-2 border-t ${themeClasses.border} text-center`}>
                     <span className={`text-xs ${themeClasses.text.secondary}`}>Total Billable: </span>
                     <span className={`text-sm font-bold ${themeClasses.text.primary}`}>
-                      {timeBreakdown.totalBillableHours.toFixed(1)} hours
+                      {timeBreakdown.totalBillableHours.toFixed(2)} hours
                     </span>
                   </div>
                 </div>
@@ -2495,7 +2495,7 @@ const AdminServiceRequests: React.FC = () => {
                               <div className={`text-xs ${themeClasses.text.muted}`}>Mon-Fri 8am-5pm</div>
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.standard_hours.toFixed(1)}
+                              {invoiceData.invoice.standard_hours.toFixed(2)}
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
                               ${invoiceData.invoice.standard_rate.toFixed(2)}
@@ -2514,7 +2514,7 @@ const AdminServiceRequests: React.FC = () => {
                               <div className={`text-xs ${themeClasses.text.muted}`}>Weekends</div>
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.premium_hours.toFixed(1)}
+                              {invoiceData.invoice.premium_hours.toFixed(2)}
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
                               ${invoiceData.invoice.premium_rate.toFixed(2)}
@@ -2533,7 +2533,7 @@ const AdminServiceRequests: React.FC = () => {
                               <div className={`text-xs ${themeClasses.text.muted}`}>Late night/overnight</div>
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.emergency_hours.toFixed(1)}
+                              {invoiceData.invoice.emergency_hours.toFixed(2)}
                             </td>
                             <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
                               ${invoiceData.invoice.emergency_rate.toFixed(2)}
@@ -2548,7 +2548,7 @@ const AdminServiceRequests: React.FC = () => {
                   </div>
 
                   <div className={`text-xs ${themeClasses.text.muted} mt-2 italic`}>
-                    * Hours rounded up to nearest 0.5 hour per rate tier
+                    * Final end time rounded up to nearest 15 minutes. Exact hours billed per tier.
                   </div>
                 </div>
 

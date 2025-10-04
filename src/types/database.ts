@@ -346,6 +346,7 @@ export interface AuthUser {
   role: UserRole; // Primary role
   roles?: UserRoles; // Multiple roles
   name: string;
+  timeFormatPreference?: '12h' | '24h';
   isFirstAdmin?: boolean;
 }
 
