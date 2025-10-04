@@ -52,18 +52,17 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
           invoiceId: invoice.id,
         });
 
-        if (response.data.success && response.data.clientSecret) {
-          setClientSecret(response.data.clientSecret);
+        if (response.success && response.clientSecret) {
+          setClientSecret(response.clientSecret);
         } else {
           setError(
-            response.data.error || 'Failed to initialize payment. Please try again.'
+            response.error || 'Failed to initialize payment. Please try again.'
           );
         }
       } catch (err: any) {
         console.error('Error creating payment intent:', err);
         setError(
-          err.response?.data?.error ||
-            'Unable to process payment at this time. Please try again later.'
+          err.message || 'Unable to process payment at this time. Please try again later.'
         );
       } finally {
         setIsLoading(false);
@@ -131,6 +130,7 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
               <StripePaymentForm
                 amount={totalAmount}
                 invoiceNumber={invoice.invoice_number}
+                invoiceId={invoice.id}
                 onSuccess={() => {
                   onPaymentSuccess();
                   onClose();

@@ -2,9 +2,12 @@ import React, { createContext, useContext, useState, useCallback, useEffect, use
 
 interface NotificationContextType {
   unseenServiceRequestChanges: number;
+  unseenInvoiceChanges: number;
   hasNotifications: boolean;
   addServiceRequestChange: () => void;
+  addInvoiceChange: () => void;
   markServiceRequestChangesSeen: () => void;
+  markInvoiceChangesSeen: () => void;
   startViewTimer: () => void;
   clearViewTimer: () => void;
 }
@@ -17,16 +20,25 @@ interface NotificationProviderProps {
 
 export const NotificationProvider: React.FC<NotificationProviderProps> = ({ children }) => {
   const [unseenServiceRequestChanges, setUnseenServiceRequestChanges] = useState(0);
+  const [unseenInvoiceChanges, setUnseenInvoiceChanges] = useState(0);
   const viewTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const hasNotifications = unseenServiceRequestChanges > 0;
+  const hasNotifications = unseenServiceRequestChanges > 0 || unseenInvoiceChanges > 0;
 
   const addServiceRequestChange = useCallback(() => {
     setUnseenServiceRequestChanges(prev => prev + 1);
   }, []);
 
+  const addInvoiceChange = useCallback(() => {
+    setUnseenInvoiceChanges(prev => prev + 1);
+  }, []);
+
   const markServiceRequestChangesSeen = useCallback(() => {
     setUnseenServiceRequestChanges(0);
+  }, []);
+
+  const markInvoiceChangesSeen = useCallback(() => {
+    setUnseenInvoiceChanges(0);
   }, []);
 
   const startViewTimer = useCallback(() => {
@@ -62,9 +74,12 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const contextValue: NotificationContextType = {
     unseenServiceRequestChanges,
+    unseenInvoiceChanges,
     hasNotifications,
     addServiceRequestChange,
+    addInvoiceChange,
     markServiceRequestChangesSeen,
+    markInvoiceChangesSeen,
     startViewTimer,
     clearViewTimer
   };

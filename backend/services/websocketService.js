@@ -577,6 +577,45 @@ class WebSocketService {
     console.log(`👁️  Client ${clientId} ${isViewing ? 'IS' : 'is NOT'} viewing service request ${serviceRequestId}`);
     return isViewing;
   }
+
+  /**
+   * Notify a specific client about an invoice update
+   * @param {string} clientId - The client's user ID
+   * @param {Object} invoiceData - Invoice update data
+   */
+  notifyClientOfInvoiceUpdate(clientId, invoiceData) {
+    const socketId = this.clientSockets.get(clientId);
+    if (!socketId) {
+      console.log(`📡 No active socket for client ${clientId}, skipping invoice notification`);
+      return;
+    }
+
+    const socket = this.io.sockets.sockets.get(socketId);
+    if (socket) {
+      console.log(`📡 Sending invoice update to client ${clientId}:`, invoiceData);
+      socket.emit('invoice-updated', invoiceData);
+    }
+  }
+
+  /**
+   * Broadcast invoice update to all admin sockets
+   * @param {Object} invoiceData - Invoice update data
+   */
+  broadcastInvoiceUpdateToAdmins(invoiceData) {
+    if (this.adminSockets.size === 0) {
+      console.log('📡 No admin sockets connected, skipping invoice broadcast');
+      return;
+    }
+
+    console.log(`📡 Broadcasting invoice update to ${this.adminSockets.size} admin(s)`);
+
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit('invoice-updated', invoiceData);
+      }
+    });
+  }
 }
 
 // Export singleton instance

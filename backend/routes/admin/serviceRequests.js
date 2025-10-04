@@ -2097,14 +2097,46 @@ router.put('/service-requests/:id/close', async (req, res) => {
       JSON.stringify(actualHoursBreakdown)      // actual_hours_breakdown
     ]);
 
+    const createdInvoice = invoiceResult.rows[0];
+
+    // Get client ID to notify about new invoice
+    const clientQuery = await pool.query(`
+      SELECT u.id as client_id
+      FROM businesses b
+      JOIN users u ON b.id = u.business_id
+      WHERE b.id = $1
+      LIMIT 1
+    `, [serviceRequest.business_id]);
+
+    if (clientQuery.rows.length > 0) {
+      const { client_id } = clientQuery.rows[0];
+
+      // Notify the client about the new invoice
+      websocketService.notifyClientOfInvoiceUpdate(client_id, {
+        invoiceId: createdInvoice.id,
+        invoiceNumber: createdInvoice.invoice_number,
+        totalAmount: totalAmount,
+        paymentStatus: 'due',
+        type: 'new_invoice'
+      });
+    }
+
+    // Also notify admins
+    websocketService.broadcastInvoiceUpdateToAdmins({
+      invoiceId: createdInvoice.id,
+      invoiceNumber: createdInvoice.invoice_number,
+      totalAmount: totalAmount,
+      type: 'new_invoice'
+    });
+
     res.json({
       success: true,
       message: 'Service request closed successfully and invoice generated',
       data: {
         ...result.rows[0],
         invoice: {
-          id: invoiceResult.rows[0].id,
-          invoiceNumber: invoiceResult.rows[0].invoice_number
+          id: createdInvoice.id,
+          invoiceNumber: createdInvoice.invoice_number
         }
       }
     });

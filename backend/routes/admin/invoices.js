@@ -1,5 +1,6 @@
 import express from 'express';
 import { getPool } from '../../config/database.js';
+import { websocketService } from '../../services/websocketService.js';
 
 const router = express.Router();
 
@@ -261,10 +262,43 @@ router.patch('/invoices/:id/payment-status', async (req, res) => {
       });
     }
 
+    const updatedInvoice = result.rows[0];
+
+    // Get business ID and client ID to notify the correct client
+    const businessQuery = await pool.query(`
+      SELECT i.business_id, u.id as client_id
+      FROM invoices i
+      JOIN businesses b ON i.business_id = b.id
+      JOIN users u ON b.id = u.business_id
+      WHERE i.id = $1
+      LIMIT 1
+    `, [id]);
+
+    if (businessQuery.rows.length > 0) {
+      const { client_id } = businessQuery.rows[0];
+
+      // Notify the specific client about the invoice update
+      websocketService.notifyClientOfInvoiceUpdate(client_id, {
+        invoiceId: updatedInvoice.id,
+        invoiceNumber: updatedInvoice.invoice_number,
+        paymentStatus: updatedInvoice.payment_status,
+        paymentDate: updatedInvoice.payment_date,
+        type: 'status_change'
+      });
+    }
+
+    // Also notify admins
+    websocketService.broadcastInvoiceUpdateToAdmins({
+      invoiceId: updatedInvoice.id,
+      invoiceNumber: updatedInvoice.invoice_number,
+      paymentStatus: updatedInvoice.payment_status,
+      type: 'status_change'
+    });
+
     res.json({
       success: true,
       message: 'Invoice payment status updated successfully',
-      data: result.rows[0]
+      data: updatedInvoice
     });
 
   } catch (error) {

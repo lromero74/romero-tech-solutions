@@ -70,6 +70,20 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
       );
     }
 
+    // Cancel previous payment intent if exists and not succeeded
+    if (invoice.stripe_payment_intent_id) {
+      try {
+        const existingPI = await getPaymentIntent(invoice.stripe_payment_intent_id);
+        if (existingPI.status !== 'succeeded' && existingPI.status !== 'processing') {
+          console.log(`🔄 Canceling previous payment intent: ${invoice.stripe_payment_intent_id}`);
+          const { cancelPaymentIntent } = await import('../../services/stripeService.js');
+          await cancelPaymentIntent(invoice.stripe_payment_intent_id);
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not cancel previous payment intent:', error.message);
+      }
+    }
+
     // Create payment intent
     const paymentIntent = await createPaymentIntent({
       amount: parseFloat(invoice.total_amount),
@@ -84,7 +98,7 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
       },
     });
 
-    // Update invoice with payment intent ID
+    // Update invoice with NEW payment intent ID (always replace)
     await pool.query(
       `
       UPDATE invoices
@@ -183,6 +197,103 @@ router.get('/status/:invoiceId', authenticateClient, async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get payment status',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * Sync payment status with Stripe (for dev/test when webhooks aren't available)
+ * POST /api/client/payments/sync-status/:invoiceId
+ */
+router.post('/sync-status/:invoiceId', authenticateClient, async (req, res) => {
+  const pool = await getPool();
+  const { invoiceId } = req.params;
+  const clientId = req.user.clientId;
+
+  try {
+    // Get invoice and verify ownership
+    const invoiceQuery = await pool.query(
+      `
+      SELECT
+        i.id,
+        i.invoice_number,
+        i.payment_status,
+        i.stripe_payment_intent_id
+      FROM invoices i
+      JOIN businesses b ON i.business_id = b.id
+      JOIN users u ON b.id = u.business_id
+      WHERE i.id = $1 AND u.id = $2
+      `,
+      [invoiceId, clientId]
+    );
+
+    if (invoiceQuery.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'Invoice not found',
+      });
+    }
+
+    const invoice = invoiceQuery.rows[0];
+
+    // If no payment intent, nothing to sync
+    if (!invoice.stripe_payment_intent_id) {
+      return res.json({
+        success: true,
+        message: 'No payment intent to sync',
+        paymentStatus: invoice.payment_status,
+      });
+    }
+
+    // Get latest status from Stripe
+    const paymentIntent = await getPaymentIntent(invoice.stripe_payment_intent_id);
+
+    console.log(`🔄 Syncing payment status for invoice ${invoice.invoice_number}: ${paymentIntent.status}`);
+
+    // Update invoice based on Stripe status
+    if (paymentIntent.status === 'succeeded' && invoice.payment_status !== 'paid') {
+      await pool.query(
+        `
+        UPDATE invoices
+        SET
+          payment_status = 'paid',
+          payment_date = CURRENT_TIMESTAMP,
+          stripe_charge_id = $1,
+          payment_method = $2,
+          stripe_payment_method_id = $3,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $4
+        `,
+        [
+          paymentIntent.latest_charge,
+          paymentIntent.payment_method_types?.[0] || 'card',
+          paymentIntent.payment_method,
+          invoiceId,
+        ]
+      );
+
+      console.log(`✅ Updated invoice ${invoice.invoice_number} to paid`);
+
+      return res.json({
+        success: true,
+        message: 'Invoice updated to paid',
+        paymentStatus: 'paid',
+        stripeStatus: paymentIntent.status,
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Invoice status is up to date',
+      paymentStatus: invoice.payment_status,
+      stripeStatus: paymentIntent.status,
+    });
+  } catch (error) {
+    console.error('❌ Error syncing payment status:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to sync payment status',
       message: error.message,
     });
   }

@@ -5,10 +5,12 @@ import {
   useElements,
 } from '@stripe/react-stripe-js';
 import { CheckCircle, AlertCircle, Loader } from 'lucide-react';
+import { apiService } from '../../services/apiService';
 
 interface StripePaymentFormProps {
   amount: number;
   invoiceNumber: string;
+  invoiceId: string;
   onSuccess: () => void;
   onCancel: () => void;
 }
@@ -16,6 +18,7 @@ interface StripePaymentFormProps {
 export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
   amount,
   invoiceNumber,
+  invoiceId,
   onSuccess,
   onCancel,
 }) => {
@@ -49,6 +52,16 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
         setErrorMessage(error.message || 'An unexpected error occurred.');
         setIsProcessing(false);
       } else {
+        // Payment succeeded - sync status with backend
+        try {
+          console.log('✅ Payment confirmed, syncing status with backend...');
+          await apiService.post(`/client/payments/sync-status/${invoiceId}`, {});
+          console.log('✅ Invoice status synced successfully');
+        } catch (syncError) {
+          console.warn('⚠️ Failed to sync invoice status:', syncError);
+          // Don't fail the payment flow if sync fails - webhook will eventually update it
+        }
+
         setPaymentSuccess(true);
         setTimeout(() => {
           onSuccess();
