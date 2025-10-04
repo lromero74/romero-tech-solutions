@@ -407,8 +407,8 @@ const PushNotificationManager: React.FC = () => {
           </div>
         </div>
 
-        {/* Test Notification Button (for admin users) */}
-        {isSubscribed && localStorage.getItem('sessionToken') && (
+        {/* Test Notification Button (for admin/employee users) */}
+        {isSubscribed && (localStorage.getItem('sessionToken') || localStorage.getItem('authUser')) && (
           <div className="mt-4 pt-4 border-t">
             <button
               onClick={handleTestNotification}
