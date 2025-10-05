@@ -116,7 +116,8 @@ const WorkflowConfiguration: React.FC = () => {
       'start_timeout': 'Start Timeout',
       'started': 'Started',
       'completed': 'Completed',
-      'closed': 'Closed'
+      'closed': 'Closed',
+      'cancelled': 'Cancelled'
     };
     return labels[event] || event;
   };
@@ -127,7 +128,8 @@ const WorkflowConfiguration: React.FC = () => {
       'acknowledged': 'Acknowledged',
       'started': 'In Progress',
       'completed': 'Completed',
-      'closed': 'Closed'
+      'closed': 'Closed',
+      'cancelled': 'Cancelled'
     };
     return labels[state] || state;
   };

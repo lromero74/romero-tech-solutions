@@ -629,3 +629,123 @@ export async function sendServiceRequestClosedAdminEmail({
     throw error;
   }
 }
+
+/**
+ * Notify client when service request is cancelled
+ */
+export async function sendServiceRequestCancelledClientEmail({
+  serviceRequestData,
+  client,
+  cancelledBy
+}) {
+  const subject = `❌ Service Request #${serviceRequestData.requestNumber} Cancelled`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px;">
+        <h1 style="color: #1f2937; margin: 0 0 20px 0;">Service Request Cancelled</h1>
+
+        <p style="font-size: 16px;">Hello ${client.firstName},</p>
+
+        <div style="background-color: #fee2e2; border-left: 4px solid #ef4444; padding: 15px; margin: 20px 0; border-radius: 4px;">
+          <strong style="color: #991b1b;">Request Cancelled</strong>
+          <p style="margin: 10px 0 0 0; color: #7f1d1d;">
+            Your service request has been cancelled ${cancelledBy ? `by ${cancelledBy}` : ''}.
+          </p>
+        </div>
+
+        <div style="background-color: white; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+          <h2 style="color: #3b82f6; margin-top: 0;">Service Request #${serviceRequestData.requestNumber}</h2>
+          <p style="margin: 10px 0;"><strong>Title:</strong> ${serviceRequestData.title}</p>
+          ${serviceRequestData.cancelReason ? `<p style="margin: 10px 0;"><strong>Reason:</strong> ${serviceRequestData.cancelReason}</p>` : ''}
+        </div>
+
+        <p style="color: #4b5563;">
+          If you have any questions about this cancellation, please contact us.
+        </p>
+
+        ${getEmailFooter()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  const mailOptions = {
+    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    to: client.email,
+    subject,
+    html
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`📧 Cancelled notification sent to client ${client.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Error sending cancelled notification to client:`, error);
+    throw error;
+  }
+}
+
+/**
+ * Notify admin/executives when service request is cancelled
+ */
+export async function sendServiceRequestCancelledAdminEmail({
+  serviceRequestData,
+  admin,
+  cancelledBy
+}) {
+  const subject = `❌ Service Request #${serviceRequestData.requestNumber} Cancelled`;
+
+  const html = `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px;">
+        <h1 style="color: #1f2937; margin: 0 0 20px 0;">Service Request Cancelled</h1>
+
+        <p style="font-size: 16px;">Hello ${admin.firstName},</p>
+
+        <p style="color: #4b5563;">
+          Service request #${serviceRequestData.requestNumber} has been cancelled ${cancelledBy ? `by ${cancelledBy}` : ''}.
+        </p>
+
+        <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+          <h2 style="color: #3b82f6; margin-top: 0;">${serviceRequestData.title}</h2>
+          <p style="color: #6b7280;"><strong>Request #:</strong> ${serviceRequestData.requestNumber}</p>
+          <p style="color: #6b7280;"><strong>Client:</strong> ${serviceRequestData.clientName}</p>
+          ${serviceRequestData.cancelReason ? `<p style="color: #6b7280;"><strong>Cancellation Reason:</strong> ${serviceRequestData.cancelReason}</p>` : ''}
+        </div>
+
+        ${getEmailFooter()}
+      </div>
+    </body>
+    </html>
+  `;
+
+  const mailOptions = {
+    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    to: admin.email,
+    subject,
+    html
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`📧 Cancelled notification sent to admin ${admin.email}`);
+    return { success: true };
+  } catch (error) {
+    console.error(`❌ Error sending cancelled notification to admin:`, error);
+    throw error;
+  }
+}
