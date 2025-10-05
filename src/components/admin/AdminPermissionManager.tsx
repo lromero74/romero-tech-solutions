@@ -633,7 +633,7 @@ const AdminPermissionManager: React.FC<AdminPermissionManagerProps> = ({
                       </div>
                       <div className="text-xs font-normal">
                         <span className={themeClasses.text.success}>
-                          {role.permissions.size} permissions
+                          {role.permissions?.size || 0} permissions
                         </span>
                       </div>
                       {role.name !== 'executive' && (
