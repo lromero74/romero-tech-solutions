@@ -151,7 +151,8 @@ const AdminServiceRequests: React.FC = () => {
         ...(filters.urgency !== 'all' && { urgency: filters.urgency }),
         ...(filters.priority !== 'all' && { priority: filters.priority }),
         ...(filters.business !== 'all' && { businessId: filters.business }),
-        ...(filters.technician !== 'all' && { technicianId: filters.technician })
+        ...(filters.technician !== 'all' && { technicianId: filters.technician }),
+        ...(filters.search && { search: filters.search })
       });
 
       const url = `${API_BASE_URL}/admin/service-requests?${params}`;
@@ -1051,16 +1052,8 @@ const AdminServiceRequests: React.FC = () => {
   };
 
   // Filter requests locally by search term
-  const filteredRequests = serviceRequests.filter(request => {
-    if (!filters.search) return true;
-    const searchLower = filters.search.toLowerCase();
-    return (
-      request.request_number.toLowerCase().includes(searchLower) ||
-      request.title.toLowerCase().includes(searchLower) ||
-      request.client_name.toLowerCase().includes(searchLower) ||
-      request.business_name.toLowerCase().includes(searchLower)
-    );
-  });
+  // No client-side filtering needed - backend handles all filtering including search
+  const filteredRequests = serviceRequests;
 
   // Get unique clients for filter dropdown
   const uniqueClients = React.useMemo(() => {

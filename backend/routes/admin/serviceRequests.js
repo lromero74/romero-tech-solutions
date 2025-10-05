@@ -21,6 +21,7 @@ router.get('/service-requests', async (req, res) => {
       priority,
       businessId,
       technicianId,
+      search,
       sortBy = 'created_at',
       sortOrder = 'DESC'
     } = req.query;
@@ -88,6 +89,18 @@ router.get('/service-requests', async (req, res) => {
     if (technicianId && technicianId !== 'all') {
       conditions.push(`sr.assigned_to_employee_id = $${paramIndex}`);
       params.push(technicianId);
+      paramIndex++;
+    }
+
+    if (search && search.trim()) {
+      const searchTerm = `%${search.trim().toLowerCase()}%`;
+      conditions.push(`(
+        LOWER(sr.request_number) LIKE $${paramIndex} OR
+        LOWER(sr.title) LIKE $${paramIndex} OR
+        LOWER(u.first_name || ' ' || u.last_name) LIKE $${paramIndex} OR
+        LOWER(b.business_name) LIKE $${paramIndex}
+      )`);
+      params.push(searchTerm);
       paramIndex++;
     }
 
