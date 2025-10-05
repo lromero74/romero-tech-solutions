@@ -671,21 +671,29 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         setSelectedEndTime(endTime);
         setErrorMessage('');
 
-        // Scroll to show the buffer time before the suggested slot
+        // Scroll to show the suggested slot with good context, especially on mobile
         setTimeout(() => {
           const hours = startTime.getHours();
           const minutes = startTime.getMinutes();
 
-          // Calculate position to show buffer (1 hour before slot) + 30 min context
-          // This shows: [30 min context] [1 hour buffer] [slot start] ...
-          const bufferStartHours = hours - 1.5; // 1 hour buffer + 30 min context
-          const slotIndex = (bufferStartHours - 6) * 2 + (minutes / 30);
-          const scrollPosition = Math.max(0, slotIndex * 64); // Don't scroll before timeline start
-
           const container = document.getElementById('timeline-scroll');
-          if (container) {
-            container.scrollTo({ left: scrollPosition, behavior: 'smooth' });
-          }
+          if (!container) return;
+
+          // Calculate slot position in timeline
+          const slotIndex = (hours - 6) * 2 + (minutes / 30);
+          const slotPosition = slotIndex * 64; // Each 30-min slot is 64px wide
+
+          // Get viewport width to adjust scroll for mobile
+          const viewportWidth = container.clientWidth;
+
+          // Position slot at 20% from left edge (works well on mobile and desktop)
+          // This shows plenty of context before the slot
+          const targetScrollPosition = slotPosition - (viewportWidth * 0.2);
+
+          // Don't scroll before timeline start (6 AM)
+          const finalScrollPosition = Math.max(0, targetScrollPosition);
+
+          container.scrollTo({ left: finalScrollPosition, behavior: 'smooth' });
         }, 500); // Longer delay to allow for date change and timeline re-render
       } else {
         setErrorMessage(result.message || 'No available slots found');
