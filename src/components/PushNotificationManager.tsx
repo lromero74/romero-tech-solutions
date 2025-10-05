@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Settings, Smartphone, AlertCircle, Check, X } from 'lucide-react';
 import { pushNotificationService } from '../services/pushNotificationService';
+import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 
 interface NotificationPreferences {
   new_client_signup: boolean;
@@ -13,9 +14,11 @@ interface NotificationPreferences {
   service_request_updated: boolean;
   invoice_created: boolean;
   invoice_paid: boolean;
+  mfa_codes: boolean;
 }
 
 const PushNotificationManager: React.FC = () => {
+  const { isAuthenticated, user } = useEnhancedAuth();
   const [isSupported, setIsSupported] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -25,66 +28,27 @@ const PushNotificationManager: React.FC = () => {
     new_service_request: true,
     service_request_updated: true,
     invoice_created: true,
-    invoice_paid: true
+    invoice_paid: true,
+    mfa_codes: true
   });
   const [showPreferences, setShowPreferences] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [isIOSInstructions, setIsIOSInstructions] = useState(false);
   const [debugInfo, setDebugInfo] = useState<string>('');
-  const [isEmployee, setIsEmployee] = useState(false);
+
+  // Determine if user is an employee based on auth context
+  const isEmployee = isAuthenticated && user?.role !== 'client';
 
   useEffect(() => {
     const init = async () => {
-      const isEmp = await checkEmployeeStatus();
-      console.log('Employee status after check:', isEmp);
+      console.log('Employee status from auth context:', isEmployee);
       await checkNotificationStatus();
     };
-    // Small delay to ensure localStorage is ready
+    // Small delay to ensure everything is ready
     setTimeout(init, 100);
-  }, []);
+  }, [isEmployee]);
 
-  const checkEmployeeStatus = async () => {
-    console.log('🔍 Checking employee status...');
-
-    // Check for role-based session tokens (RoleBasedStorage pattern)
-    const employeeRoles = ['admin', 'executive', 'employee', 'technician', 'sales'];
-    for (const role of employeeRoles) {
-      const roleToken = localStorage.getItem(`${role}_sessionToken`);
-      console.log(`Checking ${role}_sessionToken:`, roleToken ? 'Found' : 'Not found');
-      if (roleToken) {
-        setIsEmployee(true);
-        console.log(`✅ Employee detected via ${role} session token`);
-        return true; // Return true to indicate employee found
-      }
-    }
-
-    // Check for traditional auth
-    const sessionToken = localStorage.getItem('sessionToken');
-    console.log('Traditional sessionToken:', sessionToken ? 'Found' : 'Not found');
-    if (sessionToken) {
-      setIsEmployee(true);
-      console.log('✅ Employee detected via traditional auth');
-      return true;
-    }
-
-    // Check for AWS Amplify auth
-    try {
-      const { getCurrentUser } = await import('aws-amplify/auth');
-      const user = await getCurrentUser();
-      console.log('AWS Amplify user:', user);
-      if (user) {
-        setIsEmployee(true);
-        console.log('✅ Employee detected via AWS Amplify');
-        return true;
-      }
-    } catch (e) {
-      console.log('❌ Not authenticated with AWS Amplify:', e);
-    }
-
-    console.log('❌ No employee authentication found');
-    setIsEmployee(false);
-    return false;
-  };
+  // Remove old checkEmployeeStatus function - now using auth context
 
   const checkNotificationStatus = async () => {
     try {
@@ -611,18 +575,17 @@ const PushNotificationManager: React.FC = () => {
 
             <button
               onClick={async () => {
-                console.log('🔄 Rechecking employee status...');
-                setMessage({ type: 'info', text: 'Rechecking employee status...' });
-                const isEmp = await checkEmployeeStatus();
+                console.log('🔄 Rechecking notification status...');
+                setMessage({ type: 'info', text: 'Rechecking notification status...' });
                 await checkNotificationStatus();
                 setMessage({
-                  type: isEmp ? 'success' : 'error',
-                  text: isEmp ? 'Employee detected!' : 'No employee auth found'
+                  type: isEmployee ? 'success' : 'info',
+                  text: `Employee: ${isEmployee ? 'Yes' : 'No'} | User: ${user?.email || 'Not authenticated'}`
                 });
               }}
               className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm w-full"
             >
-              🔄 DEBUG: Recheck Employee Status
+              🔄 DEBUG: Recheck Status
             </button>
           </div>
         )}
@@ -719,6 +682,22 @@ const PushNotificationManager: React.FC = () => {
                 className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
               />
             </label>
+
+            {/* MFA Codes - Only show for employees */}
+            {isEmployee && (
+              <label className="flex items-center justify-between">
+                <span className="text-sm">MFA Verification Codes</span>
+                <input
+                  type="checkbox"
+                  checked={preferences.mfa_codes}
+                  onChange={(e) => setPreferences({
+                    ...preferences,
+                    mfa_codes: e.target.checked
+                  })}
+                  className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                />
+              </label>
+            )}
           </div>
 
           <div className="mt-4 pt-4 border-t">
