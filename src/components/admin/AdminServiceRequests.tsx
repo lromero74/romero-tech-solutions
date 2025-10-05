@@ -1337,7 +1337,7 @@ const AdminServiceRequests: React.FC = () => {
                           {request.title}
                         </div>
                         <div className={`text-xs ${themeClasses.text.muted}`}>
-                          {request.business_type === 'individual' ? 'Individual' : request.business_name}
+                          {request.is_individual ? 'Individual' : request.business_name}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -1474,7 +1474,7 @@ const AdminServiceRequests: React.FC = () => {
                       {request.title}
                     </div>
                     <div className={`text-xs ${themeClasses.text.muted}`}>
-                      {request.business_type === 'individual' ? 'Individual' : request.business_name}
+                      {request.is_individual ? 'Individual' : request.business_name}
                     </div>
                   </div>
 

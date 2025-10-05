@@ -147,7 +147,7 @@ router.get('/service-requests', async (req, res) => {
         pl.color_code as priority_color,
         st.name as service_type,
         b.business_name,
-        b.type as business_type,
+        b.is_individual,
         sl.address_label as location_name,
         sl.street,
         sl.city,

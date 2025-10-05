@@ -13,7 +13,7 @@ export interface ServiceRequest {
   priority_color: string;
   service_type: string;
   business_name: string;
-  business_type: string;
+  is_individual: boolean;
   location_name: string;
   client_name: string;
   client_email: string;
