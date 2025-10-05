@@ -199,6 +199,14 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
       });
     }
 
+    // CRITICAL: Date parameter is in business timezone (e.g., "2025-10-07" means Oct 7 PDT)
+    // But PDT day spans TWO UTC dates! (00:00 PDT = 07:00 UTC same day, 23:59 PDT = 06:59 UTC next day)
+    // So we must query by UTC timestamp range, not date equality
+    const startOfBusinessDay = timezoneService.businessTimeToUTC(date, '00:00:00');
+    const endOfBusinessDay = timezoneService.businessTimeToUTC(date, '23:59:59');
+
+    console.log(`📅 Fetching bookings for business day ${date} (UTC range: ${startOfBusinessDay.toISOString()} to ${endOfBusinessDay.toISOString()})`);
+
     // IMPORTANT: Query system-wide bookings (removed business_id filter)
     // This allows clients to see all appointments to avoid scheduling conflicts
     const query = `
@@ -219,11 +227,18 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
       FROM service_requests sr
       LEFT JOIN users u ON sr.client_id = u.id
       LEFT JOIN service_types st ON sr.service_type_id = st.id
-      WHERE (sr.requested_date = $2 OR sr.scheduled_date = $2)
-        AND sr.soft_delete = false
+      WHERE sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
           WHERE is_final_status = true
+        )
+        AND (
+          -- Check if appointment's UTC timestamp falls within this business day's UTC range
+          (sr.requested_date::timestamp + sr.requested_time_start::time) >= $2::timestamp
+          AND (sr.requested_date::timestamp + sr.requested_time_start::time) < $3::timestamp
+          OR
+          (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) >= $2::timestamp
+          AND (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) < $3::timestamp
         )
       ORDER BY
         COALESCE(sr.scheduled_time_start, sr.requested_time_start),
@@ -231,7 +246,11 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
     `;
 
     const pool = await getPool();
-    const result = await pool.query(query, [clientId, date]);
+    const result = await pool.query(query, [
+      clientId,
+      startOfBusinessDay.toISOString(),
+      endOfBusinessDay.toISOString()
+    ]);
 
     const bookings = result.rows.map(row => {
       // Use scheduled time if available, otherwise use requested time
@@ -262,11 +281,18 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
         endDateTime = new Date(startDateTime.getTime() + (1 * 60 * 60 * 1000));
       }
 
+      // Calculate 1-hour buffer zones for frontend display
+      const BUFFER_HOURS = 1;
+      const bufferStartTime = new Date(startDateTime.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
+      const bufferEndTime = new Date(endDateTime.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
+
       return {
         id: row.id,
         resourceId: row.resourceid,
-        startTime: startDateTime,
-        endTime: endDateTime,
+        startTime: startDateTime,     // Actual appointment start
+        endTime: endDateTime,         // Actual appointment end
+        bufferStartTime: bufferStartTime, // Buffer zone before appointment
+        bufferEndTime: bufferEndTime,     // Buffer zone after appointment
         clientName: row.isownbooking ? 'You' : `${row.first_name || ''} ${row.last_name || ''}`.trim() || 'Client',
         serviceType: row.servicetype || 'Service Request',
         isOwnBooking: row.isownbooking

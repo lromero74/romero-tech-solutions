@@ -31,8 +31,10 @@ const ServiceScheduler: React.FC = () => {
   // State management
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [selectedTime, setSelectedTime] = useState<string>('');
-  const [selectedEndTime, setSelectedEndTime] = useState<string>('');
+  const [selectedTime, setSelectedTime] = useState<string>(''); // UTC time for backend
+  const [selectedEndTime, setSelectedEndTime] = useState<string>(''); // UTC time for backend
+  const [displayTime, setDisplayTime] = useState<string>(''); // PDT time for display
+  const [displayEndTime, setDisplayEndTime] = useState<string>(''); // PDT time for display
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [selectedUrgency, setSelectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
@@ -564,8 +566,20 @@ const ServiceScheduler: React.FC = () => {
       return `${hours}:${minutes}:${seconds}`;
     };
 
+    // Format time for display in Pacific timezone
+    const formatPDTTime = (date: Date): string => {
+      return date.toLocaleTimeString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true
+      });
+    };
+
     setSelectedTime(formatUTCTime(startTime));
     setSelectedEndTime(formatUTCTime(endTime));
+    setDisplayTime(formatPDTTime(startTime));
+    setDisplayEndTime(formatPDTTime(endTime));
 
     // Calculate duration in hours
     const durationMs = endTime.getTime() - startTime.getTime();
@@ -810,7 +824,7 @@ const ServiceScheduler: React.FC = () => {
                   })}
                 </div>
                 <div className={`text-md mt-1 ${isDarkMode ? 'text-blue-200' : 'text-blue-700'}`}>
-                  {selectedTime} {selectedEndTime && `- ${selectedEndTime}`} ({selectedDuration}h)
+                  {displayTime} {displayEndTime && `- ${displayEndTime}`} ({selectedDuration}h)
                 </div>
               </div>
 
