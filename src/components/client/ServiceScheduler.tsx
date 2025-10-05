@@ -554,8 +554,18 @@ const ServiceScheduler: React.FC = () => {
   ) => {
     // Update form state with selected date and time
     setSelectedDate(startTime);
-    setSelectedTime(startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
-    setSelectedEndTime(endTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }));
+
+    // CRITICAL: Extract UTC time (HH:MM:SS) for database storage
+    // Backend stores times in UTC, so we must send UTC time, not local time
+    const formatUTCTime = (date: Date): string => {
+      const hours = String(date.getUTCHours()).padStart(2, '0');
+      const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+      const seconds = String(date.getUTCSeconds()).padStart(2, '0');
+      return `${hours}:${minutes}:${seconds}`;
+    };
+
+    setSelectedTime(formatUTCTime(startTime));
+    setSelectedEndTime(formatUTCTime(endTime));
 
     // Calculate duration in hours
     const durationMs = endTime.getTime() - startTime.getTime();

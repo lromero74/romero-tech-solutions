@@ -129,22 +129,34 @@ class TimezoneService {
   }
 
   /**
-   * Get day of week and time string for a UTC timestamp in business timezone
+   * Get day of week and time string for a UTC timestamp
+   * CRITICAL: Database stores tier times in UTC, so we return UTC time!
+   * But day of week is in business timezone (rates can differ by day)
    * @param {Date} utcTimestamp - UTC Date object
-   * @returns {{dayOfWeek: number, timeString: string}} Business timezone day and time
+   * @returns {{dayOfWeek: number, timeString: string}} Business day of week + UTC time
    */
   getBusinessDayAndTime(utcTimestamp) {
-    const businessDate = new Date(utcTimestamp.toLocaleString('en-US', {
-      timeZone: this.businessTimezone
-    }));
+    // Get day of week in business timezone (rates vary by business day)
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: this.businessTimezone,
+      weekday: 'short'
+    });
 
-    const dayOfWeek = businessDate.getDay();
+    const parts = formatter.formatToParts(utcTimestamp);
+    const weekdayPart = parts.find(p => p.type === 'weekday');
 
-    // Format time as HH:MM:SS
-    const hours = String(businessDate.getHours()).padStart(2, '0');
-    const minutes = String(businessDate.getMinutes()).padStart(2, '0');
-    const seconds = String(businessDate.getSeconds()).padStart(2, '0');
+    // Convert weekday short name to day number (0-6, Sunday=0)
+    const weekdayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
+    const dayOfWeek = weekdayMap[weekdayPart.value];
+
+    // Get time in UTC (because database stores tier times in UTC!)
+    const hours = String(utcTimestamp.getUTCHours()).padStart(2, '0');
+    const minutes = String(utcTimestamp.getUTCMinutes()).padStart(2, '0');
+    const seconds = String(utcTimestamp.getUTCSeconds()).padStart(2, '0');
     const timeString = `${hours}:${minutes}:${seconds}`;
+
+    // Debug logging
+    console.log(`🕐 UTC ${utcTimestamp.toISOString()} → ${weekdayPart.value} (day ${dayOfWeek}) at ${timeString} UTC`);
 
     return { dayOfWeek, timeString };
   }
@@ -159,9 +171,11 @@ class TimezoneService {
 
     const { dayOfWeek, timeString } = this.getBusinessDayAndTime(utcTimestamp);
 
+    console.log(`🔍 Looking up tier: dayOfWeek=${dayOfWeek}, time=${timeString}`);
+
     const pool = await getPool();
     const result = await pool.query(`
-      SELECT tier_name, tier_level, rate_multiplier
+      SELECT tier_name, tier_level, rate_multiplier, time_start, time_end
       FROM service_hour_rate_tiers
       WHERE is_active = true
         AND day_of_week = $1
@@ -172,13 +186,16 @@ class TimezoneService {
     `, [dayOfWeek, timeString]);
 
     if (result.rows.length > 0) {
+      const tier = result.rows[0];
+      console.log(`✅ Found tier: ${tier.tier_name} (level ${tier.tier_level}) [${tier.time_start}-${tier.time_end}]`);
       return {
-        tierName: result.rows[0].tier_name,
-        tierLevel: result.rows[0].tier_level,
-        rateMultiplier: parseFloat(result.rows[0].rate_multiplier)
+        tierName: tier.tier_name,
+        tierLevel: tier.tier_level,
+        rateMultiplier: parseFloat(tier.rate_multiplier)
       };
     }
 
+    console.log(`❌ No tier found for dayOfWeek=${dayOfWeek}, time=${timeString}`);
     return null;
   }
 

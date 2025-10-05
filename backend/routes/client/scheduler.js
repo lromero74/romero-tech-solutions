@@ -223,7 +223,7 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
         AND sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
-          WHERE name IN ('Closed') AND is_final_status = true
+          WHERE is_final_status = true
         )
       ORDER BY
         COALESCE(sr.scheduled_time_start, sr.requested_time_start),
@@ -251,11 +251,12 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
         dateString = useDate;
       }
 
-      const startDateTime = new Date(`${dateString}T${startTime}`);
+      // CRITICAL: Database stores times in UTC, so we must parse as UTC
+      const startDateTime = new Date(`${dateString}T${startTime}Z`);
       let endDateTime;
 
       if (endTime) {
-        endDateTime = new Date(`${dateString}T${endTime}`);
+        endDateTime = new Date(`${dateString}T${endTime}Z`);
       } else {
         // Default to 1 hour if no end time specified (changed from 2 hours)
         endDateTime = new Date(startDateTime.getTime() + (1 * 60 * 60 * 1000));
@@ -365,7 +366,7 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
         AND sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
-          WHERE name IN ('Closed') AND is_final_status = true
+          WHERE is_final_status = true
         )
       ORDER BY
         COALESCE(sr.scheduled_time_start, sr.requested_time_start)
@@ -384,11 +385,12 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
       const existingStartTime = booking.scheduled_time_start || booking.requested_time_start;
       const existingEndTime = booking.scheduled_time_end || booking.requested_time_end;
 
-      const existingStart = new Date(`${existingUseDate}T${existingStartTime}`);
+      // CRITICAL: Database stores times in UTC, so we must parse as UTC
+      const existingStart = new Date(`${existingUseDate}T${existingStartTime}Z`);
       let existingEnd;
 
       if (existingEndTime) {
-        existingEnd = new Date(`${existingUseDate}T${existingEndTime}`);
+        existingEnd = new Date(`${existingUseDate}T${existingEndTime}Z`);
       } else {
         existingEnd = new Date(existingStart.getTime() + (1 * 60 * 60 * 1000));
       }
@@ -523,12 +525,38 @@ router.post('/suggest-available-slot', async (req, res) => {
   try {
     const { date, durationHours, tierPreference } = req.body;
 
+    console.log(`🔍 Auto-suggest request: date="${date}", durationHours=${durationHours}, tierPreference="${tierPreference}"`);
+
     if (!date) {
       return res.status(400).json({
         success: false,
         message: 'Date parameter is required'
       });
     }
+
+    // Validate and normalize date format
+    let normalizedDate;
+    if (typeof date === 'string') {
+      // Extract YYYY-MM-DD from various formats (YYYY-MM-DD, YYYY-MM-DDTHH:MM:SS, etc.)
+      const match = date.match(/^(\d{4}-\d{2}-\d{2})/);
+      if (match) {
+        normalizedDate = match[1];
+      } else {
+        console.error(`❌ Invalid date format received: "${date}"`);
+        return res.status(400).json({
+          success: false,
+          message: `Invalid date format: ${date}. Expected YYYY-MM-DD`
+        });
+      }
+    } else {
+      console.error(`❌ Date is not a string: ${typeof date}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Date must be a string in YYYY-MM-DD format'
+      });
+    }
+
+    console.log(`📅 Normalized input date: "${normalizedDate}"`);
 
     const requestedDuration = durationHours || 1; // Default to 1 hour
     const tierPref = tierPreference || 'any'; // Default to 'any'
@@ -559,8 +587,29 @@ router.post('/suggest-available-slot', async (req, res) => {
     const now = new Date();
     const minimumStartTime = new Date(now.getTime() + (1 * 60 * 60 * 1000)); // 1 hour from now
 
-    // Helper function to get blocked ranges for a specific date
+    // Helper function to get blocked ranges for a specific date (in business timezone)
     const getBlockedRangesForDate = async (searchDate) => {
+      // CRITICAL: searchDate is in business timezone (e.g., "2025-10-06" means Oct 6 PDT)
+      // But a PDT day spans TWO UTC dates! (00:00 PDT = 07:00 UTC same day, 23:59 PDT = 06:59 UTC next day)
+      // So we must query by UTC timestamp range, not date equality
+
+      console.log(`🔍 getBlockedRangesForDate called with searchDate: "${searchDate}" (type: ${typeof searchDate})`);
+
+      // Validate and normalize date string
+      let normalizedDate;
+      if (typeof searchDate === 'string' && searchDate.match(/^\d{4}-\d{2}-\d{2}/)) {
+        normalizedDate = searchDate.split('T')[0]; // Extract YYYY-MM-DD if ISO string
+      } else {
+        console.error(`❌ Invalid date format: ${searchDate}`);
+        throw new Error(`Invalid date format: ${searchDate}`);
+      }
+
+      console.log(`📅 Normalized date: "${normalizedDate}"`);
+
+      const startOfBusinessDay = timezoneService.businessTimeToUTC(normalizedDate, '00:00:00');
+      const endOfBusinessDay = timezoneService.businessTimeToUTC(normalizedDate, '23:59:59');
+
+      // Create timestamp range query that catches appointments in this business day
       const query = `
         SELECT
           sr.requested_date,
@@ -570,39 +619,71 @@ router.post('/suggest-available-slot', async (req, res) => {
           sr.scheduled_time_start,
           sr.scheduled_time_end
         FROM service_requests sr
-        WHERE (sr.requested_date = $1 OR sr.scheduled_date = $1)
-          AND sr.soft_delete = false
+        WHERE sr.soft_delete = false
           AND sr.status_id NOT IN (
             SELECT id FROM service_request_statuses
-            WHERE name IN ('Cancelled', 'Completed', 'Rejected')
+            WHERE is_final_status = true
+          )
+          AND (
+            -- Check if appointment's UTC timestamp falls within this business day's UTC range
+            (sr.requested_date::timestamp + sr.requested_time_start::time) >= $1::timestamp
+            AND (sr.requested_date::timestamp + sr.requested_time_start::time) < $2::timestamp
+            OR
+            (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) >= $1::timestamp
+            AND (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) < $2::timestamp
           )
         ORDER BY
           COALESCE(sr.scheduled_time_start, sr.requested_time_start)
       `;
 
-      const result = await pool.query(query, [searchDate]);
+      const result = await pool.query(query, [
+        startOfBusinessDay.toISOString(),
+        endOfBusinessDay.toISOString()
+      ]);
       const blockedRanges = [];
-      const BUFFER_HOURS = 1;
+
+      console.log(`🔍 Checking blocked ranges for business date ${searchDate} (UTC range: ${startOfBusinessDay.toISOString()} to ${endOfBusinessDay.toISOString()})`);
+      console.log(`   Found ${result.rows.length} existing appointments`);
 
       for (const booking of result.rows) {
         const useDate = booking.scheduled_date || booking.requested_date;
         const startTime = booking.scheduled_time_start || booking.requested_time_start;
         const endTime = booking.scheduled_time_end || booking.requested_time_end;
 
-        const start = new Date(`${useDate}T${startTime}`);
+        // Normalize date to YYYY-MM-DD format (handle both Date objects and strings)
+        let dateString;
+        if (useDate instanceof Date) {
+          dateString = useDate.toISOString().split('T')[0];
+        } else if (typeof useDate === 'string') {
+          const match = useDate.match(/(\d{4}-\d{2}-\d{2})/);
+          dateString = match ? match[1] : useDate;
+        } else {
+          console.error(`❌ Invalid date type in booking: ${typeof useDate}, value:`, useDate);
+          continue; // Skip this booking
+        }
+
+        // CRITICAL: Database stores times in UTC, so we must parse as UTC
+        // Adding 'Z' forces JavaScript to interpret as UTC, not local time
+        const start = new Date(`${dateString}T${startTime}Z`);
         let end;
 
         if (endTime) {
-          end = new Date(`${useDate}T${endTime}`);
+          end = new Date(`${dateString}T${endTime}Z`);
         } else {
           end = new Date(start.getTime() + (1 * 60 * 60 * 1000));
         }
 
-        // Add buffer before and after
-        const bufferStart = new Date(start.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
-        const bufferEnd = new Date(end.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
+        // Validate dates before logging
+        if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+          console.error(`❌ Invalid date created from booking:`, { dateString, startTime, endTime });
+          continue; // Skip invalid bookings
+        }
 
-        blockedRanges.push({ start: bufferStart, end: bufferEnd });
+        console.log(`   📅 Existing appointment: ${start.toISOString()} - ${end.toISOString()}`);
+
+        // Only block the actual appointment time (not the buffer)
+        // Buffers are allowed to overlap with other appointments' buffers
+        blockedRanges.push({ start: start, end: end });
       }
 
       return blockedRanges;
@@ -631,10 +712,31 @@ router.post('/suggest-available-slot', async (req, res) => {
           continue;
         }
 
-        // Check if this slot conflicts with any blocked ranges
+        // Check if this slot conflicts with any existing appointments
+        // Must satisfy the same rules as schedule-appointment endpoint
         let hasConflict = false;
+        const BUFFER_HOURS = 1;
+
         for (const blocked of blockedRanges) {
+          // RULE 8: Must not overlap any existing service request
           if (trySlot < blocked.end && slotEnd > blocked.start) {
+            console.log(`   ❌ RULE 8 violation: Slot ${trySlot.toISOString()} overlaps with ${blocked.start.toISOString()}-${blocked.end.toISOString()}`);
+            hasConflict = true;
+            break;
+          }
+
+          // RULE 7: Must start at least 1 hour AFTER existing appointment ends
+          const oneHourAfterExisting = new Date(blocked.end.getTime() + (BUFFER_HOURS * 60 * 60 * 1000));
+          if (trySlot >= blocked.end && trySlot < oneHourAfterExisting) {
+            console.log(`   ❌ RULE 7 violation: Slot ${trySlot.toISOString()} must be ≥1hr after ${blocked.end.toISOString()} (needs ${oneHourAfterExisting.toISOString()})`);
+            hasConflict = true;
+            break;
+          }
+
+          // RULE 9: Must end at least 1 hour BEFORE existing appointment starts
+          const oneHourBeforeExisting = new Date(blocked.start.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
+          if (slotEnd > oneHourBeforeExisting && slotEnd <= blocked.start) {
+            console.log(`   ❌ RULE 9 violation: Slot ends ${slotEnd.toISOString()}, must end ≥1hr before ${blocked.start.toISOString()} (needs ≤${oneHourBeforeExisting.toISOString()})`);
             hasConflict = true;
             break;
           }
@@ -650,8 +752,9 @@ router.post('/suggest-available-slot', async (req, res) => {
           }
 
           // Check if slot matches tier preference
+          // Tier levels: 1=Standard (cheapest), 2=Premium, 3=Emergency (most expensive)
           // If user selected "any" tier (null), accept all slots
-          // If user selected specific tier, ONLY accept exact matches - no fallback
+          // If user selected specific tier, ONLY accept exact matches
           const isMatch = preferredTierLevel === null ||
                          (rateTier && rateTier.tierLevel === preferredTierLevel);
 
@@ -688,7 +791,7 @@ router.post('/suggest-available-slot', async (req, res) => {
     };
 
     // Parse starting date string
-    const startDate = new Date(date + 'T00:00:00');
+    const startDate = new Date(normalizedDate + 'T00:00:00');
 
     // Search forward up to 30 days
     const MAX_DAYS_TO_SEARCH = 30;

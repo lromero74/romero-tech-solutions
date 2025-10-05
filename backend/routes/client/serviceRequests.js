@@ -23,6 +23,8 @@ router.use(sanitizeInputMiddleware);
  */
 router.post('/', async (req, res) => {
   try {
+    console.log('📥 Received service request data:', JSON.stringify(req.body, null, 2));
+
     const {
       title,
       description,
