@@ -507,6 +507,32 @@ const AdminServiceRequests: React.FC = () => {
   const handleTimeTracking = async (action: 'start' | 'stop') => {
     if (!selectedRequest) return;
 
+    // Check if starting work more than 10 minutes before scheduled time
+    if (action === 'start' && selectedRequest.scheduled_date && selectedRequest.scheduled_time_start) {
+      const now = new Date();
+      const scheduledDateTime = new Date(`${selectedRequest.scheduled_date}T${selectedRequest.scheduled_time_start}`);
+      const minutesUntilScheduled = (scheduledDateTime.getTime() - now.getTime()) / (1000 * 60);
+
+      if (minutesUntilScheduled > 10) {
+        const hoursUntil = Math.floor(minutesUntilScheduled / 60);
+        const minutesRemainder = Math.floor(minutesUntilScheduled % 60);
+        const timeUntilMessage = hoursUntil > 0
+          ? `${hoursUntil} hour${hoursUntil > 1 ? 's' : ''} and ${minutesRemainder} minute${minutesRemainder !== 1 ? 's' : ''}`
+          : `${Math.floor(minutesUntilScheduled)} minute${Math.floor(minutesUntilScheduled) !== 1 ? 's' : ''}`;
+
+        const confirmed = window.confirm(
+          `⚠️ Early Start Warning\n\n` +
+          `This service request is scheduled to start in ${timeUntilMessage}.\n\n` +
+          `Scheduled: ${scheduledDateTime.toLocaleString()}\n\n` +
+          `Are you sure you want to start work now?`
+        );
+
+        if (!confirmed) {
+          return; // User cancelled, don't start work
+        }
+      }
+    }
+
     try {
       setActionLoading(true);
       setActionError(null);
