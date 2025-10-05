@@ -1483,6 +1483,20 @@ const AdminServiceRequests: React.FC = () => {
                     <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Client</div>
                     <div className={`text-sm font-medium ${themeClasses.text.primary} mb-1`}>{request.client_name}</div>
 
+                    {/* Service Location Address (first) */}
+                    {request.locationDetails && (
+                      <a
+                        href={getMapUrl(request.locationDetails)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex items-start text-xs ${themeClasses.text.link} hover:underline mb-1`}
+                      >
+                        <MapPin className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
+                        <span className="break-words">{formatFullAddress(request.locationDetails)}</span>
+                      </a>
+                    )}
+
                     {/* Client Contact Info */}
                     <div className="space-y-1">
                       {request.client_phone && (
@@ -1503,18 +1517,6 @@ const AdminServiceRequests: React.FC = () => {
                         >
                           <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
                           {request.client_email}
-                        </a>
-                      )}
-                      {request.locationDetails && (
-                        <a
-                          href={getMapUrl(request.locationDetails)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-start text-xs ${themeClasses.text.link} hover:underline`}
-                        >
-                          <MapPin className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
-                          <span className="break-words">{formatFullAddress(request.locationDetails)}</span>
                         </a>
                       )}
                     </div>
