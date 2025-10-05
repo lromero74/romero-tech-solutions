@@ -67,7 +67,7 @@ export const unifiedAuthMiddleware = async (req, res, next) => {
         // Look up the employee by email
         const pool = await getPool();
         const result = await pool.query(
-          'SELECT id, email, first_name, last_name, role FROM employees WHERE email = $1 AND is_active = true',
+          'SELECT id, email, first_name, last_name FROM employees WHERE email = $1 AND is_active = true',
           [payload.email]
         );
 
@@ -81,13 +81,24 @@ export const unifiedAuthMiddleware = async (req, res, next) => {
 
         const employee = result.rows[0];
 
+        // Get employee's role from employee_roles table
+        const roleResult = await pool.query(`
+          SELECT r.name as role_name
+          FROM employee_roles er
+          JOIN roles r ON er.role_id = r.id
+          WHERE er.employee_id = $1
+          LIMIT 1
+        `, [employee.id]);
+
+        const role = roleResult.rows.length > 0 ? roleResult.rows[0].role_name : null;
+
         // Add authenticated user info to request
         req.authUser = {
           id: employee.id,
           email: employee.email,
           firstName: employee.first_name,
           lastName: employee.last_name,
-          role: employee.role,
+          role: role,
           authType: 'amplify'
         };
 
@@ -141,18 +152,30 @@ async function handleTraditionalSession(req, res, next, sessionToken) {
 
   // Try employee first
   const employeeResult = await pool.query(
-    'SELECT id, email, first_name, last_name, role FROM employees WHERE id = $1',
+    'SELECT id, email, first_name, last_name FROM employees WHERE id = $1',
     [session.userId]
   );
 
   if (employeeResult.rows.length > 0) {
     const employee = employeeResult.rows[0];
+
+    // Get employee's role from employee_roles table
+    const roleResult = await pool.query(`
+      SELECT r.name as role_name
+      FROM employee_roles er
+      JOIN roles r ON er.role_id = r.id
+      WHERE er.employee_id = $1
+      LIMIT 1
+    `, [employee.id]);
+
+    const role = roleResult.rows.length > 0 ? roleResult.rows[0].role_name : null;
+
     authUser = {
       id: employee.id,
       email: employee.email,
       firstName: employee.first_name,
       lastName: employee.last_name,
-      role: employee.role,
+      role: role,
       authType: 'traditional'
     };
     sessionType = 'employee';
