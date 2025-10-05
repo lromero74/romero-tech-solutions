@@ -534,12 +534,18 @@ const ServiceScheduler: React.FC = () => {
   const resetForm = () => {
     setSelectedDate(null);
     setSelectedTime('');
+    setSelectedEndTime('');
+    setDisplayTime('');
+    setDisplayEndTime('');
+    setSelectedDuration(1);
     setSelectedLocation('');
-    setSelectedUrgency('');
+    setSelectedUrgency('9f472726-fd54-48d4-b587-d289a26979e3'); // Reset to default "Normal" urgency
     setSelectedServiceType('');
     setTitle('');
     setDescription('');
+    // Note: Contact fields (name, phone, email) are NOT reset - they stay populated with user's info
     setUploadedFiles([]);
+    setCostBreakdown(null);
     setShowConfirmation(false);
   };
 
