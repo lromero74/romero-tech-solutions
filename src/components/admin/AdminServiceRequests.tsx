@@ -1137,12 +1137,14 @@ const AdminServiceRequests: React.FC = () => {
                 className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="all">All Statuses</option>
-                <option value="pending">Pending</option>
-                <option value="scheduled">Scheduled</option>
-                <option value="in progress">In Progress</option>
-                <option value="completed">Completed</option>
-                <option value="cancelled">Cancelled</option>
-                <option value="on hold">On Hold</option>
+                {statuses
+                  .filter(s => s.is_active)
+                  .sort((a, b) => a.display_order - b.display_order)
+                  .map(status => (
+                    <option key={status.id} value={status.name}>
+                      {status.name}
+                    </option>
+                  ))}
               </select>
             </div>
 

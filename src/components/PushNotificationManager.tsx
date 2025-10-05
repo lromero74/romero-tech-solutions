@@ -7,6 +7,7 @@ import React, { useState, useEffect } from 'react';
 import { Bell, BellOff, Settings, Smartphone, AlertCircle, Check, X } from 'lucide-react';
 import { pushNotificationService } from '../services/pushNotificationService';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
+import { themeClasses } from '../contexts/ThemeContext';
 
 interface NotificationPreferences {
   new_client_signup: boolean;
@@ -316,9 +317,9 @@ const PushNotificationManager: React.FC = () => {
   // Show loading state initially
   if (isLoading) {
     return (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
-        <div className="flex items-center gap-2 text-gray-600">
-          <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-gray-600"></div>
+      <div className={`${themeClasses.bg.secondary} ${themeClasses.border.primary} border rounded-lg p-4`}>
+        <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
+          <div className={`animate-spin rounded-full h-5 w-5 border-b-2 ${themeClasses.text.secondary}`}></div>
           <span>Checking notification support...</span>
         </div>
       </div>
@@ -327,9 +328,9 @@ const PushNotificationManager: React.FC = () => {
 
   // Always show debug panel at the top
   const DebugPanel = () => (
-    <div className="bg-gray-100 border border-gray-300 rounded-lg p-4 mb-4">
-      <h4 className="font-bold text-sm mb-2">🔍 Debug Information:</h4>
-      <pre className="text-xs font-mono whitespace-pre-wrap bg-white p-2 rounded border border-gray-200">
+    <div className={`${themeClasses.bg.tertiary} ${themeClasses.border.secondary} border rounded-lg p-4 mb-4`}>
+      <h4 className={`font-bold text-sm mb-2 ${themeClasses.text.primary}`}>🔍 Debug Information:</h4>
+      <pre className={`text-xs font-mono whitespace-pre-wrap ${themeClasses.bg.card} p-2 rounded ${themeClasses.border.primary} border ${themeClasses.text.secondary}`}>
         {debugInfo || 'Loading debug info...'}
       </pre>
     </div>
@@ -347,13 +348,13 @@ const PushNotificationManager: React.FC = () => {
     return (
       <div className="space-y-4">
         <DebugPanel />
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className={`bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4`}>
           <div className="flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-red-800">
+            <AlertCircle className={`w-5 h-5 ${themeClasses.text.error} flex-shrink-0 mt-0.5`} />
+            <div className={`text-sm text-red-800 dark:text-red-200`}>
               <p className="font-semibold mb-2">⚠️ HTTPS Required for Push Notifications</p>
               <p className="mb-3">Service Workers and Push Notifications require HTTPS. You're currently using HTTP.</p>
-              <div className="bg-red-100 p-2 rounded mb-3">
+              <div className="bg-red-100 dark:bg-red-900/40 p-2 rounded mb-3">
                 <p className="font-mono text-xs">Current: {window.location.protocol}//{window.location.hostname}</p>
                 <p className="font-mono text-xs">Required: https:// (or localhost)</p>
               </div>
@@ -383,10 +384,10 @@ const PushNotificationManager: React.FC = () => {
     return (
       <div className="space-y-4">
         <DebugPanel />
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className={`bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4`}>
           <div className="flex items-start gap-3">
-            <Smartphone className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
+            <Smartphone className={`w-5 h-5 ${themeClasses.text.accent} flex-shrink-0 mt-0.5`} />
+            <div className={`text-sm text-blue-800 dark:text-blue-200`}>
               <p className="font-semibold mb-2">Install App for Push Notifications:</p>
               <p className="mb-2">Push notifications on iOS require installing this app to your home screen.</p>
               <ol className="list-decimal ml-4 space-y-1">
@@ -407,14 +408,14 @@ const PushNotificationManager: React.FC = () => {
     return (
       <div className="space-y-4">
         <DebugPanel />
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+        <div className={`bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4`}>
           <div className="flex flex-col gap-2">
-            <div className="flex items-center gap-2 text-yellow-800">
+            <div className={`flex items-center gap-2 ${themeClasses.text.warning}`}>
               <AlertCircle className="w-5 h-5" />
               <span>Push notifications are not supported on this device or browser</span>
             </div>
             {isIOS && (
-              <div className="text-sm text-yellow-700 ml-7">
+              <div className={`text-sm text-yellow-700 dark:text-yellow-300 ml-7`}>
                 <p>iOS Requirements:</p>
                 <ul className="list-disc ml-4 mt-1">
                   <li>iOS 16.4 or later required</li>
@@ -433,23 +434,23 @@ const PushNotificationManager: React.FC = () => {
     <div className="space-y-4">
       <DebugPanel />
       {/* Main Notification Toggle */}
-      <div className="bg-white border rounded-lg p-6">
+      <div className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-6`}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             {isSubscribed ? (
-              <Bell className="w-8 h-8 text-blue-600" />
+              <Bell className={`w-8 h-8 ${themeClasses.text.accent}`} />
             ) : (
-              <BellOff className="w-8 h-8 text-gray-400" />
+              <BellOff className={`w-8 h-8 ${themeClasses.text.muted}`} />
             )}
             <div>
-              <h3 className="text-lg font-semibold">Push Notifications</h3>
-              <p className="text-sm text-gray-600">
+              <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>Push Notifications</h3>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>
                 {isSubscribed
                   ? 'You are subscribed to push notifications'
                   : 'Enable push notifications to receive alerts'}
               </p>
               {permission === 'denied' && (
-                <p className="text-sm text-red-600 mt-1">
+                <p className={`text-sm ${themeClasses.text.error} mt-1`}>
                   Notifications are blocked. Please enable them in your browser settings.
                 </p>
               )}
@@ -460,7 +461,7 @@ const PushNotificationManager: React.FC = () => {
             {isSubscribed && (
               <button
                 onClick={() => setShowPreferences(!showPreferences)}
-                className="p-2 text-gray-600 hover:text-gray-800 transition-colors"
+                className={`p-2 ${themeClasses.text.secondary} hover:${themeClasses.text.primary} transition-colors`}
                 title="Notification preferences"
               >
                 <Settings className="w-5 h-5" />
@@ -484,11 +485,11 @@ const PushNotificationManager: React.FC = () => {
         {/* Test Notification Button (for admin/employee users) */}
         {/* TEMPORARY: Always show for testing - Remove after debugging */}
         {isSubscribed && (isEmployee || true) && (
-          <div className="mt-4 pt-4 border-t">
+          <div className={`mt-4 pt-4 border-t ${themeClasses.border.primary}`}>
             <button
               onClick={handleTestNotification}
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
+              className={`px-4 py-2 ${themeClasses.button.primary} rounded-md font-medium transition-colors disabled:opacity-50`}
             >
               📱 Send Test Notification
             </button>
@@ -497,7 +498,7 @@ const PushNotificationManager: React.FC = () => {
 
         {/* DEBUG: Re-sync subscription button */}
         {isSubscribed && (
-          <div className="mt-4 pt-4 border-t space-y-2">
+          <div className={`mt-4 pt-4 border-t ${themeClasses.border.primary} space-y-2`}>
             <button
               onClick={async () => {
                 console.log('🔄 Re-syncing subscription to server...');
@@ -521,7 +522,7 @@ const PushNotificationManager: React.FC = () => {
                   setMessage({ type: 'error', text: error.message || 'Sync failed' });
                 }
               }}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm w-full"
+              className="px-4 py-2 bg-gray-600 dark:bg-gray-700 hover:bg-gray-700 dark:hover:bg-gray-600 text-white rounded-md text-sm w-full"
             >
               🔄 DEBUG: Re-sync Subscription to Server
             </button>
@@ -583,7 +584,7 @@ const PushNotificationManager: React.FC = () => {
                   text: `Employee: ${isEmployee ? 'Yes' : 'No'} | User: ${user?.email || 'Not authenticated'}`
                 });
               }}
-              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm w-full"
+              className="px-4 py-2 bg-purple-600 dark:bg-purple-700 hover:bg-purple-700 dark:hover:bg-purple-600 text-white rounded-md text-sm w-full"
             >
               🔄 DEBUG: Recheck Status
             </button>
@@ -594,10 +595,10 @@ const PushNotificationManager: React.FC = () => {
 
       {/* iOS Installation Instructions */}
       {isIOSInstructions && (
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+        <div className={`bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4`}>
           <div className="flex items-start gap-3">
-            <Smartphone className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-blue-800">
+            <Smartphone className={`w-5 h-5 ${themeClasses.text.accent} flex-shrink-0 mt-0.5`} />
+            <div className={`text-sm text-blue-800 dark:text-blue-200`}>
               <p className="font-semibold mb-2">Install App for iOS Notifications:</p>
               <ol className="list-decimal ml-4 space-y-1">
                 <li>Open this website in Safari</li>
@@ -614,12 +615,12 @@ const PushNotificationManager: React.FC = () => {
 
       {/* Notification Preferences */}
       {showPreferences && isSubscribed && (
-        <div className="bg-white border rounded-lg p-6">
-          <h4 className="font-semibold mb-4">Notification Preferences</h4>
+        <div className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-6`}>
+          <h4 className={`font-semibold mb-4 ${themeClasses.text.primary}`}>Notification Preferences</h4>
 
           <div className="space-y-3">
             <label className="flex items-center justify-between">
-              <span className="text-sm">New Client Signups</span>
+              <span className={`text-sm ${themeClasses.text.primary}`}>New Client Signups</span>
               <input
                 type="checkbox"
                 checked={preferences.new_client_signup}
@@ -632,7 +633,7 @@ const PushNotificationManager: React.FC = () => {
             </label>
 
             <label className="flex items-center justify-between">
-              <span className="text-sm">New Service Requests</span>
+              <span className={`text-sm ${themeClasses.text.primary}`}>New Service Requests</span>
               <input
                 type="checkbox"
                 checked={preferences.new_service_request}
@@ -645,7 +646,7 @@ const PushNotificationManager: React.FC = () => {
             </label>
 
             <label className="flex items-center justify-between">
-              <span className="text-sm">Service Request Updates</span>
+              <span className={`text-sm ${themeClasses.text.primary}`}>Service Request Updates</span>
               <input
                 type="checkbox"
                 checked={preferences.service_request_updated}
@@ -658,7 +659,7 @@ const PushNotificationManager: React.FC = () => {
             </label>
 
             <label className="flex items-center justify-between">
-              <span className="text-sm">Invoice Created</span>
+              <span className={`text-sm ${themeClasses.text.primary}`}>Invoice Created</span>
               <input
                 type="checkbox"
                 checked={preferences.invoice_created}
@@ -671,7 +672,7 @@ const PushNotificationManager: React.FC = () => {
             </label>
 
             <label className="flex items-center justify-between">
-              <span className="text-sm">Invoice Paid</span>
+              <span className={`text-sm ${themeClasses.text.primary}`}>Invoice Paid</span>
               <input
                 type="checkbox"
                 checked={preferences.invoice_paid}
@@ -686,7 +687,7 @@ const PushNotificationManager: React.FC = () => {
             {/* MFA Codes - Only show for employees */}
             {isEmployee && (
               <label className="flex items-center justify-between">
-                <span className="text-sm">MFA Verification Codes</span>
+                <span className={`text-sm ${themeClasses.text.primary}`}>MFA Verification Codes</span>
                 <input
                   type="checkbox"
                   checked={preferences.mfa_codes}
@@ -700,11 +701,11 @@ const PushNotificationManager: React.FC = () => {
             )}
           </div>
 
-          <div className="mt-4 pt-4 border-t">
+          <div className={`mt-4 pt-4 border-t ${themeClasses.border.primary}`}>
             <button
               onClick={handleUpdatePreferences}
               disabled={isLoading}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+              className={`px-4 py-2 ${themeClasses.button.primary} rounded-lg disabled:opacity-50 transition-colors`}
             >
               {isLoading ? 'Saving...' : 'Save Preferences'}
             </button>
@@ -717,10 +718,10 @@ const PushNotificationManager: React.FC = () => {
         <div
           className={`rounded-lg p-4 flex items-center gap-2 ${
             message.type === 'success'
-              ? 'bg-green-50 text-green-800 border border-green-200'
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800'
               : message.type === 'error'
-              ? 'bg-red-50 text-red-800 border border-red-200'
-              : 'bg-blue-50 text-blue-800 border border-blue-200'
+              ? 'bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800'
+              : 'bg-blue-50 dark:bg-blue-900/20 text-blue-800 dark:text-blue-200 border border-blue-200 dark:border-blue-800'
           }`}
         >
           {message.type === 'success' && <Check className="w-5 h-5" />}
