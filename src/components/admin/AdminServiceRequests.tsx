@@ -1286,7 +1286,8 @@ const AdminServiceRequests: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="overflow-x-auto">
+            {/* Desktop Table View */}
+            <div className="hidden md:block overflow-x-auto">
               <table className="w-full">
                 <thead className={`${themeClasses.bg.secondary} border-b ${themeClasses.border.primary}`}>
                   <tr>
@@ -1425,24 +1426,122 @@ const AdminServiceRequests: React.FC = () => {
               </table>
             </div>
 
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-4">
+              {filteredRequests.map((request) => (
+                <div
+                  key={request.id}
+                  onClick={() => handleViewRequest(request)}
+                  className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-4 ${themeClasses.bg.hover} transition-colors cursor-pointer`}
+                >
+                  {/* Request Number and Status */}
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <span className={`font-mono text-sm font-medium ${themeClasses.text.primary}`}>
+                        {request.request_number}
+                      </span>
+                      <div className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                        {formatDate(request.requested_date)}
+                        {request.requested_time_start && ` • ${formatTime(request.requested_time_start)}`}
+                      </div>
+                    </div>
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        request.status.toLowerCase() === 'cancelled'
+                          ? 'bg-gray-500 text-white'
+                          : request.status.toLowerCase() === 'submitted'
+                          ? 'bg-blue-600 text-white'
+                          : request.status.toLowerCase() === 'acknowledged'
+                          ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
+                          : themeClasses.text.primary
+                      }`}
+                      style={
+                        request.status.toLowerCase() === 'cancelled' ||
+                        request.status.toLowerCase() === 'submitted' ||
+                        request.status.toLowerCase() === 'acknowledged'
+                          ? {}
+                          : { backgroundColor: `${request.status_color}20` }
+                      }
+                    >
+                      {getStatusIcon(request.status)}
+                      <span className="ml-1">{request.status}</span>
+                    </span>
+                  </div>
+
+                  {/* Title and Business */}
+                  <div className="mb-3">
+                    <div className={`text-sm font-medium ${themeClasses.text.primary} mb-1`}>
+                      {request.title}
+                    </div>
+                    <div className={`text-xs ${themeClasses.text.muted}`}>
+                      {request.business_name}
+                    </div>
+                  </div>
+
+                  {/* Client and Technician */}
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Client</div>
+                      <div className={`text-sm ${themeClasses.text.primary}`}>{request.client_name}</div>
+                    </div>
+                    <div>
+                      <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Technician</div>
+                      <div className={`text-sm ${themeClasses.text.primary}`}>
+                        {request.technician_name ? (
+                          <span className="flex items-center">
+                            <User className="h-3 w-3 mr-1" />
+                            {request.technician_name}
+                          </span>
+                        ) : (
+                          <span className={themeClasses.text.muted}>Unassigned</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Urgency */}
+                  <div className="flex items-center justify-between">
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${themeClasses.text.primary}`}
+                      style={{ backgroundColor: `${request.urgency_color}20` }}
+                    >
+                      {request.urgency}
+                    </span>
+                    {request.invoice_id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleViewInvoice(request.invoice_id!);
+                        }}
+                        className="text-green-600 dark:text-green-400 hover:underline flex items-center text-xs"
+                      >
+                        <FileText className="h-3 w-3 mr-1" />
+                        Invoice
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
             {/* Pagination */}
             {pagination.totalPages > 1 && (
-              <div className={`px-6 py-4 border-t ${themeClasses.border.primary} flex items-center justify-between`}>
-                <div className={`text-sm ${themeClasses.text.secondary}`}>
+              <div className={`px-4 md:px-6 py-4 border-t ${themeClasses.border.primary} flex flex-col md:flex-row items-center justify-between gap-3`}>
+                <div className={`text-xs md:text-sm ${themeClasses.text.secondary} text-center md:text-left`}>
                   Showing {((pagination.page - 1) * pagination.limit) + 1} to {Math.min(pagination.page * pagination.limit, pagination.totalCount)} of {pagination.totalCount} requests
                 </div>
                 <div className="flex space-x-2">
                   <button
                     onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
                     disabled={pagination.page === 1}
-                    className={`px-3 py-1 rounded ${pagination.page === 1 ? 'opacity-50 cursor-not-allowed' : themeClasses.bg.hover}`}
+                    className={`px-4 py-2 text-sm rounded ${pagination.page === 1 ? 'opacity-50 cursor-not-allowed' : themeClasses.bg.hover}`}
                   >
                     Previous
                   </button>
                   <button
                     onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
                     disabled={pagination.page === pagination.totalPages}
-                    className={`px-3 py-1 rounded ${pagination.page === pagination.totalPages ? 'opacity-50 cursor-not-allowed' : themeClasses.bg.hover}`}
+                    className={`px-4 py-2 text-sm rounded ${pagination.page === pagination.totalPages ? 'opacity-50 cursor-not-allowed' : themeClasses.bg.hover}`}
                   >
                     Next
                   </button>
