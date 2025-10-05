@@ -383,6 +383,8 @@ export async function sendNotificationToEmployees(notificationType, notification
   const pool = await getPool();
 
   try {
+    console.log(`📢 [sendNotificationToEmployees] Called with type: ${notificationType}, permission: ${permissionRequired}`);
+
     // Build query to get employees with proper permissions
     let query = `
       SELECT DISTINCT ps.endpoint, ps.keys
@@ -431,10 +433,15 @@ export async function sendNotificationToEmployees(notificationType, notification
         break;
     }
 
+    console.log(`🔍 [sendNotificationToEmployees] Executing query with params:`, params);
+    console.log(`🔍 [sendNotificationToEmployees] Query:`, query);
+
     const result = await pool.query(query, params);
 
+    console.log(`📊 [sendNotificationToEmployees] Found ${result.rows.length} subscription(s)`);
+
     if (result.rows.length === 0) {
-      console.log('No active subscriptions found for notification type:', notificationType);
+      console.log('⚠️ No active subscriptions found for notification type:', notificationType);
       return { sent: 0, failed: 0 };
     }
 
@@ -444,6 +451,7 @@ export async function sendNotificationToEmployees(notificationType, notification
     // Send notifications
     for (const subscription of result.rows) {
       try {
+        console.log(`📤 [sendNotificationToEmployees] Sending to endpoint: ${subscription.endpoint.substring(0, 50)}...`);
         await webpush.sendNotification(
           {
             endpoint: subscription.endpoint,
@@ -452,8 +460,9 @@ export async function sendNotificationToEmployees(notificationType, notification
           JSON.stringify(notificationData)
         );
         sent++;
+        console.log(`✅ [sendNotificationToEmployees] Successfully sent notification`);
       } catch (error) {
-        console.error('Failed to send notification:', error.message);
+        console.error('❌ [sendNotificationToEmployees] Failed to send notification:', error.message);
         failed++;
 
         // Mark subscription as inactive if it's expired
@@ -467,6 +476,7 @@ export async function sendNotificationToEmployees(notificationType, notification
       }
     }
 
+    console.log(`📊 [sendNotificationToEmployees] Summary: ${sent} sent, ${failed} failed`);
     return { sent, failed };
 
   } catch (error) {

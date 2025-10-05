@@ -47,6 +47,25 @@ router.post('/', async (req, res) => {
     // Get database pool
     const pool = await getPool();
 
+    // Check if client has reached the limit of 5 open service requests
+    const openRequestsQuery = `
+      SELECT COUNT(*) as count
+      FROM service_requests sr
+      JOIN service_request_statuses srs ON sr.status_id = srs.id
+      WHERE sr.client_id = $1
+        AND sr.soft_delete = false
+        AND srs.is_final_status = false
+    `;
+    const openRequestsResult = await pool.query(openRequestsQuery, [clientId]);
+    const openRequestsCount = parseInt(openRequestsResult.rows[0].count);
+
+    if (openRequestsCount >= 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'You have reached the maximum limit of 5 open service requests. Please wait for some to be completed before submitting new requests.'
+      });
+    }
+
     // Generate unique request number (SR-YYYY-NNNNN format)
     const requestNumber = await generateRequestNumber(pool);
     const statusQuery = `
@@ -214,6 +233,8 @@ router.post('/', async (req, res) => {
     // Send push notification for new service request
     const sendPushNotification = async () => {
       try {
+        console.log(`🔔 [ServiceRequest] Starting push notification process for ${requestNumber}`);
+
         // Get business name for notification
         const businessQuery = await pool.query(
           'SELECT name FROM businesses WHERE id = $1',
@@ -240,14 +261,15 @@ router.post('/', async (req, res) => {
           }
         };
 
-        await sendNotificationToEmployees(
+        console.log(`🔔 [ServiceRequest] Calling sendNotificationToEmployees for ${requestNumber}`);
+        const result = await sendNotificationToEmployees(
           'new_service_request',
           notificationData,
           'view.service_requests.enable'  // Use existing permission for those who can view service requests
         );
-        console.log('✅ Push notification sent for new service request');
+        console.log(`✅ [ServiceRequest] Push notification result for ${requestNumber}:`, result);
       } catch (notificationError) {
-        console.error('⚠️ Failed to send push notification:', notificationError);
+        console.error(`⚠️ [ServiceRequest] Failed to send push notification for ${requestNumber}:`, notificationError);
         // Don't fail the request if notification fails
       }
     };
