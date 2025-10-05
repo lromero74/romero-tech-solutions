@@ -7,6 +7,7 @@ import express from 'express';
 import webpush from 'web-push';
 import { getPool } from '../config/database.js';
 import { unifiedAuthMiddleware as authenticateSession } from '../middleware/unifiedAuthMiddleware.js';
+import { requirePermission } from '../middleware/permissionMiddleware.js';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -36,6 +37,7 @@ router.get('/vapid-public-key', (req, res) => {
 /**
  * POST /api/push/subscribe
  * Subscribe a user/employee to push notifications
+ * Note: No additional permission required - users can manage their own subscriptions
  */
 router.post('/subscribe', authenticateSession, async (req, res) => {
   const pool = await getPool();
@@ -138,6 +140,7 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
 /**
  * DELETE /api/push/unsubscribe
  * Unsubscribe from push notifications
+ * Note: No additional permission required - users can manage their own subscriptions
  */
 router.delete('/unsubscribe', authenticateSession, async (req, res) => {
   const pool = await getPool();
@@ -186,9 +189,9 @@ router.delete('/unsubscribe', authenticateSession, async (req, res) => {
 
 /**
  * GET /api/push/preferences
- * Get notification preferences for the current user
+ * Get notification preferences for the current user (requires push_notifications.view_preferences permission)
  */
-router.get('/preferences', authenticateSession, async (req, res) => {
+router.get('/preferences', authenticateSession, requirePermission('push_notifications.view_preferences'), async (req, res) => {
   const pool = await getPool();
 
   try {
@@ -231,9 +234,9 @@ router.get('/preferences', authenticateSession, async (req, res) => {
 
 /**
  * PUT /api/push/preferences
- * Update notification preferences for the current user
+ * Update notification preferences for the current user (requires push_notifications.update_preferences permission)
  */
-router.put('/preferences', authenticateSession, async (req, res) => {
+router.put('/preferences', authenticateSession, requirePermission('push_notifications.update_preferences'), async (req, res) => {
   const pool = await getPool();
 
   try {
@@ -291,22 +294,13 @@ router.put('/preferences', authenticateSession, async (req, res) => {
 
 /**
  * POST /api/push/test
- * Send a test notification (admin/manager only)
+ * Send a test notification (requires push_notifications.send_test permission)
  */
-router.post('/test', authenticateSession, async (req, res) => {
+router.post('/test', authenticateSession, requirePermission('push_notifications.send_test'), async (req, res) => {
   const pool = await getPool();
 
   try {
     const { authUser } = req;
-
-    // For now, allow any authenticated employee to send test notifications
-    // TODO: Add proper permission check using RBAC
-    if (!authUser || !authUser.id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Authentication required'
-      });
-    }
 
     // Get all active push subscriptions for the current user
     const result = await pool.query(`

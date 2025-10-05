@@ -2156,7 +2156,7 @@ router.post('/client-login', async (req, res) => {
       console.log(`⚠️ Company email domain used for client login: ${sanitizedEmail}`);
       return res.status(403).json({
         success: false,
-        message: 'Client login using @romerotechsolutions.com email addresses is not permitted. Employees should use the employee login page.'
+        message: 'Client login using @romerotechsolutions.com email addresses is not permitted.'
       });
     }
 
