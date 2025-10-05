@@ -1181,19 +1181,27 @@ router.put('/service-requests/:id/assign', async (req, res) => {
         noteText = `${newTechName} assumed ownership of this unassigned service request`;
       }
 
-      // Get system note type ID
-      const noteTypeQuery = await pool.query(`
-        SELECT id FROM service_request_note_types WHERE type_name = 'system' LIMIT 1
-      `);
-      const noteTypeId = noteTypeQuery.rows[0]?.id;
-
-      if (noteTypeId) {
-        await pool.query(`
-          INSERT INTO service_request_notes (
-            service_request_id, note_text, note_type_id, created_by_employee_id, is_internal, created_at
-          ) VALUES ($1, $2, $3, $4, true, NOW())
-        `, [id, noteText, noteTypeId, technicianId]);
-      }
+      // Create a system note for the ownership assumption
+      await pool.query(`
+        INSERT INTO service_request_notes (
+          service_request_id,
+          note_text,
+          note_type,
+          created_by_type,
+          created_by_id,
+          created_by_name,
+          is_visible_to_client,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+      `, [
+        id,                      // service_request_id
+        noteText,                // note_text
+        'system',                // note_type
+        'employee',              // created_by_type
+        technicianId,            // created_by_id
+        newTechName,             // created_by_name
+        false                    // is_visible_to_client (system notes are internal)
+      ]);
     }
 
     res.json({
