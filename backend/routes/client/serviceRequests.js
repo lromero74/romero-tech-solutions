@@ -237,10 +237,10 @@ router.post('/', async (req, res) => {
 
         // Get business name for notification
         const businessQuery = await pool.query(
-          'SELECT name FROM businesses WHERE id = $1',
+          'SELECT business_name FROM businesses WHERE id = $1',
           [businessId]
         );
-        const businessName = businessQuery.rows[0]?.name || 'Unknown Business';
+        const businessName = businessQuery.rows[0]?.business_name || 'Unknown Business';
 
         const notificationData = {
           title: '🔧 New Service Request',
