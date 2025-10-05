@@ -128,6 +128,13 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
       return false;
     }
 
+    // SECURITY: Block all @romerotechsolutions.com emails from client login
+    const emailDomain = emailValue.toLowerCase().split('@')[1];
+    if (emailDomain === 'romerotechsolutions.com') {
+      setEmailError('Employee emails cannot be used for client login. Please use /employee to log in.');
+      return false;
+    }
+
     setEmailError('');
     return true;
   };
@@ -136,6 +143,12 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     e.preventDefault();
     if (!email || !password) {
       setError(t('login.fillAllFields'));
+      return;
+    }
+
+    // Validate email format and domain before attempting login
+    if (!validateEmailFormat(email)) {
+      setError(emailError || 'Please enter a valid email address');
       return;
     }
 
