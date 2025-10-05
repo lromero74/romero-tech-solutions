@@ -63,6 +63,7 @@ const AdminServiceHourRates: React.FC = () => {
   const [selectedCell, setSelectedCell] = useState<{ day: number; hour: number } | null>(null);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [activeTierLevel, setActiveTierLevel] = useState<number | null>(null);
+  const [selectedDay, setSelectedDay] = useState<number>(new Date().getDay()); // For mobile view
 
   // Custom multipliers for each tier (editable by user)
   const [customMultipliers, setCustomMultipliers] = useState<Record<number, number>>({
@@ -390,28 +391,47 @@ const AdminServiceHourRates: React.FC = () => {
                 </p>
               </div>
 
+              {/* Day Selector (Mobile Only) */}
+              <div className="md:hidden px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+                <label className={`block text-sm font-medium ${themeClasses.text.primary} mb-2`}>
+                  Select Day
+                </label>
+                <select
+                  value={selectedDay}
+                  onChange={(e) => setSelectedDay(Number(e.target.value))}
+                  className={`w-full px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.secondary} ${themeClasses.text.primary}`}
+                >
+                  {DAYS_OF_WEEK.map((day, index) => (
+                    <option key={index} value={index}>
+                      {day}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="p-6">
-                <div className="inline-block min-w-full">
-                  <table className="w-full border-collapse">
-                    <thead className="block w-full">
-                      <tr className="flex w-full">
-                        <th className={`sticky left-0 z-20 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-left border ${themeClasses.border.primary} w-[100px] flex-shrink-0`}>
+                {/* Desktop View: All 7 days */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full border-collapse min-w-[700px]">
+                    <thead>
+                      <tr>
+                        <th className={`sticky left-0 z-20 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-left border ${themeClasses.border.primary} w-[100px]`}>
                           Time
                         </th>
                         {DAYS_OF_WEEK.map((day, index) => (
                           <th
                             key={index}
-                            className={`${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-center border ${themeClasses.border.primary} flex-1 min-w-[80px]`}
+                            className={`${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} text-center border ${themeClasses.border.primary}`}
                           >
                             {day}
                           </th>
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="block w-full overflow-y-auto max-h-[600px]">
+                    <tbody>
                       {HOURS.map(hour => (
-                        <tr key={hour} className="flex w-full">
-                          <td className={`sticky left-0 z-10 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} border ${themeClasses.border.primary} w-[100px] flex-shrink-0`}>
+                        <tr key={hour}>
+                          <td className={`sticky left-0 z-10 ${themeClasses.bg.card} p-2 text-xs font-medium ${themeClasses.text.secondary} border ${themeClasses.border.primary} w-[100px]`}>
                             {formatHour(hour)}
                           </td>
                           {DAYS_OF_WEEK.map((_, dayIndex) => {
@@ -423,7 +443,7 @@ const AdminServiceHourRates: React.FC = () => {
                               <td
                                 key={dayIndex}
                                 onClick={() => handleCellClick(dayIndex, hour)}
-                                className={`p-2 border ${themeClasses.border.primary} text-center transition-all flex-1 min-w-[80px] ${
+                                className={`p-2 border ${themeClasses.border.primary} text-center transition-all ${
                                   canModifyRates ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-inset' : ''
                                 } ${isUnassigned ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
                                 style={{
@@ -450,6 +470,66 @@ const AdminServiceHourRates: React.FC = () => {
                           })}
                         </tr>
                       ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile View: Single day */}
+                <div className="md:hidden">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr>
+                        <th className={`${themeClasses.bg.card} p-3 text-xs font-medium ${themeClasses.text.secondary} text-left border ${themeClasses.border.primary} w-24`}>
+                          Time
+                        </th>
+                        <th className={`${themeClasses.bg.card} p-3 text-xs font-medium ${themeClasses.text.secondary} text-center border ${themeClasses.border.primary}`}>
+                          {DAYS_OF_WEEK[selectedDay]}
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {HOURS.map(hour => {
+                        const tier = getTierForCell(selectedDay, hour);
+                        const bgColor = tier ? tier.colorCode : 'transparent';
+                        const isUnassigned = !tier;
+
+                        return (
+                          <tr key={hour}>
+                            <td className={`p-3 text-xs font-medium ${themeClasses.text.secondary} border ${themeClasses.border.primary} w-24`}>
+                              {formatHour(hour)}
+                            </td>
+                            <td
+                              onClick={() => handleCellClick(selectedDay, hour)}
+                              className={`p-3 border ${themeClasses.border.primary} text-center transition-all ${
+                                canModifyRates ? 'cursor-pointer hover:ring-2 hover:ring-blue-500 hover:ring-inset' : ''
+                              } ${isUnassigned ? 'bg-gray-200 dark:bg-gray-700' : ''}`}
+                              style={{
+                                backgroundColor: isUnassigned ? undefined : `${bgColor}40`,
+                                borderColor: tier ? bgColor : undefined,
+                                borderWidth: tier ? '2px' : undefined,
+                                outline: 'none',
+                                boxShadow: 'none'
+                              }}
+                            >
+                              {tier && (
+                                <div className="flex flex-col items-center justify-center py-2">
+                                  <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                    {tier.tierName}
+                                  </span>
+                                  <span className="text-xs text-gray-600 dark:text-gray-400">
+                                    {tier.rateMultiplier}x multiplier
+                                  </span>
+                                </div>
+                              )}
+                              {!tier && (
+                                <span className="text-xs text-gray-500 dark:text-gray-400">
+                                  Unassigned
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
