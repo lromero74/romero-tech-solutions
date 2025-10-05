@@ -62,14 +62,21 @@ router.post('/send-verification', signupRateLimiters, async (req, res) => {
       });
     }
 
-    // SECURITY: Check if email belongs to an employee
+    // SECURITY: Check if email belongs to an employee (but don't reveal this to the user)
     const employeeCheck = await query('SELECT id FROM employees WHERE email = $1', [email]);
     if (employeeCheck.rows.length > 0) {
       console.log(`⚠️ Attempted client registration with employee email: ${email}`);
+      // Return same error as if email already exists to prevent enumeration
       return res.status(409).json({
         success: false,
-        error: 'This email address belongs to an employee account. Please use the employee login page.',
-        code: 'EMPLOYEE_EMAIL'
+        error: 'An account with this email already exists',
+        code: 'EMAIL_ALREADY_EXISTS',
+        data: {
+          existingAccount: true,
+          email: email,
+          showPasswordRecovery: true,
+          message: 'This email address is already registered. Would you like to reset your password instead?'
+        }
       });
     }
 

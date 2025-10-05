@@ -2158,9 +2158,10 @@ router.post('/client-login', async (req, res) => {
       // This is an employee email - they should not use client login
       recordFailedAttempt(clientIP);
       console.log(`⚠️ Employee attempted client login: ${sanitizedEmail}`);
+      // SECURITY: Return generic error to prevent account enumeration
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password. Please use the employee login page.'
+        message: 'Invalid email or password'
       });
     }
 
