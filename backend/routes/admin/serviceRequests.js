@@ -1130,18 +1130,34 @@ router.put('/service-requests/:id/assign', async (req, res) => {
     }
 
     // Also create assignment record in service_request_assignments table
-    const assignmentQuery = `
-      INSERT INTO service_request_assignments (
-        service_request_id,
-        technician_id,
-        assignment_type,
-        is_active
-      ) VALUES ($1, $2, 'primary', true)
-      ON CONFLICT (service_request_id, technician_id, assignment_type)
-      DO UPDATE SET is_active = true, assigned_at = NOW()
-    `;
+    // First, check if an assignment already exists
+    const existingAssignment = await pool.query(
+      `SELECT id FROM service_request_assignments
+       WHERE service_request_id = $1 AND technician_id = $2 AND assignment_type = 'primary'`,
+      [id, technicianId]
+    );
 
-    await pool.query(assignmentQuery, [id, technicianId]);
+    if (existingAssignment.rows.length > 0) {
+      // Update existing assignment
+      await pool.query(
+        `UPDATE service_request_assignments
+         SET is_active = true, assigned_at = NOW()
+         WHERE service_request_id = $1 AND technician_id = $2 AND assignment_type = 'primary'`,
+        [id, technicianId]
+      );
+    } else {
+      // Create new assignment
+      await pool.query(
+        `INSERT INTO service_request_assignments (
+          service_request_id,
+          technician_id,
+          assignment_type,
+          is_active,
+          assigned_at
+        ) VALUES ($1, $2, 'primary', true, NOW())`,
+        [id, technicianId]
+      );
+    }
 
     // If this is an ownership assumption, create an automatic note
     if (assumeOwnership) {
