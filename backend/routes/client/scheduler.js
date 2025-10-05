@@ -616,7 +616,6 @@ router.post('/suggest-available-slot', async (req, res) => {
       const endOfBusinessDay = timezoneService.businessTimeToUTC(searchDateString, '23:59:59');
 
       let trySlot = new Date(startOfBusinessDay);
-      let fallbackSlot = null;
 
       while (trySlot < endOfBusinessDay) {
         const slotEnd = new Date(trySlot.getTime() + (requestedDuration * 60 * 60 * 1000));
@@ -646,30 +645,13 @@ router.post('/suggest-available-slot', async (req, res) => {
           const rateTier = await timezoneService.getRateTierForUTC(trySlot);
 
           // Check if slot matches tier preference
-          // If user selected "any" tier, accept all slots
-          // If user selected specific tier, prioritize exact matches but accept others as fallback
-          const isExactMatch = preferredTierLevel === null ||
-                              (rateTier && rateTier.tierLevel === preferredTierLevel);
+          // If user selected "any" tier (null), accept all slots
+          // If user selected specific tier, ONLY accept exact matches - no fallback
+          const isMatch = preferredTierLevel === null ||
+                         (rateTier && rateTier.tierLevel === preferredTierLevel);
 
-          const isFallbackMatch = preferredTierLevel !== null &&
-                                 rateTier &&
-                                 rateTier.tierLevel !== preferredTierLevel;
-
-          // Store first fallback slot in case no exact match is found
-          if (isFallbackMatch && !fallbackSlot) {
-            fallbackSlot = {
-              startTime: trySlot.toISOString(),
-              endTime: slotEnd.toISOString(),
-              duration: requestedDuration,
-              rateTier: rateTier ? {
-                tierName: rateTier.tierName,
-                rateMultiplier: rateTier.rateMultiplier
-              } : null
-            };
-          }
-
-          // If exact match found, return immediately
-          if (isExactMatch) {
+          // If we found a matching slot, return it immediately
+          if (isMatch) {
             return {
               startTime: trySlot.toISOString(),
               endTime: slotEnd.toISOString(),
@@ -686,8 +668,8 @@ router.post('/suggest-available-slot', async (req, res) => {
         trySlot = new Date(trySlot.getTime() + (30 * 60 * 1000));
       }
 
-      // If no exact match found but we have a fallback, return it
-      return fallbackSlot;
+      // No matching slot found on this date
+      return null;
     };
 
     // Parse starting date string
