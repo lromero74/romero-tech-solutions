@@ -62,6 +62,17 @@ router.post('/send-verification', signupRateLimiters, async (req, res) => {
       });
     }
 
+    // SECURITY: Check if email belongs to an employee
+    const employeeCheck = await query('SELECT id FROM employees WHERE email = $1', [email]);
+    if (employeeCheck.rows.length > 0) {
+      console.log(`⚠️ Attempted client registration with employee email: ${email}`);
+      return res.status(409).json({
+        success: false,
+        error: 'This email address belongs to an employee account. Please use the employee login page.',
+        code: 'EMPLOYEE_EMAIL'
+      });
+    }
+
     // Check if email already exists in users table
     const existingUser = await query('SELECT id, first_name, last_name FROM users WHERE email = $1', [email]);
     if (existingUser.rows.length > 0) {

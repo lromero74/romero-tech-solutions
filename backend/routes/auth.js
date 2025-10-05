@@ -2149,6 +2149,21 @@ router.post('/client-login', async (req, res) => {
     // Use sanitized email for database queries
     const sanitizedEmail = validation.sanitized.email;
 
+    // SECURITY: First check if this email belongs to an employee
+    const employeeCheck = await query(`
+      SELECT id FROM employees WHERE email = $1
+    `, [sanitizedEmail]);
+
+    if (employeeCheck.rows.length > 0) {
+      // This is an employee email - they should not use client login
+      recordFailedAttempt(clientIP);
+      console.log(`⚠️ Employee attempted client login: ${sanitizedEmail}`);
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid email or password. Please use the employee login page.'
+      });
+    }
+
     // Only check users table for clients
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
