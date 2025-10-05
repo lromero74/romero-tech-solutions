@@ -149,9 +149,14 @@ router.get('/service-requests', async (req, res) => {
         b.business_name,
         b.is_individual,
         sl.address_label as location_name,
-        sl.street,
+        sl.street_address_1,
+        sl.street_address_2,
         sl.city,
         sl.state,
+        sl.zip_code,
+        sl.contact_phone as location_contact_phone,
+        sl.contact_person as location_contact_person,
+        sl.contact_email as location_contact_email,
         CONCAT(client.first_name, ' ', client.last_name) as client_name,
         client.email as client_email,
         client.phone as client_phone,
@@ -348,8 +353,34 @@ router.get('/service-requests', async (req, res) => {
           row.business_id,
           row.client_id
         );
+
+        // Build locationDetails object if location data exists
+        const locationDetails = row.street_address_1 ? {
+          name: row.location_name,
+          street_address_1: row.street_address_1,
+          street_address_2: row.street_address_2,
+          city: row.city,
+          state: row.state,
+          zip_code: row.zip_code,
+          contact_phone: row.location_contact_phone,
+          contact_person: row.location_contact_person,
+          contact_email: row.location_contact_email
+        } : null;
+
+        // Remove individual location fields from row to avoid duplication
+        const {
+          street_address_1,
+          street_address_2,
+          zip_code,
+          location_contact_phone,
+          location_contact_person,
+          location_contact_email,
+          ...cleanRow
+        } = row;
+
         return {
-          ...row,
+          ...cleanRow,
+          locationDetails,
           cost: costInfo
         };
       })
