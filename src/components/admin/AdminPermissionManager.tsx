@@ -321,7 +321,7 @@ const AdminPermissionManager: React.FC<AdminPermissionManagerProps> = ({
   };
 
   const hasPermission = (role: Role, permissionKey: string): boolean => {
-    return role.permissions.has(permissionKey);
+    return role.permissions?.has(permissionKey) ?? false;
   };
 
   const handleSave = async () => {
