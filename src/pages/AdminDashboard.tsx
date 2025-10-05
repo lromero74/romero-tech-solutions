@@ -441,10 +441,10 @@ const AdminDashboardContent: React.FC = () => {
                       {/* Notification badge - shows count of unacknowledged requests */}
                       {(() => {
                         // Count service requests that need acknowledgment
+                        // Check for pending status and no acknowledgment
                         const unackCount = serviceRequests.filter(sr =>
                           !sr.softDelete &&
-                          sr.isActive &&
-                          sr.status?.toLowerCase() === 'submitted' &&
+                          (sr.status?.toLowerCase() === 'pending' || sr.status?.toLowerCase() === 'submitted') &&
                           !sr.acknowledgedByEmployeeId
                         ).length;
 
