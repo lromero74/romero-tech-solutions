@@ -1084,12 +1084,13 @@ router.post('/:id/cancel', async (req, res) => {
     // Send push notification asynchronously
     sendCancellationPushNotification();
 
-    // If late cancellation, send email to executives and admins
+    // If late cancellation, send email to employees with permission to view service requests
+    // (typically executives and admins, but uses RBAC permission system)
     if (isLateCancellation) {
-      console.log(`⚠️ Late cancellation detected (${hoursUntilStart.toFixed(2)} hours notice) - notifying executives and admins`);
+      console.log(`⚠️ Late cancellation detected (${hoursUntilStart.toFixed(2)} hours notice) - notifying authorized employees`);
 
-      // Get executives and admins
-      const executivesAndAdminsQuery = `
+      // Get employees with permission to view service requests (using RBAC)
+      const authorizedEmployeesQuery = `
         SELECT DISTINCT
           e.id,
           e.email,
@@ -1097,14 +1098,17 @@ router.post('/:id/cancel', async (req, res) => {
           e.last_name
         FROM employees e
         JOIN employee_roles er ON e.id = er.employee_id
-        JOIN roles r ON er.role_id = r.id
+        JOIN role_permissions rp ON er.role_id = rp.role_id
+        JOIN permissions p ON rp.permission_id = p.id
         WHERE e.business_id = $1
           AND e.is_active = true
           AND e.email IS NOT NULL
-          AND (r.name = 'executive' OR r.name = 'admin')
+          AND rp.is_granted = true
+          AND p.permission_key = 'view.service_requests.enable'
+          AND p.is_active = true
       `;
 
-      const executivesAdminsResult = await pool.query(executivesAndAdminsQuery, [businessId]);
+      const executivesAdminsResult = await pool.query(authorizedEmployeesQuery, [businessId]);
 
       if (executivesAdminsResult.rows.length > 0) {
         // Import email service
