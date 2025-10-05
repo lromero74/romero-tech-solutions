@@ -128,8 +128,8 @@ const AdminServiceRequests: React.FC = () => {
     totalPages: 0
   });
 
-  const [sortBy, setSortBy] = useState('created_at');
-  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('DESC');
+  const [sortBy, setSortBy] = useState('requested_date');
+  const [sortOrder, setSortOrder] = useState<'ASC' | 'DESC'>('ASC');
 
   // Fetch service requests
   const fetchServiceRequests = async () => {
@@ -1113,8 +1113,8 @@ const AdminServiceRequests: React.FC = () => {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className={`${themeClasses.bg.card} border ${themeClasses.border.primary} rounded-lg p-6`}>
+      {/* Filters (Hidden on mobile) */}
+      <div className={`hidden md:block ${themeClasses.bg.card} border ${themeClasses.border.primary} rounded-lg p-6`}>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
             {/* Search */}
             <div className="md:col-span-2 lg:col-span-3 xl:col-span-2">
