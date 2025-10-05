@@ -94,6 +94,7 @@ export const themeClasses = {
     secondary: 'text-gray-600 dark:text-gray-300',
     tertiary: 'text-gray-500 dark:text-gray-400',
     muted: 'text-gray-400 dark:text-gray-500',
+    link: 'text-blue-600 dark:text-blue-400',
     accent: 'text-blue-600 dark:text-blue-400',
     success: 'text-green-600 dark:text-green-400',
     warning: 'text-orange-600 dark:text-orange-400',
