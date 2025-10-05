@@ -525,7 +525,10 @@ const AdminServiceRequests: React.FC = () => {
     // Check if starting work more than 10 minutes before scheduled time
     if (action === 'start' && selectedRequest.scheduled_date && selectedRequest.scheduled_time_start) {
       const now = new Date();
-      const scheduledDateTime = new Date(`${selectedRequest.scheduled_date}T${selectedRequest.scheduled_time_start}`);
+      const datePart = selectedRequest.scheduled_date.includes('T')
+        ? selectedRequest.scheduled_date.split('T')[0]
+        : selectedRequest.scheduled_date;
+      const scheduledDateTime = new Date(`${datePart}T${selectedRequest.scheduled_time_start}Z`);
       const minutesUntilScheduled = (scheduledDateTime.getTime() - now.getTime()) / (1000 * 60);
 
       if (minutesUntilScheduled > 10) {
@@ -1018,16 +1021,59 @@ const AdminServiceRequests: React.FC = () => {
     return <FileText className="h-4 w-4" />;
   };
 
-  // Format date
+  // Format date (assumes UTC date from database, converts to local timezone)
   const formatDate = (dateString: string | null) => {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString();
+    try {
+      // Handle both plain date strings and ISO datetime strings
+      let date: Date;
+      if (dateString.includes('T')) {
+        // Already has time component, parse as-is (assuming it has 'Z' or is UTC)
+        date = new Date(dateString);
+      } else {
+        // Plain date, append 'T00:00:00Z' to treat as UTC midnight
+        date = new Date(dateString + 'T00:00:00Z');
+      }
+
+      if (isNaN(date.getTime())) {
+        console.error('formatDate: Invalid date for input:', dateString);
+        return 'N/A';
+      }
+      return date.toLocaleDateString();
+    } catch (error) {
+      console.error('formatDate error:', error, 'input:', dateString);
+      return 'N/A';
+    }
   };
 
-  // Format time
-  const formatTime = (timeString: string | null) => {
+  // Format time (assumes UTC time from database, converts to local timezone)
+  // Note: This requires the date context to properly convert timezone
+  const formatTime = (timeString: string | null, dateString?: string | null) => {
     if (!timeString) return '';
-    return new Date(`2000-01-01T${timeString}`).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    try {
+      // If we have a date, combine with time and treat as UTC
+      if (dateString) {
+        // Extract just the date part if dateString is already an ISO datetime
+        const datePart = dateString.includes('T') ? dateString.split('T')[0] : dateString;
+        const combined = datePart + 'T' + timeString + 'Z';
+        const utcDateTime = new Date(combined);
+        if (isNaN(utcDateTime.getTime())) {
+          console.error('formatTime: Invalid datetime for:', combined);
+          return '';
+        }
+        return utcDateTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+      // Fallback: just format the time without timezone conversion
+      const fallbackDate = new Date(`2000-01-01T${timeString}`);
+      if (isNaN(fallbackDate.getTime())) {
+        console.error('formatTime: Invalid time for:', timeString);
+        return '';
+      }
+      return fallbackDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } catch (error) {
+      console.error('formatTime error:', error);
+      return '';
+    }
   };
 
   // Format duration
@@ -1391,7 +1437,7 @@ const AdminServiceRequests: React.FC = () => {
                         </div>
                         {request.requested_time_start && (
                           <div className={`text-xs ${themeClasses.text.muted}`}>
-                            {formatTime(request.requested_time_start)}
+                            {formatTime(request.requested_time_start, request.requested_date)}
                           </div>
                         )}
                       </td>
@@ -1442,7 +1488,7 @@ const AdminServiceRequests: React.FC = () => {
                       </span>
                       <div className={`text-xs ${themeClasses.text.muted} mt-1`}>
                         {formatDate(request.requested_date)}
-                        {request.requested_time_start && ` • ${formatTime(request.requested_time_start)}`}
+                        {request.requested_time_start && ` • ${formatTime(request.requested_time_start, request.requested_date)}`}
                       </div>
                     </div>
                     <span
@@ -1706,7 +1752,12 @@ const AdminServiceRequests: React.FC = () => {
                 <div>
                   <span className={`font-medium ${themeClasses.text.secondary}`}>Created:</span>
                   <p className={`${themeClasses.text.primary}`}>
-                    {new Date(selectedRequest.created_at).toLocaleString()}
+                    {(() => {
+                      const createdAt = selectedRequest.created_at.includes('Z')
+                        ? selectedRequest.created_at
+                        : selectedRequest.created_at + 'Z';
+                      return new Date(createdAt).toLocaleString();
+                    })()}
                   </p>
                 </div>
               </div>
@@ -1718,10 +1769,15 @@ const AdminServiceRequests: React.FC = () => {
                   <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                     <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Selected Date & Time</h4>
                     <div className={`text-lg font-semibold ${themeClasses.text.primary} mb-1`}>
-                      {new Date(selectedRequest.requested_date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
+                      {(() => {
+                        const dateStr = selectedRequest.requested_date.includes('T')
+                          ? selectedRequest.requested_date
+                          : selectedRequest.requested_date + 'T00:00:00Z';
+                        return new Date(dateStr).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+                      })()}
                     </div>
                     <div className={`text-base ${themeClasses.text.secondary}`}>
-                      {selectedRequest.requested_time_start.substring(0, 5)} - {selectedRequest.requested_time_end.substring(0, 5)}
+                      {formatTime(selectedRequest.requested_time_start, selectedRequest.requested_date)} - {formatTime(selectedRequest.requested_time_end, selectedRequest.requested_date)}
                       {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
                     </div>
                   </div>
@@ -1877,7 +1933,7 @@ const AdminServiceRequests: React.FC = () => {
                     <span className={`font-medium ${themeClasses.text.secondary}`}>Scheduled Date:</span>
                     <p className={`${themeClasses.text.primary}`}>
                       {formatDate(selectedRequest.scheduled_date)}
-                      {selectedRequest.scheduled_time_start && ` at ${formatTime(selectedRequest.scheduled_time_start)}`}
+                      {selectedRequest.scheduled_time_start && ` at ${formatTime(selectedRequest.scheduled_time_start, selectedRequest.scheduled_date)}`}
                     </p>
                   </div>
                 </div>
@@ -2014,11 +2070,10 @@ const AdminServiceRequests: React.FC = () => {
                   {selectedRequest.status.toLowerCase() === 'cancelled' && (() => {
                     // Check if request hasn't started yet
                     const now = new Date();
-                    const requestedDate = new Date(selectedRequest.requested_date);
-                    const year = requestedDate.getFullYear();
-                    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
-                    const day = String(requestedDate.getDate()).padStart(2, '0');
-                    const requestedDateTime = new Date(`${year}-${month}-${day}T${selectedRequest.requested_time_start}`);
+                    const datePart = selectedRequest.requested_date.includes('T')
+                      ? selectedRequest.requested_date.split('T')[0]
+                      : selectedRequest.requested_date;
+                    const requestedDateTime = new Date(`${datePart}T${selectedRequest.requested_time_start}Z`);
                     return requestedDateTime > now;
                   })() && (
                     <button
