@@ -708,6 +708,12 @@ router.post('/suggest-available-slot', async (req, res) => {
 
         if (endTime) {
           end = new Date(`${dateString}T${endTime}Z`);
+
+          // CRITICAL: If end time appears before start time, it means the appointment
+          // crosses midnight - add 1 day to the end date
+          if (end <= start) {
+            end = new Date(end.getTime() + (24 * 60 * 60 * 1000));
+          }
         } else {
           end = new Date(start.getTime() + (1 * 60 * 60 * 1000));
         }
