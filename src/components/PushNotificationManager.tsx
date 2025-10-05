@@ -35,10 +35,12 @@ const PushNotificationManager: React.FC = () => {
 
   useEffect(() => {
     const init = async () => {
-      await checkEmployeeStatus();
+      const isEmp = await checkEmployeeStatus();
+      console.log('Employee status after check:', isEmp);
       await checkNotificationStatus();
     };
-    init();
+    // Small delay to ensure localStorage is ready
+    setTimeout(init, 100);
   }, []);
 
   const checkEmployeeStatus = async () => {
@@ -48,10 +50,11 @@ const PushNotificationManager: React.FC = () => {
     const employeeRoles = ['admin', 'executive', 'employee', 'technician', 'sales'];
     for (const role of employeeRoles) {
       const roleToken = localStorage.getItem(`${role}_sessionToken`);
+      console.log(`Checking ${role}_sessionToken:`, roleToken ? 'Found' : 'Not found');
       if (roleToken) {
         setIsEmployee(true);
         console.log(`✅ Employee detected via ${role} session token`);
-        return;
+        return true; // Return true to indicate employee found
       }
     }
 
@@ -61,7 +64,7 @@ const PushNotificationManager: React.FC = () => {
     if (sessionToken) {
       setIsEmployee(true);
       console.log('✅ Employee detected via traditional auth');
-      return;
+      return true;
     }
 
     // Check for AWS Amplify auth
@@ -72,10 +75,15 @@ const PushNotificationManager: React.FC = () => {
       if (user) {
         setIsEmployee(true);
         console.log('✅ Employee detected via AWS Amplify');
+        return true;
       }
     } catch (e) {
       console.log('❌ Not authenticated with AWS Amplify:', e);
     }
+
+    console.log('❌ No employee authentication found');
+    setIsEmployee(false);
+    return false;
   };
 
   const checkNotificationStatus = async () => {
@@ -537,6 +545,22 @@ const PushNotificationManager: React.FC = () => {
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm w-full"
             >
               🧹 DEBUG: Force Clear Subscription
+            </button>
+
+            <button
+              onClick={async () => {
+                console.log('🔄 Rechecking employee status...');
+                setMessage({ type: 'info', text: 'Rechecking employee status...' });
+                const isEmp = await checkEmployeeStatus();
+                await checkNotificationStatus();
+                setMessage({
+                  type: isEmp ? 'success' : 'error',
+                  text: isEmp ? 'Employee detected!' : 'No employee auth found'
+                });
+              }}
+              className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-md text-sm w-full"
+            >
+              🔄 DEBUG: Recheck Employee Status
             </button>
           </div>
         )}
