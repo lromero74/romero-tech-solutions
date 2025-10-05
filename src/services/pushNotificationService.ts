@@ -328,19 +328,37 @@ class PushNotificationService {
    * Get session token from AWS Amplify or localStorage
    */
   private async getSessionToken(): Promise<string | null> {
+    console.log('🔍 Getting session token...');
+
     // Check for AWS Amplify authentication (employee login)
     try {
+      console.log('📱 Attempting to get AWS Amplify session...');
       const { fetchAuthSession } = await import('aws-amplify/auth');
       const session = await fetchAuthSession();
+      console.log('📱 AWS Amplify session:', session);
+
       if (session?.tokens?.idToken) {
+        console.log('✅ Found AWS Amplify idToken');
         return session.tokens.idToken.toString();
+      } else if (session?.tokens?.accessToken) {
+        console.log('✅ Found AWS Amplify accessToken (using as fallback)');
+        return session.tokens.accessToken.toString();
+      } else {
+        console.log('❌ AWS Amplify session exists but no tokens found');
       }
     } catch (e) {
-      // Not using AWS Amplify
+      console.log('❌ AWS Amplify error:', e);
     }
 
     // Fallback to traditional session tokens
-    return localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+    const traditionalToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
+    if (traditionalToken) {
+      console.log('✅ Found traditional session token');
+      return traditionalToken;
+    }
+
+    console.log('❌ No session token found in any location');
+    return null;
   }
 
   /**
@@ -396,11 +414,16 @@ class PushNotificationService {
    * Send test notification (admin only)
    */
   async sendTestNotification(): Promise<void> {
+    console.log('📮 Sending test notification...');
     const sessionToken = await this.getSessionToken();
 
     if (!sessionToken) {
-      throw new Error('No session token found');
+      console.error('❌ Cannot send test notification: No session token found');
+      throw new Error('No session token found. Please log in.');
     }
+
+    console.log('📤 Sending request to:', `${API_BASE_URL}/push/test`);
+    console.log('🔑 Using token:', sessionToken.substring(0, 20) + '...');
 
     const response = await fetch(`${API_BASE_URL}/push/test`, {
       method: 'POST',
@@ -410,10 +433,15 @@ class PushNotificationService {
       credentials: 'include'
     });
 
+    console.log('📥 Response status:', response.status);
+
     if (!response.ok) {
       const error = await response.json();
+      console.error('❌ Test notification failed:', error);
       throw new Error(error.error || 'Failed to send test notification');
     }
+
+    console.log('✅ Test notification sent successfully');
   }
 
   /**
