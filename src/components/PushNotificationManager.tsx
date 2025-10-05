@@ -140,6 +140,15 @@ const PushNotificationManager: React.FC = () => {
       debugMsg += `\nSupported Check: ${supported ? 'Yes' : 'No'}\n`;
       debugMsg += `Employee Status: Checking...\n`;
       debugMsg += `Test Button Shows When: isSubscribed=${isSubscribed} && isEmployee=${isEmployee}\n`;
+
+      // Show localStorage tokens for debugging
+      const tokenKeys = Object.keys(localStorage).filter(k => k.toLowerCase().includes('token'));
+      debugMsg += `\nLocalStorage Tokens Found:\n`;
+      tokenKeys.forEach(key => {
+        const value = localStorage.getItem(key);
+        debugMsg += `- ${key}: ${value ? value.substring(0, 20) + '...' : 'null'}\n`;
+      });
+
       setDebugInfo(debugMsg);
 
       if (supported || isPWA) {  // Allow for iOS PWAs even if not fully supported yet
@@ -467,6 +476,39 @@ const PushNotificationManager: React.FC = () => {
               className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors"
             >
               📱 Send Test Notification
+            </button>
+          </div>
+        )}
+
+        {/* DEBUG: Re-sync subscription button */}
+        {isSubscribed && (
+          <div className="mt-4 pt-4 border-t">
+            <button
+              onClick={async () => {
+                console.log('🔄 Re-syncing subscription to server...');
+                setMessage({ type: 'info', text: 'Re-syncing subscription...' });
+                try {
+                  if (pushNotificationService.registration && pushNotificationService.subscription) {
+                    await (pushNotificationService as any).sendSubscriptionToServer(pushNotificationService.subscription);
+                    setMessage({ type: 'success', text: 'Subscription synced!' });
+                  } else {
+                    const reg = await navigator.serviceWorker.getRegistration();
+                    const sub = await reg?.pushManager.getSubscription();
+                    if (sub) {
+                      await (pushNotificationService as any).sendSubscriptionToServer(sub);
+                      setMessage({ type: 'success', text: 'Subscription synced!' });
+                    } else {
+                      setMessage({ type: 'error', text: 'No subscription found to sync' });
+                    }
+                  }
+                } catch (error: any) {
+                  console.error('Sync failed:', error);
+                  setMessage({ type: 'error', text: error.message || 'Sync failed' });
+                }
+              }}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm"
+            >
+              🔄 DEBUG: Re-sync Subscription to Server
             </button>
           </div>
         )}

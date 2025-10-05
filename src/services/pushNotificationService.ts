@@ -34,8 +34,8 @@ function getDeviceInfo() {
 }
 
 class PushNotificationService {
-  private registration: ServiceWorkerRegistration | null = null;
-  private subscription: PushSubscription | null = null;
+  registration: ServiceWorkerRegistration | null = null;
+  subscription: PushSubscription | null = null;
 
   /**
    * Check if push notifications are supported
@@ -236,7 +236,7 @@ class PushNotificationService {
   /**
    * Send subscription to server
    */
-  private async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
+  async sendSubscriptionToServer(subscription: PushSubscription): Promise<void> {
     // Get session token
     const sessionToken = await this.getSessionToken();
 
