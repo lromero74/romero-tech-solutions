@@ -22,9 +22,13 @@ export interface ServiceRequest {
   requested_date: string;
   requested_time_start: string | null;
   requested_time_end: string | null;
+  requested_datetime?: string | null;
+  requested_duration_minutes?: number | null;
   scheduled_date: string | null;
   scheduled_time_start: string | null;
   scheduled_time_end: string | null;
+  scheduled_datetime?: string | null;
+  scheduled_duration_minutes?: number | null;
   created_at: string;
   updated_at: string;
   acknowledged_at: string | null;

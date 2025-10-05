@@ -43,14 +43,22 @@ export interface ServiceRequest {
   service_location_id: string;
   urgency_level_id: string;
   priority_level_id: string;
-  scheduled_date: string;
-  scheduled_time: string;
+  // New timezone-aware fields
+  requested_datetime?: string;
+  requested_duration_minutes?: number;
+  // Old/alternate fields (for backward compatibility)
+  scheduled_date?: string;
+  scheduled_time?: string;
+  requested_date?: string;
+  requested_time_start?: string;
+  requested_time_end?: string;
   title: string;
   description: string;
   contact_name: string;
   contact_phone: string;
   contact_email: string;
   files?: File[];
+  attachment_file_ids?: string[];
 }
 
 export interface ServiceSchedulerState {

@@ -52,12 +52,23 @@ ALTER TABLE service_requests
   ADD COLUMN scheduled_duration_minutes integer;
 
 -- Calculate duration from existing time fields
+-- Handle midnight crossover: if end < start, add 24 hours (1440 minutes)
 UPDATE service_requests
-SET requested_duration_minutes = EXTRACT(EPOCH FROM (requested_time_end - requested_time_start)) / 60
+SET requested_duration_minutes =
+  CASE
+    WHEN requested_time_end < requested_time_start
+    THEN 1440 + EXTRACT(EPOCH FROM (requested_time_end - requested_time_start)) / 60
+    ELSE EXTRACT(EPOCH FROM (requested_time_end - requested_time_start)) / 60
+  END
 WHERE requested_time_start IS NOT NULL AND requested_time_end IS NOT NULL;
 
 UPDATE service_requests
-SET scheduled_duration_minutes = EXTRACT(EPOCH FROM (scheduled_time_end - scheduled_time_start)) / 60
+SET scheduled_duration_minutes =
+  CASE
+    WHEN scheduled_time_end < scheduled_time_start
+    THEN 1440 + EXTRACT(EPOCH FROM (scheduled_time_end - scheduled_time_start)) / 60
+    ELSE EXTRACT(EPOCH FROM (scheduled_time_end - scheduled_time_start)) / 60
+  END
 WHERE scheduled_time_start IS NOT NULL AND scheduled_time_end IS NOT NULL;
 
 -- Step 5: Add comments for documentation

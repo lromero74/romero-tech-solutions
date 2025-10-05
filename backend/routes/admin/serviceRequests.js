@@ -120,9 +120,13 @@ router.get('/service-requests', async (req, res) => {
         sr.requested_date,
         sr.requested_time_start,
         sr.requested_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
         sr.scheduled_date,
         sr.scheduled_time_start,
         sr.scheduled_time_end,
+        sr.scheduled_datetime,
+        sr.scheduled_duration_minutes,
         sr.completed_date,
         sr.created_at,
         sr.updated_at,
@@ -199,8 +203,8 @@ router.get('/service-requests', async (req, res) => {
     console.log('📊 [Service Requests] Total count:', totalCount);
 
     // Helper function to calculate cost with tier breakdown
-    const calculateCost = async (date, timeStart, timeEnd, businessId, clientId) => {
-      if (!date || !timeStart || !timeEnd) {
+    const calculateCost = async (date, timeStart, timeEnd, businessId, clientId, durationMinutes = null) => {
+      if (!date || !timeStart || (!timeEnd && !durationMinutes)) {
         return null;
       }
 
@@ -227,12 +231,32 @@ router.get('/service-requests', async (req, res) => {
 
         // Parse times
         const [startHour, startMin] = timeStart.split(':').map(Number);
-        const [endHour, endMin] = timeEnd.split(':').map(Number);
 
         // Calculate duration
-        const startMinutes = startHour * 60 + startMin;
-        const endMinutes = endHour * 60 + endMin;
-        const durationHours = (endMinutes - startMinutes) / 60;
+        let durationHours;
+        if (durationMinutes !== null) {
+          // Use provided duration (already handles midnight crossover)
+          durationHours = durationMinutes / 60;
+        } else if (timeEnd) {
+          // Calculate from start/end times, handling midnight crossover
+          const [endHour, endMin] = timeEnd.split(':').map(Number);
+          const startMinutes = startHour * 60 + startMin;
+          let endMinutes = endHour * 60 + endMin;
+
+          // Handle midnight crossover: if end < start, add 24 hours
+          if (endMinutes <= startMinutes) {
+            endMinutes += 1440; // 24 hours in minutes
+          }
+
+          durationHours = (endMinutes - startMinutes) / 60;
+        } else {
+          return null;
+        }
+
+        // Calculate end time for tier calculations
+        const totalMinutes = startHour * 60 + startMin + (durationHours * 60);
+        const endHour = Math.floor(totalMinutes / 60) % 24;
+        const endMin = totalMinutes % 60;
 
         // Get day of week
         const requestDate = new Date(date);
@@ -351,7 +375,8 @@ router.get('/service-requests', async (req, res) => {
           row.requested_time_start,
           row.requested_time_end,
           row.business_id,
-          row.client_id
+          row.client_id,
+          row.requested_duration_minutes // Pass duration to avoid recalculating
         );
 
         // Build locationDetails object if location data exists

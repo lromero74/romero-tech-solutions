@@ -38,9 +38,13 @@ interface ServiceRequest {
   requestedDate: string | null;
   requestedTimeStart: string | null;
   requestedTimeEnd: string | null;
+  requestedDatetime?: string | null;
+  requestedDurationMinutes?: number | null;
   scheduledDate: string | null;
   scheduledTimeStart: string | null;
   scheduledTimeEnd: string | null;
+  scheduledDatetime?: string | null;
+  scheduledDurationMinutes?: number | null;
   status: string;
   statusDescription: string;
   urgency: string;
@@ -748,22 +752,24 @@ const ServiceRequests: React.FC = () => {
       return false;
     }
 
-    // Cannot cancel if already started or passed
-    if (!request.requestedDate || !request.requestedTimeStart) {
-      console.log(`Cannot cancel ${request.requestNumber}: missing date (${request.requestedDate}) or time (${request.requestedTimeStart})`);
-      return false;
-    }
-
     const now = new Date();
 
-    // Parse the UTC date to get the local date part
-    const utcDate = new Date(request.requestedDate);
-    const year = utcDate.getFullYear();
-    const month = String(utcDate.getMonth() + 1).padStart(2, '0');
-    const day = String(utcDate.getDate()).padStart(2, '0');
+    // Use new datetime field if available, otherwise fall back to old fields
+    let requestedDateTime: Date;
 
-    // Combine local date with local time
-    const requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
+    if (request.requestedDatetime) {
+      requestedDateTime = new Date(request.requestedDatetime);
+    } else if (request.requestedDate && request.requestedTimeStart) {
+      // Parse the UTC date to get the local date part
+      const utcDate = new Date(request.requestedDate);
+      const year = utcDate.getFullYear();
+      const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+      const day = String(utcDate.getDate()).padStart(2, '0');
+      requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
+    } else {
+      console.log(`Cannot cancel ${request.requestNumber}: missing date/time`);
+      return false;
+    }
 
     if (isNaN(requestedDateTime.getTime())) {
       console.log(`Cannot cancel ${request.requestNumber}: invalid date format`);
@@ -781,20 +787,24 @@ const ServiceRequests: React.FC = () => {
 
   // Calculate hours until service request starts
   const getHoursUntilStart = (request: ServiceRequest) => {
-    if (!request.requestedDate || !request.requestedTimeStart) {
+    const now = new Date();
+
+    // Use new datetime field if available, otherwise fall back to old fields
+    let requestedDateTime: Date;
+
+    if (request.requestedDatetime) {
+      requestedDateTime = new Date(request.requestedDatetime);
+    } else if (request.requestedDate && request.requestedTimeStart) {
+      // Parse the UTC date to get the local date part
+      const utcDate = new Date(request.requestedDate);
+      const year = utcDate.getFullYear();
+      const month = String(utcDate.getMonth() + 1).padStart(2, '0');
+      const day = String(utcDate.getDate()).padStart(2, '0');
+      requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
+    } else {
       return 0;
     }
 
-    const now = new Date();
-
-    // Parse the UTC date to get the local date part
-    const utcDate = new Date(request.requestedDate);
-    const year = utcDate.getFullYear();
-    const month = String(utcDate.getMonth() + 1).padStart(2, '0');
-    const day = String(utcDate.getDate()).padStart(2, '0');
-
-    // Combine local date with local time
-    const requestedDateTime = new Date(`${year}-${month}-${day}T${request.requestedTimeStart}`);
     return (requestedDateTime.getTime() - now.getTime()) / (1000 * 60 * 60);
   };
 
@@ -892,15 +902,29 @@ const ServiceRequests: React.FC = () => {
     return language === 'es' ? 'es-ES' : 'en-US';
   };
 
-  // Format date and time
-  const formatDateTime = (date: string | null, time: string | null) => {
-    if (!date) return t('serviceRequests.notScheduled', undefined, 'Not scheduled');
+  // Format date and time (converts UTC to local timezone)
+  const formatDateTime = (datetime: string | null, fallbackDate?: string | null, fallbackTime?: string | null) => {
+    // If we have the new combined datetime field (UTC ISO string), use it
+    if (datetime) {
+      try {
+        const dateObj = new Date(datetime);
+        if (isNaN(dateObj.getTime())) {
+          return t('serviceRequests.notScheduled', undefined, 'Not scheduled');
+        }
+        const formattedDate = dateObj.toLocaleDateString(getLocale());
+        const formattedTime = dateObj.toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' });
+        return `${formattedDate} ${t('serviceRequests.at', undefined, 'at')} ${formattedTime}`;
+      } catch (error) {
+        console.error('formatDateTime error:', error);
+      }
+    }
 
-    const dateObj = new Date(date);
+    // Fallback to old date/time fields for backward compatibility
+    if (!fallbackDate) return t('serviceRequests.notScheduled', undefined, 'Not scheduled');
+    const dateObj = new Date(fallbackDate);
     const formattedDate = dateObj.toLocaleDateString(getLocale());
-
-    if (time) {
-      return `${formattedDate} ${t('serviceRequests.at', undefined, 'at')} ${time}`;
+    if (fallbackTime) {
+      return `${formattedDate} ${t('serviceRequests.at', undefined, 'at')} ${fallbackTime}`;
     }
     return formattedDate;
   };
@@ -1191,15 +1215,28 @@ const ServiceRequests: React.FC = () => {
                   )}
 
                   {/* Date and Time Block */}
-                  {request.cost && request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd && (
+                  {request.cost && (request.requestedDatetime || (request.requestedDate && request.requestedTimeStart && request.requestedTimeEnd)) && (
                     <div className="mb-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.scheduledDateTime', undefined, 'Scheduled Date & Time')}</h4>
-                      <div className="text-sm text-blue-800 dark:text-blue-200 mb-1">
-                        {formatLongDate(new Date(request.requestedDate), t, language)}
-                      </div>
-                      <div className="text-sm text-blue-800 dark:text-blue-200">
-                        {request.requestedTimeStart.substring(0, 5)} - {request.requestedTimeEnd.substring(0, 5)} ({request.cost.durationHours}h)
-                      </div>
+                      {request.requestedDatetime && request.requestedDurationMinutes ? (
+                        <>
+                          <div className="text-sm text-blue-800 dark:text-blue-200 mb-1">
+                            {formatLongDate(new Date(request.requestedDatetime), t, language)}
+                          </div>
+                          <div className="text-sm text-blue-800 dark:text-blue-200">
+                            {new Date(request.requestedDatetime).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} - {new Date(new Date(request.requestedDatetime).getTime() + request.requestedDurationMinutes * 60000).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} ({(request.requestedDurationMinutes / 60).toFixed(1)}h)
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-sm text-blue-800 dark:text-blue-200 mb-1">
+                            {formatLongDate(new Date(request.requestedDate!), t, language)}
+                          </div>
+                          <div className="text-sm text-blue-800 dark:text-blue-200">
+                            {request.requestedTimeStart!.substring(0, 5)} - {request.requestedTimeEnd!.substring(0, 5)} ({request.cost.durationHours}h)
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1261,7 +1298,7 @@ const ServiceRequests: React.FC = () => {
                     )}
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3 w-3" />
-                      <span>{formatDateTime(request.requestedDate, request.requestedTimeStart)}</span>
+                      <span>{formatDateTime(request.requestedDatetime, request.requestedDate, request.requestedTimeStart)}</span>
                     </div>
                     {request.fileCount > 0 && (
                       <div className="flex items-center gap-1">
@@ -1427,15 +1464,28 @@ const ServiceRequests: React.FC = () => {
                   </div>
 
                   {/* Date & Time Block */}
-                  {selectedRequest.cost && selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd && (
+                  {selectedRequest.cost && (selectedRequest.requestedDatetime || (selectedRequest.requestedDate && selectedRequest.requestedTimeStart && selectedRequest.requestedTimeEnd)) && (
                     <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                       <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100 mb-2">{t('serviceRequests.selectedDateTime', undefined, 'Selected Date & Time')}</h4>
-                      <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
-                        {formatLongDate(new Date(selectedRequest.requestedDate), t, language)}
-                      </div>
-                      <div className="text-base text-blue-800 dark:text-blue-200">
-                        {selectedRequest.requestedTimeStart.substring(0, 5)} - {selectedRequest.requestedTimeEnd.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
-                      </div>
+                      {selectedRequest.requestedDatetime && selectedRequest.requestedDurationMinutes ? (
+                        <>
+                          <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                            {formatLongDate(new Date(selectedRequest.requestedDatetime), t, language)}
+                          </div>
+                          <div className="text-base text-blue-800 dark:text-blue-200">
+                            {new Date(selectedRequest.requestedDatetime).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} - {new Date(new Date(selectedRequest.requestedDatetime).getTime() + selectedRequest.requestedDurationMinutes * 60000).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} ({(selectedRequest.requestedDurationMinutes / 60).toFixed(1)}h)
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-lg font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                            {formatLongDate(new Date(selectedRequest.requestedDate!), t, language)}
+                          </div>
+                          <div className="text-base text-blue-800 dark:text-blue-200">
+                            {selectedRequest.requestedTimeStart!.substring(0, 5)} - {selectedRequest.requestedTimeEnd!.substring(0, 5)} ({selectedRequest.cost.durationHours}h)
+                          </div>
+                        </>
+                      )}
                     </div>
                   )}
 
@@ -1565,7 +1615,7 @@ const ServiceRequests: React.FC = () => {
                         <div>
                           <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.scheduledDate', undefined, 'Scheduled Date')}:</span>
                           <p className="text-gray-900 dark:text-white">
-                            {formatDateTime(selectedRequest.scheduledDate, selectedRequest.scheduledTimeStart)}
+                            {formatDateTime(selectedRequest.scheduledDatetime, selectedRequest.scheduledDate, selectedRequest.scheduledTimeStart)}
                           </p>
                         </div>
                       )}

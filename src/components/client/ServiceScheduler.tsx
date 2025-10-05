@@ -486,6 +486,21 @@ const ServiceScheduler: React.FC = () => {
     });
   };
 
+  // Helper function to calculate duration in minutes (handles midnight crossover)
+  const calculateDuration = (startTime: string, endTime: string): number => {
+    const [startHour, startMin] = startTime.split(':').map(Number);
+    const [endHour, endMin] = endTime.split(':').map(Number);
+    let startMinutes = startHour * 60 + startMin;
+    let endMinutes = endHour * 60 + endMin;
+
+    // Handle midnight crossover: if end <= start, add 24 hours
+    if (endMinutes <= startMinutes) {
+      endMinutes += 1440; // 24 hours in minutes
+    }
+
+    return endMinutes - startMinutes;
+  };
+
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -496,14 +511,27 @@ const ServiceScheduler: React.FC = () => {
     setIsSubmitting(true);
 
     try {
+      // Combine date + time into single UTC timestamp
+      // NOTE: selectedTime is already in UTC format (e.g., "19:00" for 12pm PDT)
+      const localDateTime = new Date(selectedDate);
+      const [hours, minutes] = selectedTime.split(':').map(Number);
+      localDateTime.setUTCHours(hours, minutes, 0, 0);
+
+      // Calculate duration (handles midnight crossover)
+      const durationMinutes = selectedEndTime ? calculateDuration(selectedTime, selectedEndTime) : 60;
+
       const request: ServiceRequest = {
         service_type_id: selectedServiceType,
         service_location_id: selectedLocation,
         urgency_level_id: selectedUrgency,
         priority_level_id: 'standard', // Default priority level
+        // New timezone-aware fields
+        requested_datetime: localDateTime.toISOString(),
+        requested_duration_minutes: durationMinutes,
+        // Keep old fields for backward compatibility during transition
         requested_date: selectedDate.toISOString().split('T')[0],
         requested_time_start: selectedTime,
-        requested_time_end: selectedEndTime || selectedTime, // Include end time from time slot picker
+        requested_time_end: selectedEndTime || selectedTime,
         title: title.trim(),
         description,
         contact_name: contactName,

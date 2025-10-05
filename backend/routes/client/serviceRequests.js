@@ -32,6 +32,8 @@ router.post('/', async (req, res) => {
       requested_date: requestedDate,
       requested_time_start: requestedTimeStart,
       requested_time_end: requestedTimeEnd,
+      requested_datetime: requestedDatetime,
+      requested_duration_minutes: requestedDuration,
       urgency_level_id: urgencyLevelId,
       priority_level_id: priorityLevelId,
       contact_name: primaryContactName,
@@ -119,6 +121,8 @@ router.post('/', async (req, res) => {
         requested_date,
         requested_time_start,
         requested_time_end,
+        requested_datetime,
+        requested_duration_minutes,
         urgency_level_id,
         priority_level_id,
         status_id,
@@ -127,7 +131,7 @@ router.post('/', async (req, res) => {
         primary_contact_email,
         service_type_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
       ) RETURNING id, request_number, created_at
     `;
 
@@ -142,6 +146,8 @@ router.post('/', async (req, res) => {
       requestedDate,
       requestedTimeStart,
       requestedTimeEnd,
+      requestedDatetime,      // Trigger will auto-populate if null
+      requestedDuration,      // Trigger will auto-calculate if null
       urgencyLevelId,
       finalPriorityLevelId,
       defaultStatusId,
@@ -327,9 +333,13 @@ router.get('/', async (req, res) => {
         sr.requested_date,
         sr.requested_time_start,
         sr.requested_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
         sr.scheduled_date,
         sr.scheduled_time_start,
         sr.scheduled_time_end,
+        sr.scheduled_datetime,
+        sr.scheduled_duration_minutes,
         sr.created_at,
         sr.updated_at,
         srs.name as status_name,
@@ -556,9 +566,13 @@ router.get('/', async (req, res) => {
             requestedDate: row.requested_date,
             requestedTimeStart: row.requested_time_start,
             requestedTimeEnd: row.requested_time_end,
+            requestedDatetime: row.requested_datetime,
+            requestedDurationMinutes: row.requested_duration_minutes,
             scheduledDate: row.scheduled_date,
             scheduledTimeStart: row.scheduled_time_start,
             scheduledTimeEnd: row.scheduled_time_end,
+            scheduledDatetime: row.scheduled_datetime,
+            scheduledDurationMinutes: row.scheduled_duration_minutes,
             status: row.status_name,
             statusDescription: row.status_description,
             urgency: row.urgency_name,
