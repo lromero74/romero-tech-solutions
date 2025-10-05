@@ -45,7 +45,22 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
     const { subscription, deviceInfo } = req.body;
     const { authUser, sessionType } = req;
 
+    console.log('📱 Push subscription request received');
+    console.log('🔍 Auth details:', {
+      authUser: authUser ? { id: authUser.id, email: authUser.email, role: authUser.role } : 'NO AUTH USER',
+      sessionType: sessionType || 'NO SESSION TYPE'
+    });
+
+    if (!authUser || !authUser.id) {
+      console.error('❌ No authenticated user found in request');
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required'
+      });
+    }
+
     if (!subscription || !subscription.endpoint || !subscription.keys) {
+      console.error('❌ Invalid subscription object:', subscription);
       return res.status(400).json({
         success: false,
         error: 'Invalid subscription object'
@@ -58,6 +73,8 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
     const isEmployee = sessionType === 'employee';
     const userColumn = isEmployee ? 'employee_id' : 'user_id';
     const userId = authUser.id;
+
+    console.log('💾 Saving subscription for:', { isEmployee, userColumn, userId });
 
     // Check if this endpoint already exists
     const existingCheck = await client.query(
