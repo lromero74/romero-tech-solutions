@@ -38,24 +38,14 @@ router.get('/vapid-public-key', (req, res) => {
  * Subscribe a user/employee to push notifications
  */
 router.post('/subscribe', authenticateSession, async (req, res) => {
+  const pool = await getPool();
+  const client = await pool.connect();
+
   try {
-    console.log('🚀 [/api/push/subscribe] Starting subscription process...');
-
-    const pool = await getPool();
-    const client = await pool.connect();
-
-    try {
-      const { subscription, deviceInfo } = req.body;
-      const { authUser, sessionType } = req;
-
-    console.log('📱 Push subscription request received');
-    console.log('🔍 Auth details:', {
-      authUser: authUser ? { id: authUser.id, email: authUser.email, role: authUser.role } : 'NO AUTH USER',
-      sessionType: sessionType || 'NO SESSION TYPE'
-    });
+    const { subscription, deviceInfo } = req.body;
+    const { authUser, sessionType } = req;
 
     if (!authUser || !authUser.id) {
-      console.error('❌ No authenticated user found in request');
       return res.status(401).json({
         success: false,
         error: 'Authentication required'
@@ -63,7 +53,6 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
     }
 
     if (!subscription || !subscription.endpoint || !subscription.keys) {
-      console.error('❌ Invalid subscription object:', subscription);
       return res.status(400).json({
         success: false,
         error: 'Invalid subscription object'
@@ -76,8 +65,6 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
     const isEmployee = sessionType === 'employee';
     const userColumn = isEmployee ? 'employee_id' : 'user_id';
     const userId = authUser.id;
-
-    console.log('💾 Saving subscription for:', { isEmployee, userColumn, userId });
 
     // Check if this endpoint already exists
     const existingCheck = await client.query(
@@ -96,16 +83,12 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
             updated_at = CURRENT_TIMESTAMP
         WHERE endpoint = $4
       `, [userId, subscription.keys, deviceInfo, subscription.endpoint]);
-
-      console.log('✅ Updated existing push subscription for', sessionType, userId);
     } else {
       // Insert new subscription
       await client.query(`
         INSERT INTO push_subscriptions (${userColumn}, endpoint, keys, device_info, is_active)
         VALUES ($1, $2, $3, $4, true)
       `, [userId, subscription.endpoint, subscription.keys, deviceInfo]);
-
-      console.log('✅ Created new push subscription for', sessionType, userId);
     }
 
     // Ensure user has notification preferences
@@ -130,10 +113,9 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
           timestamp: Date.now()
         }
       }));
-      console.log('✅ Sent welcome notification');
     } catch (error) {
-      console.error('⚠️ Failed to send welcome notification:', error.message);
       // Don't fail the subscription if welcome notification fails
+      console.log('Welcome notification could not be sent');
     }
 
     res.json({
@@ -141,24 +123,15 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
       message: 'Push subscription registered successfully'
     });
 
-    } catch (error) {
-      await client.query('ROLLBACK');
-      console.error('❌ Error subscribing to push notifications:', error);
-      res.status(500).json({
-        success: false,
-        error: 'Failed to register push subscription'
-      });
-    } finally {
-      client.release();
-    }
-  } catch (outerError) {
-    console.error('❌ [CRITICAL] Error in push subscription handler:', outerError);
-    console.error('Stack trace:', outerError.stack);
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error subscribing to push notifications:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to process subscription request',
-      details: outerError.message
+      error: 'Failed to register push subscription'
     });
+  } finally {
+    client.release();
   }
 });
 
@@ -197,15 +170,13 @@ router.delete('/unsubscribe', authenticateSession, async (req, res) => {
       });
     }
 
-    console.log('✅ Unsubscribed from push notifications:', sessionType, authUser.id);
-
     res.json({
       success: true,
       message: 'Successfully unsubscribed from push notifications'
     });
 
   } catch (error) {
-    console.error('❌ Error unsubscribing from push notifications:', error);
+    console.error('Error unsubscribing from push notifications:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to unsubscribe from push notifications'
@@ -250,7 +221,7 @@ router.get('/preferences', authenticateSession, async (req, res) => {
     res.json(result.rows[0]);
 
   } catch (error) {
-    console.error('❌ Error fetching notification preferences:', error);
+    console.error('Error fetching notification preferences:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to fetch notification preferences'
@@ -304,15 +275,13 @@ router.put('/preferences', authenticateSession, async (req, res) => {
       invoice_paid !== false
     ]);
 
-    console.log('✅ Updated notification preferences for:', sessionType, authUser.id);
-
     res.json({
       success: true,
       message: 'Notification preferences updated successfully'
     });
 
   } catch (error) {
-    console.error('❌ Error updating notification preferences:', error);
+    console.error('Error updating notification preferences:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to update notification preferences'
@@ -325,13 +294,10 @@ router.put('/preferences', authenticateSession, async (req, res) => {
  * Send a test notification (admin/manager only)
  */
 router.post('/test', authenticateSession, async (req, res) => {
-  try {
-    console.log('🧪 [/api/push/test] Test notification endpoint called');
-    const pool = await getPool();
-    const { authUser } = req;
+  const pool = await getPool();
 
-    console.log('📧 Test notification requested by:', authUser?.email || 'Unknown');
-    console.log('🔍 AuthUser details:', authUser);
+  try {
+    const { authUser } = req;
 
     // For now, allow any authenticated employee to send test notifications
     // TODO: Add proper permission check using RBAC
@@ -397,8 +363,6 @@ router.post('/test', authenticateSession, async (req, res) => {
       }
     }
 
-    console.log(`✅ Sent test notifications: ${successCount} success, ${failCount} failed`);
-
     res.json({
       success: true,
       message: `Test notification sent to ${successCount} device(s)`,
@@ -406,12 +370,10 @@ router.post('/test', authenticateSession, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error sending test notification:', error);
-    console.error('Stack trace:', error.stack);
+    console.error('Error sending test notification:', error);
     res.status(500).json({
       success: false,
-      error: 'Failed to send test notification',
-      details: error.message
+      error: 'Failed to send test notification'
     });
   }
 });
@@ -511,11 +473,10 @@ export async function sendNotificationToEmployees(notificationType, notification
       }
     }
 
-    console.log(`📤 Sent ${notificationType} notifications: ${sent} success, ${failed} failed`);
     return { sent, failed };
 
   } catch (error) {
-    console.error('❌ Error sending notifications to employees:', error);
+    console.error('Error sending notifications to employees:', error);
     throw error;
   }
 }
@@ -570,7 +531,7 @@ export async function sendNotificationToUser(userId, notificationData, isEmploye
     return { sent, failed };
 
   } catch (error) {
-    console.error('❌ Error sending notification to user:', error);
+    console.error('Error sending notification to user:', error);
     throw error;
   }
 }
