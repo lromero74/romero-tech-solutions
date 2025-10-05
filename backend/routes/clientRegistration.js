@@ -75,6 +75,16 @@ router.post('/register', async (req, res) => {
 
     console.log('✅ Validation passed, value:', JSON.stringify(value, null, 2));
 
+    // SECURITY: Block all @romerotechsolutions.com emails from client registration
+    const emailDomain = value.contactEmail.toLowerCase().split('@')[1];
+    if (emailDomain === 'romerotechsolutions.com') {
+      console.log(`⚠️ Company email domain used for client registration: ${value.contactEmail}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Client registration using @romerotechsolutions.com email addresses is not permitted. Please use your business email address.'
+      });
+    }
+
     // Validate business domain
     console.log('🔍 Route calling domain validation with:', value.domainEmail);
     const domainValidation = await clientRegistrationService.validateBusinessDomain(value.domainEmail);
@@ -326,6 +336,16 @@ router.post('/login', async (req, res) => {
     }
 
     const { email, password } = value;
+
+    // SECURITY: Block all @romerotechsolutions.com emails from client login
+    const emailDomain = email.toLowerCase().split('@')[1];
+    if (emailDomain === 'romerotechsolutions.com') {
+      console.log(`⚠️ Company email domain used for client login: ${email}`);
+      return res.status(403).json({
+        success: false,
+        message: 'Client login using @romerotechsolutions.com email addresses is not permitted. Employees should use the employee login page.'
+      });
+    }
 
     // Get user from database
     const userResult = await query(`

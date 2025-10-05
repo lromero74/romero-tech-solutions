@@ -2149,19 +2149,14 @@ router.post('/client-login', async (req, res) => {
     // Use sanitized email for database queries
     const sanitizedEmail = validation.sanitized.email;
 
-    // SECURITY: First check if this email belongs to an employee
-    const employeeCheck = await query(`
-      SELECT id FROM employees WHERE email = $1
-    `, [sanitizedEmail]);
-
-    if (employeeCheck.rows.length > 0) {
-      // This is an employee email - they should not use client login
+    // SECURITY: Block all @romerotechsolutions.com emails from client login
+    const emailDomain = sanitizedEmail.toLowerCase().split('@')[1];
+    if (emailDomain === 'romerotechsolutions.com') {
       recordFailedAttempt(clientIP);
-      console.log(`⚠️ Employee attempted client login: ${sanitizedEmail}`);
-      // SECURITY: Return generic error to prevent account enumeration
-      return res.status(401).json({
+      console.log(`⚠️ Company email domain used for client login: ${sanitizedEmail}`);
+      return res.status(403).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Client login using @romerotechsolutions.com email addresses is not permitted. Employees should use the employee login page.'
       });
     }
 

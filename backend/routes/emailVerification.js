@@ -62,21 +62,14 @@ router.post('/send-verification', signupRateLimiters, async (req, res) => {
       });
     }
 
-    // SECURITY: Check if email belongs to an employee (but don't reveal this to the user)
-    const employeeCheck = await query('SELECT id FROM employees WHERE email = $1', [email]);
-    if (employeeCheck.rows.length > 0) {
-      console.log(`⚠️ Attempted client registration with employee email: ${email}`);
-      // Return same error as if email already exists to prevent enumeration
-      return res.status(409).json({
+    // SECURITY: Block all @romerotechsolutions.com emails from client registration
+    const emailDomain = email.toLowerCase().split('@')[1];
+    if (emailDomain === 'romerotechsolutions.com') {
+      console.log(`⚠️ Attempted client registration with company email domain: ${email}`);
+      return res.status(403).json({
         success: false,
-        error: 'An account with this email already exists',
-        code: 'EMAIL_ALREADY_EXISTS',
-        data: {
-          existingAccount: true,
-          email: email,
-          showPasswordRecovery: true,
-          message: 'This email address is already registered. Would you like to reset your password instead?'
-        }
+        error: 'Client registration using @romerotechsolutions.com email addresses is not permitted. Please use your business email address.',
+        code: 'COMPANY_EMAIL_FORBIDDEN'
       });
     }
 
