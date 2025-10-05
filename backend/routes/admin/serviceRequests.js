@@ -95,6 +95,7 @@ router.get('/service-requests', async (req, res) => {
         sr.follow_up_date,
         sr.business_id,
         sr.client_id,
+        sr.assigned_to_employee_id as assigned_technician_id,
         srs.name as status,
         srs.color_code as status_color,
         ul.name as urgency,
@@ -1012,6 +1013,7 @@ router.get('/service-requests/:id', async (req, res) => {
     const query = `
       SELECT
         sr.*,
+        sr.assigned_to_employee_id as assigned_technician_id,
         srs.name as status_name,
         srs.description as status_description,
         srs.color_code as status_color,
