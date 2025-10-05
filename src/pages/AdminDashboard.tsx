@@ -16,7 +16,7 @@ type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services
 
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();
-  const { refreshAllData, serviceLocations, employees } = useAdminData();
+  const { refreshAllData, serviceLocations, employees, serviceRequests } = useAdminData();
   const { toggleTheme, isDark } = useTheme();
 
   // Helper function to get role display name
@@ -430,6 +430,35 @@ const AdminDashboardContent: React.FC = () => {
 
                 return (
                   <div className="flex items-center space-x-3">
+                    {/* Notification Bell Icon with Badge */}
+                    <button
+                      type="button"
+                      onClick={() => setCurrentView('service-requests')}
+                      className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                      aria-label="View notifications"
+                    >
+                      <Bell className="h-5 w-5" />
+                      {/* Notification badge - shows count of unacknowledged requests */}
+                      {(() => {
+                        // Count service requests that need acknowledgment
+                        const unackCount = serviceRequests.filter(sr =>
+                          !sr.softDelete &&
+                          sr.isActive &&
+                          sr.status?.toLowerCase() === 'submitted' &&
+                          !sr.acknowledgedByEmployeeId
+                        ).length;
+
+                        if (unackCount > 0) {
+                          return (
+                            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center animate-pulse">
+                              {unackCount > 9 ? '9+' : unackCount}
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </button>
+
                     <div className="relative" ref={userMenuRef}>
                       <button
                         type="button"

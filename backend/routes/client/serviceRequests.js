@@ -247,7 +247,16 @@ router.post('/', async (req, res) => {
           body: `${businessName} submitted: ${title || 'Service Request'} #${requestNumber}`,
           icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
           badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
-          vibrate: [200, 100, 200],
+          // Enhanced vibration pattern for better noticeability
+          vibrate: [200, 100, 200, 100, 200], // Triple pulse pattern
+          // Sound - browser will use default notification sound
+          sound: '/notification-sound.mp3', // Optional custom sound
+          // Require interaction to dismiss (makes it persist)
+          requireInteraction: true,
+          // High priority tag to make it more prominent
+          tag: `service-request-${serviceRequestId}`,
+          // Renotify to ensure it shows even if similar notification exists
+          renotify: true,
           data: {
             type: 'new_service_request',
             serviceRequestId: serviceRequestId,
