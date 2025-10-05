@@ -38,12 +38,15 @@ router.get('/vapid-public-key', (req, res) => {
  * Subscribe a user/employee to push notifications
  */
 router.post('/subscribe', authenticateSession, async (req, res) => {
-  const pool = await getPool();
-  const client = await pool.connect();
-
   try {
-    const { subscription, deviceInfo } = req.body;
-    const { authUser, sessionType } = req;
+    console.log('🚀 [/api/push/subscribe] Starting subscription process...');
+
+    const pool = await getPool();
+    const client = await pool.connect();
+
+    try {
+      const { subscription, deviceInfo } = req.body;
+      const { authUser, sessionType } = req;
 
     console.log('📱 Push subscription request received');
     console.log('🔍 Auth details:', {
@@ -138,15 +141,24 @@ router.post('/subscribe', authenticateSession, async (req, res) => {
       message: 'Push subscription registered successfully'
     });
 
-  } catch (error) {
-    await client.query('ROLLBACK');
-    console.error('❌ Error subscribing to push notifications:', error);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      console.error('❌ Error subscribing to push notifications:', error);
+      res.status(500).json({
+        success: false,
+        error: 'Failed to register push subscription'
+      });
+    } finally {
+      client.release();
+    }
+  } catch (outerError) {
+    console.error('❌ [CRITICAL] Error in push subscription handler:', outerError);
+    console.error('Stack trace:', outerError.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to register push subscription'
+      error: 'Failed to process subscription request',
+      details: outerError.message
     });
-  } finally {
-    client.release();
   }
 });
 
@@ -313,9 +325,9 @@ router.put('/preferences', authenticateSession, async (req, res) => {
  * Send a test notification (admin/manager only)
  */
 router.post('/test', authenticateSession, async (req, res) => {
-  const pool = await getPool();
-
   try {
+    console.log('🧪 [/api/push/test] Test notification endpoint called');
+    const pool = await getPool();
     const { authUser } = req;
 
     console.log('📧 Test notification requested by:', authUser?.email || 'Unknown');
@@ -395,9 +407,11 @@ router.post('/test', authenticateSession, async (req, res) => {
 
   } catch (error) {
     console.error('❌ Error sending test notification:', error);
+    console.error('Stack trace:', error.stack);
     res.status(500).json({
       success: false,
-      error: 'Failed to send test notification'
+      error: 'Failed to send test notification',
+      details: error.message
     });
   }
 });
