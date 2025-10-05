@@ -1478,24 +1478,60 @@ const AdminServiceRequests: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Client and Technician */}
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Client</div>
-                      <div className={`text-sm ${themeClasses.text.primary}`}>{request.client_name}</div>
+                  {/* Client Info */}
+                  <div className="mb-3">
+                    <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Client</div>
+                    <div className={`text-sm font-medium ${themeClasses.text.primary} mb-1`}>{request.client_name}</div>
+
+                    {/* Client Contact Info */}
+                    <div className="space-y-1">
+                      {request.client_phone && (
+                        <a
+                          href={`tel:${request.client_phone}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-center text-xs ${themeClasses.text.link} hover:underline`}
+                        >
+                          <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
+                          {formatPhone(request.client_phone)}
+                        </a>
+                      )}
+                      {request.client_email && (
+                        <a
+                          href={`mailto:${request.client_email}`}
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-center text-xs ${themeClasses.text.link} hover:underline`}
+                        >
+                          <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
+                          {request.client_email}
+                        </a>
+                      )}
+                      {request.locationDetails && (
+                        <a
+                          href={getMapUrl(request.locationDetails)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className={`flex items-start text-xs ${themeClasses.text.link} hover:underline`}
+                        >
+                          <MapPin className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
+                          <span className="break-words">{formatFullAddress(request.locationDetails)}</span>
+                        </a>
+                      )}
                     </div>
-                    <div>
-                      <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Technician</div>
-                      <div className={`text-sm ${themeClasses.text.primary}`}>
-                        {request.technician_name ? (
-                          <span className="flex items-center">
-                            <User className="h-3 w-3 mr-1" />
-                            {request.technician_name}
-                          </span>
-                        ) : (
-                          <span className={themeClasses.text.muted}>Unassigned</span>
-                        )}
-                      </div>
+                  </div>
+
+                  {/* Technician */}
+                  <div className="mb-3">
+                    <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Technician</div>
+                    <div className={`text-sm ${themeClasses.text.primary}`}>
+                      {request.technician_name ? (
+                        <span className="flex items-center">
+                          <User className="h-3 w-3 mr-1" />
+                          {request.technician_name}
+                        </span>
+                      ) : (
+                        <span className={themeClasses.text.muted}>Unassigned</span>
+                      )}
                     </div>
                   </div>
 
