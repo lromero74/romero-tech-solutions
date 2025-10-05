@@ -276,6 +276,13 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
 
       if (endTime) {
         endDateTime = new Date(`${dateString}T${endTime}Z`);
+
+        // CRITICAL: If end time appears before start time, it means the appointment
+        // crosses midnight - add 1 day to the end date
+        if (endDateTime <= startDateTime) {
+          endDateTime = new Date(endDateTime.getTime() + (24 * 60 * 60 * 1000));
+          console.log(`⏰ Appointment crosses midnight: ${startDateTime.toISOString()} → ${endDateTime.toISOString()}`);
+        }
       } else {
         // Default to 1 hour if no end time specified (changed from 2 hours)
         endDateTime = new Date(startDateTime.getTime() + (1 * 60 * 60 * 1000));
@@ -417,6 +424,12 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
 
       if (existingEndTime) {
         existingEnd = new Date(`${existingUseDate}T${existingEndTime}Z`);
+
+        // CRITICAL: If end time appears before start time, it means the appointment
+        // crosses midnight - add 1 day to the end date
+        if (existingEnd <= existingStart) {
+          existingEnd = new Date(existingEnd.getTime() + (24 * 60 * 60 * 1000));
+        }
       } else {
         existingEnd = new Date(existingStart.getTime() + (1 * 60 * 60 * 1000));
       }
