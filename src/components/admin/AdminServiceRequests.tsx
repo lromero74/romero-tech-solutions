@@ -114,7 +114,7 @@ const AdminServiceRequests: React.FC = () => {
 
   const [filters, setFilters] = useState<Filters>({
     search: '',
-    status: 'all',
+    status: '*Open',
     urgency: 'all',
     priority: 'all',
     business: 'all',
@@ -1237,12 +1237,12 @@ const AdminServiceRequests: React.FC = () => {
           </div>
 
           {/* Clear Filters */}
-          {(filters.search || filters.status !== 'all' || filters.urgency !== 'all' || filters.priority !== 'all' || filters.business !== 'all' || filters.technician !== 'all') && (
+          {(filters.search || filters.status !== '*Open' || filters.urgency !== 'all' || filters.priority !== 'all' || filters.business !== 'all' || filters.technician !== 'all') && (
             <div className="mt-4">
               <button
                 onClick={() => setFilters({
                   search: '',
-                  status: 'all',
+                  status: '*Open',
                   urgency: 'all',
                   priority: 'all',
                   business: 'all',
