@@ -1103,7 +1103,7 @@ router.put('/service-requests/:id/assign', async (req, res) => {
     // Get the previous assignment for logging
     const previousQuery = `
       SELECT assigned_to_employee_id,
-             (SELECT name FROM employees WHERE id = assigned_to_employee_id) as previous_tech_name
+             (SELECT CONCAT(first_name, ' ', last_name) FROM employees WHERE id = assigned_to_employee_id) as previous_tech_name
       FROM service_requests
       WHERE id = $1 AND soft_delete = false
     `;
@@ -1145,7 +1145,7 @@ router.put('/service-requests/:id/assign', async (req, res) => {
 
     // If this is an ownership assumption, create an automatic note
     if (assumeOwnership) {
-      const newTechQuery = await pool.query('SELECT name FROM employees WHERE id = $1', [technicianId]);
+      const newTechQuery = await pool.query('SELECT CONCAT(first_name, \' \', last_name) as name FROM employees WHERE id = $1', [technicianId]);
       const newTechName = newTechQuery.rows[0]?.name || 'Unknown';
       const previousTechName = previousResult.rows[0]?.previous_tech_name;
 
