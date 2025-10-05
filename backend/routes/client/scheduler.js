@@ -644,6 +644,11 @@ router.post('/suggest-available-slot', async (req, res) => {
           // Get rate tier based on business timezone
           const rateTier = await timezoneService.getRateTierForUTC(trySlot);
 
+          // Debug: Log tier detection for first 10 slots
+          if (trySlot.getTime() - new Date(startOfBusinessDay).getTime() < 10 * 30 * 60 * 1000) {
+            console.log(`🔍 Slot check: UTC ${trySlot.toISOString()} → Tier: ${rateTier?.tierName} (level ${rateTier?.tierLevel}), Looking for tier level: ${preferredTierLevel}`);
+          }
+
           // Check if slot matches tier preference
           // If user selected "any" tier (null), accept all slots
           // If user selected specific tier, ONLY accept exact matches - no fallback
