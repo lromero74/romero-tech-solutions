@@ -1037,6 +1037,53 @@ router.post('/:id/cancel', async (req, res) => {
 
     console.log(`🚫 Service request ${serviceRequest.request_number} cancelled by client ${clientEmail}`);
 
+    // Send push notification for cancellation (all cancellations, not just late ones)
+    const sendCancellationPushNotification = async () => {
+      try {
+        // Get business name for notification
+        const businessQuery = await pool.query(
+          'SELECT business_name FROM businesses WHERE id = $1',
+          [businessId]
+        );
+        const businessName = businessQuery.rows[0]?.business_name || 'Unknown Business';
+
+        const notificationData = {
+          title: isLateCancellation ? '⚠️ Late Service Request Cancellation' : '🚫 Service Request Cancelled',
+          body: `${businessName} cancelled ${serviceRequest.title || 'Service Request'} #${serviceRequest.request_number}${isLateCancellation ? ` (${hoursUntilStart.toFixed(1)}h notice)` : ''}`,
+          icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          vibrate: isLateCancellation ? [200, 100, 200, 100, 200, 100, 200] : [200, 100, 200],
+          requireInteraction: isLateCancellation, // Late cancellations require interaction
+          tag: `service-request-cancelled-${id}`,
+          renotify: true,
+          data: {
+            type: 'service_request_cancelled',
+            serviceRequestId: id,
+            requestNumber: serviceRequest.request_number,
+            businessId: businessId,
+            businessName: businessName,
+            title: serviceRequest.title || 'Service Request',
+            isLateCancellation: isLateCancellation,
+            hoursNotice: hoursUntilStart.toFixed(2),
+            timestamp: Date.now(),
+            url: `/admin/service-requests/${id}`
+          }
+        };
+
+        const result = await sendNotificationToEmployees(
+          'service_request_updated',
+          notificationData,
+          'view.service_requests.enable'
+        );
+        console.log(`✅ [ServiceRequest] Cancellation push notification result for ${serviceRequest.request_number}:`, result);
+      } catch (notificationError) {
+        console.error(`⚠️ [ServiceRequest] Failed to send cancellation push notification for ${serviceRequest.request_number}:`, notificationError);
+      }
+    };
+
+    // Send push notification asynchronously
+    sendCancellationPushNotification();
+
     // If late cancellation, send email to executives and admins
     if (isLateCancellation) {
       console.log(`⚠️ Late cancellation detected (${hoursUntilStart.toFixed(2)} hours notice) - notifying executives and admins`);
