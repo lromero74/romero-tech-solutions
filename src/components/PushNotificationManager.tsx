@@ -34,9 +34,11 @@ const PushNotificationManager: React.FC = () => {
   const [isEmployee, setIsEmployee] = useState(false);
 
   useEffect(() => {
-    checkNotificationStatus();
-    // Check if user is an employee (either traditional or AWS Amplify auth)
-    checkEmployeeStatus();
+    const init = async () => {
+      await checkEmployeeStatus();
+      await checkNotificationStatus();
+    };
+    init();
   }, []);
 
   const checkEmployeeStatus = async () => {
@@ -49,7 +51,6 @@ const PushNotificationManager: React.FC = () => {
       if (roleToken) {
         setIsEmployee(true);
         console.log(`✅ Employee detected via ${role} session token`);
-        setDebugInfo(prev => prev + `Employee Status: Yes (${role} Auth)\n`);
         return;
       }
     }
@@ -60,8 +61,6 @@ const PushNotificationManager: React.FC = () => {
     if (sessionToken) {
       setIsEmployee(true);
       console.log('✅ Employee detected via traditional auth');
-      // Update debug info
-      setDebugInfo(prev => prev + `Employee Status: Yes (Traditional Auth)\n`);
       return;
     }
 
@@ -73,14 +72,9 @@ const PushNotificationManager: React.FC = () => {
       if (user) {
         setIsEmployee(true);
         console.log('✅ Employee detected via AWS Amplify');
-        // Update debug info
-        setDebugInfo(prev => prev + `Employee Status: Yes (AWS Amplify)\n`);
-      } else {
-        setDebugInfo(prev => prev + `Employee Status: No (No user found)\n`);
       }
     } catch (e) {
       console.log('❌ Not authenticated with AWS Amplify:', e);
-      setDebugInfo(prev => prev + `Employee Status: No (Not logged in)\n`);
     }
   };
 
@@ -138,16 +132,26 @@ const PushNotificationManager: React.FC = () => {
       setIsSupported(supported);
 
       debugMsg += `\nSupported Check: ${supported ? 'Yes' : 'No'}\n`;
-      debugMsg += `Employee Status: Checking...\n`;
+      debugMsg += `Employee Status: ${isEmployee ? 'Yes' : 'No'}\n`;
       debugMsg += `Test Button Shows When: isSubscribed=${isSubscribed} && isEmployee=${isEmployee}\n`;
 
       // Show localStorage tokens for debugging
       const tokenKeys = Object.keys(localStorage).filter(k => k.toLowerCase().includes('token'));
-      debugMsg += `\nLocalStorage Tokens Found:\n`;
-      tokenKeys.forEach(key => {
-        const value = localStorage.getItem(key);
-        debugMsg += `- ${key}: ${value ? value.substring(0, 20) + '...' : 'null'}\n`;
-      });
+      debugMsg += `\nLocalStorage Tokens Found (${tokenKeys.length}):\n`;
+      if (tokenKeys.length === 0) {
+        debugMsg += `  No tokens found in localStorage\n`;
+        // Also check for authUser keys to understand what's stored
+        const authKeys = Object.keys(localStorage).filter(k => k.toLowerCase().includes('auth'));
+        debugMsg += `\nAuth Keys Found (${authKeys.length}):\n`;
+        authKeys.forEach(key => {
+          debugMsg += `  - ${key}\n`;
+        });
+      } else {
+        tokenKeys.forEach(key => {
+          const value = localStorage.getItem(key);
+          debugMsg += `  - ${key}: ${value ? value.substring(0, 20) + '...' : 'null'}\n`;
+        });
+      }
 
       setDebugInfo(debugMsg);
 
@@ -482,7 +486,7 @@ const PushNotificationManager: React.FC = () => {
 
         {/* DEBUG: Re-sync subscription button */}
         {isSubscribed && (
-          <div className="mt-4 pt-4 border-t">
+          <div className="mt-4 pt-4 border-t space-y-2">
             <button
               onClick={async () => {
                 console.log('🔄 Re-syncing subscription to server...');
@@ -506,9 +510,33 @@ const PushNotificationManager: React.FC = () => {
                   setMessage({ type: 'error', text: error.message || 'Sync failed' });
                 }
               }}
-              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm"
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white rounded-md text-sm w-full"
             >
               🔄 DEBUG: Re-sync Subscription to Server
+            </button>
+
+            <button
+              onClick={async () => {
+                console.log('🧹 Force clearing subscription...');
+                setMessage({ type: 'info', text: 'Clearing subscription...' });
+                try {
+                  const reg = await navigator.serviceWorker.getRegistration();
+                  const sub = await reg?.pushManager.getSubscription();
+                  if (sub) {
+                    await sub.unsubscribe();
+                    console.log('✅ Subscription cleared from browser');
+                  }
+                  pushNotificationService.subscription = null;
+                  setIsSubscribed(false);
+                  setMessage({ type: 'success', text: 'Subscription cleared! You can now re-enable.' });
+                } catch (error: any) {
+                  console.error('Clear failed:', error);
+                  setMessage({ type: 'error', text: error.message || 'Clear failed' });
+                }
+              }}
+              className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm w-full"
+            >
+              🧹 DEBUG: Force Clear Subscription
             </button>
           </div>
         )}
