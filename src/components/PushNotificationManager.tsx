@@ -42,6 +42,18 @@ const PushNotificationManager: React.FC = () => {
   const checkEmployeeStatus = async () => {
     console.log('🔍 Checking employee status...');
 
+    // Check for role-based session tokens (RoleBasedStorage pattern)
+    const employeeRoles = ['admin', 'executive', 'employee', 'technician', 'sales'];
+    for (const role of employeeRoles) {
+      const roleToken = localStorage.getItem(`${role}_sessionToken`);
+      if (roleToken) {
+        setIsEmployee(true);
+        console.log(`✅ Employee detected via ${role} session token`);
+        setDebugInfo(prev => prev + `Employee Status: Yes (${role} Auth)\n`);
+        return;
+      }
+    }
+
     // Check for traditional auth
     const sessionToken = localStorage.getItem('sessionToken');
     console.log('Traditional sessionToken:', sessionToken ? 'Found' : 'Not found');
@@ -64,11 +76,11 @@ const PushNotificationManager: React.FC = () => {
         // Update debug info
         setDebugInfo(prev => prev + `Employee Status: Yes (AWS Amplify)\n`);
       } else {
-        setDebugInfo(prev => prev + `Employee Status: No (No AWS user)\n`);
+        setDebugInfo(prev => prev + `Employee Status: No (No user found)\n`);
       }
     } catch (e) {
       console.log('❌ Not authenticated with AWS Amplify:', e);
-      setDebugInfo(prev => prev + `Employee Status: No (AWS Error)\n`);
+      setDebugInfo(prev => prev + `Employee Status: No (Not logged in)\n`);
     }
   };
 

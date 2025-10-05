@@ -351,13 +351,25 @@ class PushNotificationService {
     }
 
     // Fallback to traditional session tokens
-    const traditionalToken = localStorage.getItem('sessionToken') || localStorage.getItem('client_sessionToken');
-    if (traditionalToken) {
-      console.log('✅ Found traditional session token');
-      return traditionalToken;
+    // Check role-based session tokens (RoleBasedStorage pattern)
+    const possibleRoles = ['admin', 'executive', 'employee', 'technician', 'sales', 'client'];
+    for (const role of possibleRoles) {
+      const roleToken = localStorage.getItem(`${role}_sessionToken`);
+      if (roleToken) {
+        console.log(`✅ Found ${role} session token`);
+        return roleToken;
+      }
+    }
+
+    // Check non-prefixed tokens
+    const plainToken = localStorage.getItem('sessionToken');
+    if (plainToken) {
+      console.log('✅ Found plain session token');
+      return plainToken;
     }
 
     console.log('❌ No session token found in any location');
+    console.log('Checked localStorage keys:', Object.keys(localStorage).filter(k => k.includes('Token')));
     return null;
   }
 
