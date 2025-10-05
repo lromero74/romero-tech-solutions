@@ -4,8 +4,7 @@
  */
 
 import { sessionService } from '../services/sessionService.js';
-import pkg from 'aws-jwt-verify';
-const { CognitoJwtVerifier } = pkg;
+import { CognitoJwtVerifier } from 'aws-jwt-verify';
 import dotenv from 'dotenv';
 import { getPool } from '../config/database.js';
 
