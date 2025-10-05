@@ -207,6 +207,8 @@ const PushNotificationManager: React.FC = () => {
     setMessage(null);
 
     try {
+      console.log('📱 Starting enable notifications process...');
+
       // Check if on iOS and not in PWA
       if (pushNotificationService.isIOSPWA() === false && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
         setIsIOSInstructions(true);
@@ -218,8 +220,20 @@ const PushNotificationManager: React.FC = () => {
         return;
       }
 
+      // First check if there's already a subscription
+      const existingReg = await navigator.serviceWorker.getRegistration();
+      const existingSub = await existingReg?.pushManager.getSubscription();
+      if (existingSub) {
+        console.log('⚠️ Found existing subscription, clearing it first...');
+        await existingSub.unsubscribe();
+        console.log('✅ Old subscription cleared');
+      }
+
       // Subscribe to notifications
+      console.log('📤 Calling pushNotificationService.subscribe()...');
       await pushNotificationService.subscribe();
+
+      console.log('✅ Subscribe completed, updating state...');
       setIsSubscribed(true);
       setPermission('granted');
       setMessage({
@@ -228,15 +242,40 @@ const PushNotificationManager: React.FC = () => {
       });
 
       // Load preferences
-      const prefs = await pushNotificationService.getPreferences();
-      setPreferences(prefs);
+      try {
+        const prefs = await pushNotificationService.getPreferences();
+        setPreferences(prefs);
+      } catch (prefError) {
+        console.log('Could not load preferences (normal for new subscription):', prefError);
+      }
+
+      // Re-check status to confirm
+      setTimeout(() => {
+        checkNotificationStatus();
+      }, 1000);
 
     } catch (error: any) {
-      console.error('Failed to enable notifications:', error);
-      setMessage({
-        type: 'error',
-        text: error.message || 'Failed to enable notifications'
-      });
+      console.error('❌ Failed to enable notifications:', error);
+      console.error('Full error details:', error.stack);
+
+      // Re-check subscription status to see what actually happened
+      const reg = await navigator.serviceWorker.getRegistration();
+      const sub = await reg?.pushManager.getSubscription();
+
+      if (sub) {
+        console.log('⚠️ Browser has subscription despite error:', sub.endpoint);
+        setIsSubscribed(true);
+        setMessage({
+          type: 'error',
+          text: `Subscription created but not saved to server: ${error.message}`
+        });
+      } else {
+        setIsSubscribed(false);
+        setMessage({
+          type: 'error',
+          text: error.message || 'Failed to enable notifications'
+        });
+      }
 
       if (error.message.includes('permission denied')) {
         setPermission('denied');
@@ -528,15 +567,38 @@ const PushNotificationManager: React.FC = () => {
                 console.log('🧹 Force clearing subscription...');
                 setMessage({ type: 'info', text: 'Clearing subscription...' });
                 try {
-                  const reg = await navigator.serviceWorker.getRegistration();
-                  const sub = await reg?.pushManager.getSubscription();
-                  if (sub) {
-                    await sub.unsubscribe();
-                    console.log('✅ Subscription cleared from browser');
+                  // Clear all possible subscriptions
+                  const registrations = await navigator.serviceWorker.getRegistrations();
+                  for (const reg of registrations) {
+                    console.log('Found service worker registration:', reg);
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub) {
+                      console.log('Unsubscribing from:', sub.endpoint);
+                      await sub.unsubscribe();
+                      console.log('✅ Subscription cleared from browser');
+                    }
                   }
+
+                  // Also try the current registration
+                  const reg = await navigator.serviceWorker.getRegistration();
+                  if (reg) {
+                    const sub = await reg.pushManager.getSubscription();
+                    if (sub) {
+                      await sub.unsubscribe();
+                      console.log('✅ Current subscription also cleared');
+                    }
+                  }
+
                   pushNotificationService.subscription = null;
+                  pushNotificationService.registration = null;
                   setIsSubscribed(false);
-                  setMessage({ type: 'success', text: 'Subscription cleared! You can now re-enable.' });
+
+                  // Force re-check status
+                  setTimeout(() => {
+                    checkNotificationStatus();
+                  }, 500);
+
+                  setMessage({ type: 'success', text: 'All subscriptions cleared! Close and reopen the app, then try enabling again.' });
                 } catch (error: any) {
                   console.error('Clear failed:', error);
                   setMessage({ type: 'error', text: error.message || 'Clear failed' });
@@ -544,7 +606,7 @@ const PushNotificationManager: React.FC = () => {
               }}
               className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md text-sm w-full"
             >
-              🧹 DEBUG: Force Clear Subscription
+              🧹 DEBUG: Force Clear ALL Subscriptions
             </button>
 
             <button
