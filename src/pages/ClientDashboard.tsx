@@ -26,6 +26,7 @@ import {
   Clock,
   AlertCircle,
   Users,
+  User,
   HardDrive,
   Building,
   Plus,
@@ -39,8 +40,9 @@ import {
 interface User {
   id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;  // Fallback when firstName/lastName not available
   phone: string;
   role: string;
   createdAt?: string;
@@ -466,21 +468,23 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            {/* Mobile Menu Button */}
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="lg:hidden p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-              aria-label="Toggle menu"
-            >
-              {isMobileMenuOpen ? (
-                <X className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-              ) : (
-                <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
-              )}
-            </button>
+            {/* Left side: Mobile Menu Button + Logo and Title */}
+            <div className="flex items-center space-x-3">
+              {/* Mobile Menu Button */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                aria-label="Toggle menu"
+              >
+                {isMobileMenuOpen ? (
+                  <X className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+                ) : (
+                  <Menu className="h-6 w-6 text-gray-600 dark:text-gray-300" />
+                )}
+              </button>
 
-            {/* Logo and Title */}
-            <div className="flex items-center">
+              {/* Logo and Title */}
+              <div className="flex items-center">
               <div className="flex-shrink-0 h-8 w-8 relative">
                 {user.business.logo ? (
                   <div
@@ -489,7 +493,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   >
                     <img
                       src={user.business.logo}
-                      alt={`${user.business.name} logo`}
+                      alt={`${user.business.isIndividual ? (user.name || `${user.firstName} ${user.lastName}`) : user.business.name} logo`}
                       className="w-full h-full object-cover"
                       style={{
                         transform: `scale(${(user.business.logoScale || 100) / 100})`,
@@ -503,20 +507,29 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       }}
                     />
                     <div className="hidden h-8 w-8 rounded-lg bg-blue-600 dark:bg-blue-500 items-center justify-center">
-                      <Building className="h-5 w-5 text-white" />
+                      {user.business.isIndividual ? (
+                        <User className="h-5 w-5 text-white" />
+                      ) : (
+                        <Building className="h-5 w-5 text-white" />
+                      )}
                     </div>
                   </div>
                 ) : (
                   <div className="h-8 w-8 rounded-lg bg-blue-600 dark:bg-blue-500 flex items-center justify-center">
-                    <Building className="h-5 w-5 text-white" />
+                    {user.business.isIndividual ? (
+                      <User className="h-5 w-5 text-white" />
+                    ) : (
+                      <Building className="h-5 w-5 text-white" />
+                    )}
                   </div>
                 )}
               </div>
               <div className="ml-3">
                 <h1 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-white truncate max-w-[150px] sm:max-w-none">
-                  {user.business.name}
+                  {user.business.isIndividual ? (user.name || `${user.firstName} ${user.lastName}`) : user.business.name}
                 </h1>
                 <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400">{t('client.portal', 'Client Portal')}</p>
+              </div>
               </div>
             </div>
 
@@ -573,12 +586,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
               {/* User Menu - Simplified on mobile */}
               <div className="flex items-center space-x-2 sm:space-x-3">
-                <div className="hidden sm:block text-right">
-                  <p className="text-sm font-medium text-gray-900 dark:text-white">
-                    {user.firstName} {user.lastName}
-                  </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
-                </div>
+                {!user.business.isIndividual && (
+                  <div className="hidden sm:block text-right">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">
+                      {user.firstName} {user.lastName}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{user.email}</p>
+                  </div>
+                )}
                 <button
                   onClick={handleLogout}
                   className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
@@ -608,11 +623,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
       >
         <nav className="p-4 overflow-y-auto h-full">
           {/* Mobile User Info */}
-          <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
-            <p className="text-sm font-medium text-gray-900 dark:text-white">
-              {user.firstName} {user.lastName}
-            </p>
-            <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
+          {!user.business.isIndividual && (
+            <div className="mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {user.firstName} {user.lastName}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
 
             {/* Mobile-only controls */}
             <div className="mt-3 flex items-center gap-2">
@@ -631,6 +647,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               )}
             </div>
           </div>
+          )}
 
           <ul className="space-y-2">
             {[

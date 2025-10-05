@@ -354,6 +354,7 @@ router.get('/business', authenticateClient, async (req, res) => {
         business: {
           id: business.id,
           name: business.name,
+          isIndividual: business.isIndividual,
           address: {
             street: business.street,
             city: business.city,
