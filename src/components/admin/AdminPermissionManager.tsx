@@ -190,28 +190,36 @@ const AdminPermissionManager: React.FC<AdminPermissionManagerProps> = ({
     // Define logical groupings matching the sidebar structure
     const groupDefinitions = [
       {
+        groupName: 'Access & Navigation',
+        resourceTypes: ['admin_dashboard', 'admin_routes']
+      },
+      {
         groupName: 'People & HR',
         resourceTypes: ['employees']
       },
       {
         groupName: 'Business Management',
-        resourceTypes: ['businesses', 'service_locations', 'clients', 'users']
+        resourceTypes: ['businesses', 'service_locations', 'clients', 'users', 'test_accounts']
       },
       {
         groupName: 'Service Operations',
-        resourceTypes: ['services', 'service_requests', 'workflow_configuration', 'closure_reasons']
+        resourceTypes: ['services', 'service_types', 'service_requests', 'service_request_time_entries', 'service_request_work', 'workflow_configuration', 'closure_reasons']
       },
       {
         groupName: 'Billing & Finance',
-        resourceTypes: ['invoices', 'service_hour_rates', 'pricing_settings']
+        resourceTypes: ['invoices', 'service_hour_rates', 'hourly_rate_categories', 'pricing_settings']
       },
       {
         groupName: 'Security & Permissions',
-        resourceTypes: ['roles', 'permissions', 'role_hierarchy', 'role_permissions', 'permission_audit_log', 'password_complexity']
+        resourceTypes: ['roles', 'permissions', 'role_hierarchy', 'role_permissions', 'permission_audit_log', 'password_complexity', 'mfa', 'security_sessions']
+      },
+      {
+        groupName: 'System & Notifications',
+        resourceTypes: ['push_notifications']
       },
       {
         groupName: 'Administration',
-        resourceTypes: ['reports', 'settings']
+        resourceTypes: ['reports', 'settings', 'system_settings']
       }
     ];
 
