@@ -671,12 +671,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         setSelectedEndTime(endTime);
         setErrorMessage('');
 
-        // Scroll to the suggested time (longer delay for date change and re-render)
+        // Scroll to show the buffer time before the suggested slot
         setTimeout(() => {
           const hours = startTime.getHours();
           const minutes = startTime.getMinutes();
-          const slotIndex = (hours - 6) * 2 + (minutes / 30);
-          const scrollPosition = slotIndex * 64;
+
+          // Calculate position to show buffer (1 hour before slot) + 30 min context
+          // This shows: [30 min context] [1 hour buffer] [slot start] ...
+          const bufferStartHours = hours - 1.5; // 1 hour buffer + 30 min context
+          const slotIndex = (bufferStartHours - 6) * 2 + (minutes / 30);
+          const scrollPosition = Math.max(0, slotIndex * 64); // Don't scroll before timeline start
 
           const container = document.getElementById('timeline-scroll');
           if (container) {
