@@ -659,8 +659,23 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
       if (result.success && result.data) {
         const suggested = result.data;
+
+        // Debug: Log what we received from backend
+        console.log('🔍 Auto-suggest received from backend:',{
+          startTimeUTC: suggested.startTime,
+          endTimeUTC: suggested.endTime
+        });
+
         const startTime = new Date(suggested.startTime);
         const endTime = new Date(suggested.endTime);
+
+        // Debug: Log after Date conversion
+        console.log('🔍 After Date conversion:', {
+          startTimeLocal: startTime.toLocaleString(),
+          endTimeLocal: endTime.toLocaleString(),
+          startTimeISO: startTime.toISOString(),
+          endTimeISO: endTime.toISOString()
+        });
 
         // Update selected date to match the suggested slot's date
         const suggestedDate = new Date(startTime);

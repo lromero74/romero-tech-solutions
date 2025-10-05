@@ -652,7 +652,7 @@ router.post('/suggest-available-slot', async (req, res) => {
 
           // If we found a matching slot, return it immediately
           if (isMatch) {
-            return {
+            const result = {
               startTime: trySlot.toISOString(),
               endTime: slotEnd.toISOString(),
               duration: requestedDuration,
@@ -661,6 +661,16 @@ router.post('/suggest-available-slot', async (req, res) => {
                 rateMultiplier: rateTier.rateMultiplier
               } : null
             };
+
+            // Debug logging to see what we're sending
+            console.log('🎯 Auto-suggest found slot:', {
+              startTimeUTC: result.startTime,
+              endTimeUTC: result.endTime,
+              tierName: rateTier?.tierName,
+              searchDate: searchDateString
+            });
+
+            return result;
           }
         }
 
