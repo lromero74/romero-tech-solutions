@@ -23,14 +23,14 @@ export async function getEmployeesByRoles(roles) {
       e.id,
       e.email,
       e.first_name,
-      r.role_name
+      r.name as role_name
     FROM employees e
     JOIN employee_roles er ON e.id = er.employee_id
     JOIN roles r ON er.role_id = r.id
-    WHERE r.role_name = ANY($1)
+    WHERE r.name = ANY($1)
       AND e.is_active = true
       AND e.soft_delete = false
-    GROUP BY e.id, e.email, e.first_name, r.role_name
+    GROUP BY e.id, e.email, e.first_name, r.name
   `;
 
   const result = await pool.query(query, [roles]);

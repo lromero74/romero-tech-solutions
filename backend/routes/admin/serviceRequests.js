@@ -1091,12 +1091,20 @@ router.put('/service-requests/:id/assign', async (req, res) => {
   try {
     const { id } = req.params;
     const { technicianId, assumeOwnership } = req.body;
+    const assignedByUserId = req.user?.id; // Get the current user performing the assignment
     const pool = await getPool();
 
     if (!technicianId) {
       return res.status(400).json({
         success: false,
         message: 'Technician ID is required'
+      });
+    }
+
+    if (!assignedByUserId) {
+      return res.status(401).json({
+        success: false,
+        message: 'User authentication required for assignment'
       });
     }
 
@@ -1141,9 +1149,9 @@ router.put('/service-requests/:id/assign', async (req, res) => {
       // Update existing assignment
       await pool.query(
         `UPDATE service_request_assignments
-         SET is_active = true, assigned_at = NOW()
+         SET is_active = true, assigned_at = NOW(), assigned_by_user_id = $3
          WHERE service_request_id = $1 AND technician_id = $2 AND assignment_type = 'primary'`,
-        [id, technicianId]
+        [id, technicianId, assignedByUserId]
       );
     } else {
       // Create new assignment
@@ -1151,11 +1159,12 @@ router.put('/service-requests/:id/assign', async (req, res) => {
         `INSERT INTO service_request_assignments (
           service_request_id,
           technician_id,
+          assigned_by_user_id,
           assignment_type,
           is_active,
           assigned_at
-        ) VALUES ($1, $2, 'primary', true, NOW())`,
-        [id, technicianId]
+        ) VALUES ($1, $2, $3, 'primary', true, NOW())`,
+        [id, technicianId, assignedByUserId]
       );
     }
 
