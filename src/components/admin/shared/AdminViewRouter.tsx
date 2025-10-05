@@ -21,6 +21,7 @@ import WorkflowConfiguration from '../WorkflowConfiguration';
 import AdminPricingSettings from '../AdminPricingSettings';
 import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
 import AdminRoleHierarchy from '../AdminRoleHierarchy';
+import FilterPresetManager from '../FilterPresetManager';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -41,7 +42,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1565,6 +1566,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'workflow-configuration':
         return <WorkflowConfiguration />;
+
+      case 'filter-presets':
+        return <FilterPresetManager />;
 
       default:
         return (

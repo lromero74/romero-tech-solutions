@@ -58,6 +58,7 @@ const AdminServiceRequests: React.FC = () => {
   const [technicians, setTechnicians] = useState<Technician[]>([]);
   const [statuses, setStatuses] = useState<Status[]>([]);
   const [closureReasons, setClosureReasons] = useState<ClosureReason[]>([]);
+  const [filterPresets, setFilterPresets] = useState<Array<{id: string; name: string; description: string}>>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
@@ -199,11 +200,12 @@ const AdminServiceRequests: React.FC = () => {
     }
   }, [serviceRequests]);
 
-  // Fetch technicians, statuses, and closure reasons on mount
+  // Fetch technicians, statuses, closure reasons, and filter presets on mount
   useEffect(() => {
     fetchTechnicians();
     fetchStatuses();
     fetchClosureReasons();
+    fetchFilterPresets();
   }, []);
 
   // Listen for websocket note updates
@@ -347,6 +349,18 @@ const AdminServiceRequests: React.FC = () => {
       }
     } catch (err) {
       console.error('❌ Error fetching closure reasons:', err);
+    }
+  };
+
+  // Fetch filter presets
+  const fetchFilterPresets = async () => {
+    try {
+      const response = await apiService.get('/admin/service-requests/filter-presets');
+      if (response.success && response.data) {
+        setFilterPresets(response.data);
+      }
+    } catch (err) {
+      console.error('Error fetching filter presets:', err);
     }
   };
 
@@ -1137,6 +1151,13 @@ const AdminServiceRequests: React.FC = () => {
                 className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
               >
                 <option value="all">All Statuses</option>
+                {/* Admin-defined filter presets (with * prefix) */}
+                {filterPresets.map(preset => (
+                  <option key={preset.id} value={`*${preset.name}`}>
+                    *{preset.name} {preset.description ? `- ${preset.description}` : ''}
+                  </option>
+                ))}
+                {/* Individual statuses from database */}
                 {statuses
                   .filter(s => s.is_active)
                   .sort((a, b) => a.display_order - b.display_order)

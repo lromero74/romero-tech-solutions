@@ -95,7 +95,7 @@ interface ClientDashboardProps {
 const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const { isDarkMode, toggleTheme } = useClientTheme();
   const { t } = useClientLanguage();
-  const { signOut } = useEnhancedAuth();
+  const { signOut, sessionConfig } = useEnhancedAuth();
   const { hasNotifications, unseenServiceRequestChanges, unseenInvoiceChanges, startViewTimer, clearViewTimer } = useNotifications();
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -523,14 +523,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             {/* Header Actions */}
             <div className="flex items-center space-x-2 sm:space-x-4">
               {/* Session Countdown Timer - Hidden on mobile */}
-              <div className="hidden md:block">
-                <SessionCountdownTimer
-                  sessionTimeoutMs={15 * 60 * 1000} // 15 minutes
-                  warningThresholdMs={2 * 60 * 1000} // 2 minutes warning
-                  onSessionExpired={handleSessionExpired}
-                  onWarningReached={handleSessionWarning}
-                />
-              </div>
+              {sessionConfig && (
+                <div className="hidden md:block">
+                  <SessionCountdownTimer
+                    sessionTimeoutMs={sessionConfig.timeout * 60 * 1000}
+                    warningThresholdMs={sessionConfig.warningTime * 60 * 1000}
+                    onSessionExpired={handleSessionExpired}
+                    onWarningReached={handleSessionWarning}
+                  />
+                </div>
+              )}
 
               {/* Language Selector - Hidden on mobile */}
               <div className="hidden sm:block">
@@ -617,14 +619,16 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               <div className="sm:hidden">
                 <LanguageSelector toggle={true} />
               </div>
-              <div className="md:hidden">
-                <SessionCountdownTimer
-                  sessionTimeoutMs={15 * 60 * 1000}
-                  warningThresholdMs={2 * 60 * 1000}
-                  onSessionExpired={handleSessionExpired}
-                  onWarningReached={handleSessionWarning}
-                />
-              </div>
+              {sessionConfig && (
+                <div className="md:hidden">
+                  <SessionCountdownTimer
+                    sessionTimeoutMs={sessionConfig.timeout * 60 * 1000}
+                    warningThresholdMs={sessionConfig.warningTime * 60 * 1000}
+                    onSessionExpired={handleSessionExpired}
+                    onWarningReached={handleSessionWarning}
+                  />
+                </div>
+              )}
             </div>
           </div>
 

@@ -19,12 +19,13 @@ import {
   Clock,
   DollarSign,
   Workflow,
-  Receipt
+  Receipt,
+  Filter
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -104,6 +105,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       title: 'Administration',
       items: [
         { id: 'reports', label: 'Reports', icon: BarChart3, permission: 'view.reports.enable' },
+        { id: 'filter-presets', label: 'Filter Presets', icon: Filter, permission: 'view.settings.enable' },
         { id: 'settings', label: 'Settings', icon: Settings, permission: 'view.settings.enable' }
       ]
     }

@@ -12,7 +12,7 @@ import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
 import { useModalManager, useServiceLocationFilters, useClientFilters, useBusinessFilters } from '../hooks/admin';
 
-type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity';
+type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity' | 'filter-presets';
 
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();

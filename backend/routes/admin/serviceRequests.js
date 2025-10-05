@@ -2,6 +2,7 @@ import express from 'express';
 import { getPool } from '../../config/database.js';
 import { sendEmployeeNoteNotificationToClient } from '../../services/emailService.js';
 import { websocketService } from '../../services/websocketService.js';
+import filterPresetService from '../../services/filterPresetService.js';
 
 const router = express.Router();
 
@@ -32,9 +33,38 @@ router.get('/service-requests', async (req, res) => {
     let paramIndex = 1;
 
     if (status && status !== 'all') {
-      conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
-      params.push(status);
-      paramIndex++;
+      // Check if this is a preset filter (starts with *)
+      if (status.startsWith('*')) {
+        const presetName = status.substring(1); // Remove the * prefix
+        try {
+          // Fetch the preset
+          const presets = await filterPresetService.getActivePresets('status');
+          const preset = presets.find(p => p.name === presetName);
+
+          if (preset) {
+            // Build WHERE clause from preset criteria
+            const presetClause = filterPresetService.buildWhereClause(preset.criteria);
+            conditions.push(presetClause);
+          } else {
+            console.warn(`Preset filter not found: ${presetName}`);
+            // Fallback to exact match
+            conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
+            params.push(status);
+            paramIndex++;
+          }
+        } catch (error) {
+          console.error('Error applying preset filter:', error);
+          // Fallback to exact match
+          conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
+          params.push(status);
+          paramIndex++;
+        }
+      } else {
+        // Regular status filter (exact match)
+        conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
+        params.push(status);
+        paramIndex++;
+      }
     }
 
     if (urgency && urgency !== 'all') {
@@ -653,6 +683,30 @@ router.get('/service-requests/statuses', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch service request statuses',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/service-requests/filter-presets
+ * Get all active filter presets
+ */
+router.get('/service-requests/filter-presets', async (req, res) => {
+  try {
+    const { filterType = 'status' } = req.query;
+    const presets = await filterPresetService.getActivePresets(filterType);
+
+    res.json({
+      success: true,
+      data: presets
+    });
+
+  } catch (error) {
+    console.error('Error fetching filter presets:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch filter presets',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
@@ -2661,6 +2715,118 @@ router.patch('/service-requests/:id/details', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to update service request details',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/service-requests/filter-presets
+ * Create a new filter preset
+ */
+router.post('/service-requests/filter-presets', async (req, res) => {
+  try {
+    const { name, description, filter_type, criteria, display_order } = req.body;
+    const employeeId = req.employeeId || req.user?.id;
+
+    if (!name || !criteria) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name and criteria are required'
+      });
+    }
+
+    const preset = await filterPresetService.createPreset(
+      { name, description, filter_type, criteria, display_order },
+      employeeId
+    );
+
+    res.status(201).json({
+      success: true,
+      message: 'Filter preset created successfully',
+      data: preset
+    });
+
+  } catch (error) {
+    console.error('Error creating filter preset:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to create filter preset',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * PUT /api/admin/service-requests/filter-presets/:id
+ * Update a filter preset
+ */
+router.put('/service-requests/filter-presets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+
+    const preset = await filterPresetService.updatePreset(id, updates);
+
+    res.json({
+      success: true,
+      message: 'Filter preset updated successfully',
+      data: preset
+    });
+
+  } catch (error) {
+    console.error('Error updating filter preset:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update filter preset',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * DELETE /api/admin/service-requests/filter-presets/:id
+ * Delete a filter preset
+ */
+router.delete('/service-requests/filter-presets/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    await filterPresetService.deletePreset(id);
+
+    res.json({
+      success: true,
+      message: 'Filter preset deleted successfully'
+    });
+
+  } catch (error) {
+    console.error('Error deleting filter preset:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to delete filter preset',
+      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * GET /api/admin/service-requests/filter-presets/all
+ * Get all filter presets (including inactive ones, for management)
+ */
+router.get('/service-requests/filter-presets/all', async (req, res) => {
+  try {
+    const presets = await filterPresetService.getAllPresets();
+
+    res.json({
+      success: true,
+      data: presets
+    });
+
+  } catch (error) {
+    console.error('Error fetching all filter presets:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch filter presets',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
     });
   }
