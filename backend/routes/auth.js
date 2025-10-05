@@ -754,7 +754,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
         // For test accounts, skip email/SMS but allow login to proceed
         message = `Test account login - MFA code: ${mfaCode}`;
       } else {
-        console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: both`);
+        console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: all`);
         const deliveryResult = await sendMfaCode({
           email: user.email,
           phoneNumber: user.phone, // Use phone from employees table
@@ -762,8 +762,9 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
           mfaCode,
           language: 'en',
           userType: 'admin',
-          deliveryMethod: 'both', // Send via both email and SMS
-          codeType: 'login'
+          deliveryMethod: 'all', // Send via email, SMS, and push
+          codeType: 'login',
+          userId: user.id // Pass userId for push notifications
         });
         console.log(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
 
@@ -780,6 +781,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
         const methods = [];
         if (deliveryResult.email.sent) methods.push('email');
         if (deliveryResult.sms.sent) methods.push('text message');
+        if (deliveryResult.push?.sent) methods.push('device (push notification)');
 
         if (methods.length > 0) {
           message += ` to your ${methods.join(' and ')}`;

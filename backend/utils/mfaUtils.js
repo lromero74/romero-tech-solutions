@@ -3,6 +3,7 @@ import { query } from '../config/database.js';
 import { emailService } from '../services/emailService.js';
 import { smsService } from '../services/smsService.js';
 import twilioSmsService from '../services/twilioSmsService.js';
+import { sendNotificationToUser, sendNotificationToEmployees } from '../routes/pushRoutes.js';
 
 /**
  * MFA (Multi-Factor Authentication) Utilities
@@ -135,6 +136,57 @@ export async function sendMfaEmail(email, firstName, mfaCode, language = 'en', u
   } catch (error) {
     console.error('Failed to send MFA email:', error);
     throw new Error('Failed to send verification code. Please try again.');
+  }
+}
+
+/**
+ * Send MFA verification code via push notification
+ * @param {string} userId - User ID (UUID)
+ * @param {string} firstName - User first name
+ * @param {string} mfaCode - The MFA code to send
+ * @param {string} userType - Type of user ('client', 'employee', or 'admin')
+ * @param {string} language - User's preferred language ('en' or 'es')
+ * @returns {Promise<void>}
+ */
+export async function sendMfaPush(userId, firstName, mfaCode, userType = 'employee', language = 'en') {
+  try {
+    const isEmployee = userType === 'employee' || userType === 'admin';
+
+    // Prepare notification payload
+    const notificationData = {
+      title: language === 'es' ? '🔐 Código de Verificación' : '🔐 Verification Code',
+      body: language === 'es'
+        ? `Hola ${firstName}, tu código de verificación es: ${mfaCode}`
+        : `Hi ${firstName}, your verification code is: ${mfaCode}`,
+      icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+      badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+      requireInteraction: true,
+      vibrate: [200, 100, 200],
+      data: {
+        type: 'mfa_code',
+        code: mfaCode,
+        timestamp: Date.now(),
+        expiresIn: 300 // 5 minutes
+      },
+      actions: [
+        {
+          action: 'copy',
+          title: language === 'es' ? 'Copiar Código' : 'Copy Code'
+        }
+      ]
+    };
+
+    // Send notification to the user
+    const result = await sendNotificationToUser(userId, notificationData, isEmployee);
+
+    if (result.sent > 0) {
+      console.log(`Push MFA code sent to ${userType} ${userId}: ${mfaCode}`);
+    } else {
+      throw new Error('No active push subscriptions found for user');
+    }
+  } catch (error) {
+    console.error('Failed to send MFA push notification:', error);
+    throw new Error('Failed to send verification code via push notification');
   }
 }
 
@@ -477,7 +529,7 @@ export async function sendMfaSMS(phoneNumber, firstName, mfaCode, language = 'en
 }
 
 /**
- * Send verification code via both email and SMS (universal MFA function)
+ * Send verification code via email, SMS, and/or push notification (universal MFA function)
  * @param {Object} options - MFA delivery options
  * @param {string} options.email - User email address
  * @param {string} options.phoneNumber - User phone number (optional)
@@ -485,8 +537,9 @@ export async function sendMfaSMS(phoneNumber, firstName, mfaCode, language = 'en
  * @param {string} options.mfaCode - The MFA code to send
  * @param {string} options.language - User's preferred language ('en' or 'es')
  * @param {string} options.userType - Type of user ('client' or 'admin')
- * @param {string} options.deliveryMethod - Delivery method ('email', 'sms', or 'both')
+ * @param {string} options.deliveryMethod - Delivery method ('email', 'sms', 'push', 'both', or 'all')
  * @param {string} options.codeType - Type of MFA code (setup or login)
+ * @param {string} options.userId - User ID for push notifications (required if deliveryMethod includes push)
  * @returns {Promise<Object>} Delivery status result
  */
 export async function sendMfaCode(options) {
@@ -498,18 +551,20 @@ export async function sendMfaCode(options) {
     language = 'en',
     userType = 'admin',
     deliveryMethod = 'email',
-    codeType = 'login'
+    codeType = 'login',
+    userId = null
   } = options;
 
   const result = {
     email: { sent: false, error: null },
     sms: { sent: false, error: null },
+    push: { sent: false, error: null },
     success: false
   };
 
   try {
     // Send via email if requested
-    if (deliveryMethod === 'email' || deliveryMethod === 'both') {
+    if (deliveryMethod === 'email' || deliveryMethod === 'both' || deliveryMethod === 'all') {
       try {
         await sendMfaEmail(email, firstName, mfaCode, language, userType);
         result.email.sent = true;
@@ -521,7 +576,7 @@ export async function sendMfaCode(options) {
     }
 
     // Send via SMS if requested and phone number provided
-    if ((deliveryMethod === 'sms' || deliveryMethod === 'both') && phoneNumber) {
+    if ((deliveryMethod === 'sms' || deliveryMethod === 'both' || deliveryMethod === 'all') && phoneNumber) {
       try {
         await sendMfaSMS(phoneNumber, firstName, mfaCode, language, userType);
         result.sms.sent = true;
@@ -532,13 +587,29 @@ export async function sendMfaCode(options) {
       }
     }
 
+    // Send via push if requested and userId provided
+    if ((deliveryMethod === 'push' || deliveryMethod === 'all') && userId) {
+      try {
+        await sendMfaPush(userId, firstName, mfaCode, userType, language);
+        result.push.sent = true;
+        console.log(`✅ MFA push notification sent successfully to user ${userId}`);
+      } catch (error) {
+        result.push.error = error.message;
+        console.error(`❌ MFA push failed for user ${userId}:`, error.message);
+      }
+    }
+
     // Determine overall success
     if (deliveryMethod === 'email') {
       result.success = result.email.sent;
     } else if (deliveryMethod === 'sms') {
       result.success = result.sms.sent;
+    } else if (deliveryMethod === 'push') {
+      result.success = result.push.sent;
     } else if (deliveryMethod === 'both') {
       result.success = result.email.sent || result.sms.sent; // At least one must succeed
+    } else if (deliveryMethod === 'all') {
+      result.success = result.email.sent || result.sms.sent || result.push.sent; // At least one must succeed
     }
 
     return result;

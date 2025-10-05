@@ -256,7 +256,42 @@ self.addEventListener('notificationclick', (event) => {
     return;
   }
 
-  // Open the app or focus existing window
+  // Handle MFA code notifications specially
+  if (event.notification.data?.type === 'mfa_code' && event.action === 'copy') {
+    event.waitUntil(
+      (async () => {
+        const mfaCode = event.notification.data.code;
+
+        // Try to copy to clipboard
+        const windowClients = await clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true
+        });
+
+        if (windowClients.length > 0) {
+          const client = windowClients[0];
+          client.focus();
+
+          // Send message to client to copy the code
+          client.postMessage({
+            type: 'COPY_MFA_CODE',
+            code: mfaCode
+          });
+
+          console.log('SW: MFA code sent to client for copying:', mfaCode);
+        } else {
+          // If no window is open, open one and pass the code
+          if (clients.openWindow) {
+            const urlToOpen = `/?mfa_code=${mfaCode}`;
+            return clients.openWindow(urlToOpen);
+          }
+        }
+      })()
+    );
+    return;
+  }
+
+  // Default behavior: Open the app or focus existing window
   event.waitUntil(
     clients.matchAll({
       type: 'window',
