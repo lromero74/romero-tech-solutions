@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const CURRENT_VERSION = '1.44.11';
+const CURRENT_VERSION = '1.44.12';
 const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 interface VersionInfo {
@@ -25,6 +25,16 @@ export function useVersionCheck() {
 
     const checkVersion = async () => {
       try {
+        // Check if we've already done a version-triggered reload recently
+        const lastReloadTime = sessionStorage.getItem('versionCheckReloadTime');
+        const now = Date.now();
+
+        if (lastReloadTime && (now - parseInt(lastReloadTime)) < 10000) {
+          // Skip check if we reloaded less than 10 seconds ago
+          console.log('⏭️ Skipping version check - recently reloaded');
+          return;
+        }
+
         // Add timestamp to prevent caching of version.json itself
         const response = await fetch(`/version.json?t=${Date.now()}`, {
           cache: 'no-store',
@@ -53,10 +63,12 @@ export function useVersionCheck() {
               'A new version of the application is available. Click OK to reload and get the latest updates.'
             );
             if (shouldReload) {
+              sessionStorage.setItem('versionCheckReloadTime', now.toString());
               window.location.reload();
             }
           } else {
             // Silent reload on first check (page just loaded with old cache)
+            sessionStorage.setItem('versionCheckReloadTime', now.toString());
             window.location.reload();
           }
         } else {
