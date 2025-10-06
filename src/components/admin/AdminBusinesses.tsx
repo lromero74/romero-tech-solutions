@@ -20,6 +20,8 @@ interface Business {
   isActive: boolean;
   softDelete?: boolean;
   isIndividual?: boolean;
+  individualFirstName?: string;
+  individualLastName?: string;
   createdAt: string;
   logo?: string;
   logoPositionX?: number;
@@ -103,6 +105,14 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
   loadingBusinessOperations = {}
 }) => {
   const filteredBusinesses = getFilteredAndSortedBusinesses();
+
+  // Helper function to get display name for business
+  const getBusinessDisplayName = (business: Business) => {
+    if (business.isIndividual && business.individualFirstName && business.individualLastName) {
+      return `${business.individualFirstName} ${business.individualLastName}`;
+    }
+    return business.businessName.replace(/^Individual:\s*/, '');
+  };
 
   // Permission checks
   const { checkPermission } = usePermission();
@@ -468,7 +478,9 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                           )}
                         </div>
                         <div className="ml-4">
-                          <div className={`text-sm font-medium ${themeClasses.text.primary}`}>{business.businessName}</div>
+                          <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                            {getBusinessDisplayName(business)}
+                          </div>
                         </div>
                       </div>
                     </td>
@@ -718,7 +730,9 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
             </div>
             {/* Business Info */}
             <div className={`mt-4 text-center ${themeClasses.text.primary}`}>
-              <h3 className="text-lg font-medium text-white">{selectedLogo.business.businessName}</h3>
+              <h3 className="text-lg font-medium text-white">
+                {getBusinessDisplayName(selectedLogo.business)}
+              </h3>
               {selectedLogo.business.address && (
                 <p className={`text-sm text-gray-300`}>
                   {selectedLogo.business.address.street}, {selectedLogo.business.address.city}, {selectedLogo.business.address.state}
@@ -782,7 +796,7 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   </div>
                   <div className="min-w-0 flex-1">
                     <h3 className={`text-base font-semibold ${themeClasses.text.primary} truncate`}>
-                      {business.businessName}
+                      {getBusinessDisplayName(business)}
                     </h3>
                   </div>
                 </div>

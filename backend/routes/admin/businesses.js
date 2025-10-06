@@ -83,6 +83,9 @@ router.get('/businesses', async (req, res) => {
         COALESCE(b.soft_delete, false) as soft_delete,
         COALESCE(b.is_individual, false) as is_individual,
         b.created_at,
+        -- Get individual's name from users table
+        u.first_name as individual_first_name,
+        u.last_name as individual_last_name,
         -- Get rate category info
         rc.category_name as rate_category_name,
         rc.base_hourly_rate,
@@ -105,6 +108,7 @@ router.get('/businesses', async (req, res) => {
       FROM businesses b
       LEFT JOIN service_locations hq ON hq.business_id = b.id AND hq.is_headquarters = true
       LEFT JOIN hourly_rate_categories rc ON b.rate_category_id = rc.id
+      LEFT JOIN users u ON b.id = u.business_id AND b.is_individual = true
       ORDER BY b.business_name
     `);
 
@@ -135,6 +139,8 @@ router.get('/businesses', async (req, res) => {
           isActive: business.is_active,
           softDelete: business.soft_delete,
           isIndividual: business.is_individual,
+          individualFirstName: business.individual_first_name,
+          individualLastName: business.individual_last_name,
           createdAt: business.created_at
         }))
       }
