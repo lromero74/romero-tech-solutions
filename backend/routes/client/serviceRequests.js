@@ -317,6 +317,7 @@ router.get('/', async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
+    const hideClosed = req.query.hideClosed === 'true'; // Get hideClosed filter
 
     const query = `
       SELECT
@@ -354,6 +355,7 @@ router.get('/', async (req, res) => {
       LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
       LEFT JOIN t_client_files cf ON sr.id = cf.service_request_id AND cf.soft_delete = false
       WHERE sr.business_id = $1 AND sr.client_id = $2 AND sr.soft_delete = false
+        ${hideClosed ? "AND srs.name NOT IN ('Closed', 'Cancelled')" : ''}
       GROUP BY sr.id, srs.name, srs.description, ul.name,
                pl.name, st.name, sl.location_name, sl.street_address_1,
                sl.street_address_2, sl.city, sl.state, sl.zip_code,

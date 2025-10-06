@@ -308,7 +308,7 @@ const ServiceRequests: React.FC = () => {
         throw new Error('No session token found');
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests?page=${page}&limit=${pagination.limit}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests?page=${page}&limit=${pagination.limit}&hideClosed=${filters.hideClosed}`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -929,7 +929,7 @@ const ServiceRequests: React.FC = () => {
     return formattedDate;
   };
 
-  // Filter service requests
+  // Filter service requests (hideClosed is now handled by backend)
   const filteredRequests = serviceRequests.filter(request => {
     const matchesSearch = !filters.search ||
       request.title.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -939,12 +939,7 @@ const ServiceRequests: React.FC = () => {
     const matchesStatus = filters.status === 'all' ||
       request.status.toLowerCase().includes(filters.status.toLowerCase());
 
-    // Hide closed/cancelled requests if filter is enabled
-    const statusLower = request.status.toLowerCase();
-    const isClosed = statusLower.includes('completed') || statusLower.includes('cancelled') || statusLower.includes('resolved');
-    const matchesClosedFilter = !filters.hideClosed || !isClosed;
-
-    return matchesSearch && matchesStatus && matchesClosedFilter;
+    return matchesSearch && matchesStatus;
   });
 
   // Load service requests on component mount
@@ -1003,7 +998,7 @@ const ServiceRequests: React.FC = () => {
     }, 30000); // Poll every 30 seconds
 
     return () => clearInterval(pollInterval);
-  }, [pagination.page]);
+  }, [pagination.page, filters.hideClosed]);
 
   // Listen for websocket note updates
   useEffect(() => {
