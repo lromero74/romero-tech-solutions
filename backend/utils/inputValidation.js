@@ -402,14 +402,19 @@ export const validateFileUpload = (file, type = 'images') => {
     return { isValid: false, error: `Invalid file type. Allowed types: ${config.allowedTypes.join(', ')}` };
   }
 
-  // Check file extension
-  const ext = file.originalname.toLowerCase().substring(file.originalname.lastIndexOf('.'));
+  // Check file extension (use lastIndexOf to get the actual extension)
+  const lastDotIndex = file.originalname.lastIndexOf('.');
+  if (lastDotIndex === -1) {
+    return { isValid: false, error: 'File must have an extension' };
+  }
+  const ext = file.originalname.toLowerCase().substring(lastDotIndex);
   if (!config.allowedExtensions.includes(ext)) {
     return { isValid: false, error: `Invalid file extension. Allowed extensions: ${config.allowedExtensions.join(', ')}` };
   }
 
-  // Additional security checks
-  if (file.originalname.includes('..') || file.originalname.includes('/') || file.originalname.includes('\\')) {
+  // Additional security checks - only reject path traversal patterns, not dots in filename
+  if (file.originalname.includes('../') || file.originalname.includes('..\\') ||
+      file.originalname.includes('/') || file.originalname.includes('\\')) {
     return { isValid: false, error: 'Invalid filename characters detected' };
   }
 

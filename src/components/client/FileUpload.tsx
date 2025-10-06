@@ -176,26 +176,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
 
         // Create FormData
         const formData = new FormData();
-        // Sanitize filename (remove any path separators and invalid characters)
-        let sanitizedFilename = file.name;
-
-        // Extract just the filename if there's a path
-        if (sanitizedFilename.includes('/')) {
-          sanitizedFilename = sanitizedFilename.split('/').pop() || sanitizedFilename;
-        }
-        if (sanitizedFilename.includes('\\')) {
-          sanitizedFilename = sanitizedFilename.split('\\').pop() || sanitizedFilename;
-        }
-
-        // Remove consecutive dots (path traversal attempts) but preserve the extension
-        // Replace multiple consecutive dots with a single dot
-        sanitizedFilename = sanitizedFilename.replace(/\.{2,}/g, '.');
-
-        console.log('📎 Original filename:', file.name);
-        console.log('📎 Sanitized filename:', sanitizedFilename);
-
-        // Append file with sanitized filename using the third parameter of append()
-        formData.append('files', file, sanitizedFilename);
+        formData.append('files', file);
         if (serviceLocationId) formData.append('serviceLocationId', serviceLocationId);
         if (categoryId) formData.append('categoryId', categoryId);
 

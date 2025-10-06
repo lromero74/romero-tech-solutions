@@ -45,6 +45,16 @@ const storage = multer.diskStorage({
     }
   },
   filename: (req, file, cb) => {
+    // Properly decode filename from Latin-1 to UTF-8 (Multer bug workaround)
+    // Multer incorrectly interprets UTF-8 bytes as Latin-1 in multipart headers
+    try {
+      const originalBytes = Buffer.from(file.originalname, 'latin1');
+      file.originalname = originalBytes.toString('utf8');
+    } catch (error) {
+      console.error('⚠️ Failed to decode filename:', error);
+      // Keep original if decoding fails
+    }
+
     // Generate secure filename with UUID and timestamp
     const fileExtension = path.extname(file.originalname);
     const randomId = crypto.randomUUID();

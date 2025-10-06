@@ -29,6 +29,7 @@ const createDbConfig = async () => {
         database: credentials.database,
         user: credentials.user,
         password: credentials.password,
+        client_encoding: 'UTF8', // Explicitly set UTF-8 encoding
         ssl: process.env.DB_SSL === 'true' ? {
           ca: rdsCaCert,
           rejectUnauthorized: true // Validate RDS SSL certificate
@@ -55,6 +56,7 @@ const createDbConfig = async () => {
     database: process.env.DB_NAME,
     user: process.env.DB_USER,
     password: process.env.DB_PASSWORD,
+    client_encoding: 'UTF8', // Explicitly set UTF-8 encoding
     ssl: process.env.DB_SSL === 'true' ? {
       ca: rdsCaCert,
       rejectUnauthorized: true // Validate RDS SSL certificate
