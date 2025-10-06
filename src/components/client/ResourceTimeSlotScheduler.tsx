@@ -68,6 +68,8 @@ interface ResourceTimeSlotSchedulerProps {
   initialTierPreference?: 'any' | 'standard' | 'premium' | 'emergency';
   onDurationChange?: (duration: number) => void;
   onTierPreferenceChange?: (preference: 'any' | 'standard' | 'premium' | 'emergency') => void;
+  suggestedStartTime?: Date | null;
+  suggestedEndTime?: Date | null;
 }
 
 const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
@@ -79,7 +81,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   initialDuration = 1,
   initialTierPreference = 'standard',
   onDurationChange,
-  onTierPreferenceChange
+  onTierPreferenceChange,
+  suggestedStartTime = null,
+  suggestedEndTime = null
 }) => {
   const { isDarkMode } = useClientTheme();
   const { t, language } = useClientLanguage();
@@ -389,6 +393,18 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
     return slots;
   }, [selectedDate, rateTiers, is24HourFormat]);
+
+  // Apply suggested times from auto-suggest
+  useEffect(() => {
+    if (suggestedStartTime && suggestedEndTime) {
+      console.log('🎯 Applying suggested time slot:', {
+        start: suggestedStartTime.toLocaleString(),
+        end: suggestedEndTime.toLocaleString()
+      });
+      setSelectedStartTime(suggestedStartTime);
+      setSelectedEndTime(suggestedEndTime);
+    }
+  }, [suggestedStartTime, suggestedEndTime]);
 
   // Load rate tiers and existing bookings
   useEffect(() => {

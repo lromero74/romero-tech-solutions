@@ -39,6 +39,8 @@ const ServiceScheduler: React.FC = () => {
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
+  const [suggestedStartTime, setSuggestedStartTime] = useState<Date | null>(null);
+  const [suggestedEndTime, setSuggestedEndTime] = useState<Date | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [selectedUrgency, setSelectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
@@ -414,10 +416,8 @@ const ServiceScheduler: React.FC = () => {
 
   // Auto-suggest available slot
   const handleAutoSuggest = async () => {
-    if (!selectedDate) {
-      alert(t('scheduler.pleaseSelectDate', 'Please select a date first'));
-      return;
-    }
+    // Use selected date or default to today
+    const dateToSearch = selectedDate || new Date();
 
     try {
       setIsAutoSuggesting(true);
@@ -425,7 +425,7 @@ const ServiceScheduler: React.FC = () => {
       const result = await apiService.post<{ success: boolean; data?: any; message?: string }>(
         '/client/suggest-available-slot',
         {
-          date: selectedDate.toISOString().split('T')[0],
+          date: dateToSearch.toISOString().split('T')[0],
           durationHours: selectedDuration,
           tierPreference: tierPreference
         }
@@ -441,6 +441,10 @@ const ServiceScheduler: React.FC = () => {
         const suggestedDate = new Date(startTime);
         suggestedDate.setHours(0, 0, 0, 0);
         setSelectedDate(suggestedDate);
+
+        // Store suggested times to pass to modal
+        setSuggestedStartTime(startTime);
+        setSuggestedEndTime(endTime);
 
         // Open the time slot scheduler to show the suggested time
         setShowTimeSlotScheduler(true);
@@ -688,6 +692,9 @@ const ServiceScheduler: React.FC = () => {
       alert(t('schedule.messages.selectDate'));
       return;
     }
+    // Clear any previous suggestions when manually opening
+    setSuggestedStartTime(null);
+    setSuggestedEndTime(null);
     setShowTimeSlotScheduler(true);
   };
 
@@ -861,6 +868,9 @@ const ServiceScheduler: React.FC = () => {
                         onClick={() => {
                           if (isValid) {
                             setSelectedDate(date);
+                            // Clear any previous suggestions when clicking calendar
+                            setSuggestedStartTime(null);
+                            setSuggestedEndTime(null);
                             setShowTimeSlotScheduler(true);
                           }
                         }}
@@ -934,7 +944,7 @@ const ServiceScheduler: React.FC = () => {
               <button
                 type="button"
                 onClick={handleAutoSuggest}
-                disabled={isAutoSuggesting || !selectedDate}
+                disabled={isAutoSuggesting}
                 className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
               >
                 <Sparkles className="h-4 w-4 flex-shrink-0" />
@@ -1236,6 +1246,8 @@ const ServiceScheduler: React.FC = () => {
           initialTierPreference={tierPreference}
           onDurationChange={setSelectedDuration}
           onTierPreferenceChange={setTierPreference}
+          suggestedStartTime={suggestedStartTime}
+          suggestedEndTime={suggestedEndTime}
         />
       )}
     </div>
