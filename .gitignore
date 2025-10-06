@@ -69,3 +69,6 @@ nohup*.out
 
 # Registration logs
 backend/logs/registration-attempts.log
+
+# User uploaded files
+backend/uploads/
