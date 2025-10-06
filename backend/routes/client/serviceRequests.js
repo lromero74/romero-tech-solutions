@@ -855,6 +855,7 @@ router.post('/:id/notes', async (req, res) => {
         sr.id,
         sr.request_number,
         sr.title,
+        sr.assigned_technician_id,
         COALESCE(srs.name, 'Unknown') as status,
         sl.location_name,
         sl.street_address_1,
@@ -879,6 +880,18 @@ router.post('/:id/notes', async (req, res) => {
 
     // Send email notifications (non-blocking)
     if (serviceRequest) {
+      // Check if assigned technician is actively viewing - skip email if so
+      let excludeEmployeeId = null;
+      if (serviceRequest.assigned_technician_id) {
+        const isTechnicianViewing = websocketService.isEmployeeViewingRequest(
+          serviceRequest.assigned_technician_id,
+          id
+        );
+        if (isTechnicianViewing) {
+          excludeEmployeeId = serviceRequest.assigned_technician_id;
+        }
+      }
+
       sendNoteAdditionNotification({
         serviceRequest: {
           requestNumber: serviceRequest.request_number,
@@ -907,7 +920,8 @@ router.post('/:id/notes', async (req, res) => {
           firstName: serviceRequest.client_first_name,
           lastName: serviceRequest.client_last_name,
           phone: serviceRequest.client_phone
-        }
+        },
+        excludeEmployeeId: excludeEmployeeId
       }).catch(err => {
         console.error('❌ Failed to send note addition email notifications:', err);
       });

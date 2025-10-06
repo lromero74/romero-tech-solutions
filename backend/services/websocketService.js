@@ -579,6 +579,27 @@ class WebSocketService {
   }
 
   /**
+   * Check if an employee is currently viewing a specific service request
+   * @param {string} employeeId - The employee's user ID
+   * @param {string} serviceRequestId - The service request ID
+   * @returns {boolean} - True if the employee is currently viewing the request
+   */
+  isEmployeeViewingRequest(employeeId, serviceRequestId) {
+    const viewers = this.serviceRequestViewers.get(serviceRequestId);
+    if (!viewers || viewers.size === 0) {
+      return false;
+    }
+
+    // Check if any viewer matches the employee ID and is an employee type
+    const isViewing = Array.from(viewers).some(
+      viewer => viewer.userId === employeeId && viewer.userType === 'employee'
+    );
+
+    console.log(`👁️  Employee ${employeeId} ${isViewing ? 'IS' : 'is NOT'} viewing service request ${serviceRequestId}`);
+    return isViewing;
+  }
+
+  /**
    * Notify a specific client about an invoice update
    * @param {string} clientId - The client's user ID
    * @param {Object} invoiceData - Invoice update data

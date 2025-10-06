@@ -1509,8 +1509,9 @@ Email: info@romerotechsolutions.com
   /**
    * Send note addition notification
    * Sends to: service request creator and all employees with admin, executive, or technician roles
+   * @param {string} excludeEmployeeId - Optional employee ID to exclude from notifications (e.g., if they're actively viewing)
    */
-  async sendNoteAdditionNotification({ serviceRequest, note, noteCreator, clientData }) {
+  async sendNoteAdditionNotification({ serviceRequest, note, noteCreator, clientData, excludeEmployeeId = null }) {
     try {
       console.log('📧 Sending note addition notifications...');
 
@@ -1527,7 +1528,16 @@ Email: info@romerotechsolutions.com
         AND r.is_active = true
       `;
       const employeesResult = await pool.query(employeesQuery);
-      const employees = employeesResult.rows;
+      let employees = employeesResult.rows;
+
+      // Filter out excluded employee if they're actively viewing
+      if (excludeEmployeeId) {
+        const beforeCount = employees.length;
+        employees = employees.filter(e => e.id !== excludeEmployeeId);
+        if (beforeCount > employees.length) {
+          console.log(`📧 Skipping email to employee ${excludeEmployeeId} - they are actively viewing the service request`);
+        }
+      }
 
       console.log(`📬 Found ${employees.length} employees to notify about note`);
 
