@@ -494,12 +494,12 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                         <div className="flex items-center">
                           <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 transition-colors`} />
                           <span className="group-hover:text-blue-600 transition-colors">
-                            {business.address?.city || 'N/A'}, {business.address?.state || 'N/A'}
+                            {business.address?.street || 'No street'}
+                            {business.address?.street2 && ` ${business.address.street2}`}
                           </span>
                         </div>
                         <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 mt-1 transition-colors`}>
-                          {business.address?.street || 'No street'}
-                          {business.address?.street2 && ` ${business.address.street2}`}, {business.address?.zipCode || 'No zip'}
+                          {business.address?.city || 'N/A'}, {business.address?.state || 'N/A'} {business.address?.zipCode || 'No zip'}
                         </div>
                       </button>
                     </td>
