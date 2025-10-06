@@ -38,6 +38,7 @@ const ServiceScheduler: React.FC = () => {
   const [displayEndTime, setDisplayEndTime] = useState<string>(''); // PDT time for display
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
+  const [minDaysFromNow, setMinDaysFromNow] = useState<number>(0); // Minimum days from now for auto-suggest
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
   const [suggestedStartTime, setSuggestedStartTime] = useState<Date | null>(null);
   const [suggestedEndTime, setSuggestedEndTime] = useState<Date | null>(null);
@@ -416,8 +417,10 @@ const ServiceScheduler: React.FC = () => {
 
   // Auto-suggest available slot
   const handleAutoSuggest = async () => {
-    // Use selected date or default to today
-    const dateToSearch = selectedDate || new Date();
+    // Calculate the starting date based on minDaysFromNow
+    const baseDate = selectedDate || new Date();
+    const dateToSearch = new Date(baseDate);
+    dateToSearch.setDate(dateToSearch.getDate() + minDaysFromNow);
 
     try {
       setIsAutoSuggesting(true);
@@ -937,6 +940,31 @@ const ServiceScheduler: React.FC = () => {
                   <option value="standard">{t('scheduler.tierStandard', 'Standard')}</option>
                   <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
                   <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
+                </select>
+              </div>
+
+              {/* Days From Now Selector */}
+              <div className="flex items-center gap-2 min-w-fit">
+                <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {t('scheduler.minDaysFromNow', 'Days from now:')}
+                </label>
+                <select
+                  value={minDaysFromNow}
+                  onChange={(e) => setMinDaysFromNow(parseInt(e.target.value))}
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="0">{t('scheduler.today', 'Today')}</option>
+                  <option value="1">{t('scheduler.tomorrow', 'Tomorrow')}</option>
+                  <option value="2">2 {t('scheduler.days', 'days')}</option>
+                  <option value="3">3 {t('scheduler.days', 'days')}</option>
+                  <option value="5">5 {t('scheduler.days', 'days')}</option>
+                  <option value="7">1 {t('scheduler.week', 'week')}</option>
+                  <option value="14">2 {t('scheduler.weeks', 'weeks')}</option>
+                  <option value="30">1 {t('scheduler.month', 'month')}</option>
                 </select>
               </div>
 
