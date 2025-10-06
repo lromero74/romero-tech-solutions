@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { FileText, Edit2, Download, Trash2, Check, X, RefreshCw, Upload } from 'lucide-react';
 import { ServiceRequestFile, ThemeClasses } from './types';
 import { formatFileSize, formatFileTimestamp } from './utils';
+import { FileUploadProgress } from '../../../hooks/useFileUploadWithProgress';
 
 interface ServiceRequestFilesSectionProps {
   fileCount: number;
@@ -11,6 +12,8 @@ interface ServiceRequestFilesSectionProps {
   newFileName: string;
   deletingFileId: string | null;
   uploadingFiles: boolean;
+  fileUploads: FileUploadProgress[];
+  newlyUploadedFileIds?: string[];
   savingEdit: boolean;
   t: (key: string, params?: any, fallback?: string) => string;
   themeClasses: ThemeClasses;
@@ -30,6 +33,8 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
   newFileName,
   deletingFileId,
   uploadingFiles,
+  fileUploads,
+  newlyUploadedFileIds = [],
   savingEdit,
   t,
   themeClasses,
@@ -91,6 +96,49 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
           </button>
         </>
       </div>
+
+      {/* Upload Progress */}
+      {fileUploads.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {fileUploads.map((upload) => (
+            <div key={upload.id} className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md">
+              <div className="flex items-center gap-3 mb-2">
+                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {upload.file.name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">
+                    {formatFileSize(upload.file.size)} • {
+                      upload.status === 'pending' ? t('serviceRequests.uploadPending', undefined, 'Pending...') :
+                      upload.status === 'uploading' ? t('serviceRequests.uploading', undefined, 'Uploading...') :
+                      upload.status === 'scanning' ? t('serviceRequests.scanning', undefined, 'Scanning...') :
+                      upload.status === 'success' ? t('serviceRequests.uploadSuccess', undefined, 'Upload complete!') :
+                      upload.error || t('serviceRequests.uploadFailed', undefined, 'Upload failed')
+                    }
+                  </p>
+                </div>
+              </div>
+              {upload.status !== 'error' && (
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      upload.status === 'success' ? 'bg-green-500' :
+                      upload.status === 'scanning' ? 'bg-yellow-500' :
+                      'bg-blue-500'
+                    }`}
+                    style={{ width: `${upload.progress}%` }}
+                  />
+                </div>
+              )}
+              {upload.status === 'error' && upload.error && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">{upload.error}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {fileCount > 0 && (
         <div>
         {loadingFiles ? (
@@ -100,8 +148,15 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
           </div>
         ) : files.length > 0 ? (
           <div className="space-y-2">
-            {files.map((file) => (
-              <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+            {files.map((file) => {
+              const isNewlyUploaded = newlyUploadedFileIds.includes(file.id);
+              return (
+              <div
+                key={file.id}
+                className={`flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md transition-all duration-300 ${
+                  isNewlyUploaded ? 'ring-2 ring-blue-400 shadow-lg shadow-blue-400/50 dark:ring-blue-500 dark:shadow-blue-500/50' : ''
+                }`}
+              >
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
                   <div className="flex-1 min-w-0">
@@ -189,7 +244,8 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                   </div>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         ) : (
           <p className="text-gray-500 dark:text-gray-400 text-sm">{t('serviceRequests.noFilesAvailable', undefined, 'No files available')}</p>

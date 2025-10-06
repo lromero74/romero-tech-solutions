@@ -2,6 +2,7 @@ import React, { useRef } from 'react';
 import { FileText, RefreshCw, Edit2, Download, Trash2, Check, X as XIcon, Upload } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { ServiceRequestFile } from './types';
+import { FileUploadProgress } from '../../../hooks/useFileUploadWithProgress';
 
 interface ServiceRequestFilesSectionProps {
   files: ServiceRequestFile[];
@@ -13,6 +14,7 @@ interface ServiceRequestFilesSectionProps {
   deletingFileId: string | null;
   apiBaseUrl: string;
   uploading?: boolean;
+  fileUploads?: FileUploadProgress[];
   newlyUploadedFileIds?: string[];
   onStartRename: (file: ServiceRequestFile) => void;
   onCancelRename: () => void;
@@ -32,6 +34,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
   deletingFileId,
   apiBaseUrl,
   uploading = false,
+  fileUploads = [],
   newlyUploadedFileIds = [],
   onStartRename,
   onCancelRename,
@@ -131,6 +134,49 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
           </>
         )}
       </div>
+
+      {/* Upload Progress */}
+      {fileUploads.length > 0 && (
+        <div className="space-y-2 mb-4">
+          {fileUploads.map((upload) => (
+            <div key={upload.id} className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md">
+              <div className="flex items-center gap-3 mb-2">
+                <FileText className="h-5 w-5 text-blue-600 dark:text-blue-300 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+                    {upload.file.name}
+                  </p>
+                  <p className="text-xs text-gray-500 dark:text-gray-300">
+                    {formatFileSize(upload.file.size)} • {
+                      upload.status === 'pending' ? 'Pending...' :
+                      upload.status === 'uploading' ? 'Uploading...' :
+                      upload.status === 'scanning' ? 'Scanning...' :
+                      upload.status === 'success' ? 'Upload complete!' :
+                      upload.error || 'Upload failed'
+                    }
+                  </p>
+                </div>
+              </div>
+              {upload.status !== 'error' && (
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      upload.status === 'success' ? 'bg-green-500' :
+                      upload.status === 'scanning' ? 'bg-yellow-500' :
+                      'bg-blue-500'
+                    }`}
+                    style={{ width: `${upload.progress}%` }}
+                  />
+                </div>
+              )}
+              {upload.status === 'error' && upload.error && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-1">{upload.error}</p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
       {loading ? (
         <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
           <RefreshCw className="h-4 w-4 animate-spin" />

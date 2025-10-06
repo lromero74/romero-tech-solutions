@@ -5,6 +5,7 @@ import { getStatusColor, getPriorityColor, formatFullAddress, getMapUrl, formatP
 import { formatLongDate } from '../../../utils/dateFormatter';
 import ServiceRequestFilesSection from './ServiceRequestFilesSection';
 import ServiceRequestNotesSection from './ServiceRequestNotesSection';
+import { FileUploadProgress } from '../../../hooks/useFileUploadWithProgress';
 
 interface ServiceRequestDetailModalProps {
   selectedRequest: ServiceRequest;
@@ -25,6 +26,8 @@ interface ServiceRequestDetailModalProps {
   newFileName: string;
   deletingFileId: string | null;
   uploadingFiles: boolean;
+  fileUploads: FileUploadProgress[];
+  newlyUploadedFileIds: string[];
   isDarkMode: boolean;
   authUser: any;
   language: string;
@@ -69,6 +72,8 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
   newFileName,
   deletingFileId,
   uploadingFiles,
+  fileUploads,
+  newlyUploadedFileIds,
   isDarkMode,
   authUser,
   language,
@@ -358,6 +363,8 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                 newFileName={newFileName}
                 deletingFileId={deletingFileId}
                 uploadingFiles={uploadingFiles}
+                fileUploads={fileUploads}
+                newlyUploadedFileIds={newlyUploadedFileIds}
                 savingEdit={savingEdit}
                 t={t}
                 themeClasses={themeClasses}

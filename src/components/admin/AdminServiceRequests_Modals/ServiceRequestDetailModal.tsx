@@ -18,6 +18,7 @@ import {
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { ServiceRequest, ServiceRequestFile, ServiceRequestNote } from './types';
 import { ServiceRequestFilesSection, ServiceRequestNotesSection } from './';
+import { FileUploadProgress } from '../../../hooks/useFileUploadWithProgress';
 
 interface ServiceRequestDetailModalProps {
   selectedRequest: ServiceRequest;
@@ -36,6 +37,7 @@ interface ServiceRequestDetailModalProps {
   newFileName: string;
   deletingFileId: string | null;
   uploadingFiles: boolean;
+  fileUploads: FileUploadProgress[];
   newlyUploadedFileIds: string[];
   actionError: string | null;
   actionLoading: boolean;
@@ -92,6 +94,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
   newFileName,
   deletingFileId,
   uploadingFiles,
+  fileUploads,
   newlyUploadedFileIds,
   actionError,
   actionLoading,
@@ -503,6 +506,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
             deletingFileId={deletingFileId}
             apiBaseUrl={apiBaseUrl}
             uploading={uploadingFiles}
+            fileUploads={fileUploads}
             newlyUploadedFileIds={newlyUploadedFileIds}
             onStartRename={onStartRenameFile}
             onCancelRename={onCancelRenameFile}

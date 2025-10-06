@@ -10,6 +10,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
 import { websocketService } from '../../services/websocketService';
+import { useFileUploadWithProgress } from '../../hooks/useFileUploadWithProgress';
 import {
   ServiceRequest,
   Filters,
@@ -109,6 +110,60 @@ const AdminServiceRequests: React.FC = () => {
 
   // Presence tracking
   const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
+
+  // File upload with progress
+  const {
+    uploads: fileUploads,
+    isUploading: isUploadingWithProgress,
+    uploadFiles: uploadFilesWithProgress,
+    clearUploads
+  } = useFileUploadWithProgress({
+    uploadUrl: selectedRequest
+      ? `${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/files/upload`
+      : '',
+    onSuccess: (uploadedFiles) => {
+      if (selectedRequest) {
+        // Track newly uploaded file IDs for blue halo effect
+        const fileIds = uploadedFiles.map((f: any) => f.fileId).filter(Boolean);
+        setNewlyUploadedFileIds(fileIds);
+
+        // Refresh files list
+        fetchRequestFiles(selectedRequest.id);
+        // Refresh notes to show the upload note
+        fetchRequestNotes(selectedRequest.id);
+        // Update file count
+        const newFileCount = (selectedRequest.file_count || 0) + uploadedFiles.length;
+        setSelectedRequest({ ...selectedRequest, file_count: newFileCount });
+        setServiceRequests(prev =>
+          prev.map(req => req.id === selectedRequest.id ? { ...req, file_count: newFileCount } : req)
+        );
+
+        // Clear upload progress after a short delay
+        setTimeout(() => {
+          clearUploads();
+        }, 1000);
+
+        // Clear blue halos after 3 seconds
+        setTimeout(() => {
+          setNewlyUploadedFileIds([]);
+        }, 3000);
+      }
+    },
+    onError: (error) => {
+      console.error('Error uploading files:', error);
+      alert('Failed to upload files. Please try again.');
+    },
+    onComplete: () => {
+      setUploadingFiles(false);
+    },
+    getHeaders: async () => {
+      const token = localStorage.getItem('token');
+      if (!token) throw new Error('No token found');
+      return {
+        'Authorization': `Bearer ${token}`
+      };
+    }
+  });
 
   const [filters, setFilters] = useState<Filters>({
     search: '',
@@ -1011,73 +1066,9 @@ const AdminServiceRequests: React.FC = () => {
 
   const uploadFiles = async (files: FileList) => {
     if (!selectedRequest) return;
-
-    try {
-      setUploadingFiles(true);
-
-      const csrfToken = await apiService.getToken();
-
-      const formData = new FormData();
-      Array.from(files).forEach(file => {
-        formData.append('files', file);
-      });
-
-      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/files/upload`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          'x-csrf-token': csrfToken
-        },
-        credentials: 'include',
-        body: formData
-      });
-
-      const result = await response.json();
-      console.log('📤 Upload response:', result);
-      console.log('📤 Failed files:', result.data?.failedFiles);
-      if (result.data?.failedFiles?.length > 0) {
-        result.data.failedFiles.forEach((f: any, i: number) => {
-          console.log(`❌ Failed file ${i + 1}:`, f.originalName, '- Error:', f.error);
-        });
-      }
-
-      if (result.success) {
-        // Check if any files were actually uploaded
-        const uploadedCount = result.data?.uploadedFiles?.length || 0;
-        const failedCount = result.data?.failedFiles?.length || 0;
-
-        if (uploadedCount === 0 && failedCount > 0) {
-          // All files failed
-          const errorMessages = result.data.failedFiles.map((f: any) => `${f.originalName}: ${f.error}`).join('\n');
-          throw new Error(`Upload completed. 0 file(s) uploaded successfully, ${failedCount} failed.\n\nErrors:\n${errorMessages}`);
-        }
-
-        // Refresh files list
-        fetchRequestFiles(selectedRequest.id);
-        // Refresh notes to show the upload note
-        fetchRequestNotes(selectedRequest.id);
-        // Update file count
-        if (result.data?.uploadedFiles) {
-          const newFileCount = (selectedRequest.file_count || 0) + result.data.uploadedFiles.length;
-          setSelectedRequest({ ...selectedRequest, file_count: newFileCount });
-          setServiceRequests(prev =>
-            prev.map(req => req.id === selectedRequest.id ? { ...req, file_count: newFileCount } : req)
-          );
-        }
-
-        // Show success message
-        if (result.data?.failedFiles?.length > 0) {
-          alert(`Upload completed!\n${result.data.uploadedFiles.length} file(s) uploaded successfully.\n${result.data.failedFiles.length} file(s) failed.`);
-        }
-      } else {
-        throw new Error(result.message || 'Failed to upload files');
-      }
-    } catch (err) {
-      console.error('Error uploading files:', err);
-      alert('Failed to upload files. Please try again.');
-    } finally {
-      setUploadingFiles(false);
-    }
+    setUploadingFiles(true);
+    clearUploads(); // Clear previous uploads
+    await uploadFilesWithProgress(files);
   };
 
   // Format full address
@@ -1415,6 +1406,7 @@ const AdminServiceRequests: React.FC = () => {
           newFileName={newFileName}
           deletingFileId={deletingFileId}
           uploadingFiles={uploadingFiles}
+          fileUploads={fileUploads}
           newlyUploadedFileIds={newlyUploadedFileIds}
           actionError={actionError}
           actionLoading={actionLoading}
