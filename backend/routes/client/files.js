@@ -12,6 +12,9 @@ import virusScanService from '../../services/virusScanService.js';
 import quotaManagementService from '../../services/quotaManagementService.js';
 import { getPool } from '../../config/database.js';
 
+// Create composite middleware for client routes
+const authenticateClient = [authMiddleware, clientContextMiddleware];
+
 const router = express.Router();
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -125,7 +128,7 @@ router.use(sanitizeInputMiddleware);
  * POST /api/client/files/upload
  * Upload files with virus scanning and quota enforcement
  */
-router.post('/upload', upload.array('files', 5), async (req, res) => {
+router.post('/upload', authenticateClient, upload.array('files', 5), async (req, res) => {
   const uploadedFiles = [];
   const failedFiles = [];
   let totalSizeBytes = 0;
@@ -140,6 +143,8 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
 
     const businessId = req.user.businessId;
     const serviceLocationId = req.body.serviceLocationId || null;
+    const serviceRequestId = req.body.serviceRequestId || null;
+    const folderId = req.body.folderId || null;
     const categoryId = req.body.categoryId || null;
     const description = req.body.description || '';
     const isPublic = req.body.isPublic === 'true';
@@ -221,6 +226,8 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
         const fileData = {
           businessId: businessId,
           serviceLocationId: serviceLocationId,
+          serviceRequestId: serviceRequestId,
+          folderId: folderId,
           userId: req.user.id,
           fileName: file.filename,
           originalName: file.originalname,
@@ -311,32 +318,44 @@ router.post('/upload', upload.array('files', 5), async (req, res) => {
  * GET /api/client/files
  * Get files for authenticated client
  */
-router.get('/', async (req, res) => {
+router.get('/', authenticateClient, async (req, res) => {
   try {
     const businessId = req.user.businessId;
     const serviceLocationId = req.query.serviceLocationId || null;
-    const categoryId = req.query.categoryId || null;
+    const folderId = req.query.folderId || null;
+    const search = req.query.search || '';
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
     let query = `
       SELECT
-        f.file_id,
-        f.file_name,
-        f.original_name,
+        f.id,
+        f.stored_filename,
+        f.original_filename,
         f.file_size_bytes,
-        f.mime_type,
-        f.description,
-        f.is_public,
+        f.content_type as mime_type,
+        f.file_description,
+        f.is_public_to_business,
+        f.folder_id,
+        f.service_request_id,
+        f.virus_scan_status,
+        f.virus_scan_result,
+        f.virus_scan_date,
         f.created_at,
-        c.category_name,
-        sl.location_name,
+        f.updated_at,
+        u.id as uploader_id,
+        u.first_name as uploader_first_name,
+        u.last_name as uploader_last_name,
+        folder.folder_name,
+        folder.folder_color,
+        sr.title as service_request_title,
         COUNT(*) OVER() as total_count
       FROM t_client_files f
-      LEFT JOIN t_file_categories c ON f.category_id = c.category_id
-      LEFT JOIN service_locations sl ON f.service_location_id = sl.service_location_id
-      WHERE f.business_id = $1 AND f.deleted_at IS NULL
+      LEFT JOIN users u ON f.uploaded_by_user_id = u.id
+      LEFT JOIN t_client_folders folder ON f.folder_id = folder.id
+      LEFT JOIN service_requests sr ON f.service_request_id = sr.id
+      WHERE f.business_id = $1 AND f.soft_delete = false
     `;
 
     const queryParams = [businessId];
@@ -347,9 +366,18 @@ router.get('/', async (req, res) => {
       queryParams.push(serviceLocationId);
     }
 
-    if (categoryId) {
-      query += ` AND f.category_id = $${++paramCount}`;
-      queryParams.push(categoryId);
+    if (folderId !== null) {
+      if (folderId === 'null' || folderId === '') {
+        query += ` AND f.folder_id IS NULL`;
+      } else {
+        query += ` AND f.folder_id = $${++paramCount}`;
+        queryParams.push(folderId);
+      }
+    }
+
+    if (search) {
+      query += ` AND f.original_filename ILIKE $${++paramCount}`;
+      queryParams.push(`%${search}%`);
     }
 
     query += ` ORDER BY f.created_at DESC LIMIT $${++paramCount} OFFSET $${++paramCount}`;
@@ -363,17 +391,30 @@ router.get('/', async (req, res) => {
       success: true,
       data: {
         files: result.rows.map(row => ({
-          fileId: row.file_id,
-          fileName: row.file_name,
-          originalName: row.original_name,
+          id: row.id,
+          storedFilename: row.stored_filename,
+          originalFilename: row.original_filename,
           fileSizeBytes: parseInt(row.file_size_bytes),
           sizeFormatted: quotaManagementService.formatBytes(parseInt(row.file_size_bytes)),
           mimeType: row.mime_type,
-          description: row.description,
-          isPublic: row.is_public,
-          categoryName: row.category_name,
-          locationName: row.location_name,
-          createdAt: row.created_at
+          description: row.file_description,
+          isPublic: row.is_public_to_business,
+          folderId: row.folder_id,
+          folderName: row.folder_name,
+          folderColor: row.folder_color,
+          serviceRequestId: row.service_request_id,
+          serviceRequestTitle: row.service_request_title,
+          virusScanStatus: row.virus_scan_status,
+          virusScanResult: row.virus_scan_result,
+          virusScanDate: row.virus_scan_date,
+          createdAt: row.created_at,
+          updatedAt: row.updated_at,
+          uploader: row.uploader_id ? {
+            id: row.uploader_id,
+            firstName: row.uploader_first_name,
+            lastName: row.uploader_last_name,
+            fullName: `${row.uploader_first_name} ${row.uploader_last_name}`.trim()
+          } : null
         })),
         pagination: {
           page,
@@ -397,7 +438,7 @@ router.get('/', async (req, res) => {
  * GET /api/client/files/quota
  * Get quota information for client
  */
-router.get('/quota', async (req, res) => {
+router.get('/quota', authenticateClient, async (req, res) => {
   try {
     const businessId = req.user.businessId;
 
@@ -427,7 +468,7 @@ router.get('/quota', async (req, res) => {
  * GET /api/client/files/:fileId/download
  * Download a file
  */
-router.get('/:fileId/download', async (req, res) => {
+router.get('/:fileId/download', authenticateClient, async (req, res) => {
   try {
     const { fileId } = req.params;
     const businessId = req.user.businessId;
@@ -510,16 +551,16 @@ router.get('/:fileId/download', async (req, res) => {
  * DELETE /api/client/files/:fileId
  * Delete a file (soft delete)
  */
-router.delete('/:fileId', async (req, res) => {
+router.delete('/:fileId', authenticateClient, async (req, res) => {
   try {
     const { fileId } = req.params;
     const businessId = req.user.businessId;
 
     // Verify file belongs to this business
     const checkQuery = `
-      SELECT file_path, original_name
+      SELECT file_path, original_filename
       FROM t_client_files
-      WHERE file_id = $1 AND business_id = $2 AND deleted_at IS NULL
+      WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
     `;
 
     const pool = await getPool();
@@ -533,13 +574,15 @@ router.delete('/:fileId', async (req, res) => {
     }
 
     const filePath = checkResult.rows[0].file_path;
-    const originalName = checkResult.rows[0].original_name;
+    const originalName = checkResult.rows[0].original_filename;
 
     // Soft delete in database
     const deleteQuery = `
       UPDATE t_client_files
-      SET deleted_at = CURRENT_TIMESTAMP, deleted_by = $3
-      WHERE file_id = $1 AND business_id = $2
+      SET deleted_at = CURRENT_TIMESTAMP,
+          deleted_by_user_id = $3,
+          soft_delete = true
+      WHERE id = $1 AND business_id = $2
     `;
 
     await pool.query(deleteQuery, [fileId, businessId, req.user.id]);

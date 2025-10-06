@@ -1,5 +1,5 @@
-import React from 'react';
-import { FileText, RefreshCw, Edit2, Download, Trash2, Check, X as XIcon } from 'lucide-react';
+import React, { useRef } from 'react';
+import { FileText, RefreshCw, Edit2, Download, Trash2, Check, X as XIcon, Upload } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { ServiceRequestFile } from './types';
 
@@ -12,11 +12,13 @@ interface ServiceRequestFilesSectionProps {
   savingEdit: boolean;
   deletingFileId: string | null;
   apiBaseUrl: string;
+  uploading?: boolean;
   onStartRename: (file: ServiceRequestFile) => void;
   onCancelRename: () => void;
   onSaveFileName: (fileId: string) => void;
   onDeleteFile: (fileId: string) => void;
   onFileNameChange: (name: string) => void;
+  onUploadFiles?: (files: FileList) => void;
 }
 
 const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
@@ -28,12 +30,16 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
   savingEdit,
   deletingFileId,
   apiBaseUrl,
+  uploading = false,
   onStartRename,
   onCancelRename,
   onSaveFileName,
   onDeleteFile,
-  onFileNameChange
+  onFileNameChange,
+  onUploadFiles
 }) => {
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
@@ -42,15 +48,59 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  if (!fileCount || fileCount === 0) {
-    return null;
-  }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0 && onUploadFiles) {
+      onUploadFiles(files);
+      // Reset input so the same file can be selected again
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   return (
     <div className="mb-4">
-      <h4 className={`font-medium ${themeClasses.text.secondary} mb-2`}>
-        Attachments ({fileCount})
-      </h4>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className={`font-medium ${themeClasses.text.secondary}`}>
+          Attachments ({fileCount})
+        </h4>
+        {onUploadFiles && (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={handleFileChange}
+              disabled={uploading || loading}
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.zip,.rar,.7z"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading || loading}
+              className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors ${
+                uploading || loading
+                  ? 'opacity-50 cursor-not-allowed'
+                  : `${themeClasses.button.primary} hover:opacity-90`
+              }`}
+              title="Upload files (max 5 files, 50MB each)"
+            >
+              {uploading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 animate-spin" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4" />
+                  <span>Upload Files</span>
+                </>
+              )}
+            </button>
+          </>
+        )}
+      </div>
       {loading ? (
         <div className={`flex items-center gap-2 ${themeClasses.text.secondary}`}>
           <RefreshCw className="h-4 w-4 animate-spin" />

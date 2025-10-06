@@ -22,6 +22,9 @@ import permissionsRoutes from './admin/permissions.js';
 import permissionAuditLogRoutes from './admin/permissionAuditLog.js';
 import serviceHourRatesRoutes from './admin/serviceHourRates.js';
 import hourlyRateCategoriesRoutes from './admin/hourlyRateCategories.js';
+import globalQuotasRoutes from './admin/globalQuotas.js';
+import clientQuotasRoutes from './admin/clientQuotas.js';
+import clientFilesRoutes from './admin/clientFiles.js';
 import { getSignupStats } from '../middleware/signupRateLimiter.js';
 import { getEmployeeLoginStats } from '../middleware/employeeLoginRateLimiter.js';
 
@@ -53,6 +56,15 @@ router.use('/', requirePermission('access.admin_routes.enable'), serviceLocation
 
 // Location Contacts routes - accessible by all employees (needed for service locations table)
 router.use('/', requirePermission('access.admin_routes.enable'), locationContactsRoutes);
+
+// Global Quotas routes - requires manage.global_quotas.enable (checked in route)
+router.use('/global-quotas', requirePermission('access.admin_routes.enable'), globalQuotasRoutes);
+
+// Client Quotas routes - requires manage.client_quotas.enable (checked in route)
+router.use('/client-quotas', requirePermission('access.admin_routes.enable'), clientQuotasRoutes);
+
+// Client Files routes - requires view.client_files.enable (checked in route)
+router.use('/client-files', requirePermission('access.admin_routes.enable'), clientFilesRoutes);
 
 // All other admin routes - require manage.security_sessions.enable
 router.use(requirePermission('manage.security_sessions.enable'));

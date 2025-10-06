@@ -19,6 +19,7 @@ import locationRoutes from './routes/locations.js';
 import publicRoutes from './routes/public.js';
 import securityRoutes from './routes/security.js';
 import clientFilesRoutes from './routes/client/files.js';
+import clientFoldersRoutes from './routes/client/folders.js';
 import clientProfileRoutes from './routes/client/profile.js';
 import clientMfaRoutes from './routes/client/mfa.js';
 import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
@@ -410,6 +411,7 @@ app.use('/api/locations', generalLimiter, doubleCsrfProtection, locationRoutes);
 app.use('/api/clients', generalLimiter, doubleCsrfProtection, clientRegistrationRoutes); // General rate limiting + CSRF
 app.use('/api/uploads', generalLimiter, doubleCsrfProtection, uploadRoutes); // General rate limiting + CSRF
 app.use('/api/client/files', generalLimiter, doubleCsrfProtection, clientFilesRoutes); // Client file management + CSRF
+app.use('/api/client/folders', generalLimiter, doubleCsrfProtection, clientFoldersRoutes); // Client folder management + CSRF
 app.use('/api/client/service-requests', generalLimiter, doubleCsrfProtection, clientServiceRequestRoutes); // Client service request + CSRF
 app.use('/api/client', generalLimiter, doubleCsrfProtection, clientSchedulerRoutes); // Client scheduler + CSRF
 app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfileRoutes); // Client profile + CSRF

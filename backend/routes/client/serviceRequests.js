@@ -1,13 +1,23 @@
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import fs from 'fs/promises';
+import crypto from 'crypto';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware, requireClientAccess } from '../../middleware/clientMiddleware.js';
-import { sanitizeInputMiddleware } from '../../utils/inputValidation.js';
+import { sanitizeInputMiddleware, validateFileUpload } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
 import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
 import { initializeServiceRequestWorkflow } from '../../services/workflowService.js';
 import { websocketService } from '../../services/websocketService.js';
 import { sendNotificationToEmployees } from '../pushRoutes.js';
+import virusScanService from '../../services/virusScanService.js';
+import quotaManagementService from '../../services/quotaManagementService.js';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const router = express.Router();
 
@@ -1545,6 +1555,345 @@ router.patch('/service-requests/:id/details', async (req, res) => {
       success: false,
       message: 'Failed to update service request details',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+// Configure multer for service request file uploads
+const clientUploadsDir = path.join(__dirname, '..', '..', 'uploads', 'clients');
+
+async function ensureDirectoryExists(dirPath) {
+  try {
+    await fs.access(dirPath);
+  } catch {
+    await fs.mkdir(dirPath, { recursive: true });
+    console.log(`📁 Created directory: ${dirPath}`);
+  }
+}
+
+const storage = multer.diskStorage({
+  destination: async (req, file, cb) => {
+    try {
+      const businessId = req.user?.businessId || 'unknown';
+      const businessDir = path.join(clientUploadsDir, businessId);
+      await ensureDirectoryExists(businessDir);
+      cb(null, businessDir);
+    } catch (error) {
+      cb(error, null);
+    }
+  },
+  filename: (req, file, cb) => {
+    // Properly decode filename from Latin-1 to UTF-8 (Multer bug workaround)
+    try {
+      const originalBytes = Buffer.from(file.originalname, 'latin1');
+      file.originalname = originalBytes.toString('utf8');
+    } catch (error) {
+      console.error('⚠️ Failed to decode filename:', error);
+    }
+
+    // Generate secure filename with UUID and timestamp
+    const fileExtension = path.extname(file.originalname);
+    const randomId = crypto.randomUUID();
+    const timestamp = Date.now();
+    const secureFilename = `${timestamp}_${randomId}${fileExtension}`;
+    cb(null, secureFilename);
+  }
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = [
+    'application/pdf',
+    'text/plain',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'image/jpeg',
+    'image/png',
+    'image/gif',
+    'image/webp',
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/gzip'
+  ];
+
+  const validation = validateFileUpload(file, 'attachments');
+
+  if (!allowedTypes.includes(file.mimetype)) {
+    cb(new Error(`File type ${file.mimetype} not allowed`), false);
+    return;
+  }
+
+  if (validation.isValid) {
+    cb(null, true);
+  } else {
+    cb(new Error(validation.error), false);
+  }
+};
+
+const upload = multer({
+  storage: storage,
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit per file
+    files: 5 // Maximum 5 files per request
+  },
+  fileFilter: fileFilter
+});
+
+/**
+ * POST /api/client/service-requests/:id/files/upload
+ * Upload files to a service request with virus scanning and auto-note creation
+ */
+router.post('/:id/files/upload', upload.array('files', 5), async (req, res) => {
+  const uploadedFiles = [];
+  const failedFiles = [];
+  let totalSizeBytes = 0;
+
+  try {
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No files uploaded'
+      });
+    }
+
+    const { id: serviceRequestId } = req.params;
+    const businessId = req.user.businessId;
+    const userId = req.user.id;
+    const pool = await getPool();
+
+    // Verify service request belongs to this client
+    const requestCheck = await pool.query(
+      'SELECT id, request_number FROM service_requests WHERE id = $1 AND client_id = $2 AND soft_delete = false',
+      [serviceRequestId, userId]
+    );
+
+    if (requestCheck.rows.length === 0) {
+      // Cleanup uploaded files
+      await Promise.all(req.files.map(file =>
+        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+      ));
+
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found or access denied'
+      });
+    }
+
+    const requestNumber = requestCheck.rows[0].request_number;
+
+    // Calculate total upload size
+    totalSizeBytes = req.files.reduce((sum, file) => sum + file.size, 0);
+
+    console.log(`📤 Processing ${req.files.length} file(s) upload for service request ${requestNumber}`);
+
+    // Check quota
+    const quotaCheck = await quotaManagementService.checkQuotaAvailability(
+      businessId,
+      totalSizeBytes,
+      null,
+      userId
+    );
+
+    if (!quotaCheck.canUpload) {
+      await Promise.all(req.files.map(file =>
+        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+      ));
+
+      return res.status(413).json({
+        success: false,
+        message: quotaCheck.message,
+        quotaInfo: quotaCheck
+      });
+    }
+
+    // Process each file
+    for (const file of req.files) {
+      try {
+        console.log(`🔍 Processing file: ${file.originalname} (${quotaManagementService.formatBytes(file.size)})`);
+
+        // Perform virus scan
+        const scanResult = await virusScanService.scanFile(file.path, {
+          originalName: file.originalname,
+          size: file.size,
+          userId: userId,
+          businessId: businessId,
+          serviceRequestId: serviceRequestId
+        });
+
+        if (scanResult.isInfected) {
+          await virusScanService.quarantineFile(file.path, scanResult);
+
+          failedFiles.push({
+            originalName: file.originalname,
+            error: `File infected with virus: ${scanResult.virusName}`,
+            scanId: scanResult.scanId
+          });
+
+          console.log(`🚨 Infected file quarantined: ${file.originalname}`);
+          continue;
+        }
+
+        if (!scanResult.scanSuccess) {
+          await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+
+          failedFiles.push({
+            originalName: file.originalname,
+            error: `Virus scan failed: ${scanResult.errorMessage}`,
+            scanId: scanResult.scanId
+          });
+
+          console.log(`❌ Scan failed for file: ${file.originalname}`);
+          continue;
+        }
+
+        // File is clean, record in database
+        const fileData = {
+          businessId: businessId,
+          serviceLocationId: null,
+          userId: userId,
+          fileName: file.filename,
+          originalName: file.originalname,
+          fileSizeBytes: file.size,
+          mimeType: file.mimetype,
+          filePath: file.path,
+          categoryId: null,
+          description: '',
+          isPublic: false,
+          metadata: {
+            scanId: scanResult.scanId,
+            uploadedBy: req.user.email,
+            uploadIp: req.ip,
+            userAgent: req.get('User-Agent'),
+            serviceRequestId: serviceRequestId
+          },
+          ipAddress: req.ip,
+          userAgent: req.get('User-Agent')
+        };
+
+        const uploadResult = await quotaManagementService.recordFileUpload(fileData);
+
+        if (uploadResult.success) {
+          // Link file to service request
+          await pool.query(
+            'UPDATE t_client_files SET service_request_id = $1 WHERE id = $2',
+            [serviceRequestId, uploadResult.fileId]
+          );
+
+          uploadedFiles.push({
+            fileId: uploadResult.fileId,
+            originalName: file.originalname,
+            fileName: file.filename,
+            size: file.size,
+            mimeType: file.mimetype,
+            scanId: scanResult.scanId,
+            scanStatus: scanResult.isInfected ? 'infected' : 'clean',
+            uploadedAt: uploadResult.createdAt
+          });
+
+          console.log(`✅ File uploaded successfully: ${file.originalname}`);
+        } else {
+          await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+
+          failedFiles.push({
+            originalName: file.originalname,
+            error: `Database error: ${uploadResult.error}`
+          });
+        }
+
+      } catch (error) {
+        console.error(`❌ Error processing file ${file.originalname}:`, error);
+
+        await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+
+        failedFiles.push({
+          originalName: file.originalname,
+          error: error.message
+        });
+      }
+    }
+
+    // Create automatic note if any files were uploaded successfully
+    if (uploadedFiles.length > 0) {
+      const userQuery = await pool.query(
+        'SELECT first_name, last_name FROM users WHERE id = $1',
+        [userId]
+      );
+      const userName = userQuery.rows[0] ? `${userQuery.rows[0].first_name} ${userQuery.rows[0].last_name}` : 'User';
+
+      const now = new Date();
+      const utcTime = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+      const localTime = now.toLocaleString('en-US', {
+        timeZone: 'America/Los_Angeles',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false
+      }) + ' PST';
+
+      const fileList = uploadedFiles.map(f => `- ${f.originalName} (${quotaManagementService.formatBytes(f.size)})`).join('\n');
+      const allClean = uploadedFiles.every(f => f.scanStatus === 'clean');
+      const virusStatus = allClean ? '✅ Clean' : '⚠️ Some files flagged';
+
+      const noteText = `📎 **${userName}** uploaded **${uploadedFiles.length}** file(s) on ${utcTime} (${localTime})
+
+**Files:**
+${fileList}
+
+**Virus scan:** ${virusStatus}`;
+
+      await pool.query(`
+        INSERT INTO service_request_notes (
+          service_request_id,
+          note_text,
+          note_type,
+          created_by_type,
+          created_by_id,
+          created_by_name,
+          is_visible_to_client
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [
+        serviceRequestId,
+        noteText,
+        'file_upload',
+        'client',
+        userId,
+        userName,
+        true
+      ]);
+
+      console.log(`📝 Created auto-note for ${uploadedFiles.length} uploaded file(s)`);
+    }
+
+    // Get updated quota information
+    const updatedQuotaInfo = await quotaManagementService.getBusinessQuotaInfo(businessId);
+
+    res.status(uploadedFiles.length > 0 ? 200 : 400).json({
+      success: uploadedFiles.length > 0,
+      message: `Upload completed. ${uploadedFiles.length} file(s) uploaded successfully${failedFiles.length > 0 ? `, ${failedFiles.length} failed` : ''}.`,
+      data: {
+        uploadedFiles,
+        failedFiles,
+        quotaInfo: updatedQuotaInfo
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ File upload error:', error);
+
+    // Cleanup all uploaded files on error
+    if (req.files) {
+      await Promise.all(req.files.map(file =>
+        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+      ));
+    }
+
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error during file upload'
     });
   }
 });

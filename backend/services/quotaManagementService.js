@@ -214,19 +214,35 @@ class QuotaManagementService {
     try {
       await client.query('BEGIN');
 
+      // If serviceRequestId is provided but no folderId, get the Service Requests folder
+      let finalFolderId = fileData.folderId;
+      if (fileData.serviceRequestId && !finalFolderId) {
+        const folderQuery = `
+          SELECT id FROM t_client_folders
+          WHERE business_id = $1 AND folder_name = 'Service Requests' AND is_system_folder = true
+          LIMIT 1
+        `;
+        const folderResult = await client.query(folderQuery, [fileData.businessId]);
+        if (folderResult.rows.length > 0) {
+          finalFolderId = folderResult.rows[0].id;
+        }
+      }
+
       // Insert file record
       const fileQuery = `
         INSERT INTO t_client_files (
-          business_id, service_location_id, uploaded_by_user_id, stored_filename, original_filename,
-          file_size_bytes, content_type, file_path, file_category_id, file_description,
-          is_public_to_business
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          business_id, service_location_id, service_request_id, folder_id, uploaded_by_user_id,
+          stored_filename, original_filename, file_size_bytes, content_type, file_path,
+          file_category_id, file_description, is_public_to_business
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
         RETURNING id, created_at
       `;
 
       const fileValues = [
         fileData.businessId,
         fileData.serviceLocationId || null,
+        fileData.serviceRequestId || null,
+        finalFolderId || null,
         fileData.userId || null,
         fileData.fileName,
         fileData.originalName,
@@ -291,7 +307,7 @@ class QuotaManagementService {
           AVG(file_size_bytes) as avg_file_size,
           MAX(file_size_bytes) as largest_file,
           MIN(file_size_bytes) as smallest_file,
-          COUNT(DISTINCT category_id) as categories_used,
+          COUNT(DISTINCT file_category_id) as categories_used,
           COUNT(DISTINCT DATE(created_at)) as upload_days
         FROM t_client_files
         WHERE business_id = $1 AND deleted_at IS NULL

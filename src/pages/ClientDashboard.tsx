@@ -8,6 +8,7 @@ import ServiceScheduler from '../components/client/ServiceScheduler';
 import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
 import { InvoicesList } from '../components/client/InvoicesList';
+import FileManager from '../components/client/FileManager';
 import LanguageSelector from '../components/client/LanguageSelector';
 import AddServiceLocationForm from '../components/client/AddServiceLocationForm';
 import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
@@ -127,6 +128,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
   // State for mobile menu
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // State for navigating to specific service request
+  const [serviceRequestIdToOpen, setServiceRequestIdToOpen] = useState<string | null>(null);
 
   // Function to handle successful service location addition
   const handleServiceLocationAdded = (newLocation: any) => {
@@ -436,6 +440,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Handle navigation from FileManager to specific service request
+  const handleNavigateToServiceRequest = (serviceRequestId: string) => {
+    setServiceRequestIdToOpen(serviceRequestId);
+    setActiveTab('requests');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
@@ -466,7 +476,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     }`}>
       {/* Sticky Header */}
       <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             {/* Left side: Mobile Menu Button + Logo and Title */}
             <div className="flex items-center space-x-3">
@@ -700,7 +710,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
       {/* Main Container - fills remaining height */}
       <div className="flex-1 overflow-hidden">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 h-full">
+        <div className="px-4 sm:px-6 lg:px-8 py-4 sm:py-6 h-full">
           <div className="flex gap-6 h-full">
             {/* Desktop Sidebar Navigation - Hidden on mobile */}
             <aside className="hidden lg:block w-64 flex-shrink-0">
@@ -994,7 +1004,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
             {/* Service Requests Tab */}
             {activeTab === 'requests' && (
-              <ServiceRequests />
+              <ServiceRequests
+                initialServiceRequestId={serviceRequestIdToOpen}
+                onServiceRequestOpened={() => setServiceRequestIdToOpen(null)}
+              />
             )}
 
             {/* Invoices Tab */}
@@ -1004,8 +1017,15 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               </div>
             )}
 
+            {/* Files Tab */}
+            {activeTab === 'files' && (
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                <FileManager onNavigateToServiceRequest={handleNavigateToServiceRequest} />
+              </div>
+            )}
+
             {/* Placeholder for other tabs */}
-            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && activeTab !== 'requests' && activeTab !== 'invoices' && (
+            {activeTab !== 'dashboard' && activeTab !== 'locations' && activeTab !== 'schedule' && activeTab !== 'settings' && activeTab !== 'requests' && activeTab !== 'invoices' && activeTab !== 'files' && (
               <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-white mb-4 capitalize">
                   {activeTab.replace(/([A-Z])/g, ' $1').trim()}

@@ -108,6 +108,7 @@ const AdminServiceRequests: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   // Presence tracking
   const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
@@ -924,6 +925,56 @@ const AdminServiceRequests: React.FC = () => {
       alert('Failed to delete file. Please try again.');
     } finally {
       setDeletingFileId(null);
+    }
+  };
+
+  const uploadFiles = async (files: FileList) => {
+    if (!selectedRequest) return;
+
+    try {
+      setUploadingFiles(true);
+
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch(`${API_BASE_URL}/admin/service-requests/${selectedRequest.id}/files/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: formData
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh files list
+        fetchRequestFiles(selectedRequest.id);
+        // Refresh notes to show the upload note
+        fetchRequestNotes(selectedRequest.id);
+        // Update file count
+        if (result.data?.uploadedFiles) {
+          const newFileCount = (selectedRequest.file_count || 0) + result.data.uploadedFiles.length;
+          setSelectedRequest({ ...selectedRequest, file_count: newFileCount });
+          setServiceRequests(prev =>
+            prev.map(req => req.id === selectedRequest.id ? { ...req, file_count: newFileCount } : req)
+          );
+        }
+
+        // Show success message
+        if (result.data?.failedFiles?.length > 0) {
+          alert(`Upload completed!\n${result.data.uploadedFiles.length} file(s) uploaded successfully.\n${result.data.failedFiles.length} file(s) failed.`);
+        }
+      } else {
+        throw new Error(result.message || 'Failed to upload files');
+      }
+    } catch (err) {
+      console.error('Error uploading files:', err);
+      alert('Failed to upload files. Please try again.');
+    } finally {
+      setUploadingFiles(false);
     }
   };
 
@@ -2029,11 +2080,13 @@ const AdminServiceRequests: React.FC = () => {
                 savingEdit={savingEdit}
                 deletingFileId={deletingFileId}
                 apiBaseUrl={API_BASE_URL}
+                uploading={uploadingFiles}
                 onStartRename={startRenameFile}
                 onCancelRename={cancelRenameFile}
                 onSaveFileName={saveFileName}
                 onDeleteFile={deleteFile}
                 onFileNameChange={setNewFileName}
+                onUploadFiles={uploadFiles}
               />
 
               {/* Display error if any */}

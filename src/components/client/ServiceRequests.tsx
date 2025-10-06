@@ -27,7 +27,8 @@ import {
   X,
   Edit2,
   Trash2,
-  Check
+  Check,
+  Upload
 } from 'lucide-react';
 
 interface ServiceRequest {
@@ -150,7 +151,15 @@ const formatTimestampWithUTC = (timestamp: string, locale?: string, timeFormat: 
   return { local, utc };
 };
 
-const ServiceRequests: React.FC = () => {
+interface ServiceRequestsProps {
+  initialServiceRequestId?: string | null;
+  onServiceRequestOpened?: () => void;
+}
+
+const ServiceRequests: React.FC<ServiceRequestsProps> = ({
+  initialServiceRequestId,
+  onServiceRequestOpened
+}) => {
   const { isDarkMode } = useClientTheme();
   const { t, language } = useClientLanguage();
   const { addServiceRequestChange } = useNotifications();
@@ -179,6 +188,7 @@ const ServiceRequests: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const previousServiceRequestsRef = useRef<ServiceRequest[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [pagination, setPagination] = useState<PaginationInfo>({
     page: 1,
     limit: 10,
@@ -214,6 +224,7 @@ const ServiceRequests: React.FC = () => {
   const [renamingFileId, setRenamingFileId] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const [deletingFileId, setDeletingFileId] = useState<string | null>(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
 
   // Close confirmation state
   const [showCloseConfirmation, setShowCloseConfirmation] = useState(false);
@@ -731,6 +742,65 @@ const ServiceRequests: React.FC = () => {
     }
   };
 
+  const uploadFiles = async (files: FileList) => {
+    if (!selectedRequest || !authUser) return;
+
+    try {
+      setUploadingFiles(true);
+
+      const formData = new FormData();
+      Array.from(files).forEach(file => {
+        formData.append('files', file);
+      });
+
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      if (!sessionToken) throw new Error('No session token found');
+
+      const csrfToken = await apiService.getToken();
+
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${selectedRequest.id}/files/upload`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${sessionToken}`,
+          'x-csrf-token': csrfToken
+        },
+        credentials: 'include',
+        body: formData
+      });
+
+      if (!response.ok) throw new Error(`Failed to upload files: ${response.statusText}`);
+
+      const result = await response.json();
+
+      if (result.success) {
+        // Refresh files list
+        fetchRequestFiles(selectedRequest.id);
+        // Refresh notes to show the upload note
+        fetchRequestNotes(selectedRequest.id);
+        // Update file count
+        if (result.data?.uploadedFiles) {
+          const newFileCount = (selectedRequest.fileCount || 0) + result.data.uploadedFiles.length;
+          setSelectedRequest({ ...selectedRequest, fileCount: newFileCount });
+          setServiceRequests(prev =>
+            prev.map(req => req.id === selectedRequest.id ? { ...req, fileCount: newFileCount } : req)
+          );
+        }
+
+        // Show success message
+        if (result.data?.failedFiles?.length > 0) {
+          alert(t('serviceRequests.uploadCompleted', undefined, `Upload completed!\n${result.data.uploadedFiles.length} file(s) uploaded successfully.\n${result.data.failedFiles.length} file(s) failed.`));
+        }
+      } else {
+        throw new Error(result.message || 'Failed to upload files');
+      }
+    } catch (err) {
+      console.error('Error uploading files:', err);
+      alert(t('serviceRequests.fileUploadError', undefined, 'Failed to upload files. Please try again.'));
+    } finally {
+      setUploadingFiles(false);
+    }
+  };
+
   // Handle view request details
   const handleViewRequest = (request: ServiceRequest) => {
     setSelectedRequest(request);
@@ -946,6 +1016,17 @@ const ServiceRequests: React.FC = () => {
   useEffect(() => {
     fetchServiceRequests();
   }, []);
+
+  // Handle opening specific service request when navigating from FileManager
+  useEffect(() => {
+    if (initialServiceRequestId && serviceRequests.length > 0) {
+      const requestToOpen = serviceRequests.find(req => req.id === initialServiceRequestId);
+      if (requestToOpen) {
+        setSelectedRequest(requestToOpen);
+        onServiceRequestOpened?.();
+      }
+    }
+  }, [initialServiceRequestId, serviceRequests, onServiceRequestOpened]);
 
   // Connect to websocket for real-time updates
   useEffect(() => {
@@ -1753,11 +1834,56 @@ const ServiceRequests: React.FC = () => {
                   </div>
 
                   {/* Files Section */}
-                  {selectedRequest.fileCount > 0 && (
-                    <div>
-                      <h4 className="font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        {t('serviceRequests.attachments', undefined, 'Attachments')} ({selectedRequest.fileCount})
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-700 dark:text-gray-300">
+                        {t('serviceRequests.attachments', undefined, 'Attachments')} ({selectedRequest.fileCount || 0})
                       </h4>
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            if (files && files.length > 0) {
+                              uploadFiles(files);
+                              // Reset input so the same file can be selected again
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = '';
+                              }
+                            }
+                          }}
+                          disabled={uploadingFiles || loadingFiles}
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.zip,.rar,.7z"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingFiles || loadingFiles}
+                          className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors ${
+                            uploadingFiles || loadingFiles
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                          title={t('serviceRequests.uploadFiles', undefined, 'Upload files (max 5 files, 50MB each)')}
+                        >
+                          {uploadingFiles ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              <span>{t('serviceRequests.uploading', undefined, 'Uploading...')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4" />
+                              <span>{t('serviceRequests.uploadFilesButton', undefined, 'Upload Files')}</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    </div>
+                    {selectedRequest.fileCount > 0 && (
+                      <div>
                       {loadingFiles ? (
                         <div className="flex items-center gap-2 text-gray-500">
                           <RefreshCw className="h-4 w-4 animate-spin" />
@@ -1854,8 +1980,12 @@ const ServiceRequests: React.FC = () => {
                       ) : (
                         <p className="text-gray-500 dark:text-gray-400 text-sm">{t('serviceRequests.noFilesAvailable', undefined, 'No files available')}</p>
                       )}
-                    </div>
-                  )}
+                      </div>
+                    )}
+                    {(!selectedRequest.fileCount || selectedRequest.fileCount === 0) && (
+                      <p className="text-gray-500 dark:text-gray-400 text-sm">{t('serviceRequests.noFilesAvailable', undefined, 'No files available')}</p>
+                    )}
+                  </div>
                 </div>
               </div>
 
