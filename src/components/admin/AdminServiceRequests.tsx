@@ -256,6 +256,12 @@ const AdminServiceRequests: React.FC = () => {
         }
         fetchRequestFiles(selectedRequest.id);
       }
+
+      // If a file was deleted from the currently selected request, refresh the files list
+      if (change.entityType === 'serviceRequest' && change.fileDeleted && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log(`🗑️  File deleted from current service request, refreshing files list...`);
+        fetchRequestFiles(selectedRequest.id);
+      }
     };
 
     websocketService.onEntityDataChange(handleEntityChange);
@@ -683,7 +689,17 @@ const AdminServiceRequests: React.FC = () => {
       const response = await apiService.get(`/admin/service-requests/${requestId}/files`);
 
       if (response.success) {
-        setRequestFiles(response.data.files);
+        const files = response.data.files;
+        setRequestFiles(files);
+
+        // Update file count in selectedRequest and serviceRequests array
+        const actualFileCount = files.length;
+        if (selectedRequest && selectedRequest.id === requestId) {
+          setSelectedRequest({ ...selectedRequest, file_count: actualFileCount });
+        }
+        setServiceRequests(prev =>
+          prev.map(req => req.id === requestId ? { ...req, file_count: actualFileCount } : req)
+        );
       } else {
         throw new Error(response.message || 'Failed to fetch request files');
       }

@@ -223,7 +223,17 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       const data = await response.json();
       if (data.success) {
-        setRequestFiles(data.data.files);
+        const files = data.data.files;
+        setRequestFiles(files);
+
+        // Update file count in selectedRequest and serviceRequests array
+        const actualFileCount = files.length;
+        if (selectedRequest && selectedRequest.id === requestId) {
+          setSelectedRequest({ ...selectedRequest, fileCount: actualFileCount });
+        }
+        setServiceRequests(prev =>
+          prev.map(req => req.id === requestId ? { ...req, fileCount: actualFileCount } : req)
+        );
       } else {
         throw new Error(data.message || 'Failed to fetch request files');
       }
@@ -816,6 +826,12 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       // If files were uploaded to the currently selected request, refresh the files list
       if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
         console.log(`📎 Files uploaded to current service request, refreshing files list (${change.fileCount} files)...`);
+        fetchRequestFiles(selectedRequest.id);
+      }
+
+      // If a file was deleted from the currently selected request, refresh the files list
+      if (change.entityType === 'serviceRequest' && change.fileDeleted && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log(`🗑️  File deleted from current service request, refreshing files list...`);
         fetchRequestFiles(selectedRequest.id);
       }
     };
