@@ -883,7 +883,7 @@ router.get('/service-requests/:id/files', async (req, res) => {
       });
     }
 
-    // Get associated files
+    // Get associated files with uploader information
     const filesQuery = `
       SELECT
         cf.id,
@@ -892,8 +892,17 @@ router.get('/service-requests/:id/files', async (req, res) => {
         cf.file_size_bytes,
         cf.content_type,
         cf.file_description,
-        cf.created_at
+        cf.created_at,
+        cf.uploaded_by_user_id,
+        COALESCE(u.email, e.email) as uploaded_by_email,
+        CASE
+          WHEN u.id IS NOT NULL THEN 'client'
+          WHEN e.id IS NOT NULL THEN 'employee'
+          ELSE 'unknown'
+        END as uploaded_by_type
       FROM t_client_files cf
+      LEFT JOIN users u ON cf.uploaded_by_user_id = u.id
+      LEFT JOIN employees e ON cf.uploaded_by_user_id = e.id
       WHERE cf.service_request_id = $1 AND cf.soft_delete = false
       ORDER BY cf.created_at DESC
     `;
@@ -911,7 +920,9 @@ router.get('/service-requests/:id/files', async (req, res) => {
           file_size_bytes: parseInt(row.file_size_bytes),
           content_type: row.content_type,
           description: row.file_description,
-          created_at: row.created_at
+          created_at: row.created_at,
+          uploaded_by_email: row.uploaded_by_email,
+          uploaded_by_type: row.uploaded_by_type
         }))
       }
     });
@@ -2534,7 +2545,7 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
 
     // Get file info before deletion
     const fileResult = await pool.query(
-      'SELECT file_name FROM service_request_files WHERE id = $1 AND service_request_id = $2',
+      'SELECT original_filename FROM t_client_files WHERE id = $1 AND service_request_id = $2 AND soft_delete = false',
       [fileId, requestId]
     );
 
@@ -2545,12 +2556,12 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
       });
     }
 
-    const fileName = fileResult.rows[0].file_name;
+    const fileName = fileResult.rows[0].original_filename;
 
-    // Delete the file
+    // Soft delete the file
     await pool.query(
-      'DELETE FROM service_request_files WHERE id = $1',
-      [fileId]
+      'UPDATE t_client_files SET soft_delete = true, deleted_at = NOW(), deleted_by_user_id = $1 WHERE id = $2',
+      [deletedBy.id, fileId]
     );
 
     // Create note entry
@@ -2575,6 +2586,13 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
       deletedBy.name,
       true
     ]);
+
+    // Notify via WebSocket
+    websocketService.broadcastEntityUpdate('serviceRequest', requestId, 'updated', {
+      fileDeleted: true,
+      fileName: fileName,
+      deletedBy: deletedBy
+    });
 
     res.json({
       success: true,
@@ -2617,7 +2635,7 @@ router.patch('/service-requests/:requestId/files/:fileId/rename', async (req, re
 
     // Get current file info
     const fileResult = await pool.query(
-      'SELECT file_name FROM service_request_files WHERE id = $1 AND service_request_id = $2',
+      'SELECT original_filename FROM t_client_files WHERE id = $1 AND service_request_id = $2 AND soft_delete = false',
       [fileId, requestId]
     );
 
@@ -2628,7 +2646,7 @@ router.patch('/service-requests/:requestId/files/:fileId/rename', async (req, re
       });
     }
 
-    const oldFileName = fileResult.rows[0].file_name;
+    const oldFileName = fileResult.rows[0].original_filename;
 
     if (oldFileName === newFileName) {
       return res.json({
@@ -2639,7 +2657,7 @@ router.patch('/service-requests/:requestId/files/:fileId/rename', async (req, re
 
     // Update the filename
     await pool.query(
-      'UPDATE service_request_files SET file_name = $1 WHERE id = $2',
+      'UPDATE t_client_files SET original_filename = $1 WHERE id = $2',
       [newFileName, fileId]
     );
 

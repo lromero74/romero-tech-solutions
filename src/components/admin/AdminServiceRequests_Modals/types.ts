@@ -94,6 +94,8 @@ export interface ServiceRequestFile {
   content_type: string;
   description: string;
   created_at: string;
+  uploaded_by_email?: string;
+  uploaded_by_type?: string;
 }
 
 export interface ServiceRequestNote {

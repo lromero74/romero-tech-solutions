@@ -97,6 +97,8 @@ interface ServiceRequestFile {
   contentType: string;
   description: string;
   createdAt: string;
+  uploadedByEmail?: string;
+  uploadedByType?: string;
 }
 
 interface ServiceRequestNote {
@@ -1840,8 +1842,13 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                                         {file.originalFilename}
                                       </p>
                                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()}
+                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()} {new Date(file.createdAt).toLocaleTimeString()}
                                       </p>
+                                      {file.uploadedByEmail && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                          Uploaded by: {file.uploadedByEmail} ({file.uploadedByType})
+                                        </p>
+                                      )}
                                     </>
                                   )}
                                 </div>
@@ -2129,8 +2136,13 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                                         {file.originalFilename}
                                       </p>
                                       <p className="text-xs text-gray-500 dark:text-gray-400">
-                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()}
+                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()} {new Date(file.createdAt).toLocaleTimeString()}
                                       </p>
+                                      {file.uploadedByEmail && (
+                                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                          Uploaded by: {file.uploadedByEmail} ({file.uploadedByType})
+                                        </p>
+                                      )}
                                     </>
                                   )}
                                 </div>

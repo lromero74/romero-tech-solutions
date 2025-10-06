@@ -13,6 +13,7 @@ interface ServiceRequestFilesSectionProps {
   deletingFileId: string | null;
   apiBaseUrl: string;
   uploading?: boolean;
+  newlyUploadedFileIds?: string[];
   onStartRename: (file: ServiceRequestFile) => void;
   onCancelRename: () => void;
   onSaveFileName: (fileId: string) => void;
@@ -31,6 +32,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
   deletingFileId,
   apiBaseUrl,
   uploading = false,
+  newlyUploadedFileIds = [],
   onStartRename,
   onCancelRename,
   onSaveFileName,
@@ -63,7 +65,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
     <div className="mb-4">
       <div className="flex items-center justify-between mb-2">
         <h4 className={`font-medium ${themeClasses.text.secondary}`}>
-          Attachments ({fileCount})
+          Attachments ({files.length})
         </h4>
         {onUploadFiles && (
           <>
@@ -108,56 +110,69 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
         </div>
       ) : files.length > 0 ? (
         <div className="space-y-2">
-          {files.map((file) => (
-            <div key={file.id} className={`flex items-center justify-between p-3 ${themeClasses.bg.secondary} rounded-md`}>
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  {renamingFileId === file.id ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={newFileName}
-                        onChange={(e) => onFileNameChange(e.target.value)}
-                        className={`flex-1 px-2 py-1 rounded text-sm ${themeClasses.input}`}
-                        disabled={savingEdit}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') onSaveFileName(file.id);
-                          if (e.key === 'Escape') onCancelRename();
-                        }}
-                      />
-                      <button
-                        onClick={() => onSaveFileName(file.id)}
-                        disabled={savingEdit || !newFileName.trim()}
-                        className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
-                        title="Save"
-                      >
-                        {savingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                      </button>
-                      <button
-                        onClick={onCancelRename}
-                        disabled={savingEdit}
-                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                        title="Cancel"
-                      >
-                        <XIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <p className={`text-sm font-medium ${themeClasses.text.primary} truncate`}>
-                        {file.original_filename}
-                      </p>
-                      <p className={`text-xs ${themeClasses.text.muted}`}>
-                        {formatFileSize(file.file_size_bytes)} • {new Date(file.created_at).toLocaleDateString()}
-                      </p>
-                    </>
-                  )}
+          {files.map((file) => {
+            const isNewlyUploaded = newlyUploadedFileIds.includes(file.id);
+            return (
+            <div
+              key={file.id}
+              className={`p-3 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg transition-all duration-300 ${
+                isNewlyUploaded ? 'ring-2 ring-blue-400 shadow-lg shadow-blue-400/50 dark:ring-blue-500 dark:shadow-blue-500/50' : ''
+              }`}
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    {renamingFileId === file.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={newFileName}
+                          onChange={(e) => onFileNameChange(e.target.value)}
+                          className={`flex-1 px-2 py-1 rounded text-sm ${themeClasses.input}`}
+                          disabled={savingEdit}
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') onSaveFileName(file.id);
+                            if (e.key === 'Escape') onCancelRename();
+                          }}
+                        />
+                        <button
+                          onClick={() => onSaveFileName(file.id)}
+                          disabled={savingEdit || !newFileName.trim()}
+                          className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                          title="Save"
+                        >
+                          {savingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </button>
+                        <button
+                          onClick={onCancelRename}
+                          disabled={savingEdit}
+                          className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                          title="Cancel"
+                        >
+                          <XIcon className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <p className={`text-sm font-medium ${themeClasses.text.primary} truncate`}>
+                          {file.original_filename}
+                        </p>
+                        <p className={`text-xs ${themeClasses.text.muted}`}>
+                          {formatFileSize(file.file_size_bytes)} • {new Date(file.created_at).toLocaleDateString()} {new Date(file.created_at).toLocaleTimeString()}
+                        </p>
+                        {file.uploaded_by_email && (
+                          <p className={`text-xs ${themeClasses.text.muted} mt-0.5`}>
+                            Uploaded by: {file.uploaded_by_email} ({file.uploaded_by_type})
+                          </p>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
-              </div>
-              {renamingFileId !== file.id && (
-                <div className="flex items-center gap-1 flex-shrink-0">
+                {renamingFileId !== file.id && (
+                  <div className="flex items-center gap-1 flex-shrink-0">
                   <button
                     onClick={() => onStartRename(file)}
                     className={`p-2 ${themeClasses.text.muted} hover:text-blue-600`}
@@ -188,10 +203,12 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                       <Trash2 className="h-4 w-4" />
                     )}
                   </button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       ) : (
         <p className={`${themeClasses.text.muted} text-sm`}>No files available</p>
