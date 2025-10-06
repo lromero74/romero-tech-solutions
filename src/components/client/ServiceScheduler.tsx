@@ -20,7 +20,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Check,
-  Calendar
+  Calendar,
+  Sparkles
 } from 'lucide-react';
 
 
@@ -36,6 +37,8 @@ const ServiceScheduler: React.FC = () => {
   const [displayTime, setDisplayTime] = useState<string>(''); // PDT time for display
   const [displayEndTime, setDisplayEndTime] = useState<string>(''); // PDT time for display
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
+  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
+  const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [selectedUrgency, setSelectedUrgency] = useState<string>('9f472726-fd54-48d4-b587-d289a26979e3'); // Default to "Normal" urgency
   const [selectedServiceType, setSelectedServiceType] = useState<string>('');
@@ -323,6 +326,13 @@ const ServiceScheduler: React.FC = () => {
     fetchServiceTypes();
   }, []);
 
+  // Auto-select location if there's only one available
+  useEffect(() => {
+    if (locations.length === 1 && !selectedLocation) {
+      setSelectedLocation(locations[0].id);
+    }
+  }, [locations, selectedLocation]);
+
   // Calendar generation
   const generateCalendar = () => {
     const year = currentDate.getFullYear();
@@ -399,6 +409,49 @@ const ServiceScheduler: React.FC = () => {
         return generateDayCalendar();
       default:
         return generateCalendar();
+    }
+  };
+
+  // Auto-suggest available slot
+  const handleAutoSuggest = async () => {
+    if (!selectedDate) {
+      alert(t('scheduler.pleaseSelectDate', 'Please select a date first'));
+      return;
+    }
+
+    try {
+      setIsAutoSuggesting(true);
+
+      const result = await apiService.post<{ success: boolean; data?: any; message?: string }>(
+        '/client/suggest-available-slot',
+        {
+          date: selectedDate.toISOString().split('T')[0],
+          durationHours: selectedDuration,
+          tierPreference: tierPreference
+        }
+      );
+
+      if (result.success && result.data) {
+        const suggested = result.data;
+
+        // Update selected date to match the suggested slot's date
+        const startTime = new Date(suggested.startTime);
+        const endTime = new Date(suggested.endTime);
+
+        const suggestedDate = new Date(startTime);
+        suggestedDate.setHours(0, 0, 0, 0);
+        setSelectedDate(suggestedDate);
+
+        // Open the time slot scheduler to show the suggested time
+        setShowTimeSlotScheduler(true);
+      } else {
+        alert(result.message || t('scheduler.noSlotsAvailable', 'No available slots found for the selected criteria'));
+      }
+    } catch (error) {
+      console.error('Auto-suggest error:', error);
+      alert(t('scheduler.autoSuggestError', 'Error finding available slots'));
+    } finally {
+      setIsAutoSuggesting(false);
     }
   };
 
@@ -831,6 +884,68 @@ const ServiceScheduler: React.FC = () => {
                 )}
               </div>
             </div>
+
+            {/* Duration, Tier Preference, and Auto-Suggest Controls */}
+            <div className="flex flex-wrap items-center gap-3 mt-4 px-4">
+              {/* Duration Selector */}
+              <div className="flex items-center gap-2 min-w-fit">
+                <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {t('scheduler.duration', 'Duration:')}
+                </label>
+                <select
+                  value={selectedDuration}
+                  onChange={(e) => setSelectedDuration(parseFloat(e.target.value))}
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map(hours => (
+                    <option key={hours} value={hours}>
+                      {hours} {hours === 1 ? t('scheduler.hour', 'hour') : t('scheduler.hours', 'hours')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tier Preference Selector */}
+              <div className="flex items-center gap-2 min-w-fit">
+                <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                  {t('scheduler.tierPreference', 'Prefer:')}
+                </label>
+                <select
+                  value={tierPreference}
+                  onChange={(e) => setTierPreference(e.target.value as 'any' | 'standard' | 'premium' | 'emergency')}
+                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    isDarkMode
+                      ? 'bg-gray-700 border-gray-600 text-white'
+                      : 'bg-white border-gray-300 text-gray-900'
+                  }`}
+                >
+                  <option value="any">{t('scheduler.tierAny', 'Any Rate')}</option>
+                  <option value="standard">{t('scheduler.tierStandard', 'Standard')}</option>
+                  <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
+                  <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
+                </select>
+              </div>
+
+              {/* Auto-Suggest button */}
+              <button
+                type="button"
+                onClick={handleAutoSuggest}
+                disabled={isAutoSuggesting || !selectedDate}
+                className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
+              >
+                <Sparkles className="h-4 w-4 flex-shrink-0" />
+                <span className="hidden md:inline">
+                  {isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}
+                </span>
+                <span className="md:hidden">
+                  {isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}
+                </span>
+              </button>
+            </div>
           </div>
 
 
@@ -939,7 +1054,7 @@ const ServiceScheduler: React.FC = () => {
               <option value="">{t('schedule.selectLocation')}</option>
               {locations.map((location) => (
                 <option key={location.id} value={location.id}>
-                  {location.name} - {location.address.city}, {location.address.state}
+                  {location.name} • {location.address.street}{location.address.street2 ? ` ${location.address.street2}` : ''}, {location.address.city}, {location.address.state} {location.address.zipCode}
                 </option>
               ))}
             </select>
@@ -1117,6 +1232,10 @@ const ServiceScheduler: React.FC = () => {
           onDateChange={setSelectedDate}
           onClose={() => setShowTimeSlotScheduler(false)}
           businessId={businessId}
+          initialDuration={selectedDuration}
+          initialTierPreference={tierPreference}
+          onDurationChange={setSelectedDuration}
+          onTierPreferenceChange={setTierPreference}
         />
       )}
     </div>

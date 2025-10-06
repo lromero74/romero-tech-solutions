@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { AlertCircle, X, Sparkles, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
@@ -64,6 +64,10 @@ interface ResourceTimeSlotSchedulerProps {
   onDateChange: (date: Date) => void;
   onClose: () => void;
   businessId: string;
+  initialDuration?: number;
+  initialTierPreference?: 'any' | 'standard' | 'premium' | 'emergency';
+  onDurationChange?: (duration: number) => void;
+  onTierPreferenceChange?: (preference: 'any' | 'standard' | 'premium' | 'emergency') => void;
 }
 
 const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
@@ -71,7 +75,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   onSlotSelect,
   onDateChange,
   onClose,
-  businessId
+  businessId,
+  initialDuration = 1,
+  initialTierPreference = 'standard',
+  onDurationChange,
+  onTierPreferenceChange
 }) => {
   const { isDarkMode } = useClientTheme();
   const { t, language } = useClientLanguage();
@@ -103,7 +111,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
   const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
   const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
-  const [selectedDuration, setSelectedDuration] = useState<number>(1); // Default 1 hour
+  const [selectedDuration, setSelectedDuration] = useState<number>(initialDuration);
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'move' | 'resize-start' | 'resize-end' | null>(null);
@@ -114,7 +122,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   const [rateTiers, setRateTiers] = useState<RateTier[]>([]);
   const [baseHourlyRate, setBaseHourlyRate] = useState<number>(75); // Default fallback
   const [rateCategoryName, setRateCategoryName] = useState<string>('Standard'); // Default category name
-  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
+  const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>(initialTierPreference);
   const [isFirstTimer, setIsFirstTimer] = useState<boolean>(false);
 
   // Initialize time format from user preference if available
@@ -615,6 +623,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   // Handle duration change
   const handleDurationChange = (newDuration: number) => {
     setSelectedDuration(newDuration);
+    onDurationChange?.(newDuration);
 
     // If there's a selection, recalculate end time
     if (selectedStartTime) {
@@ -966,47 +975,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             </button>
           </div>
 
-          {/* Duration Selector, Time Format Toggle, and Auto-Suggest */}
+          {/* Time Format Toggle and Now Button */}
           <div className="flex flex-wrap items-center gap-3 mt-4">
-            {/* Duration Selector */}
-            <div className="flex items-center gap-2 min-w-fit">
-              <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.duration', 'Duration:')}</label>
-              <select
-                value={selectedDuration}
-                onChange={(e) => handleDurationChange(parseFloat(e.target.value))}
-                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                }`}
-              >
-                {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map(hours => (
-                  <option key={hours} value={hours}>
-                    {hours} {hours === 1 ? t('scheduler.hour', 'hour') : t('scheduler.hours', 'hours')}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Tier Preference Selector */}
-            <div className="flex items-center gap-2 min-w-fit">
-              <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.tierPreference', 'Prefer:')}</label>
-              <select
-                value={tierPreference}
-                onChange={(e) => setTierPreference(e.target.value as 'any' | 'standard' | 'premium' | 'emergency')}
-                className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  isDarkMode
-                    ? 'bg-gray-700 border-gray-600 text-white'
-                    : 'bg-white border-gray-300 text-gray-900'
-                }`}
-              >
-                <option value="any">{t('scheduler.tierAny', 'Any Rate')}</option>
-                <option value="standard">{t('scheduler.tierStandard', 'Standard')}</option>
-                <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
-                <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
-              </select>
-            </div>
-
             {/* Time Format Toggle */}
             <div className="flex items-center gap-2 min-w-fit">
               <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.timeFormat', 'Time:')}</label>
@@ -1023,17 +993,6 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 {is24HourFormat ? '24h' : '12h'}
               </button>
             </div>
-
-            {/* Auto-Suggest button */}
-            <button
-              onClick={handleAutoSuggest}
-              disabled={isAutoSuggesting || isSelectedDateInPast}
-              className="flex items-center justify-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm whitespace-nowrap"
-            >
-              <Sparkles className="h-4 w-4 flex-shrink-0" />
-              <span className="hidden md:inline">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}</span>
-              <span className="md:hidden">{isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}</span>
-            </button>
 
             {/* Now button */}
             {selectedDate.toDateString() === new Date().toDateString() && (
