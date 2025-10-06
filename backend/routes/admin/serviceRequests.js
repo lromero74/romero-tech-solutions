@@ -2591,6 +2591,7 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
     // Notify via WebSocket (both admins and client)
     websocketService.broadcastServiceRequestUpdate(requestId, 'updated', {
       fileDeleted: true,
+      fileId: fileId,
       fileName: fileName,
       deletedBy: deletedBy
     });

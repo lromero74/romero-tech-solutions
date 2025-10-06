@@ -823,16 +823,28 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         }
       }
 
-      // If files were uploaded to the currently selected request, refresh the files list
+      // If files were uploaded to the currently selected request, add them smoothly to the list
       if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
-        console.log(`📎 Files uploaded to current service request, refreshing files list (${change.fileCount} files)...`);
+        console.log(`📎 Files uploaded to current service request (${change.fileCount} files)...`);
+        // Fetch the updated list to get all file details including IDs
         fetchRequestFiles(selectedRequest.id);
       }
 
-      // If a file was deleted from the currently selected request, refresh the files list
+      // If a file was deleted from the currently selected request, remove it smoothly from the list
       if (change.entityType === 'serviceRequest' && change.fileDeleted && selectedRequest && change.entityId === selectedRequest.id) {
-        console.log(`🗑️  File deleted from current service request, refreshing files list...`);
-        fetchRequestFiles(selectedRequest.id);
+        console.log(`🗑️  File "${change.fileName}" deleted from current service request`);
+        // Remove the file from the list (smooth in-place update)
+        if (change.fileId) {
+          setRequestFiles(prev => prev.filter(f => f.id !== change.fileId));
+          // Update file count
+          if (selectedRequest.fileCount && selectedRequest.fileCount > 0) {
+            const newFileCount = selectedRequest.fileCount - 1;
+            setSelectedRequest({ ...selectedRequest, fileCount: newFileCount });
+            setServiceRequests(prev =>
+              prev.map(req => req.id === selectedRequest.id ? { ...req, fileCount: newFileCount } : req)
+            );
+          }
+        }
       }
     };
 
