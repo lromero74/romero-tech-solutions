@@ -7,6 +7,32 @@ import { getPool } from '../config/database.js';
 class ClientFileBrowserService {
 
   /**
+   * Get all businesses with file storage statistics
+   * @returns {array} List of businesses with file counts and storage info
+   */
+  async getAllBusinesses() {
+    try {
+      const query = `
+        SELECT
+          business_id as id,
+          business_name as name,
+          COALESCE(total_files, 0)::integer as "totalFiles",
+          COALESCE(total_storage_used, 0)::bigint as "totalStorageBytes"
+        FROM v_file_storage_by_business
+        ORDER BY business_name ASC
+      `;
+
+      const pool = await getPool();
+      const result = await pool.query(query);
+
+      return result.rows;
+    } catch (error) {
+      console.error('❌ Error fetching businesses:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Get folder tree for a business
    * @param {string} businessId - Business UUID
    * @returns {array} Folder tree structure

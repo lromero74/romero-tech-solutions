@@ -739,7 +739,8 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     if (initialServiceRequestId && serviceRequests.length > 0) {
       const requestToOpen = serviceRequests.find(req => req.id === initialServiceRequestId);
       if (requestToOpen) {
-        setSelectedRequest(requestToOpen);
+        // Use handleViewRequest to properly fetch files and notes
+        handleViewRequest(requestToOpen);
         onServiceRequestOpened?.();
       }
     }
@@ -830,6 +831,16 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       // If files were uploaded to the currently selected request, add them smoothly to the list
       if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
         console.log(`📎 Files uploaded to current service request (${change.fileCount} files)...`);
+        // Extract file IDs for blue halo effect
+        if (change.uploadedFiles && Array.isArray(change.uploadedFiles)) {
+          const fileIds = change.uploadedFiles.map((f: any) => f.fileId).filter(Boolean);
+          setNewlyUploadedFileIds(fileIds);
+
+          // Clear blue halos after 3 seconds
+          setTimeout(() => {
+            setNewlyUploadedFileIds([]);
+          }, 3000);
+        }
         // Fetch the updated list to get all file details including IDs
         fetchRequestFiles(selectedRequest.id);
       }

@@ -5,6 +5,116 @@ import clientFileBrowserService from '../../services/clientFileBrowserService.js
 const router = express.Router();
 
 /**
+ * GET /api/admin/client-files/businesses
+ * Get all businesses with file storage statistics
+ * Permission: view.client_files.enable
+ */
+router.get('/businesses',
+  requirePermission('view.client_files.enable'),
+  async (req, res) => {
+    try {
+      const businesses = await clientFileBrowserService.getAllBusinesses();
+
+      return res.status(200).json({
+        success: true,
+        data: businesses
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching businesses:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch businesses',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/client-files/businesses/:businessId/folders
+ * Get folder tree for a business (alias for convenience)
+ * Permission: view.client_files.enable
+ */
+router.get('/businesses/:businessId/folders',
+  requirePermission('view.client_files.enable'),
+  async (req, res) => {
+    try {
+      const { businessId } = req.params;
+
+      if (!businessId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Business ID is required'
+        });
+      }
+
+      const folders = await clientFileBrowserService.getFolderTree(businessId);
+
+      return res.status(200).json({
+        success: true,
+        data: folders
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching folder tree:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch folder tree',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/client-files/businesses/:businessId/files
+ * Get all files for a business with pagination and filtering
+ * Permission: view.client_files.enable
+ */
+router.get('/businesses/:businessId/files',
+  requirePermission('view.client_files.enable'),
+  async (req, res) => {
+    try {
+      const { businessId } = req.params;
+      const { page, limit, search, sortBy, sortOrder, virusScanStatus, folderId } = req.query;
+
+      if (!businessId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Business ID is required'
+        });
+      }
+
+      const options = {
+        page: parseInt(page) || 1,
+        limit: parseInt(limit) || 50,
+        search: search || '',
+        sortBy: sortBy || 'created_at',
+        sortOrder: sortOrder || 'DESC',
+        virusScanStatus: virusScanStatus || null,
+        folderId: folderId || null
+      };
+
+      const result = await clientFileBrowserService.getAllFiles(businessId, options);
+
+      return res.status(200).json({
+        success: true,
+        data: result
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching files:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch files',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
  * GET /api/admin/client-files/:businessId/folders
  * Get folder tree for a business
  * Permission: view.client_files.enable

@@ -157,7 +157,7 @@ const AdminServiceRequests: React.FC = () => {
       setUploadingFiles(false);
     },
     getHeaders: async () => {
-      const token = localStorage.getItem('token');
+      const token = RoleBasedStorage.getItem('sessionToken');
       if (!token) throw new Error('No token found');
       return {
         'Authorization': `Bearer ${token}`

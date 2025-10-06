@@ -29,7 +29,7 @@ interface ClientFile {
 }
 
 const AdminClientFileBrowser: React.FC = () => {
-  const { checkPermission } = usePermission();
+  const { checkPermission, loading: permissionsLoading } = usePermission();
 
   // Permission checks
   const canViewClientFiles = checkPermission('view.client_files.enable');
@@ -218,6 +218,16 @@ const AdminClientFileBrowser: React.FC = () => {
       minute: '2-digit'
     });
   };
+
+  // Loading permissions view
+  if (permissionsLoading) {
+    return (
+      <div className={`${themeClasses.container} rounded-lg p-8 text-center`}>
+        <RefreshCw className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
+        <p className={themeClasses.mutedText}>Loading permissions...</p>
+      </div>
+    );
+  }
 
   // Permission denied view
   if (!canViewClientFiles) {

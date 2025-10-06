@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useTheme } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
+import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import {
   FileText,
   Download,
@@ -90,7 +91,7 @@ const AdminPermissionAuditLog: React.FC = () => {
 
       const response = await fetch('/api/admin/permission-audit-log', {
         headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
+          'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken')}`
         }
       });
 
