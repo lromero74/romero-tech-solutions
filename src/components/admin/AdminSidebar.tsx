@@ -20,12 +20,14 @@ import {
   DollarSign,
   Workflow,
   Receipt,
-  Filter
+  Filter,
+  HardDrive,
+  FolderOpen
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -99,6 +101,13 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network, permission: 'view.role_hierarchy.enable' },
         { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText, permission: 'view.permission_audit_log.enable' },
         { id: 'password-complexity', label: 'Password Policy', icon: Lock, permission: 'view.password_complexity.enable' }
+      ]
+    },
+    {
+      title: 'Storage & Files',
+      items: [
+        { id: 'quota-management', label: 'Quota Management', icon: HardDrive, permission: 'view.quota_statistics.enable' },
+        { id: 'client-files', label: 'Client Files', icon: FolderOpen, permission: 'view.client_files.enable' }
       ]
     },
     {

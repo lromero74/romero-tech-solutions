@@ -1,3 +1,13 @@
 export { default as ServiceRequestNotesSection } from './ServiceRequestNotesSection';
 export { default as ServiceRequestFilesSection } from './ServiceRequestFilesSection';
+export { default as FilterBar } from './FilterBar';
+export { default as AssignTechnicianModal } from './AssignTechnicianModal';
+export { default as ChangeStatusModal } from './ChangeStatusModal';
+export { default as CompleteRequestModal } from './CompleteRequestModal';
+export { default as UncancelRequestModal } from './UncancelRequestModal';
+export { default as InvoiceViewerModal } from './InvoiceViewerModal';
+export { default as CloseConfirmationModal } from './CloseConfirmationModal';
+export { default as ServiceRequestDetailModal } from './ServiceRequestDetailModal';
+export { default as ServiceRequestsTable } from './ServiceRequestsTable';
+export { default as ServiceRequestsMobileView } from './ServiceRequestsMobileView';
 export * from './types';

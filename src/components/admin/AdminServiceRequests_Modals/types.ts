@@ -62,6 +62,7 @@ export interface Technician {
   first_name: string;
   last_name: string;
   full_name: string;
+  name: string; // Alias for full_name, used in filters
   email: string;
   working_status: string;
   working_status_display: string;
@@ -74,6 +75,8 @@ export interface Status {
   description: string;
   color_code: string;
   sort_order: number;
+  display_order: number;
+  is_active: boolean;
   is_final_status: boolean;
   requires_technician: boolean;
 }

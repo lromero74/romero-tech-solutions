@@ -231,10 +231,10 @@ class QuotaManagementService {
       // Insert file record
       const fileQuery = `
         INSERT INTO t_client_files (
-          business_id, service_location_id, service_request_id, folder_id, uploaded_by_user_id,
+          business_id, service_location_id, service_request_id, folder_id, uploaded_by_user_id, uploaded_by_employee_id,
           stored_filename, original_filename, file_size_bytes, content_type, file_path,
           file_category_id, file_description, is_public_to_business
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
         RETURNING id, created_at
       `;
 
@@ -243,7 +243,8 @@ class QuotaManagementService {
         fileData.serviceLocationId || null,
         fileData.serviceRequestId || null,
         finalFolderId || null,
-        fileData.userId || null,
+        fileData.userId || null, // For client uploads
+        fileData.employeeId || null, // For employee uploads
         fileData.fileName,
         fileData.originalName,
         fileData.fileSizeBytes,
@@ -257,7 +258,7 @@ class QuotaManagementService {
       const fileResult = await client.query(fileQuery, fileValues);
       const fileId = fileResult.rows[0].id;
 
-      // Log file access
+      // Log file access (use userId for clients, employeeId for employees)
       const accessQuery = `
         INSERT INTO t_client_file_access_log (
           client_file_id, accessed_by_user_id, access_type, access_granted, ip_address, user_agent
@@ -266,7 +267,7 @@ class QuotaManagementService {
 
       await client.query(accessQuery, [
         fileId,
-        fileData.userId,
+        fileData.userId || fileData.employeeId || null,
         fileData.ipAddress || null,
         fileData.userAgent || null
       ]);

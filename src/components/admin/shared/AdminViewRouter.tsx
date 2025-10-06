@@ -16,6 +16,8 @@ import {
   AdminReports,
   AdminPasswordComplexity
 } from '..';
+import AdminQuotaManagement from '../AdminQuotaManagement';
+import AdminClientFileBrowser from '../AdminClientFileBrowser';
 import AdminInvoices from '../AdminInvoices';
 import WorkflowConfiguration from '../WorkflowConfiguration';
 import AdminPricingSettings from '../AdminPricingSettings';
@@ -42,7 +44,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1569,6 +1571,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'filter-presets':
         return <FilterPresetManager />;
+
+      case 'quota-management':
+        return <AdminQuotaManagement />;
+
+      case 'client-files':
+        return <AdminClientFileBrowser />;
 
       default:
         return (

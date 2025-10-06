@@ -894,6 +894,7 @@ router.get('/service-requests/:id/files', async (req, res) => {
         cf.file_description,
         cf.created_at,
         cf.uploaded_by_user_id,
+        cf.uploaded_by_employee_id,
         COALESCE(u.email, e.email) as uploaded_by_email,
         CASE
           WHEN u.id IS NOT NULL THEN 'client'
@@ -902,7 +903,7 @@ router.get('/service-requests/:id/files', async (req, res) => {
         END as uploaded_by_type
       FROM t_client_files cf
       LEFT JOIN users u ON cf.uploaded_by_user_id = u.id
-      LEFT JOIN employees e ON cf.uploaded_by_user_id = e.id
+      LEFT JOIN employees e ON cf.uploaded_by_employee_id = e.id
       WHERE cf.service_request_id = $1 AND cf.soft_delete = false
       ORDER BY cf.created_at DESC
     `;
@@ -3174,7 +3175,7 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
         const fileData = {
           businessId: businessId,
           serviceLocationId: null,
-          userId: null, // Admin upload, no user
+          employeeId: employeeId, // Set employee ID for admin uploads
           fileName: file.filename,
           originalName: file.originalname,
           fileSizeBytes: file.size,

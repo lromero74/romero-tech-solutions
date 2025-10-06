@@ -1,25 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   ClipboardList,
-  Search,
-  Filter,
-  Calendar,
-  User,
   AlertCircle,
-  CheckCircle,
-  Clock,
-  XCircle,
-  Pause,
-  FileText,
-  ChevronDown,
-  ChevronUp,
-  MapPin,
-  Phone,
-  Mail,
-  RefreshCw,
-  Edit2,
-  Check,
-  X as XIcon
+  FileText
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
@@ -38,7 +21,17 @@ import {
   Invoice,
   CompanyInfo,
   ServiceRequestNotesSection,
-  ServiceRequestFilesSection
+  ServiceRequestFilesSection,
+  FilterBar,
+  AssignTechnicianModal,
+  ChangeStatusModal,
+  CompleteRequestModal,
+  UncancelRequestModal,
+  InvoiceViewerModal,
+  CloseConfirmationModal,
+  ServiceRequestDetailModal,
+  ServiceRequestsTable,
+  ServiceRequestsMobileView
 } from './AdminServiceRequests_Modals';
 
 const AdminServiceRequests: React.FC = () => {
@@ -91,6 +84,7 @@ const AdminServiceRequests: React.FC = () => {
   // Files and Notes state
   const [requestFiles, setRequestFiles] = useState<ServiceRequestFile[]>([]);
   const [loadingFiles, setLoadingFiles] = useState(false);
+  const [newlyUploadedFileIds, setNewlyUploadedFileIds] = useState<string[]>([]);
   const [requestNotes, setRequestNotes] = useState<ServiceRequestNote[]>([]);
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
@@ -251,6 +245,15 @@ const AdminServiceRequests: React.FC = () => {
       // If files were uploaded to the currently selected request, refresh the files list
       if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
         console.log(`📎 Files uploaded to current service request, refreshing files list (${change.fileCount} files)...`);
+        // Track the newly uploaded file IDs for blue halo effect
+        if (change.uploadedFiles && Array.isArray(change.uploadedFiles)) {
+          const fileIds = change.uploadedFiles.map((f: any) => f.fileId);
+          setNewlyUploadedFileIds(fileIds);
+          // Auto-remove highlight after 3 seconds
+          setTimeout(() => {
+            setNewlyUploadedFileIds([]);
+          }, 3000);
+        }
         fetchRequestFiles(selectedRequest.id);
       }
     };
@@ -985,6 +988,8 @@ const AdminServiceRequests: React.FC = () => {
     try {
       setUploadingFiles(true);
 
+      const csrfToken = await apiService.getToken();
+
       const formData = new FormData();
       Array.from(files).forEach(file => {
         formData.append('files', file);
@@ -994,13 +999,32 @@ const AdminServiceRequests: React.FC = () => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
+          'x-csrf-token': csrfToken
         },
+        credentials: 'include',
         body: formData
       });
 
       const result = await response.json();
+      console.log('📤 Upload response:', result);
+      console.log('📤 Failed files:', result.data?.failedFiles);
+      if (result.data?.failedFiles?.length > 0) {
+        result.data.failedFiles.forEach((f: any, i: number) => {
+          console.log(`❌ Failed file ${i + 1}:`, f.originalName, '- Error:', f.error);
+        });
+      }
 
       if (result.success) {
+        // Check if any files were actually uploaded
+        const uploadedCount = result.data?.uploadedFiles?.length || 0;
+        const failedCount = result.data?.failedFiles?.length || 0;
+
+        if (uploadedCount === 0 && failedCount > 0) {
+          // All files failed
+          const errorMessages = result.data.failedFiles.map((f: any) => `${f.originalName}: ${f.error}`).join('\n');
+          throw new Error(`Upload completed. 0 file(s) uploaded successfully, ${failedCount} failed.\n\nErrors:\n${errorMessages}`);
+        }
+
         // Refresh files list
         fetchRequestFiles(selectedRequest.id);
         // Refresh notes to show the upload note
@@ -1250,147 +1274,14 @@ const AdminServiceRequests: React.FC = () => {
       </div>
 
       {/* Filters (Hidden on mobile) */}
-      <div className={`hidden md:block ${themeClasses.bg.card} border ${themeClasses.border.primary} rounded-lg p-6`}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {/* Search */}
-            <div className="md:col-span-2 lg:col-span-3 xl:col-span-2">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Search
-              </label>
-              <div className="relative">
-                <Search className={`absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 ${themeClasses.text.muted}`} />
-                <input
-                  type="text"
-                  value={filters.search}
-                  onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
-                  placeholder="Request #, title, client, business..."
-                  className={`w-full pl-10 pr-4 py-2 rounded-lg ${themeClasses.input}`}
-                />
-              </div>
-            </div>
-
-            {/* Status */}
-            <div>
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Status
-              </label>
-              <select
-                value={filters.status}
-                onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="all">All Statuses</option>
-                {/* Admin-defined filter presets (with * prefix) */}
-                {filterPresets.map(preset => (
-                  <option key={preset.id} value={`*${preset.name}`}>
-                    *{preset.name} {preset.description ? `- ${preset.description}` : ''}
-                  </option>
-                ))}
-                {/* Individual statuses from database */}
-                {statuses
-                  .filter(s => s.is_active)
-                  .sort((a, b) => a.display_order - b.display_order)
-                  .map(status => (
-                    <option key={status.id} value={status.name}>
-                      {status.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            {/* Urgency */}
-            <div>
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Urgency
-              </label>
-              <select
-                value={filters.urgency}
-                onChange={(e) => setFilters(prev => ({ ...prev, urgency: e.target.value }))}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="all">All Urgencies</option>
-                <option value="normal">Normal</option>
-                <option value="prime">Prime</option>
-                <option value="emergency">Emergency</option>
-              </select>
-            </div>
-
-            {/* Priority */}
-            <div>
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Priority
-              </label>
-              <select
-                value={filters.priority}
-                onChange={(e) => setFilters(prev => ({ ...prev, priority: e.target.value }))}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="all">All Priorities</option>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="critical">Critical</option>
-              </select>
-            </div>
-
-            {/* Technician */}
-            <div>
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Technician
-              </label>
-              <select
-                value={filters.technician}
-                onChange={(e) => setFilters(prev => ({ ...prev, technician: e.target.value }))}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="all">All Technicians</option>
-                {technicians.map((tech) => (
-                  <option key={tech.id} value={tech.id}>
-                    {tech.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Client/Business */}
-            <div>
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Client
-              </label>
-              <select
-                value={filters.business}
-                onChange={(e) => setFilters(prev => ({ ...prev, business: e.target.value }))}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="all">All Clients</option>
-                {uniqueClients.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* Clear Filters */}
-          {(filters.search || filters.status !== '*Open' || filters.urgency !== 'all' || filters.priority !== 'all' || filters.business !== 'all' || filters.technician !== 'all') && (
-            <div className="mt-4">
-              <button
-                onClick={() => setFilters({
-                  search: '',
-                  status: '*Open',
-                  urgency: 'all',
-                  priority: 'all',
-                  business: 'all',
-                  technician: 'all'
-                })}
-                className={`text-sm ${themeClasses.text.link} hover:underline`}
-              >
-                Clear all filters
-              </button>
-            </div>
-          )}
-        </div>
+      <FilterBar
+        filters={filters}
+        statuses={statuses}
+        technicians={technicians}
+        filterPresets={filterPresets}
+        uniqueClients={uniqueClients}
+        onFiltersChange={setFilters}
+      />
 
       {/* Service Requests Table */}
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg overflow-hidden`}>
@@ -1423,280 +1314,32 @@ const AdminServiceRequests: React.FC = () => {
         ) : (
           <>
             {/* Desktop Table View */}
-            <div className="hidden md:block overflow-x-auto">
-              <table className="w-full">
-                <thead className={`${themeClasses.bg.secondary} border-b ${themeClasses.border.primary}`}>
-                  <tr>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider cursor-pointer`}
-                        onClick={() => handleSort('request_number')}>
-                      Request #
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider cursor-pointer`}
-                        onClick={() => handleSort('title')}>
-                      Title
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider`}>
-                      Status
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider`}>
-                      Urgency
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider`}>
-                      Client
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider`}>
-                      Technician
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider cursor-pointer`}
-                        onClick={() => handleSort('requested_date')}>
-                      Requested Date
-                    </th>
-                    <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.secondary} uppercase tracking-wider`}>
-                      Actions
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                  {filteredRequests.map((request) => (
-                    <tr
-                      key={request.id}
-                      className={`${themeClasses.bg.hover} transition-colors cursor-pointer`}
-                      onClick={() => handleViewRequest(request)}
-                    >
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`font-mono text-sm ${themeClasses.text.primary}`}>
-                          {request.request_number}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                          {request.title}
-                        </div>
-                        <div className={`text-xs ${themeClasses.text.muted}`}>
-                          {request.is_individual ? 'Individual' : request.business_name}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                            request.status.toLowerCase() === 'cancelled'
-                              ? 'bg-gray-500 text-white'
-                              : request.status.toLowerCase() === 'submitted'
-                              ? 'bg-blue-600 text-white'
-                              : request.status.toLowerCase() === 'acknowledged'
-                              ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
-                              : themeClasses.text.primary
-                          }`}
-                          style={
-                            request.status.toLowerCase() === 'cancelled' ||
-                            request.status.toLowerCase() === 'submitted' ||
-                            request.status.toLowerCase() === 'acknowledged'
-                              ? {}
-                              : { backgroundColor: `${request.status_color}20` }
-                          }
-                        >
-                          {getStatusIcon(request.status)}
-                          <span className="ml-1">{request.status}</span>
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span
-                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${themeClasses.text.primary}`}
-                          style={{ backgroundColor: `${request.urgency_color}20` }}
-                        >
-                          {request.urgency}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className={`text-sm ${themeClasses.text.primary}`}>{request.client_name}</div>
-                        <div className={`text-xs ${themeClasses.text.muted}`}>{request.client_email}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        {request.technician_name ? (
-                          <div className={`text-sm flex items-center ${themeClasses.text.primary}`}>
-                            <User className="h-4 w-4 mr-1" />
-                            {request.technician_name}
-                          </div>
-                        ) : (
-                          <span className={`text-sm ${themeClasses.text.muted}`}>Unassigned</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${themeClasses.text.primary}`}>
-                          {request.requested_datetime ? formatDate(request.requested_datetime) : formatDate(request.requested_date)}
-                        </div>
-                        <div className={`text-xs ${themeClasses.text.muted}`}>
-                          {request.requested_datetime ? formatTime(request.requested_datetime) : (request.requested_time_start || '')}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm">
-                        <div className="flex items-center space-x-3">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleViewRequest(request);
-                            }}
-                            className="text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            View Details
-                          </button>
-                          {request.invoice_id && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleViewInvoice(request.invoice_id!);
-                              }}
-                              className="text-green-600 dark:text-green-400 hover:underline flex items-center"
-                            >
-                              <FileText className="h-4 w-4 mr-1" />
-                              View Invoice
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ServiceRequestsTable
+              requests={filteredRequests}
+              isDark={isDark}
+              sortBy={sortBy}
+              sortOrder={sortOrder}
+              onSort={handleSort}
+              onViewRequest={handleViewRequest}
+              onViewInvoice={handleViewInvoice}
+              formatDate={formatDate}
+              formatTime={formatTime}
+              getStatusIcon={getStatusIcon}
+            />
 
             {/* Mobile Card View */}
-            <div className="md:hidden space-y-4">
-              {filteredRequests.map((request) => (
-                <div
-                  key={request.id}
-                  onClick={() => handleViewRequest(request)}
-                  className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-4 ${themeClasses.bg.hover} transition-colors cursor-pointer`}
-                >
-                  {/* Request Number and Status */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
-                      <span className={`font-mono text-sm font-medium ${themeClasses.text.primary}`}>
-                        {request.request_number}
-                      </span>
-                      <div className={`text-xs ${themeClasses.text.muted} mt-1`}>
-                        {request.requested_datetime ? formatDate(request.requested_datetime) : formatDate(request.requested_date)}
-                        {request.requested_datetime
-                          ? ` • ${formatTime(request.requested_datetime)}`
-                          : (request.requested_time_start && ` • ${request.requested_time_start}`)}
-                      </div>
-                    </div>
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        request.status.toLowerCase() === 'cancelled'
-                          ? 'bg-gray-500 text-white'
-                          : request.status.toLowerCase() === 'submitted'
-                          ? 'bg-blue-600 text-white'
-                          : request.status.toLowerCase() === 'acknowledged'
-                          ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
-                          : themeClasses.text.primary
-                      }`}
-                      style={
-                        request.status.toLowerCase() === 'cancelled' ||
-                        request.status.toLowerCase() === 'submitted' ||
-                        request.status.toLowerCase() === 'acknowledged'
-                          ? {}
-                          : { backgroundColor: `${request.status_color}20` }
-                      }
-                    >
-                      {getStatusIcon(request.status)}
-                      <span className="ml-1">{request.status}</span>
-                    </span>
-                  </div>
-
-                  {/* Title and Business */}
-                  <div className="mb-3">
-                    <div className={`text-sm font-medium ${themeClasses.text.primary} mb-1`}>
-                      {request.title}
-                    </div>
-                    <div className={`text-xs ${themeClasses.text.muted}`}>
-                      {request.is_individual ? 'Individual' : request.business_name}
-                    </div>
-                  </div>
-
-                  {/* Client Info */}
-                  <div className="mb-3">
-                    <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Client</div>
-                    <div className={`text-sm font-medium ${themeClasses.text.primary} mb-1`}>{request.client_name}</div>
-
-                    {/* Service Location Address (first) */}
-                    {request.locationDetails && (
-                      <a
-                        href={getMapUrl(request.locationDetails)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        onClick={(e) => e.stopPropagation()}
-                        className={`flex items-start text-xs ${themeClasses.text.link} hover:underline mb-1`}
-                      >
-                        <MapPin className="h-3 w-3 mr-1 flex-shrink-0 mt-0.5" />
-                        <span className="break-words">{formatFullAddress(request.locationDetails)}</span>
-                      </a>
-                    )}
-
-                    {/* Client Contact Info */}
-                    <div className="space-y-1">
-                      {request.client_phone && (
-                        <a
-                          href={`tel:${request.client_phone}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-center text-xs ${themeClasses.text.link} hover:underline`}
-                        >
-                          <Phone className="h-3 w-3 mr-1 flex-shrink-0" />
-                          {formatPhone(request.client_phone)}
-                        </a>
-                      )}
-                      {request.client_email && (
-                        <a
-                          href={`mailto:${request.client_email}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className={`flex items-center text-xs ${themeClasses.text.link} hover:underline`}
-                        >
-                          <Mail className="h-3 w-3 mr-1 flex-shrink-0" />
-                          {request.client_email}
-                        </a>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Technician */}
-                  <div className="mb-3">
-                    <div className={`text-xs ${themeClasses.text.muted} mb-1`}>Technician</div>
-                    <div className={`text-sm ${themeClasses.text.primary}`}>
-                      {request.technician_name ? (
-                        <span className="flex items-center">
-                          <User className="h-3 w-3 mr-1" />
-                          {request.technician_name}
-                        </span>
-                      ) : (
-                        <span className={themeClasses.text.muted}>Unassigned</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Urgency */}
-                  <div className="flex items-center justify-between">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${themeClasses.text.primary}`}
-                      style={{ backgroundColor: `${request.urgency_color}20` }}
-                    >
-                      {request.urgency}
-                    </span>
-                    {request.invoice_id && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleViewInvoice(request.invoice_id!);
-                        }}
-                        className="text-green-600 dark:text-green-400 hover:underline flex items-center text-xs"
-                      >
-                        <FileText className="h-3 w-3 mr-1" />
-                        Invoice
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ServiceRequestsMobileView
+              requests={filteredRequests}
+              isDark={isDark}
+              onViewRequest={handleViewRequest}
+              onViewInvoice={handleViewInvoice}
+              formatDate={formatDate}
+              formatTime={formatTime}
+              formatFullAddress={formatFullAddress}
+              getMapUrl={getMapUrl}
+              formatPhone={formatPhone}
+              getStatusIcon={getStatusIcon}
+            />
 
             {/* Pagination */}
             {pagination.totalPages > 1 && (
@@ -1726,1166 +1369,177 @@ const AdminServiceRequests: React.FC = () => {
         )}
       </div>
 
-      {/* Detail Modal - Placeholder for now */}
+      {/* Detail Modal */}
       {selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto`}>
-            <div className="p-6">
-              <div className="flex justify-between items-start mb-6">
-                <div className="flex-1 mr-4">
-                  {editingTitle ? (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={editedTitle}
-                        onChange={(e) => setEditedTitle(e.target.value)}
-                        className={`flex-1 px-3 py-2 rounded-md text-2xl font-bold ${themeClasses.input}`}
-                        disabled={savingEdit}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') saveTitle();
-                          if (e.key === 'Escape') cancelEditTitle();
-                        }}
-                      />
-                      <button
-                        onClick={saveTitle}
-                        disabled={savingEdit || !editedTitle.trim()}
-                        className="p-2 text-green-600 hover:text-green-700 disabled:opacity-50"
-                        title="Save"
-                      >
-                        {savingEdit ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
-                      </button>
-                      <button
-                        onClick={cancelEditTitle}
-                        disabled={savingEdit}
-                        className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                        title="Cancel"
-                      >
-                        <XIcon className="h-5 w-5" />
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-2">
-                      <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>
-                        {selectedRequest.title}
-                      </h2>
-                      <button
-                        onClick={startEditTitle}
-                        className={`p-1 ${themeClasses.text.muted} hover:text-blue-600`}
-                        title="Edit title"
-                      >
-                        <Edit2 className="h-4 w-4" />
-                      </button>
-                      {/* Other Viewers Indicator */}
-                      {otherViewers.length > 0 && (
-                        <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-full">
-                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-                          <span className="text-xs font-medium text-green-700 dark:text-green-300">
-                            {otherViewers[0].userName} viewing
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                  <p className={`text-lg ${themeClasses.text.secondary} mt-1 font-mono`}>
-                    {selectedRequest.request_number}
-                  </p>
-                </div>
-                <button
-                  onClick={handleCloseDetailModal}
-                  className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
-                >
-                  <XCircle className="h-6 w-6" />
-                </button>
-              </div>
-
-              {/* Status Badges */}
-              <div className="flex flex-wrap gap-2 mb-6">
-                <span
-                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                    selectedRequest.status.toLowerCase() === 'cancelled'
-                      ? 'bg-gray-500 text-white'
-                      : selectedRequest.status.toLowerCase() === 'submitted'
-                      ? 'bg-blue-600 text-white'
-                      : selectedRequest.status.toLowerCase() === 'acknowledged'
-                      ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
-                      : themeClasses.text.primary
-                  }`}
-                  style={
-                    selectedRequest.status.toLowerCase() === 'cancelled' ||
-                    selectedRequest.status.toLowerCase() === 'submitted' ||
-                    selectedRequest.status.toLowerCase() === 'acknowledged'
-                      ? {}
-                      : { backgroundColor: `${selectedRequest.status_color}20` }
-                  }
-                >
-                  {getStatusIcon(selectedRequest.status)}
-                  <span className="ml-1">{selectedRequest.status}</span>
-                </span>
-                <span
-                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${themeClasses.text.primary}`}
-                  style={{ backgroundColor: `${selectedRequest.urgency_color}20` }}
-                >
-                  {selectedRequest.urgency}
-                </span>
-                <span
-                  className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${themeClasses.text.primary}`}
-                  style={{ backgroundColor: `${selectedRequest.priority_color}20` }}
-                >
-                  {selectedRequest.priority} Priority
-                </span>
-              </div>
-
-              {/* Request Metadata */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm pb-4 border-b border-gray-200 dark:border-gray-700">
-                <div>
-                  <span className={`font-medium ${themeClasses.text.secondary}`}>Service Type:</span>
-                  <p className={`${themeClasses.text.primary}`}>{selectedRequest.service_type}</p>
-                </div>
-                <div>
-                  <span className={`font-medium ${themeClasses.text.secondary}`}>Technician:</span>
-                  <p className={`${themeClasses.text.primary}`}>
-                    {selectedRequest.technician_name || 'Unassigned'}
-                  </p>
-                </div>
-                <div>
-                  <span className={`font-medium ${themeClasses.text.secondary}`}>Created:</span>
-                  <p className={`${themeClasses.text.primary}`}>
-                    {(() => {
-                      const createdAt = selectedRequest.created_at.includes('Z')
-                        ? selectedRequest.created_at
-                        : selectedRequest.created_at + 'Z';
-                      return new Date(createdAt).toLocaleString();
-                    })()}
-                  </p>
-                </div>
-              </div>
-
-              {/* Date/Time & Cost Summary & Location Side-by-Side */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 my-4">
-                {/* Date/Time */}
-                {(selectedRequest.requested_datetime || (selectedRequest.requested_date && selectedRequest.requested_time_start)) && (
-                  <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Selected Date & Time</h4>
-                    <div className={`text-lg font-semibold ${themeClasses.text.primary} mb-1`}>
-                      {selectedRequest.requested_datetime
-                        ? formatDateTime(selectedRequest.requested_datetime, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
-                        : formatDateTime(selectedRequest.requested_date, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })}
-                    </div>
-                    <div className={`text-base ${themeClasses.text.secondary}`}>
-                      {selectedRequest.requested_datetime ? (
-                        <>
-                          {formatTime(selectedRequest.requested_datetime)}
-                          {selectedRequest.requested_duration_minutes && (() => {
-                            const endTime = new Date(new Date(selectedRequest.requested_datetime!).getTime() + selectedRequest.requested_duration_minutes! * 60000);
-                            return ` - ${formatTime(endTime.toISOString())}`;
-                          })()}
-                          {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
-                        </>
-                      ) : (
-                        <>
-                          {selectedRequest.requested_time_start || ''}
-                          {selectedRequest.requested_time_end && ` - ${selectedRequest.requested_time_end}`}
-                          {selectedRequest.cost?.durationHours && ` (${selectedRequest.cost.durationHours}h)`}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Cost Estimate - Only for users with permission */}
-                {canViewCosts && selectedRequest.cost && (
-                  <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
-                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Estimated Cost</h4>
-                    <div className={`text-sm ${themeClasses.text.secondary} mb-2`}>
-                      Base Rate: ${selectedRequest.cost.baseRate}/hr
-                    </div>
-                    {/* Tier Breakdown */}
-                    {selectedRequest.cost.breakdown && selectedRequest.cost.breakdown.map((block: any, idx: number) => (
-                      <div key={idx} className={`text-sm ${themeClasses.text.secondary}`}>
-                        {block.hours}h {block.tierName} @ {block.multiplier}x = ${block.cost.toFixed(2)}
-                      </div>
-                    ))}
-                    {/* First Hour Discount */}
-                    {selectedRequest.cost.firstHourDiscount && selectedRequest.cost.firstHourDiscount > 0 && (
-                      <>
-                        <div className={`text-sm ${themeClasses.text.secondary} mt-2 pt-2 border-t border-green-200 dark:border-green-700`}>
-                          Subtotal: ${selectedRequest.cost.subtotal?.toFixed(2)}
-                        </div>
-                        <div className="text-sm text-green-600 dark:text-green-400 font-medium mt-1">
-                          🎁 First Hour Comp (New Client):
-                        </div>
-                        {selectedRequest.cost.firstHourCompBreakdown?.map((compBlock: any, idx: number) => (
-                          <div key={idx} className="text-sm text-green-600 dark:text-green-400 ml-4">
-                            • {compBlock.hours}h {compBlock.tierName} @ {compBlock.multiplier}x = -${compBlock.discount.toFixed(2)}
-                          </div>
-                        ))}
-                        {selectedRequest.cost.firstHourCompBreakdown && selectedRequest.cost.firstHourCompBreakdown.length > 1 && (
-                          <div className="text-sm text-green-600 dark:text-green-400 font-medium ml-4">
-                            Total Discount: -${selectedRequest.cost.firstHourDiscount.toFixed(2)}
-                          </div>
-                        )}
-                      </>
-                    )}
-                    <div className={`text-base font-semibold ${themeClasses.text.primary} mt-2 pt-2 border-t border-green-200 dark:border-green-700`}>
-                      Total*: ${selectedRequest.cost.total.toFixed(2)}
-                    </div>
-                    <div className={`text-xs ${themeClasses.text.muted} mt-1 italic`}>
-                      * Actual cost may vary based on time required to complete the service
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Location & Contact Information */}
-              <div className="my-4">
-                {selectedRequest.locationDetails && (
-                  <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                    <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Location & Contact</h4>
-
-                    <div className="space-y-3">
-                      {/* Address */}
-                      <div>
-                        <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Address</span>
-                        <a
-                          href={getMapUrl(selectedRequest.locationDetails)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-start gap-2 mt-1 text-blue-600 dark:text-blue-400 hover:underline"
-                        >
-                          <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          <div className="text-sm">
-                            <div>{selectedRequest.locationDetails.street_address_1}</div>
-                            {selectedRequest.locationDetails.street_address_2 && (
-                              <div>{selectedRequest.locationDetails.street_address_2}</div>
-                            )}
-                            <div>
-                              {selectedRequest.locationDetails.city}, {selectedRequest.locationDetails.state} {selectedRequest.locationDetails.zip_code}
-                            </div>
-                          </div>
-                        </a>
-                      </div>
-
-                      {/* Contact Information */}
-                      {(selectedRequest.locationDetails.contact_person || selectedRequest.locationDetails.contact_phone || selectedRequest.locationDetails.contact_email) && (
-                        <div className="space-y-2">
-                          {selectedRequest.locationDetails.contact_person && (
-                            <div className={`flex items-center gap-2 text-sm ${themeClasses.text.primary}`}>
-                              <User className="h-4 w-4 text-gray-400" />
-                              {selectedRequest.locationDetails.contact_person}
-                            </div>
-                          )}
-                          {selectedRequest.locationDetails.contact_email && (
-                            <a
-                              href={`mailto:${selectedRequest.locationDetails.contact_email}`}
-                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              <Mail className="h-4 w-4" />
-                              {selectedRequest.locationDetails.contact_email}
-                            </a>
-                          )}
-                          {selectedRequest.locationDetails.contact_phone && (
-                            <a
-                              href={`tel:${selectedRequest.locationDetails.contact_phone}`}
-                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                            >
-                              <Phone className="h-4 w-4" />
-                              {formatPhone(selectedRequest.locationDetails.contact_phone)}
-                            </a>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Additional Details */}
-              {(selectedRequest.scheduled_datetime || selectedRequest.scheduled_date) && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm mb-4">
-                  <div>
-                    <span className={`font-medium ${themeClasses.text.secondary}`}>Scheduled Date:</span>
-                    <p className={`${themeClasses.text.primary}`}>
-                      {selectedRequest.scheduled_datetime ? (
-                        <>
-                          {formatDate(selectedRequest.scheduled_datetime)}
-                          {` at ${formatTime(selectedRequest.scheduled_datetime)}`}
-                        </>
-                      ) : (
-                        <>
-                          {formatDate(selectedRequest.scheduled_date)}
-                          {selectedRequest.scheduled_time_start && ` at ${selectedRequest.scheduled_time_start}`}
-                        </>
-                      )}
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              {/* Display error if any */}
-              {actionError && (
-                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                  {actionError}
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="mt-6 mb-6">
-                <div className="flex flex-wrap gap-3">
-                  {/* Time tracking toggle button - changes based on status */}
-                  {selectedRequest.technician_name && selectedRequest.status.toLowerCase() !== 'completed' && (
-                    <>
-                      {selectedRequest.status === 'Started' ? (
-                        <button
-                          onClick={() => handleTimeTracking('stop')}
-                          disabled={actionLoading}
-                          className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center"
-                        >
-                          <Pause className="h-4 w-4 mr-2" />
-                          Pause Work
-                        </button>
-                      ) : selectedRequest.status === 'Paused' ? (
-                        <button
-                          onClick={() => handleTimeTracking('start')}
-                          disabled={actionLoading}
-                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
-                        >
-                          <Clock className="h-4 w-4 mr-2" />
-                          Resume Work
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => handleTimeTracking('start')}
-                          disabled={actionLoading}
-                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
-                        >
-                          <Clock className="h-4 w-4 mr-2" />
-                          Start Work
-                        </button>
-                      )}
-                    </>
-                  )}
-
-                  {canCompleteRequest(selectedRequest) && (
-                    <button
-                      onClick={() => {
-                        setShowCloseModal(true);
-                        setActionError(null);
-                        // Fetch time breakdown and auto-populate duration
-                        if (selectedRequest?.id) {
-                          fetchTimeBreakdown(selectedRequest.id);
-                        }
-                      }}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
-                    >
-                      <CheckCircle className="h-4 w-4 mr-2" />
-                      Complete Request
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => {
-                      setShowStatusModal(true);
-                      setActionError(null);
-                    }}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    Change Status
-                  </button>
-                </div>
-              </div>
-
-              {/* Files Section */}
-              <ServiceRequestFilesSection
-                files={requestFiles}
-                loading={loadingFiles}
-                fileCount={selectedRequest.file_count || 0}
-                renamingFileId={renamingFileId}
-                newFileName={newFileName}
-                savingEdit={savingEdit}
-                deletingFileId={deletingFileId}
-                apiBaseUrl={API_BASE_URL}
-                uploading={uploadingFiles}
-                onStartRename={startRenameFile}
-                onCancelRename={cancelRenameFile}
-                onSaveFileName={saveFileName}
-                onDeleteFile={deleteFile}
-                onFileNameChange={setNewFileName}
-                onUploadFiles={uploadFiles}
-              />
-
-              {/* Description */}
-              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>Description</h4>
-                  {!editingDescription && (
-                    <button
-                      onClick={startEditDescription}
-                      className={`p-1 ${themeClasses.text.muted} hover:text-blue-600`}
-                      title="Edit description"
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </button>
-                  )}
-                </div>
-                {editingDescription ? (
-                  <div>
-                    <textarea
-                      value={editedDescription}
-                      onChange={(e) => setEditedDescription(e.target.value)}
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} resize-none`}
-                      rows={5}
-                      disabled={savingEdit}
-                      autoFocus
-                      placeholder="Enter description..."
-                    />
-                    <div className="mt-2 flex justify-end gap-2">
-                      <button
-                        onClick={cancelEditDescription}
-                        disabled={savingEdit}
-                        className="px-3 py-1 rounded-md text-sm bg-gray-500 text-white hover:bg-gray-600 disabled:opacity-50"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        onClick={saveDescription}
-                        disabled={savingEdit}
-                        className="px-3 py-1 rounded-md text-sm bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 flex items-center gap-2"
-                      >
-                        {savingEdit ? (
-                          <>
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                            Saving...
-                          </>
-                        ) : (
-                          'Save'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className={`${themeClasses.text.primary} whitespace-pre-wrap text-sm`}>
-                    {selectedRequest.description || <span className={themeClasses.text.muted}>No description</span>}
-                  </p>
-                )}
-              </div>
-
-              {/* Notes Section */}
-              <ServiceRequestNotesSection
-                notes={requestNotes}
-                loading={loadingNotes}
-                newNoteText={newNoteText}
-                submittingNote={submittingNote}
-                onNewNoteChange={setNewNoteText}
-                onSubmitNote={submitNote}
-                otherViewers={otherViewers}
-                timeFormatPreference={(user?.timeFormatPreference as '12h' | '24h') || '12h'}
-                newlyReceivedNoteId={newlyReceivedNoteId}
-              />
-
-              {/* Row 3: Close */}
-              <div className="mt-6 flex justify-end">
-                <button
-                  onClick={handleCloseDetailModal}
-                  disabled={actionLoading}
-                  className={`px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ServiceRequestDetailModal
+          selectedRequest={selectedRequest}
+          requestFiles={requestFiles}
+          loadingFiles={loadingFiles}
+          requestNotes={requestNotes}
+          loadingNotes={loadingNotes}
+          newNoteText={newNoteText}
+          submittingNote={submittingNote}
+          editingTitle={editingTitle}
+          editingDescription={editingDescription}
+          editedTitle={editedTitle}
+          editedDescription={editedDescription}
+          savingEdit={savingEdit}
+          renamingFileId={renamingFileId}
+          newFileName={newFileName}
+          deletingFileId={deletingFileId}
+          uploadingFiles={uploadingFiles}
+          newlyUploadedFileIds={newlyUploadedFileIds}
+          actionError={actionError}
+          actionLoading={actionLoading}
+          otherViewers={otherViewers}
+          apiBaseUrl={API_BASE_URL}
+          canViewCosts={canViewCosts}
+          canCompleteRequest={canCompleteRequest(selectedRequest)}
+          isDark={isDark}
+          userTimeFormatPreference={(user?.timeFormatPreference as '12h' | '24h') || '12h'}
+          newlyReceivedNoteId={newlyReceivedNoteId}
+          onClose={handleCloseDetailModal}
+          onNewNoteChange={setNewNoteText}
+          onSubmitNote={submitNote}
+          onStartEditTitle={startEditTitle}
+          onStartEditDescription={startEditDescription}
+          onCancelEditTitle={cancelEditTitle}
+          onCancelEditDescription={cancelEditDescription}
+          onEditedTitleChange={setEditedTitle}
+          onEditedDescriptionChange={setEditedDescription}
+          onSaveTitle={saveTitle}
+          onSaveDescription={saveDescription}
+          onStartRenameFile={startRenameFile}
+          onCancelRenameFile={cancelRenameFile}
+          onSaveFileName={saveFileName}
+          onDeleteFile={deleteFile}
+          onFileNameChange={setNewFileName}
+          onUploadFiles={uploadFiles}
+          onTimeTracking={handleTimeTracking}
+          onShowCompleteModal={() => {
+            setShowCloseModal(true);
+            setActionError(null);
+            if (selectedRequest?.id) {
+              fetchTimeBreakdown(selectedRequest.id);
+            }
+          }}
+          onShowStatusModal={() => {
+            setShowStatusModal(true);
+            setActionError(null);
+          }}
+          formatFullAddress={formatFullAddress}
+          getMapUrl={getMapUrl}
+          formatPhone={formatPhone}
+          formatDate={formatDate}
+          formatTime={formatTime}
+          formatDateTime={formatDateTime}
+          getStatusIcon={getStatusIcon}
+        />
       )}
 
       {/* Close Confirmation Modal */}
-      {showCloseConfirmation && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-md w-full p-6`}>
-            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-              Unsaved Changes
-            </h2>
-
-            <p className={`text-sm ${themeClasses.text.secondary} mb-6`}>
-              You have unsaved changes. Are you sure you want to close this service request? All unsaved changes will be lost.
-            </p>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={confirmCloseDetailModal}
-                className="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-              >
-                Discard Changes
-              </button>
-              <button
-                onClick={() => setShowCloseConfirmation(false)}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80`}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CloseConfirmationModal
+        show={showCloseConfirmation}
+        onConfirm={confirmCloseDetailModal}
+        onCancel={() => setShowCloseConfirmation(false)}
+      />
 
       {/* Assign Technician Modal */}
-      {showAssignModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-md w-full p-6`}>
-            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-              Assign Technician
-            </h2>
-
-            <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
-              Assign a technician to service request <span className="font-mono">{selectedRequest.request_number}</span>
-            </p>
-
-            {actionError && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                {actionError}
-              </div>
-            )}
-
-            <div className="mb-6">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Select Technician
-              </label>
-              <select
-                value={selectedTechnicianId}
-                onChange={(e) => setSelectedTechnicianId(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="">-- Select Technician --</option>
-                {technicians.map((tech) => (
-                  <option key={tech.id} value={tech.id}>
-                    {tech.full_name} ({tech.active_requests} active requests)
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={handleAssignTechnician}
-                disabled={!selectedTechnicianId || actionLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actionLoading ? 'Assigning...' : 'Assign'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowAssignModal(false);
-                  setSelectedTechnicianId('');
-                  setActionError(null);
-                }}
-                disabled={actionLoading}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AssignTechnicianModal
+        show={showAssignModal}
+        selectedRequest={selectedRequest}
+        technicians={technicians}
+        selectedTechnicianId={selectedTechnicianId}
+        actionLoading={actionLoading}
+        actionError={actionError}
+        onTechnicianIdChange={setSelectedTechnicianId}
+        onAssign={handleAssignTechnician}
+        onClose={() => {
+          setShowAssignModal(false);
+          setSelectedTechnicianId('');
+          setActionError(null);
+        }}
+      />
 
       {/* Change Status Modal */}
-      {showStatusModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-md w-full p-6`}>
-            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-              Change Status
-            </h2>
-
-            <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
-              Change status for service request <span className="font-mono">{selectedRequest.request_number}</span>
-            </p>
-
-            {actionError && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                {actionError}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                New Status
-              </label>
-              <select
-                value={selectedStatusId}
-                onChange={(e) => setSelectedStatusId(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="">-- Select Status --</option>
-                {statuses.map((status) => (
-                  <option key={status.id} value={status.id}>
-                    {status.name} {status.description && `- ${status.description}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="mb-6">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Notes (Optional)
-              </label>
-              <textarea
-                value={statusNotes}
-                onChange={(e) => setStatusNotes(e.target.value)}
-                placeholder="Add notes about this status change..."
-                rows={3}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={handleChangeStatus}
-                disabled={!selectedStatusId || actionLoading}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actionLoading ? 'Changing...' : 'Change Status'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowStatusModal(false);
-                  setSelectedStatusId('');
-                  setStatusNotes('');
-                  setActionError(null);
-                }}
-                disabled={actionLoading}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ChangeStatusModal
+        show={showStatusModal}
+        selectedRequest={selectedRequest}
+        statuses={statuses}
+        selectedStatusId={selectedStatusId}
+        statusNotes={statusNotes}
+        actionLoading={actionLoading}
+        actionError={actionError}
+        onStatusIdChange={setSelectedStatusId}
+        onStatusNotesChange={setStatusNotes}
+        onChangeStatus={handleChangeStatus}
+        onClose={() => {
+          setShowStatusModal(false);
+          setSelectedStatusId('');
+          setStatusNotes('');
+          setActionError(null);
+        }}
+      />
 
       {/* Complete/Close Request Modal */}
-      {showCloseModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col`}>
-            <div className="p-6 overflow-y-auto flex-1">
-              <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-                Complete Service Request
-              </h2>
+      <CompleteRequestModal
+        show={showCloseModal}
+        selectedRequest={selectedRequest}
+        closureReasons={closureReasons}
+        selectedClosureReasonId={selectedClosureReasonId}
+        resolutionSummary={resolutionSummary}
+        actualDurationMinutes={actualDurationMinutes}
+        equipmentUsed={equipmentUsed}
+        timeBreakdown={timeBreakdown}
+        actionLoading={actionLoading}
+        actionError={actionError}
+        onClosureReasonIdChange={setSelectedClosureReasonId}
+        onResolutionSummaryChange={setResolutionSummary}
+        onActualDurationChange={setActualDurationMinutes}
+        onEquipmentUsedChange={setEquipmentUsed}
+        onComplete={handleCloseRequest}
+        onClose={() => {
+          setShowCloseModal(false);
+          setSelectedClosureReasonId('');
+          setResolutionSummary('');
+          setActualDurationMinutes('');
+          setEquipmentUsed('');
+          setActionError(null);
+        }}
+        formatDuration={formatDuration}
+      />
 
-            <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
-              Complete and close service request <span className="font-mono">{selectedRequest.request_number}</span>
-            </p>
-
-            {actionError && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                {actionError}
-              </div>
-            )}
-
-            {/* Closure Reason */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Closure Reason <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={selectedClosureReasonId}
-                onChange={(e) => setSelectedClosureReasonId(e.target.value)}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              >
-                <option value="">-- Select Closure Reason --</option>
-                {closureReasons.map((reason) => (
-                  <option key={reason.id} value={reason.id}>
-                    {reason.reason} {reason.description && `- ${reason.description}`}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Resolution Summary */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Resolution Summary <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={resolutionSummary}
-                onChange={(e) => setResolutionSummary(e.target.value)}
-                placeholder="Describe what was done to resolve this service request..."
-                rows={4}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
-              />
-            </div>
-
-            {/* Actual Duration */}
-            <div className="mb-4">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Actual Duration (minutes)
-              </label>
-              <input
-                type="number"
-                value={actualDurationMinutes}
-                onChange={(e) => setActualDurationMinutes(e.target.value)}
-                placeholder="Enter actual time spent"
-                min="0"
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-              />
-              {selectedRequest.total_work_duration_minutes > 0 && (
-                <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
-                  Tracked time: {formatDuration(selectedRequest.total_work_duration_minutes)}
-                </p>
-              )}
-              {timeBreakdown && (
-                <div className={`mt-3 p-3 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
-                  {/* Show waived time for first-time clients */}
-                  {timeBreakdown.isFirstServiceRequest && parseFloat(timeBreakdown.waivedHours) > 0 && (
-                    <div className={`mb-3 pb-3 border-b ${themeClasses.border}`}>
-                      <p className={`text-xs ${themeClasses.text.secondary} mb-1`}>
-                        First Service Request Discount:
-                      </p>
-                      <p className={`text-sm font-medium text-green-600 dark:text-green-400`}>
-                        New Client Assessment - Waived: {timeBreakdown.waivedHours} hours
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Billable hours breakdown */}
-                  <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
-                    Billable Hours:
-                  </p>
-                  <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="text-center">
-                      <div className={`${themeClasses.text.secondary} mb-1`}>Standard</div>
-                      <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.standardBillableHours.toFixed(2)} hrs
-                      </div>
-                      <div className={`text-xs ${themeClasses.text.muted}`}>1.0x rate</div>
-                    </div>
-                    <div className="text-center">
-                      <div className={`${themeClasses.text.secondary} mb-1`}>Premium</div>
-                      <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.premiumBillableHours.toFixed(2)} hrs
-                      </div>
-                      <div className={`text-xs ${themeClasses.text.muted}`}>1.5x rate</div>
-                    </div>
-                    <div className="text-center">
-                      <div className={`${themeClasses.text.secondary} mb-1`}>Emergency</div>
-                      <div className={`font-bold ${themeClasses.text.primary}`}>
-                        {timeBreakdown.emergencyBillableHours.toFixed(2)} hrs
-                      </div>
-                      <div className={`text-xs ${themeClasses.text.muted}`}>2.0x rate</div>
-                    </div>
-                  </div>
-                  <div className={`mt-2 pt-2 border-t ${themeClasses.border} text-center`}>
-                    <span className={`text-xs ${themeClasses.text.secondary}`}>Total Billable: </span>
-                    <span className={`text-sm font-bold ${themeClasses.text.primary}`}>
-                      {timeBreakdown.totalBillableHours.toFixed(2)} hours
-                    </span>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Equipment Used */}
-            <div className="mb-6">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Equipment/Materials Used (Optional)
-              </label>
-              <textarea
-                value={equipmentUsed}
-                onChange={(e) => setEquipmentUsed(e.target.value)}
-                placeholder="List any equipment or materials used..."
-                rows={3}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={handleCloseRequest}
-                disabled={!selectedClosureReasonId || !resolutionSummary || actionLoading}
-                className="flex-1 px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {actionLoading ? 'Completing...' : 'Complete Request'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowCloseModal(false);
-                  setSelectedClosureReasonId('');
-                  setResolutionSummary('');
-                  setActualDurationMinutes('');
-                  setEquipmentUsed('');
-                  setActionError(null);
-                }}
-                disabled={actionLoading}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-              >
-                Cancel
-              </button>
-            </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Uncancel Modal */}
-      {showUncancelModal && selectedRequest && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-lg w-full p-6`}>
-            <h2 className={`text-xl font-bold ${themeClasses.text.primary} mb-4`}>
-              Restore Service Request
-            </h2>
-
-            <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
-              Are you sure you want to restore service request <span className="font-mono">{selectedRequest.request_number}</span>?
-              This will change the status back to "Submitted".
-            </p>
-
-            {actionError && (
-              <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                {actionError}
-              </div>
-            )}
-
-            <div className="mb-4">
-              <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
-                Reason for restoring (optional)
-              </label>
-              <textarea
-                value={uncancelReason}
-                onChange={(e) => setUncancelReason(e.target.value)}
-                placeholder="Provide a reason for restoring this request..."
-                rows={3}
-                className={`w-full px-3 py-2 rounded-lg ${themeClasses.input} resize-none`}
-              />
-            </div>
-
-            <div className="flex space-x-3">
-              <button
-                onClick={handleUncancelRequest}
-                disabled={actionLoading}
-                className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {actionLoading ? 'Restoring...' : 'Restore Request'}
-              </button>
-              <button
-                onClick={() => {
-                  setShowUncancelModal(false);
-                  setUncancelReason('');
-                  setActionError(null);
-                }}
-                disabled={actionLoading}
-                className={`flex-1 px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <UncancelRequestModal
+        show={showUncancelModal}
+        selectedRequest={selectedRequest}
+        uncancelReason={uncancelReason}
+        actionLoading={actionLoading}
+        actionError={actionError}
+        onUncancelReasonChange={setUncancelReason}
+        onUncancel={handleUncancelRequest}
+        onClose={() => {
+          setShowUncancelModal(false);
+          setUncancelReason('');
+          setActionError(null);
+        }}
+      />
 
       {/* Invoice Viewer Modal */}
-      {showInvoiceModal && selectedInvoiceId && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className={`${themeClasses.bg.card} rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto`}>
-            {loadingInvoice ? (
-              <div className="p-8 text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                <p className={`mt-4 ${themeClasses.text.secondary}`}>Loading invoice...</p>
-              </div>
-            ) : invoiceData ? (
-              <div className="p-8" id="invoice-content">
-                {/* Header with Close Button */}
-                <div className="flex justify-between items-start mb-6">
-                  <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>Invoice</h2>
-                  <button
-                    onClick={() => {
-                      setShowInvoiceModal(false);
-                      setSelectedInvoiceId(null);
-                      setInvoiceData(null);
-                    }}
-                    className={`text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200`}
-                  >
-                    <XCircle className="h-6 w-6" />
-                  </button>
-                </div>
+      <InvoiceViewerModal
+        show={showInvoiceModal}
+        selectedInvoiceId={selectedInvoiceId}
+        invoiceData={invoiceData}
+        loadingInvoice={loadingInvoice}
+        formatDate={formatDate}
+        onClose={() => {
+          setShowInvoiceModal(false);
+          setSelectedInvoiceId(null);
+          setInvoiceData(null);
+        }}
+      />
 
-                {/* Company Letterhead */}
-                <div className="mb-8 pb-6 border-b-2 border-gray-300 dark:border-gray-600">
-                  <h1 className={`text-3xl font-bold ${themeClasses.text.primary} mb-2`}>
-                    {invoiceData.companyInfo.company_name}
-                  </h1>
-                  <div className={`text-sm ${themeClasses.text.secondary}`}>
-                    <p>{invoiceData.companyInfo.company_address_line1}</p>
-                    <p>{invoiceData.companyInfo.company_address_line2}</p>
-                    <p>
-                      {invoiceData.companyInfo.company_city}, {invoiceData.companyInfo.company_state}{' '}
-                      {invoiceData.companyInfo.company_zip}
-                    </p>
-                    <p className="mt-2">Phone: {invoiceData.companyInfo.company_phone}</p>
-                    <p>Email: {invoiceData.companyInfo.company_email}</p>
-                  </div>
-                </div>
-
-                {/* Invoice Details & Client Info Side by Side */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-8">
-                  {/* Invoice Details */}
-                  <div>
-                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Invoice Details</h3>
-                    <div className={`space-y-2 text-sm ${themeClasses.text.secondary}`}>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Invoice Number:</span>
-                        <span className="font-mono">{invoiceData.invoice.invoice_number}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Issue Date:</span>
-                        <span>{formatDate(invoiceData.invoice.issue_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Due Date:</span>
-                        <span className="font-semibold">{formatDate(invoiceData.invoice.due_date)}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="font-medium">Payment Status:</span>
-                        <span
-                          className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                            invoiceData.invoice.payment_status === 'paid'
-                              ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                              : invoiceData.invoice.payment_status === 'overdue'
-                              ? 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300'
-                              : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
-                          }`}
-                        >
-                          {invoiceData.invoice.payment_status.toUpperCase()}
-                        </span>
-                      </div>
-                      {invoiceData.invoice.payment_date && (
-                        <div className="flex justify-between">
-                          <span className="font-medium">Payment Date:</span>
-                          <span>{formatDate(invoiceData.invoice.payment_date)}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Bill To */}
-                  <div>
-                    <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Bill To</h3>
-                    <div className={`text-sm ${themeClasses.text.secondary}`}>
-                      <p className="font-semibold text-base">{invoiceData.invoice.business_name}</p>
-                      <p className="mt-2">{invoiceData.invoice.primary_contact_name}</p>
-                      <p>{invoiceData.invoice.street_address}</p>
-                      <p>
-                        {invoiceData.invoice.city}, {invoiceData.invoice.state} {invoiceData.invoice.zip_code}
-                      </p>
-                      <p className="mt-2">{invoiceData.invoice.primary_contact_phone}</p>
-                      <p>{invoiceData.invoice.primary_contact_email}</p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Service Request Details */}
-                <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
-                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Service Request</h3>
-                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 text-sm ${themeClasses.text.secondary}`}>
-                    <div>
-                      <span className="font-medium">Request Number:</span>
-                      <span className="ml-2 font-mono">{invoiceData.invoice.request_number}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service:</span>
-                      <span className="ml-2">{invoiceData.invoice.service_title}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service Started:</span>
-                      <span className="ml-2">{formatDate(invoiceData.invoice.service_created_at)}</span>
-                    </div>
-                    <div>
-                      <span className="font-medium">Service Completed:</span>
-                      <span className="ml-2">{formatDate(invoiceData.invoice.service_completed_at)}</span>
-                    </div>
-                  </div>
-                  {invoiceData.invoice.work_description && (
-                    <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-600">
-                      <p className="font-medium text-sm mb-1">Work Description:</p>
-                      <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
-                        {invoiceData.invoice.work_description}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Billable Hours Breakdown */}
-                <div className="mb-6">
-                  <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3`}>Time & Cost Breakdown</h3>
-
-                  {/* First-time Client Discount */}
-                  {invoiceData.invoice.is_first_service_request && invoiceData.invoice.waived_hours > 0 && (
-                    <div className={`mb-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg`}>
-                      <div className="flex justify-between items-center">
-                        <span className={`font-medium ${themeClasses.text.primary}`}>
-                          New Client Assessment - Waived
-                        </span>
-                        <span className={`font-semibold text-green-600 dark:text-green-400`}>
-                          {invoiceData.invoice.waived_hours.toFixed(2)} hours
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Billable Hours Table */}
-                  <div className={`overflow-hidden border ${themeClasses.border} rounded-lg`}>
-                    <table className="w-full">
-                      <thead className={`${themeClasses.bg.secondary}`}>
-                        <tr>
-                          <th className={`px-4 py-3 text-left text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Rate Tier
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Hours
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Rate
-                          </th>
-                          <th className={`px-4 py-3 text-right text-sm font-semibold ${themeClasses.text.primary}`}>
-                            Amount
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className={`divide-y ${themeClasses.border}`}>
-                        {/* Standard Hours */}
-                        {invoiceData.invoice.standard_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
-                              Standard (1.0x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Mon-Fri 8am-5pm</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.standard_hours.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.standard_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.standard_cost.toFixed(2)}
-                            </td>
-                          </tr>
-                        )}
-
-                        {/* Premium Hours */}
-                        {invoiceData.invoice.premium_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
-                              Premium (1.5x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Weekends</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.premium_hours.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.premium_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.premium_cost.toFixed(2)}
-                            </td>
-                          </tr>
-                        )}
-
-                        {/* Emergency Hours */}
-                        {invoiceData.invoice.emergency_hours > 0 && (
-                          <tr>
-                            <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
-                              Emergency (2.0x)
-                              <div className={`text-xs ${themeClasses.text.muted}`}>Late night/overnight</div>
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              {invoiceData.invoice.emergency_hours.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.emergency_rate.toFixed(2)}
-                            </td>
-                            <td className={`px-4 py-3 text-sm text-right font-semibold ${themeClasses.text.primary}`}>
-                              ${invoiceData.invoice.emergency_cost.toFixed(2)}
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-
-                  <div className={`text-xs ${themeClasses.text.muted} mt-2 italic`}>
-                    * Final end time rounded up to nearest 15 minutes. Exact hours billed per tier.
-                  </div>
-                </div>
-
-                {/* Totals */}
-                <div className="mb-6">
-                  <div className={`max-w-sm ml-auto space-y-2 text-sm`}>
-                    <div className="flex justify-between">
-                      <span className={`${themeClasses.text.secondary}`}>Subtotal:</span>
-                      <span className={`${themeClasses.text.primary} font-semibold`}>
-                        ${invoiceData.invoice.subtotal.toFixed(2)}
-                      </span>
-                    </div>
-                    {invoiceData.invoice.tax_rate > 0 && (
-                      <div className="flex justify-between">
-                        <span className={`${themeClasses.text.secondary}`}>
-                          Tax ({(invoiceData.invoice.tax_rate * 100).toFixed(2)}%):
-                        </span>
-                        <span className={`${themeClasses.text.primary} font-semibold`}>
-                          ${invoiceData.invoice.tax_amount.toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                    <div className={`flex justify-between pt-2 border-t-2 border-gray-300 dark:border-gray-600`}>
-                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>Total Due:</span>
-                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
-                        ${invoiceData.invoice.total_amount.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Notes */}
-                {invoiceData.invoice.notes && (
-                  <div className={`mb-6 p-4 ${themeClasses.bg.secondary} rounded-lg`}>
-                    <h3 className={`text-sm font-semibold ${themeClasses.text.primary} mb-2`}>Notes</h3>
-                    <p className={`text-sm ${themeClasses.text.secondary} whitespace-pre-wrap`}>
-                      {invoiceData.invoice.notes}
-                    </p>
-                  </div>
-                )}
-
-                {/* Payment Terms */}
-                <div className={`text-xs ${themeClasses.text.muted} text-center`}>
-                  <p>Payment due within 30 days of invoice date.</p>
-                  <p className="mt-1">Thank you for your business!</p>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="mt-8 flex justify-end space-x-3">
-                  <button
-                    onClick={() => window.print()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
-                  >
-                    <Download className="h-4 w-4 mr-2" />
-                    Print / Save PDF
-                  </button>
-                  <button
-                    onClick={() => {
-                      setShowInvoiceModal(false);
-                      setSelectedInvoiceId(null);
-                      setInvoiceData(null);
-                    }}
-                    className={`px-4 py-2 ${themeClasses.bg.secondary} rounded-lg hover:opacity-80`}
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            ) : null}
-          </div>
-        </div>
-      )}
     </div>
   );
 };

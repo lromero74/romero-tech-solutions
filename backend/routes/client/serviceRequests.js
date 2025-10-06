@@ -677,6 +677,7 @@ router.get('/:id/files', async (req, res) => {
         cf.file_description,
         cf.created_at,
         cf.uploaded_by_user_id,
+        cf.uploaded_by_employee_id,
         COALESCE(u.email, e.email) as uploaded_by_email,
         CASE
           WHEN u.id IS NOT NULL THEN 'client'
@@ -685,7 +686,7 @@ router.get('/:id/files', async (req, res) => {
         END as uploaded_by_type
       FROM t_client_files cf
       LEFT JOIN users u ON cf.uploaded_by_user_id = u.id
-      LEFT JOIN employees e ON cf.uploaded_by_user_id = e.id
+      LEFT JOIN employees e ON cf.uploaded_by_employee_id = e.id
       WHERE cf.service_request_id = $1 AND cf.soft_delete = false
       ORDER BY cf.created_at DESC
     `;
