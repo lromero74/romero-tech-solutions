@@ -892,7 +892,7 @@ router.get('/service-requests/:id/files', async (req, res) => {
         cf.file_size_bytes,
         cf.content_type,
         cf.file_description,
-        cf.created_at,
+        cf.created_at AT TIME ZONE 'UTC' as created_at,
         cf.uploaded_by_user_id,
         cf.uploaded_by_employee_id,
         COALESCE(u.email, e.email) as uploaded_by_email,
@@ -3066,6 +3066,96 @@ const upload = multer({
 });
 
 /**
+ * Ensures the folder structure exists for organizing service request files
+ * Creates "Service Requests" parent folder and SR-specific subfolder if needed
+ * @param {string} businessId - Business UUID
+ * @param {string} requestNumber - Service request number (e.g., "SR-2025-00001")
+ * @returns {Promise<string>} - Folder ID for the service request
+ */
+async function ensureServiceRequestFolder(businessId, requestNumber) {
+  const pool = await getPool();
+
+  // Step 1: Ensure "Service Requests" parent folder exists
+  let parentFolderId;
+  const parentFolderResult = await pool.query(
+    `SELECT id FROM t_client_folders
+     WHERE business_id = $1
+       AND folder_name = 'Service Requests'
+       AND parent_folder_id IS NULL
+       AND soft_delete = false
+       LIMIT 1`,
+    [businessId]
+  );
+
+  if (parentFolderResult.rows.length > 0) {
+    parentFolderId = parentFolderResult.rows[0].id;
+  } else {
+    // Create "Service Requests" parent folder
+    const createParentResult = await pool.query(
+      `INSERT INTO t_client_folders (
+        business_id,
+        parent_folder_id,
+        folder_name,
+        folder_description,
+        folder_color,
+        sort_order,
+        is_system_folder
+      ) VALUES ($1, NULL, $2, $3, $4, 0, true)
+      RETURNING id`,
+      [
+        businessId,
+        'Service Requests',
+        'Automatically organized files from service requests',
+        '#3B82F6'
+      ]
+    );
+    parentFolderId = createParentResult.rows[0].id;
+    console.log(`📁 Created "Service Requests" parent folder for business ${businessId}`);
+  }
+
+  // Step 2: Ensure service request subfolder exists
+  let srFolderId;
+  const srFolderResult = await pool.query(
+    `SELECT id FROM t_client_folders
+     WHERE business_id = $1
+       AND parent_folder_id = $2
+       AND folder_name = $3
+       AND soft_delete = false
+       LIMIT 1`,
+    [businessId, parentFolderId, requestNumber]
+  );
+
+  if (srFolderResult.rows.length > 0) {
+    srFolderId = srFolderResult.rows[0].id;
+  } else {
+    // Create service request subfolder
+    const createSrFolderResult = await pool.query(
+      `INSERT INTO t_client_folders (
+        business_id,
+        parent_folder_id,
+        folder_name,
+        folder_description,
+        folder_color,
+        sort_order,
+        is_system_folder
+      ) VALUES ($1, $2, $3, $4, $5, 0, true)
+      RETURNING id`,
+      [
+        businessId,
+        parentFolderId,
+        requestNumber,
+        `Files for service request ${requestNumber}`,
+        '#10B981'
+      ]
+    );
+    srFolderId = createSrFolderResult.rows[0].id;
+    console.log(`📁 Created folder for service request ${requestNumber}`);
+  }
+
+  return srFolderId;
+}
+
+/**
  * POST /api/admin/service-requests/:id/files/upload
  * Upload files to a service request (admin/employee)
  */
@@ -3106,6 +3196,10 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
 
     const requestNumber = requestCheck.rows[0].request_number;
     const businessId = requestCheck.rows[0].business_id;
+
+    // Ensure folder structure exists for this service request
+    const serviceRequestFolderId = await ensureServiceRequestFolder(businessId, requestNumber);
+    console.log(`📁 [Admin] Files will be organized in folder: ${requestNumber}`);
 
     // Calculate total upload size
     totalSizeBytes = req.files.reduce((sum, file) => sum + file.size, 0);
@@ -3200,10 +3294,10 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
         const uploadResult = await quotaManagementService.recordFileUpload(fileData);
 
         if (uploadResult.success) {
-          // Link file to service request
+          // Link file to service request and assign to the appropriate folder
           await pool.query(
-            'UPDATE t_client_files SET service_request_id = $1 WHERE id = $2',
-            [serviceRequestId, uploadResult.fileId]
+            'UPDATE t_client_files SET service_request_id = $1, folder_id = $2 WHERE id = $3',
+            [serviceRequestId, serviceRequestFolderId, uploadResult.fileId]
           );
 
           uploadedFiles.push({

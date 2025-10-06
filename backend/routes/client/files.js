@@ -11,6 +11,7 @@ import { validateFileUpload, sanitizeInputMiddleware } from '../../utils/inputVa
 import virusScanService from '../../services/virusScanService.js';
 import quotaManagementService from '../../services/quotaManagementService.js';
 import { getPool } from '../../config/database.js';
+import { websocketService } from '../../services/websocketService.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
@@ -556,9 +557,9 @@ router.delete('/:fileId', authenticateClient, async (req, res) => {
     const { fileId } = req.params;
     const businessId = req.user.businessId;
 
-    // Verify file belongs to this business
+    // Verify file belongs to this business and get its details
     const checkQuery = `
-      SELECT file_path, original_filename
+      SELECT file_path, original_filename, folder_id, service_request_id
       FROM t_client_files
       WHERE id = $1 AND business_id = $2 AND deleted_at IS NULL
     `;
@@ -575,6 +576,8 @@ router.delete('/:fileId', authenticateClient, async (req, res) => {
 
     const filePath = checkResult.rows[0].file_path;
     const originalName = checkResult.rows[0].original_filename;
+    const folderId = checkResult.rows[0].folder_id;
+    const serviceRequestId = checkResult.rows[0].service_request_id;
 
     // Soft delete in database
     const deleteQuery = `
@@ -602,6 +605,18 @@ router.delete('/:fileId', authenticateClient, async (req, res) => {
     ]);
 
     console.log(`🗑️ File soft-deleted: ${originalName} by user ${req.user.email}`);
+
+    // If file belongs to a service request, broadcast update so file count refreshes
+    if (serviceRequestId) {
+      console.log(`📡 Broadcasting file deletion for service request ${serviceRequestId}`);
+      websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'updated', {
+        fileDeleted: true,
+        fileId: fileId,
+        fileName: originalName,
+        deletedBy: 'client',
+        deletedFrom: 'fileStorage'
+      });
+    }
 
     res.json({
       success: true,

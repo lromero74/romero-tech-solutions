@@ -84,6 +84,37 @@ export const formatFileSize = (bytes: number) => {
 };
 
 /**
+ * Format file timestamp (converts UTC to local timezone)
+ */
+export const formatFileTimestamp = (timestamp: string, locale?: string) => {
+  try {
+    const dateObj = new Date(timestamp);
+
+    if (isNaN(dateObj.getTime())) {
+      return 'Invalid date';
+    }
+
+    const formattedDate = dateObj.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+
+    const formattedTime = dateObj.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    });
+
+    return `${formattedDate} ${formattedTime}`;
+  } catch (error) {
+    console.error('formatFileTimestamp error:', error);
+    return 'Invalid date';
+  }
+};
+
+/**
  * Format full address from location details
  */
 export const formatFullAddress = (locationDetails: ServiceRequest['locationDetails']) => {

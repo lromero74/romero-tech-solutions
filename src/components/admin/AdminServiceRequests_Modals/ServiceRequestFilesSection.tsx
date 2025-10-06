@@ -50,6 +50,34 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
+  const formatFileTimestamp = (timestamp: string) => {
+    try {
+      const dateObj = new Date(timestamp);
+
+      if (isNaN(dateObj.getTime())) {
+        return 'Invalid date';
+      }
+
+      const formattedDate = dateObj.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+
+      const formattedTime = dateObj.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      });
+
+      return `${formattedDate} ${formattedTime}`;
+    } catch (error) {
+      console.error('formatFileTimestamp error:', error);
+      return 'Invalid date';
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0 && onUploadFiles) {
@@ -160,7 +188,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                           {file.original_filename}
                         </p>
                         <p className={`text-xs ${themeClasses.text.muted}`}>
-                          {formatFileSize(file.file_size_bytes)} • {new Date(file.created_at).toLocaleDateString()} {new Date(file.created_at).toLocaleTimeString()}
+                          {formatFileSize(file.file_size_bytes)} • {formatFileTimestamp(file.created_at)}
                         </p>
                         {file.uploaded_by_email && (
                           <p className={`text-xs ${themeClasses.text.muted} mt-0.5`}>

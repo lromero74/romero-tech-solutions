@@ -117,8 +117,12 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
   const [newFolderDescription, setNewFolderDescription] = useState('');
   const [newFolderColor, setNewFolderColor] = useState('#3B82F6');
   const [showMoveToFolder, setShowMoveToFolder] = useState(false);
+  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [fileCache, setFileCache] = useState<Map<string, { files: ClientFile[], totalPages: number, timestamp: number }>>(new Map());
+  const [isBackgroundLoading, setIsBackgroundLoading] = useState(false);
 
   const filesPerPage = 20;
+  const CACHE_DURATION = 30000; // 30 seconds
 
   // Get file icon based on MIME type
   const getFileIcon = (mimeType: string) => {
@@ -170,9 +174,40 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     }
   };
 
-  // Load files and quota information
-  const loadData = async () => {
-    setLoading(true);
+  // Get cache key for current view
+  const getCacheKey = () => {
+    return `${selectedFolder || 'null'}_${currentPage}_${searchTerm}`;
+  };
+
+  // Check if cache is fresh
+  const isCacheFresh = (timestamp: number) => {
+    return Date.now() - timestamp < CACHE_DURATION;
+  };
+
+  // Load files and quota information with caching
+  const loadData = async (forceRefresh = false) => {
+    const cacheKey = getCacheKey();
+    const cached = fileCache.get(cacheKey);
+
+    // Use cached data if available and fresh, unless force refresh
+    if (!forceRefresh && cached && isCacheFresh(cached.timestamp)) {
+      setFiles(cached.files);
+      setTotalPages(cached.totalPages);
+      // Don't set loading state - instant switch
+      return;
+    }
+
+    // If we have stale cache, use it immediately but fetch in background
+    const hasStaleCache = cached && !isCacheFresh(cached.timestamp);
+    if (hasStaleCache) {
+      setFiles(cached.files);
+      setTotalPages(cached.totalPages);
+      setIsBackgroundLoading(true);
+    } else {
+      // No cache at all - show loading spinner
+      setLoading(true);
+    }
+
     try {
       // Build file query params
       const params = new URLSearchParams({
@@ -182,11 +217,9 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       });
 
       // Always include folderId to filter properly
-      // null/'null' means unorganized files (folder_id IS NULL)
-      // Omitting it would return ALL files regardless of folder
       params.append('folderId', selectedFolder || 'null');
 
-      // Load files and quota in parallel (folders loaded separately on mount)
+      // Load files and quota in parallel
       const [filesResponse, quotaResponse] = await Promise.all([
         fetch(`${API_BASE_URL}/client/files?${params.toString()}`, {
           method: 'GET',
@@ -200,8 +233,22 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
 
       if (filesResponse.ok) {
         const filesData = await filesResponse.json();
-        setFiles(filesData.data.files);
-        setTotalPages(filesData.data.pagination.totalPages);
+        const newFiles = filesData.data.files;
+        const newTotalPages = filesData.data.pagination.totalPages;
+
+        setFiles(newFiles);
+        setTotalPages(newTotalPages);
+
+        // Update cache
+        setFileCache(prev => {
+          const updated = new Map(prev);
+          updated.set(cacheKey, {
+            files: newFiles,
+            totalPages: newTotalPages,
+            timestamp: Date.now()
+          });
+          return updated;
+        });
       }
 
       if (quotaResponse.ok) {
@@ -213,7 +260,13 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       console.error('Failed to load file data:', error);
     } finally {
       setLoading(false);
+      setIsBackgroundLoading(false);
     }
+  };
+
+  // Invalidate cache (e.g., after upload, delete, move)
+  const invalidateCache = () => {
+    setFileCache(new Map());
   };
 
   // Delete file
@@ -221,13 +274,10 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     if (!confirm(t('files.actions.confirmDelete'))) return;
 
     try {
-      const response = await apiService.delete(`/client/files/${fileId}`);
-
-      if (response.ok) {
-        loadData(); // Refresh data
-      } else {
-        alert(t('files.actions.deleteFailed'));
-      }
+      await apiService.delete(`/client/files/${fileId}`);
+      // If we get here, the delete was successful (apiService throws on error)
+      invalidateCache();
+      loadData(true); // Force refresh
     } catch (error) {
       console.error('Delete error:', error);
       alert(t('files.actions.deleteFailed'));
@@ -262,6 +312,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
         setNewFolderDescription('');
         setNewFolderColor('#3B82F6');
         setShowCreateFolder(false);
+        invalidateCache();
         await loadFolders();
       } else {
         const error = await response.json();
@@ -278,20 +329,17 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     if (!confirm(t('client.deleteFolder') + '?')) return;
 
     try {
-      const response = await apiService.delete(`/client/folders/${folderId}`);
-
-      if (response.ok) {
-        if (selectedFolder === folderId) {
-          setSelectedFolder(null);
-        }
-        await loadFolders();
-      } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to delete folder');
+      await apiService.delete(`/client/folders/${folderId}`);
+      // If we get here, the delete was successful (apiService throws on error)
+      if (selectedFolder === folderId) {
+        setSelectedFolder(null);
       }
+      invalidateCache();
+      await loadFolders();
     } catch (error) {
       console.error('Delete folder error:', error);
-      alert('Failed to delete folder');
+      const errorMessage = error instanceof Error ? error.message : 'Failed to delete folder';
+      alert(errorMessage);
     }
   };
 
@@ -313,7 +361,8 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       if (response.ok) {
         setSelectedFiles(new Set());
         setShowMoveToFolder(false);
-        await loadData();
+        invalidateCache();
+        await loadData(true);
       } else {
         const error = await response.json();
         alert(error.message || 'Failed to move files');
@@ -351,7 +400,8 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       });
 
       if (response.ok) {
-        await loadData();
+        invalidateCache();
+        await loadData(true);
       }
     } catch (error) {
       console.error('Drop error:', error);
@@ -369,6 +419,142 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       newSelection.add(fileId);
     }
     setSelectedFiles(newSelection);
+  };
+
+  // Toggle folder expansion
+  const toggleFolderExpansion = (folderId: string) => {
+    const newExpanded = new Set(expandedFolders);
+    if (newExpanded.has(folderId)) {
+      newExpanded.delete(folderId);
+    } else {
+      newExpanded.add(folderId);
+    }
+    setExpandedFolders(newExpanded);
+  };
+
+  // Calculate total file count including all children recursively
+  const calculateTotalFileCount = (folder: ClientFolder & { children?: ClientFolder[] }): number => {
+    let total = folder.fileCount;
+    if (folder.children) {
+      folder.children.forEach(child => {
+        total += calculateTotalFileCount(child);
+      });
+    }
+    return total;
+  };
+
+  // Check if a folder is the "Service Requests" parent folder
+  const isServiceRequestsParent = (folderId: string | null): boolean => {
+    if (!folderId) return false;
+    const folder = folders.find(f => f.id === folderId);
+    return folder?.folderName === 'Service Requests' && folder?.parentFolderId === null;
+  };
+
+  // Check if a folder is anywhere in the Service Requests tree (parent or child)
+  const isInServiceRequestsTree = (folderId: string | null): boolean => {
+    if (!folderId) return false;
+    const folder = folders.find(f => f.id === folderId);
+    if (!folder) return false;
+
+    // Check if this is the Service Requests parent folder
+    if (folder.folderName === 'Service Requests' && folder.parentFolderId === null) {
+      return true;
+    }
+
+    // Check if parent is Service Requests
+    if (folder.parentFolderId) {
+      const parent = folders.find(f => f.id === folder.parentFolderId);
+      if (parent?.folderName === 'Service Requests' && parent?.parentFolderId === null) {
+        return true;
+      }
+    }
+
+    return false;
+  };
+
+  // Organize folders into tree structure
+  const organizeFoldersIntoTree = () => {
+    const rootFolders: ClientFolder[] = [];
+    const folderMap = new Map<string, ClientFolder & { children: ClientFolder[] }>();
+
+    // Create a map of all folders with children arrays
+    folders.forEach(folder => {
+      folderMap.set(folder.id, { ...folder, children: [] });
+    });
+
+    // Organize into tree structure
+    folders.forEach(folder => {
+      if (folder.parentFolderId === null) {
+        rootFolders.push(folderMap.get(folder.id)!);
+      } else {
+        const parent = folderMap.get(folder.parentFolderId);
+        if (parent) {
+          parent.children.push(folderMap.get(folder.id)!);
+        }
+      }
+    });
+
+    return rootFolders;
+  };
+
+  // Render folder tree recursively
+  const renderFolderTree = (folder: ClientFolder & { children?: ClientFolder[] }, level: number = 0) => {
+    const hasChildren = folder.children && folder.children.length > 0;
+    const isExpanded = expandedFolders.has(folder.id);
+    const paddingLeft = `${level * 1.5}rem`;
+    const totalFileCount = calculateTotalFileCount(folder);
+
+    return (
+      <React.Fragment key={folder.id}>
+        <div
+          className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${
+            selectedFolder === folder.id
+              ? 'bg-blue-100 dark:bg-blue-900'
+              : 'hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+          onDragOver={handleDragOver}
+          onDrop={(e) => handleDrop(e, folder.id)}
+          style={{ paddingLeft }}
+        >
+          <div
+            onClick={() => setSelectedFolder(folder.id)}
+            className="flex items-center flex-1"
+          >
+            {hasChildren && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFolderExpansion(folder.id);
+                }}
+                className="mr-1"
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4 text-gray-500" />
+                ) : (
+                  <ChevronRight className="h-4 w-4 text-gray-500" />
+                )}
+              </button>
+            )}
+            {!hasChildren && <span className="w-5" />}
+            <Folder className="h-4 w-4 mr-2" style={{ color: folder.folderColor }} />
+            <span className={`text-sm ${themeClasses.text}`}>{folder.folderName}</span>
+            <span className={`ml-2 text-xs ${themeClasses.textSecondary}`}>({totalFileCount})</span>
+          </div>
+          {!folder.isSystemFolder && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                deleteFolder(folder.id);
+              }}
+              className="text-red-600 hover:text-red-700 ml-2"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {hasChildren && isExpanded && folder.children!.map(child => renderFolderTree(child, level + 1))}
+      </React.Fragment>
+    );
   };
 
   // Load folders once on mount
@@ -430,7 +616,8 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
           </div>
           <FileUpload
             onUploadComplete={() => {
-              loadData();
+              invalidateCache();
+              loadData(true);
               setShowUpload(false);
             }}
             onQuotaUpdate={setQuotaInfo}
@@ -442,13 +629,15 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
           <div className={`rounded-lg border p-4 ${themeClasses.container} lg:col-span-1`}>
             <div className="flex items-center justify-between mb-4">
               <h3 className={`text-lg font-semibold ${themeClasses.text}`}>{t('client.folders')}</h3>
-              <button
-                onClick={() => setShowCreateFolder(true)}
-                className="text-blue-600 hover:text-blue-700"
-                title={t('client.createFolder')}
-              >
-                <FolderPlus className="h-5 w-5" />
-              </button>
+              {!isInServiceRequestsTree(selectedFolder) && (
+                <button
+                  onClick={() => setShowCreateFolder(true)}
+                  className="text-blue-600 hover:text-blue-700"
+                  title={t('client.createFolder')}
+                >
+                  <FolderPlus className="h-5 w-5" />
+                </button>
+              )}
             </div>
 
             {/* All Files / Root */}
@@ -466,42 +655,19 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
               <span className={`text-sm ${themeClasses.text}`}>{t('client.unorganizedFiles')}</span>
             </div>
 
-            {/* Folder List */}
-            {folders.map((folder) => (
-              <div
-                key={folder.id}
-                className={`flex items-center justify-between p-2 mb-1 rounded cursor-pointer ${
-                  selectedFolder === folder.id
-                    ? 'bg-blue-100 dark:bg-blue-900'
-                    : 'hover:bg-gray-100 dark:hover:bg-gray-700'
-                }`}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, folder.id)}
-              >
-                <div
-                  onClick={() => setSelectedFolder(folder.id)}
-                  className="flex items-center flex-1"
-                >
-                  <Folder className="h-4 w-4 mr-2" style={{ color: folder.folderColor }} />
-                  <span className={`text-sm ${themeClasses.text}`}>{folder.folderName}</span>
-                  <span className={`ml-2 text-xs ${themeClasses.textSecondary}`}>({folder.fileCount})</span>
-                </div>
-                {!folder.isSystemFolder && (
-                  <button
-                    onClick={() => deleteFolder(folder.id)}
-                    className="text-red-600 hover:text-red-700 ml-2"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            ))}
+            {/* Folder Tree */}
+            {organizeFoldersIntoTree().map((folder) => renderFolderTree(folder))}
           </div>
 
           {/* Main Content Area */}
           <div className={`rounded-lg border p-6 ${themeClasses.container} lg:col-span-3`}>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-6 gap-4">
-              <h2 className={`text-xl font-semibold ${themeClasses.text}`}>{t('files.title')}</h2>
+              <div className="flex items-center gap-2">
+                <h2 className={`text-xl font-semibold ${themeClasses.text}`}>{t('files.title')}</h2>
+                {isBackgroundLoading && (
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-500" title="Refreshing..." />
+                )}
+              </div>
               <div className="flex gap-2">
                 {selectedFiles.size > 0 && (
                   <button
@@ -512,13 +678,15 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                     {t('client.moveToFolder')}
                   </button>
                 )}
-                <button
-                  onClick={() => setShowUpload(true)}
-                  className={`flex items-center px-4 py-2 rounded-md ${themeClasses.button}`}
-                >
-                  <HardDrive className="h-4 w-4 mr-2" />
-                  {t('files.uploadFiles')}
-                </button>
+                {!isServiceRequestsParent(selectedFolder) && (
+                  <button
+                    onClick={() => setShowUpload(true)}
+                    className={`flex items-center px-4 py-2 rounded-md ${themeClasses.button}`}
+                  >
+                    <HardDrive className="h-4 w-4 mr-2" />
+                    {t('files.uploadFiles')}
+                  </button>
+                )}
               </div>
             </div>
 
@@ -940,20 +1108,29 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                 <span className={themeClasses.text}>{t('client.unorganizedFiles')}</span>
               </button>
 
-              {/* Folders */}
-              {folders.map((folder) => (
-                <button
-                  key={folder.id}
-                  onClick={() => moveFilesToFolder(folder.id)}
-                  className="w-full flex items-center p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
-                >
-                  <Folder className="h-5 w-5 mr-2" style={{ color: folder.folderColor }} />
-                  <span className={themeClasses.text}>{folder.folderName}</span>
-                  <span className={`ml-auto text-xs ${themeClasses.textSecondary}`}>
-                    ({folder.fileCount} files)
-                  </span>
-                </button>
-              ))}
+              {/* Folders Tree */}
+              {(() => {
+                const renderFolderOption = (folder: ClientFolder & { children?: ClientFolder[] }, level: number = 0) => {
+                  const totalFileCount = calculateTotalFileCount(folder);
+                  return (
+                    <React.Fragment key={folder.id}>
+                      <button
+                        onClick={() => moveFilesToFolder(folder.id)}
+                        className="w-full flex items-center p-3 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 text-left"
+                        style={{ paddingLeft: `${0.75 + level * 1.5}rem` }}
+                      >
+                        <Folder className="h-5 w-5 mr-2" style={{ color: folder.folderColor }} />
+                        <span className={themeClasses.text}>{folder.folderName}</span>
+                        <span className={`ml-auto text-xs ${themeClasses.textSecondary}`}>
+                          ({totalFileCount} files)
+                        </span>
+                      </button>
+                      {folder.children && folder.children.map(child => renderFolderOption(child, level + 1))}
+                    </React.Fragment>
+                  );
+                };
+                return organizeFoldersIntoTree().map(folder => renderFolderOption(folder));
+              })()}
             </div>
           </div>
         </div>

@@ -1,7 +1,7 @@
 import React, { useRef } from 'react';
 import { FileText, Edit2, Download, Trash2, Check, X, RefreshCw, Upload } from 'lucide-react';
 import { ServiceRequestFile, ThemeClasses } from './types';
-import { formatFileSize } from './utils';
+import { formatFileSize, formatFileTimestamp } from './utils';
 
 interface ServiceRequestFilesSectionProps {
   fileCount: number;
@@ -142,7 +142,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                           {file.originalFilename}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()} {new Date(file.createdAt).toLocaleTimeString()}
+                          {formatFileSize(file.fileSizeBytes)} • {formatFileTimestamp(file.createdAt)}
                         </p>
                         {file.uploadedByEmail && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
