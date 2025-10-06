@@ -29,7 +29,7 @@ router.get('/businesses/by-email-domain/:email', async (req, res) => {
         b.logo_url,
         b.is_active,
         b.soft_delete,
-        hq.street as business_street,
+        hq.street_address_1 as business_street,
         hq.city as business_city,
         hq.state as business_state,
         hq.zip_code as business_zip_code,
@@ -87,7 +87,8 @@ router.get('/businesses', async (req, res) => {
         rc.category_name as rate_category_name,
         rc.base_hourly_rate,
         -- Get primary business address from headquarters service location
-        hq.street,
+        hq.street_address_1 as street,
+        hq.street_address_2,
         hq.city,
         hq.state,
         hq.zip_code,
@@ -124,6 +125,7 @@ router.get('/businesses', async (req, res) => {
           baseHourlyRate: business.base_hourly_rate ? parseFloat(business.base_hourly_rate) : null,
           address: {
             street: business.street,
+            street2: business.street_address_2,
             city: business.city,
             state: business.state,
             zipCode: business.zip_code,
@@ -217,15 +219,17 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
           await query(`
             UPDATE service_locations
             SET
-              street = $1,
-              city = $2,
-              state = $3,
-              zip_code = $4,
-              country = $5,
+              street_address_1 = $1,
+              street_address_2 = $2,
+              city = $3,
+              state = $4,
+              zip_code = $5,
+              country = $6,
               updated_at = CURRENT_TIMESTAMP
-            WHERE business_id = $6 AND is_headquarters = TRUE
+            WHERE business_id = $7 AND is_headquarters = TRUE
           `, [
             address.street || '',
+            address.street2 || '',
             address.city || '',
             address.state || '',
             address.zipCode || '',
@@ -238,7 +242,8 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
             INSERT INTO service_locations (
               business_id,
               location_name,
-              street,
+              street_address_1,
+              street_address_2,
               city,
               state,
               zip_code,
@@ -247,11 +252,12 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
               is_active,
               soft_delete
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, FALSE)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, FALSE)
           `, [
             businessId,
             businessName + ' - Headquarters',
             address.street || '',
+            address.street2 || '',
             address.city || '',
             address.state || '',
             address.zipCode || '',
@@ -262,7 +268,7 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
 
       // Get the updated headquarters address
       const addressResult = await query(`
-        SELECT street, city, state, zip_code, country
+        SELECT street_address_1 as street, street_address_2, city, state, zip_code, country
         FROM service_locations
         WHERE business_id = $1 AND is_headquarters = TRUE
         LIMIT 1
@@ -285,6 +291,7 @@ router.put('/businesses/:businessId', requirePermission('modify.businesses.enabl
             businessName: updatedBusiness.business_name,
             address: {
               street: addressData.street || '',
+              street2: addressData.street_address_2 || '',
               city: addressData.city || '',
               state: addressData.state || '',
               zipCode: addressData.zip_code || '',
@@ -396,7 +403,8 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
         INSERT INTO service_locations (
           business_id,
           location_name,
-          street,
+          street_address_1,
+          street_address_2,
           city,
           state,
           zip_code,
@@ -405,11 +413,12 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
           is_active,
           soft_delete
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, TRUE, TRUE, FALSE)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TRUE, TRUE, FALSE)
       `, [
         business.id,
         businessName + ' - Headquarters',
         address.street,
+        address.street2 || '',
         address.city,
         address.state,
         address.zipCode,
@@ -438,6 +447,7 @@ router.post('/businesses', requirePermission('add.businesses.enable'), async (re
             businessName: business.business_name,
             address: {
               street: address.street,
+              street2: address.street2 || '',
               city: address.city,
               state: address.state,
               zipCode: address.zipCode,

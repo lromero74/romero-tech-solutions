@@ -213,12 +213,10 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
       SELECT
         sr.id,
         sr.service_location_id as resourceId,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
-        sr.scheduled_date,
-        sr.scheduled_time_start,
-        sr.scheduled_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
+        sr.scheduled_datetime,
+        sr.scheduled_duration_minutes,
         u.first_name,
         u.last_name,
         st.name as serviceType,
@@ -234,15 +232,14 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
         )
         AND (
           -- Check if appointment's UTC timestamp falls within this business day's UTC range
-          (sr.requested_date::timestamp + sr.requested_time_start::time) >= $2::timestamp
-          AND (sr.requested_date::timestamp + sr.requested_time_start::time) < $3::timestamp
+          sr.requested_datetime >= $2::timestamptz
+          AND sr.requested_datetime < $3::timestamptz
           OR
-          (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) >= $2::timestamp
-          AND (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) < $3::timestamp
+          sr.scheduled_datetime >= $2::timestamptz
+          AND sr.scheduled_datetime < $3::timestamptz
         )
       ORDER BY
-        COALESCE(sr.scheduled_time_start, sr.requested_time_start),
-        COALESCE(sr.scheduled_date, sr.requested_date)
+        COALESCE(sr.scheduled_datetime, sr.requested_datetime)
     `;
 
     const pool = await getPool();
@@ -253,40 +250,15 @@ router.get('/bookings', clientContextMiddleware, requireClientAccess(['business'
     ]);
 
     const bookings = result.rows.map(row => {
-      // Use scheduled time if available, otherwise use requested time
-      const useDate = row.scheduled_date || row.requested_date;
-      const startTime = row.scheduled_time_start || row.requested_time_start;
-      const endTime = row.scheduled_time_end || row.requested_time_end;
+      // Use scheduled datetime if available, otherwise use requested datetime
+      const useDatetime = row.scheduled_datetime || row.requested_datetime;
+      const durationMinutes = row.scheduled_duration_minutes || row.requested_duration_minutes || 60; // Default to 60 minutes
 
-      // Convert date to YYYY-MM-DD format if it's a Date object
-      let dateString;
-      if (useDate instanceof Date) {
-        dateString = useDate.toISOString().split('T')[0];
-      } else if (typeof useDate === 'string') {
-        // If it's already a string, try to extract YYYY-MM-DD
-        const match = useDate.match(/\d{4}-\d{2}-\d{2}/);
-        dateString = match ? match[0] : useDate;
-      } else {
-        dateString = useDate;
-      }
+      // Parse the timestamptz (already in UTC)
+      const startDateTime = new Date(useDatetime);
 
-      // CRITICAL: Database stores times in UTC, so we must parse as UTC
-      const startDateTime = new Date(`${dateString}T${startTime}Z`);
-      let endDateTime;
-
-      if (endTime) {
-        endDateTime = new Date(`${dateString}T${endTime}Z`);
-
-        // CRITICAL: If end time appears before start time, it means the appointment
-        // crosses midnight - add 1 day to the end date
-        if (endDateTime <= startDateTime) {
-          endDateTime = new Date(endDateTime.getTime() + (24 * 60 * 60 * 1000));
-          console.log(`⏰ Appointment crosses midnight: ${startDateTime.toISOString()} → ${endDateTime.toISOString()}`);
-        }
-      } else {
-        // Default to 1 hour if no end time specified (changed from 2 hours)
-        endDateTime = new Date(startDateTime.getTime() + (1 * 60 * 60 * 1000));
-      }
+      // Calculate end time by adding duration
+      const endDateTime = new Date(startDateTime.getTime() + (durationMinutes * 60 * 1000));
 
       // Calculate 1-hour buffer zones for frontend display
       const BUFFER_HOURS = 1;
@@ -386,23 +358,25 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
     const conflictQuery = `
       SELECT
         sr.id,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
-        sr.scheduled_date,
-        sr.scheduled_time_start,
-        sr.scheduled_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
+        sr.scheduled_datetime,
+        sr.scheduled_duration_minutes,
         sr.client_id,
         sr.service_location_id
       FROM service_requests sr
-      WHERE (sr.requested_date = $1 OR sr.scheduled_date = $1)
-        AND sr.soft_delete = false
+      WHERE sr.soft_delete = false
         AND sr.status_id NOT IN (
           SELECT id FROM service_request_statuses
           WHERE is_final_status = true
         )
+        AND (
+          -- Check if appointment overlaps with requested date range
+          sr.requested_datetime::date = $1::date
+          OR sr.scheduled_datetime::date = $1::date
+        )
       ORDER BY
-        COALESCE(sr.scheduled_time_start, sr.requested_time_start)
+        COALESCE(sr.scheduled_datetime, sr.requested_datetime)
     `;
 
     const requestDate = startDateTime.toISOString().split('T')[0];
@@ -414,25 +388,14 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
 
     // Check each existing booking for conflicts
     for (const booking of conflictResult.rows) {
-      const existingUseDate = booking.scheduled_date || booking.requested_date;
-      const existingStartTime = booking.scheduled_time_start || booking.requested_time_start;
-      const existingEndTime = booking.scheduled_time_end || booking.requested_time_end;
+      const existingDatetime = booking.scheduled_datetime || booking.requested_datetime;
+      const existingDurationMinutes = booking.scheduled_duration_minutes || booking.requested_duration_minutes || 60;
 
-      // CRITICAL: Database stores times in UTC, so we must parse as UTC
-      const existingStart = new Date(`${existingUseDate}T${existingStartTime}Z`);
-      let existingEnd;
+      // Parse the timestamptz (already in UTC)
+      const existingStart = new Date(existingDatetime);
 
-      if (existingEndTime) {
-        existingEnd = new Date(`${existingUseDate}T${existingEndTime}Z`);
-
-        // CRITICAL: If end time appears before start time, it means the appointment
-        // crosses midnight - add 1 day to the end date
-        if (existingEnd <= existingStart) {
-          existingEnd = new Date(existingEnd.getTime() + (24 * 60 * 60 * 1000));
-        }
-      } else {
-        existingEnd = new Date(existingStart.getTime() + (1 * 60 * 60 * 1000));
-      }
+      // Calculate end time by adding duration
+      const existingEnd = new Date(existingStart.getTime() + (existingDurationMinutes * 60 * 1000));
 
       // RULE 8: Must not overlap any existing service request
       if (startDateTime < existingEnd && endDateTime > existingStart) {
@@ -501,17 +464,18 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
         business_id,
         service_location_id,
         created_by_user_id,
-        requested_date,
-        requested_time_start,
-        requested_time_end,
+        requested_datetime,
+        requested_duration_minutes,
         urgency_level_id,
         priority_level_id,
         status_id,
         service_type_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13
       ) RETURNING id, request_number, created_at
     `;
+
+    const durationMinutes = Math.round((endDateTime - startDateTime) / (60 * 1000));
 
     const values = [
       requestNumber,
@@ -521,9 +485,8 @@ router.post('/schedule-appointment', clientContextMiddleware, requireClientAcces
       businessId,
       resourceId,
       clientId,
-      requestDate,
-      startDateTime.toTimeString().slice(0, 8), // HH:MM:SS format
-      endDateTime.toTimeString().slice(0, 8),
+      startDateTime.toISOString(), // Store as timestamptz
+      durationMinutes,
       urgencyLevelId || defaults.urgency_id,
       priorityLevelId || defaults.priority_id,
       defaults.status_id,
@@ -651,12 +614,10 @@ router.post('/suggest-available-slot', async (req, res) => {
       // Create timestamp range query that catches appointments in this business day
       const query = `
         SELECT
-          sr.requested_date,
-          sr.requested_time_start,
-          sr.requested_time_end,
-          sr.scheduled_date,
-          sr.scheduled_time_start,
-          sr.scheduled_time_end
+          sr.requested_datetime,
+          sr.requested_duration_minutes,
+          sr.scheduled_datetime,
+          sr.scheduled_duration_minutes
         FROM service_requests sr
         WHERE sr.soft_delete = false
           AND sr.status_id NOT IN (
@@ -665,14 +626,14 @@ router.post('/suggest-available-slot', async (req, res) => {
           )
           AND (
             -- Check if appointment's UTC timestamp falls within this business day's UTC range
-            (sr.requested_date::timestamp + sr.requested_time_start::time) >= $1::timestamp
-            AND (sr.requested_date::timestamp + sr.requested_time_start::time) < $2::timestamp
+            sr.requested_datetime >= $1::timestamptz
+            AND sr.requested_datetime < $2::timestamptz
             OR
-            (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) >= $1::timestamp
-            AND (sr.scheduled_date::timestamp + sr.scheduled_time_start::time) < $2::timestamp
+            sr.scheduled_datetime >= $1::timestamptz
+            AND sr.scheduled_datetime < $2::timestamptz
           )
         ORDER BY
-          COALESCE(sr.scheduled_time_start, sr.requested_time_start)
+          COALESCE(sr.scheduled_datetime, sr.requested_datetime)
       `;
 
       const result = await pool.query(query, [
@@ -685,42 +646,18 @@ router.post('/suggest-available-slot', async (req, res) => {
       console.log(`   Found ${result.rows.length} existing appointments`);
 
       for (const booking of result.rows) {
-        const useDate = booking.scheduled_date || booking.requested_date;
-        const startTime = booking.scheduled_time_start || booking.requested_time_start;
-        const endTime = booking.scheduled_time_end || booking.requested_time_end;
+        const useDatetime = booking.scheduled_datetime || booking.requested_datetime;
+        const durationMinutes = booking.scheduled_duration_minutes || booking.requested_duration_minutes || 60;
 
-        // Normalize date to YYYY-MM-DD format (handle both Date objects and strings)
-        let dateString;
-        if (useDate instanceof Date) {
-          dateString = useDate.toISOString().split('T')[0];
-        } else if (typeof useDate === 'string') {
-          const match = useDate.match(/(\d{4}-\d{2}-\d{2})/);
-          dateString = match ? match[1] : useDate;
-        } else {
-          console.error(`❌ Invalid date type in booking: ${typeof useDate}, value:`, useDate);
-          continue; // Skip this booking
-        }
+        // Parse the timestamptz (already in UTC)
+        const start = new Date(useDatetime);
 
-        // CRITICAL: Database stores times in UTC, so we must parse as UTC
-        // Adding 'Z' forces JavaScript to interpret as UTC, not local time
-        const start = new Date(`${dateString}T${startTime}Z`);
-        let end;
-
-        if (endTime) {
-          end = new Date(`${dateString}T${endTime}Z`);
-
-          // CRITICAL: If end time appears before start time, it means the appointment
-          // crosses midnight - add 1 day to the end date
-          if (end <= start) {
-            end = new Date(end.getTime() + (24 * 60 * 60 * 1000));
-          }
-        } else {
-          end = new Date(start.getTime() + (1 * 60 * 60 * 1000));
-        }
+        // Calculate end time by adding duration
+        const end = new Date(start.getTime() + (durationMinutes * 60 * 1000));
 
         // Validate dates before logging
         if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-          console.error(`❌ Invalid date created from booking:`, { dateString, startTime, endTime });
+          console.error(`❌ Invalid date created from booking:`, { useDatetime, durationMinutes });
           continue; // Skip invalid bookings
         }
 

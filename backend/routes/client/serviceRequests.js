@@ -118,9 +118,6 @@ router.post('/', async (req, res) => {
         business_id,
         service_location_id,
         created_by_user_id,
-        requested_date,
-        requested_time_start,
-        requested_time_end,
         requested_datetime,
         requested_duration_minutes,
         urgency_level_id,
@@ -131,7 +128,7 @@ router.post('/', async (req, res) => {
         primary_contact_email,
         service_type_id
       ) VALUES (
-        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
       ) RETURNING id, request_number, created_at
     `;
 
@@ -143,11 +140,8 @@ router.post('/', async (req, res) => {
       businessId,
       serviceLocationId,
       clientId,
-      requestedDate,
-      requestedTimeStart,
-      requestedTimeEnd,
-      requestedDatetime,      // Trigger will auto-populate if null
-      requestedDuration,      // Trigger will auto-calculate if null
+      requestedDatetime,
+      requestedDuration,
       urgencyLevelId,
       finalPriorityLevelId,
       defaultStatusId,
@@ -330,14 +324,8 @@ router.get('/', async (req, res) => {
         sr.request_number,
         sr.title,
         sr.description,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
         sr.requested_datetime,
         sr.requested_duration_minutes,
-        sr.scheduled_date,
-        sr.scheduled_time_start,
-        sr.scheduled_time_end,
         sr.scheduled_datetime,
         sr.scheduled_duration_minutes,
         sr.created_at,
@@ -405,14 +393,18 @@ router.get('/', async (req, res) => {
       console.error('Error fetching base hourly rate, using fallback:', error);
     }
 
-    // Check if this is the client's first service request
-    const firstServiceRequestCheck = await pool.query(`
-      SELECT COUNT(*) as request_count
-      FROM service_requests
-      WHERE client_id = $1 AND soft_delete = false
+    // Check if client has any completed (Closed) service requests
+    // First-hour comp should only apply to first COMPLETED service request, not cancelled ones
+    const completedServiceRequestCheck = await pool.query(`
+      SELECT COUNT(*) as completed_count
+      FROM service_requests sr
+      JOIN service_request_statuses srs ON sr.status_id = srs.id
+      WHERE sr.client_id = $1
+        AND sr.soft_delete = false
+        AND srs.name = 'Closed'
     `, [clientId]);
 
-    const isFirstServiceRequest = parseInt(firstServiceRequestCheck.rows[0].request_count) === 1;
+    const isFirstServiceRequest = parseInt(completedServiceRequestCheck.rows[0].completed_count) === 0;
 
     // Helper function to calculate estimated cost with first-hour waiver for new clients
     const calculateCost = async (date, timeStart, timeEnd, baseRate, isFirstRequest, categoryName) => {
@@ -544,14 +536,36 @@ router.get('/', async (req, res) => {
     const serviceRequestsWithCosts = await Promise.all(
       result.rows.map(async (row) => {
         // Calculate cost using business-specific rate from rate category
-        const costInfo = await calculateCost(
-          row.requested_date,
-          row.requested_time_start,
-          row.requested_time_end,
+        let costDate, costTimeStart, costTimeEnd;
+
+        if (row.requested_datetime && row.requested_duration_minutes) {
+          // Use datetime fields
+          const startDateTime = new Date(row.requested_datetime);
+          const endDateTime = new Date(startDateTime.getTime() + row.requested_duration_minutes * 60000);
+
+          // Extract date in YYYY-MM-DD format
+          costDate = startDateTime.toISOString().split('T')[0];
+
+          // Extract time in HH:MM:SS format
+          const formatTime = (date) => {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+          };
+
+          costTimeStart = formatTime(startDateTime);
+          costTimeEnd = formatTime(endDateTime);
+        }
+
+        const costInfo = costDate && costTimeStart && costTimeEnd ? await calculateCost(
+          costDate,
+          costTimeStart,
+          costTimeEnd,
           baseHourlyRate,
           isFirstServiceRequest,
           rateCategoryName
-        );
+        ) : null;
 
         // Check if we have any location data (address or contact info)
         const hasLocationData = row.street_address_1 || row.city || row.state ||
@@ -563,14 +577,8 @@ router.get('/', async (req, res) => {
             requestNumber: row.request_number,
             title: row.title,
             description: row.description,
-            requestedDate: row.requested_date,
-            requestedTimeStart: row.requested_time_start,
-            requestedTimeEnd: row.requested_time_end,
             requestedDatetime: row.requested_datetime,
             requestedDurationMinutes: row.requested_duration_minutes,
-            scheduledDate: row.scheduled_date,
-            scheduledTimeStart: row.scheduled_time_start,
-            scheduledTimeEnd: row.scheduled_time_end,
             scheduledDatetime: row.scheduled_datetime,
             scheduledDurationMinutes: row.scheduled_duration_minutes,
             status: row.status_name,
@@ -931,9 +939,8 @@ router.post('/:id/cancel', async (req, res) => {
         sr.request_number,
         sr.title,
         sr.description,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
         srs.name as status_name,
         srs.is_final_status,
         u.first_name as client_first_name,
@@ -974,13 +981,7 @@ router.post('/:id/cancel', async (req, res) => {
 
     // Check if service request has already started or passed
     const now = new Date();
-
-    // Parse UTC date and combine with local time
-    const requestedDate = new Date(serviceRequest.requested_date);
-    const year = requestedDate.getFullYear();
-    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(requestedDate.getDate()).padStart(2, '0');
-    const requestedDateTime = new Date(`${year}-${month}-${day}T${serviceRequest.requested_time_start}`);
+    const requestedDateTime = new Date(serviceRequest.requested_datetime);
 
     if (requestedDateTime < now) {
       return res.status(400).json({
@@ -1134,9 +1135,8 @@ router.post('/:id/cancel', async (req, res) => {
             requestNumber: serviceRequest.request_number,
             title: serviceRequest.title,
             description: serviceRequest.description,
-            requestedDate: serviceRequest.requested_date,
-            requestedTimeStart: serviceRequest.requested_time_start,
-            requestedTimeEnd: serviceRequest.requested_time_end,
+            requestedDatetime: serviceRequest.requested_datetime,
+            requestedDurationMinutes: serviceRequest.requested_duration_minutes,
             locationName: serviceRequest.location_name,
             locationAddress: {
               street1: serviceRequest.street_address_1,

@@ -10,6 +10,7 @@ interface Business {
   domainEmails: string;
   address: {
     street: string;
+    street2?: string;
     city: string;
     state: string;
     zipCode: string;
@@ -497,7 +498,8 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                           </span>
                         </div>
                         <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 mt-1 transition-colors`}>
-                          {business.address?.street || 'No street'}, {business.address?.zipCode || 'No zip'}
+                          {business.address?.street || 'No street'}
+                          {business.address?.street2 && ` ${business.address.street2}`}, {business.address?.zipCode || 'No zip'}
                         </div>
                       </button>
                     </td>
@@ -821,7 +823,10 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                     <div className="flex items-start">
                       <MapPin className={`w-4 h-4 ${themeClasses.text.muted} mr-1 mt-0.5 flex-shrink-0`} />
                       <div>
-                        <div>{business.address?.street || 'No street'}</div>
+                        <div>
+                          {business.address?.street || 'No street'}
+                          {business.address?.street2 && ` ${business.address.street2}`}
+                        </div>
                         <div>{business.address?.city || 'N/A'}, {business.address?.state || 'N/A'} {business.address?.zipCode || 'No zip'}</div>
                       </div>
                     </div>

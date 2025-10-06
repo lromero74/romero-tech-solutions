@@ -107,7 +107,7 @@ router.get('/service-requests', async (req, res) => {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
     // Validate sortBy to prevent SQL injection
-    const validSortColumns = ['created_at', 'updated_at', 'request_number', 'title', 'requested_date', 'scheduled_date'];
+    const validSortColumns = ['created_at', 'updated_at', 'request_number', 'title', 'requested_datetime', 'scheduled_datetime'];
     const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
     const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -117,14 +117,8 @@ router.get('/service-requests', async (req, res) => {
         sr.request_number,
         sr.title,
         sr.description,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
         sr.requested_datetime,
         sr.requested_duration_minutes,
-        sr.scheduled_date,
-        sr.scheduled_time_start,
-        sr.scheduled_time_end,
         sr.scheduled_datetime,
         sr.scheduled_duration_minutes,
         sr.completed_date,
@@ -221,13 +215,17 @@ router.get('/service-requests', async (req, res) => {
         const rateResult = await pool.query(rateQuery, [businessId]);
         const baseRate = rateResult.rows[0]?.base_hourly_rate || 75;
 
-        // Check if this is the client's first service request
-        const firstRequestCheck = await pool.query(`
-          SELECT COUNT(*) as request_count
-          FROM service_requests
-          WHERE client_id = $1 AND soft_delete = false
+        // Check if client has any completed (Closed) service requests
+        // First-hour comp should only apply to first COMPLETED service request, not cancelled ones
+        const completedRequestCheck = await pool.query(`
+          SELECT COUNT(*) as completed_count
+          FROM service_requests sr
+          JOIN service_request_statuses srs ON sr.status_id = srs.id
+          WHERE sr.client_id = $1
+            AND sr.soft_delete = false
+            AND srs.name = 'Closed'
         `, [clientId]);
-        const isFirstRequest = parseInt(firstRequestCheck.rows[0].request_count) === 1;
+        const isFirstRequest = parseInt(completedRequestCheck.rows[0].completed_count) === 0;
 
         // Parse times
         const [startHour, startMin] = timeStart.split(':').map(Number);
@@ -370,10 +368,33 @@ router.get('/service-requests', async (req, res) => {
     // Add cost calculations to service requests
     const serviceRequestsWithCosts = await Promise.all(
       result.rows.map(async (row) => {
+        // Prefer new datetime fields over old time fields (which have timezone bugs)
+        let costDate, costTimeStart, costTimeEnd;
+
+        if (row.requested_datetime && row.requested_duration_minutes) {
+          // Use datetime fields
+          const startDateTime = new Date(row.requested_datetime);
+          const endDateTime = new Date(startDateTime.getTime() + row.requested_duration_minutes * 60000);
+
+          // Extract date in YYYY-MM-DD format
+          costDate = startDateTime.toISOString().split('T')[0];
+
+          // Extract time in HH:MM:SS format
+          const formatTime = (date) => {
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            const seconds = String(date.getSeconds()).padStart(2, '0');
+            return `${hours}:${minutes}:${seconds}`;
+          };
+
+          costTimeStart = formatTime(startDateTime);
+          costTimeEnd = formatTime(endDateTime);
+        }
+
         const costInfo = await calculateCost(
-          row.requested_date,
-          row.requested_time_start,
-          row.requested_time_end,
+          costDate,
+          costTimeStart,
+          costTimeEnd,
           row.business_id,
           row.client_id,
           row.requested_duration_minutes // Pass duration to avoid recalculating
@@ -482,7 +503,7 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
 
     // Get business_id for this service request to check if it's their first request
     const serviceRequestQuery = `
-      SELECT business_id
+      SELECT business_id, client_id
       FROM service_requests
       WHERE id = $1
     `;
@@ -496,20 +517,21 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     }
 
     const businessId = srResult.rows[0].business_id;
+    const clientId = srResult.rows[0].client_id;
 
-    // Check if this is the client's first service request
-    // Count service requests with status "Closed" (excluding current one if it's closed)
+    // Check if this is the client's first COMPLETED service request
+    // Only count "Closed" status (not "Cancelled") that were created before this one
     const completedRequestsQuery = `
       SELECT COUNT(*) as count
       FROM service_requests sr
       JOIN service_request_statuses srs ON sr.status_id = srs.id
-      WHERE sr.business_id = $1
+      WHERE sr.client_id = $1
         AND srs.name = 'Closed'
         AND sr.created_at < (
           SELECT created_at FROM service_requests WHERE id = $2
         )
     `;
-    const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
+    const completedResult = await pool.query(completedRequestsQuery, [clientId, id]);
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
@@ -1943,9 +1965,8 @@ router.put('/service-requests/:id/close', async (req, res) => {
         sr.business_id,
         sr.created_at as service_start_date,
         sr.closed_at,
-        sr.requested_date,
-        sr.requested_time_start,
-        sr.requested_time_end,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
         b.business_name,
         b.rate_category_id,
         hrc.base_hourly_rate,
@@ -1967,7 +1988,7 @@ router.put('/service-requests/:id/close', async (req, res) => {
     // Get time breakdown with first-time client discount
     const timeBreakdownUrl = `/service-requests/${id}/time-breakdown`;
     const timeBreakdownQuery = `
-      SELECT business_id
+      SELECT business_id, client_id
       FROM service_requests
       WHERE id = $1
     `;
@@ -1978,19 +1999,21 @@ router.put('/service-requests/:id/close', async (req, res) => {
     }
 
     const businessId = srResult.rows[0].business_id;
+    const clientId = srResult.rows[0].client_id;
 
-    // Check if this is the client's first service request
+    // Check if this is the client's first COMPLETED service request
+    // Only count "Closed" status (not "Cancelled") that were created before this one
     const completedRequestsQuery = `
       SELECT COUNT(*) as count
       FROM service_requests sr
       JOIN service_request_statuses srs ON sr.status_id = srs.id
-      WHERE sr.business_id = $1
+      WHERE sr.client_id = $1
         AND srs.name = 'Closed'
         AND sr.created_at < (
           SELECT created_at FROM service_requests WHERE id = $2
         )
     `;
-    const completedResult = await pool.query(completedRequestsQuery, [businessId, id]);
+    const completedResult = await pool.query(completedRequestsQuery, [clientId, id]);
     const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
@@ -2157,12 +2180,27 @@ router.put('/service-requests/:id/close', async (req, res) => {
 
     // Calculate original cost estimate (snapshot at invoice time)
     let originalCostEstimate = null;
-    if (serviceRequest.requested_date && serviceRequest.requested_time_start && serviceRequest.requested_time_end) {
+    if (serviceRequest.requested_datetime && serviceRequest.requested_duration_minutes) {
+      // Convert datetime + duration to date, time_start, time_end format for calculateCost
+      const startDateTime = new Date(serviceRequest.requested_datetime);
+      const endDateTime = new Date(startDateTime.getTime() + serviceRequest.requested_duration_minutes * 60000);
+
+      const formatTime = (date) => {
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${hours}:${minutes}:${seconds}`;
+      };
+
+      const costDate = startDateTime.toISOString().split('T')[0];
+      const costTimeStart = formatTime(startDateTime);
+      const costTimeEnd = formatTime(endDateTime);
+
       originalCostEstimate = await calculateCost(
         pool,
-        serviceRequest.requested_date,
-        serviceRequest.requested_time_start,
-        serviceRequest.requested_time_end,
+        costDate,
+        costTimeStart,
+        costTimeEnd,
         baseRate,
         isFirstServiceRequest,
         serviceRequest.rate_category_name || 'Standard'
@@ -2330,8 +2368,7 @@ router.post('/service-requests/:id/uncancel', async (req, res) => {
         sr.id,
         sr.request_number,
         sr.title,
-        sr.requested_date,
-        sr.requested_time_start,
+        sr.requested_datetime,
         srs.name as status_name,
         srs.is_final_status
       FROM service_requests sr
@@ -2360,13 +2397,7 @@ router.post('/service-requests/:id/uncancel', async (req, res) => {
 
     // Check if service request has already started or passed
     const now = new Date();
-
-    // Parse UTC date and combine with local time
-    const requestedDate = new Date(serviceRequest.requested_date);
-    const year = requestedDate.getFullYear();
-    const month = String(requestedDate.getMonth() + 1).padStart(2, '0');
-    const day = String(requestedDate.getDate()).padStart(2, '0');
-    const requestedDateTime = new Date(`${year}-${month}-${day}T${serviceRequest.requested_time_start}`);
+    const requestedDateTime = new Date(serviceRequest.requested_datetime);
 
     if (requestedDateTime < now) {
       return res.status(400).json({

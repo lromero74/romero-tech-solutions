@@ -42,12 +42,10 @@ router.get('/employee-calendar', async (req, res) => {
           sr.id as service_request_id,
           sr.request_number,
           sr.title as request_title,
-          sr.scheduled_date,
-          sr.scheduled_time_start,
-          sr.scheduled_time_end,
-          sr.requested_date,
-          sr.requested_time_start,
-          sr.requested_time_end,
+          sr.scheduled_datetime,
+          sr.scheduled_duration_minutes,
+          sr.requested_datetime,
+          sr.requested_duration_minutes,
           sra.assigned_at,
           sra.assignment_type,
           sra.is_active as assignment_active,
@@ -55,17 +53,17 @@ router.get('/employee-calendar', async (req, res) => {
           sts.name as service_type,
           sl.address_label as location_name,
           CASE
-            WHEN sr.scheduled_date IS NOT NULL AND sr.scheduled_time_start IS NOT NULL
-            THEN sr.scheduled_date + sr.scheduled_time_start
-            WHEN sr.requested_date IS NOT NULL AND sr.requested_time_start IS NOT NULL
-            THEN sr.requested_date + sr.requested_time_start
+            WHEN sr.scheduled_datetime IS NOT NULL
+            THEN sr.scheduled_datetime
+            WHEN sr.requested_datetime IS NOT NULL
+            THEN sr.requested_datetime
             ELSE NULL
           END as start_datetime,
           CASE
-            WHEN sr.scheduled_date IS NOT NULL AND sr.scheduled_time_end IS NOT NULL
-            THEN sr.scheduled_date + sr.scheduled_time_end
-            WHEN sr.requested_date IS NOT NULL AND sr.requested_time_end IS NOT NULL
-            THEN sr.requested_date + sr.requested_time_end
+            WHEN sr.scheduled_datetime IS NOT NULL AND sr.scheduled_duration_minutes IS NOT NULL
+            THEN sr.scheduled_datetime + (sr.scheduled_duration_minutes || ' minutes')::interval
+            WHEN sr.requested_datetime IS NOT NULL AND sr.requested_duration_minutes IS NOT NULL
+            THEN sr.requested_datetime + (sr.requested_duration_minutes || ' minutes')::interval
             ELSE NULL
           END as end_datetime,
           CASE
@@ -93,8 +91,8 @@ router.get('/employee-calendar', async (req, res) => {
         WHERE e.is_active = true
           AND (
             sr.id IS NULL
-            OR sr.scheduled_date BETWEEN $1 AND $2
-            OR sr.requested_date BETWEEN $1 AND $2
+            OR DATE(sr.scheduled_datetime) BETWEEN $1 AND $2
+            OR DATE(sr.requested_datetime) BETWEEN $1 AND $2
           )
           ${employeeFilter}
         ORDER BY e.last_name, e.first_name, start_datetime
@@ -133,12 +131,10 @@ router.get('/employee-calendar', async (req, res) => {
           serviceRequestId: row.service_request_id,
           requestNumber: row.request_number,
           title: row.request_title,
-          scheduledDate: row.scheduled_date,
-          scheduledTimeStart: row.scheduled_time_start,
-          scheduledTimeEnd: row.scheduled_time_end,
-          requestedDate: row.requested_date,
-          requestedTimeStart: row.requested_time_start,
-          requestedTimeEnd: row.requested_time_end,
+          scheduledDatetime: row.scheduled_datetime,
+          scheduledDurationMinutes: row.scheduled_duration_minutes,
+          requestedDatetime: row.requested_datetime,
+          requestedDurationMinutes: row.requested_duration_minutes,
           assignedAt: row.assigned_at,
           assignmentType: row.assignment_type,
           assignmentActive: row.assignment_active,
@@ -190,16 +186,16 @@ router.get('/employee-availability', async (req, res) => {
         e.first_name,
         e.last_name,
         ews.status_name as working_status,
-        COUNT(CASE WHEN sra.is_active = true AND sr.scheduled_date = $1 THEN 1 END) as scheduled_requests,
-        COUNT(CASE WHEN sra.is_active = true AND sr.scheduled_date = $1 AND LOWER(srs.name) = 'in progress' THEN 1 END) as active_requests,
+        COUNT(CASE WHEN sra.is_active = true AND DATE(sr.scheduled_datetime) = $1 THEN 1 END) as scheduled_requests,
+        COUNT(CASE WHEN sra.is_active = true AND DATE(sr.scheduled_datetime) = $1 AND LOWER(srs.name) = 'in progress' THEN 1 END) as active_requests,
         CASE
           -- First check if working status is null (no status assigned)
           WHEN ews.status_name IS NULL THEN 'unavailable'
           -- Then check employee working status
           WHEN LOWER(ews.status_name) IN ('inactive', 'on_vacation', 'out_sick', 'on_other_leave') THEN 'unavailable'
           -- Then check service request engagement if employee is available
-          WHEN COUNT(CASE WHEN sra.is_active = true AND sr.scheduled_date = $1 AND LOWER(srs.name) = 'in progress' THEN 1 END) > 0 THEN 'engaged'
-          WHEN COUNT(CASE WHEN sra.is_active = true AND sr.scheduled_date = $1 THEN 1 END) > 0 THEN 'scheduled'
+          WHEN COUNT(CASE WHEN sra.is_active = true AND DATE(sr.scheduled_datetime) = $1 AND LOWER(srs.name) = 'in progress' THEN 1 END) > 0 THEN 'engaged'
+          WHEN COUNT(CASE WHEN sra.is_active = true AND DATE(sr.scheduled_datetime) = $1 THEN 1 END) > 0 THEN 'scheduled'
           -- Only show as available if working status is explicitly 'available'
           WHEN LOWER(ews.status_name) = 'available' THEN 'available'
           ELSE 'unavailable'
