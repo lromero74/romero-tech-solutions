@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { ServiceRequestNote } from './types';
@@ -12,6 +12,7 @@ interface ServiceRequestNotesSectionProps {
   onSubmitNote: () => void;
   otherViewers?: Array<{userId: string; userName: string; userType: string}>;
   timeFormatPreference?: '12h' | '24h';
+  newlyReceivedNoteId?: string | null; // ID of note that was just received via websocket
 }
 
 /**
@@ -57,8 +58,22 @@ const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
   onNewNoteChange,
   onSubmitNote,
   otherViewers = [],
-  timeFormatPreference = '12h'
+  timeFormatPreference = '12h',
+  newlyReceivedNoteId = null
 }) => {
+  const [highlightedNoteId, setHighlightedNoteId] = useState<string | null>(null);
+
+  // Auto-remove highlight after 3 seconds
+  useEffect(() => {
+    if (newlyReceivedNoteId) {
+      setHighlightedNoteId(newlyReceivedNoteId);
+      const timer = setTimeout(() => {
+        setHighlightedNoteId(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [newlyReceivedNoteId]);
+
   return (
     <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
       <div className="flex items-center gap-2 mb-3">
@@ -115,21 +130,27 @@ const ServiceRequestNotesSection: React.FC<ServiceRequestNotesSectionProps> = ({
         <div className="space-y-3">
           {notes.map((note, index) => {
             const timestamps = formatTimestampWithUTC(note.created_at, timeFormatPreference);
+            const isHighlighted = highlightedNoteId === note.id;
             return (
               <div key={note.id}>
                 {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
-                <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
-                  <span className="font-medium">{note.created_by_name}</span>
-                  {' • '}
-                  <span className="inline-flex flex-col sm:flex-row sm:gap-1">
-                    <span>{timestamps.local} (Local)</span>
-                    <span className="hidden sm:inline">•</span>
-                    <span>{timestamps.utc} (UTC)</span>
-                  </span>
+                <div className={`
+                  p-2 rounded-lg transition-all duration-300
+                  ${isHighlighted ? 'ring-2 ring-blue-400 shadow-lg shadow-blue-400/50 dark:ring-blue-500 dark:shadow-blue-500/50' : ''}
+                `}>
+                  <div className={`text-xs ${themeClasses.text.muted} mb-1`}>
+                    <span className="font-medium">{note.created_by_name}</span>
+                    {' • '}
+                    <span className="inline-flex flex-col sm:flex-row sm:gap-1">
+                      <span>{timestamps.local} (Local)</span>
+                      <span className="hidden sm:inline">•</span>
+                      <span>{timestamps.utc} (UTC)</span>
+                    </span>
+                  </div>
+                  <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
+                    {note.note_text}
+                  </p>
                 </div>
-                <p className={`text-sm ${themeClasses.text.primary} whitespace-pre-wrap`}>
-                  {note.note_text}
-                </p>
               </div>
             );
           })}

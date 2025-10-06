@@ -902,7 +902,19 @@ router.post('/:id/notes', async (req, res) => {
     }
 
     // Broadcast service request update via websocket for real-time note updates
-    websocketService.broadcastServiceRequestUpdate(id, 'updated', { noteAdded: true });
+    // Include the full note data so clients can insert it without reloading all notes
+    websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+      noteAdded: true,
+      note: {
+        id: newNote.id,
+        note_text: newNote.note_text,
+        note_type: newNote.note_type,
+        created_by_type: newNote.created_by_type,
+        created_by_name: newNote.created_by_name,
+        created_at: newNote.created_at,
+        is_visible_to_client: true
+      }
+    });
 
     res.json({
       success: true,
@@ -1866,6 +1878,13 @@ ${fileList}
       ]);
 
       console.log(`📝 Created auto-note for ${uploadedFiles.length} uploaded file(s)`);
+
+      // Broadcast file upload to admins/employees and client via WebSocket
+      websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'updated', {
+        filesUploaded: true,
+        fileCount: uploadedFiles.length,
+        uploadedFiles: uploadedFiles
+      });
     }
 
     // Get updated quota information

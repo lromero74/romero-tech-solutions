@@ -209,6 +209,8 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [newlyReceivedNoteId, setNewlyReceivedNoteId] = useState<string | null>(null);
+  const [lastSubmittedNoteId, setLastSubmittedNoteId] = useState<string | null>(null);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [cancellingRequest, setCancellingRequest] = useState<ServiceRequest | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
@@ -462,8 +464,12 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
       const data = await response.json();
       if (data.success) {
-        // Add the new note to the list
+        // Add the new note to the list (optimistic update)
         setRequestNotes(prev => [data.data.note, ...prev]);
+        // Track this note ID so we don't add it again from websocket
+        setLastSubmittedNoteId(data.data.note.id);
+        // Trigger blue halo effect for the note we just submitted
+        setNewlyReceivedNoteId(data.data.note.id);
         setNewNoteText('');
       } else {
         throw new Error(data.message || 'Failed to submit note');
@@ -1081,13 +1087,39 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     return () => clearInterval(pollInterval);
   }, [pagination.page, filters.hideClosed]);
 
-  // Listen for websocket note updates
+  // Listen for websocket note updates and file uploads
   useEffect(() => {
     const handleEntityChange = (change: any) => {
       // If a service request was updated with a note added, and it's the currently selected request
       if (change.entityType === 'serviceRequest' && change.noteAdded && selectedRequest && change.entityId === selectedRequest.id) {
-        console.log('📝 Note added to current service request, refreshing notes...');
-        fetchRequestNotes(selectedRequest.id);
+        console.log('📝 Note added to current service request, inserting new note...');
+        // Instead of reloading all notes, directly insert the new note at the top
+        if (change.note) {
+          // Skip if this is the note we just submitted (already added optimistically)
+          if (change.note.id === lastSubmittedNoteId) {
+            console.log('📝 Skipping duplicate note (we just submitted this one)');
+            setLastSubmittedNoteId(null); // Clear the flag
+            return;
+          }
+          // Transform snake_case from backend to camelCase for client
+          const transformedNote: ServiceRequestNote = {
+            id: change.note.id,
+            noteText: change.note.note_text,
+            noteType: change.note.note_type,
+            createdByType: change.note.created_by_type,
+            createdByName: change.note.created_by_name,
+            createdAt: change.note.created_at
+          };
+          setRequestNotes(prev => [transformedNote, ...prev]);
+          // Trigger blue halo effect for the newly received note
+          setNewlyReceivedNoteId(change.note.id);
+        }
+      }
+
+      // If files were uploaded to the currently selected request, refresh the files list
+      if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log(`📎 Files uploaded to current service request, refreshing files list (${change.fileCount} files)...`);
+        fetchRequestFiles(selectedRequest.id);
       }
     };
 
@@ -1097,7 +1129,17 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       // Cleanup: remove listener when component unmounts or selectedRequest changes
       websocketService.onEntityDataChange(() => {});
     };
-  }, [selectedRequest]);
+  }, [selectedRequest, lastSubmittedNoteId]);
+
+  // Auto-remove highlight after 3 seconds
+  useEffect(() => {
+    if (newlyReceivedNoteId) {
+      const timer = setTimeout(() => {
+        setNewlyReceivedNoteId(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [newlyReceivedNoteId]);
 
   // Track viewers of the selected service request
   useEffect(() => {
@@ -1496,6 +1538,15 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                         >
                           <Edit2 className="h-4 w-4" />
                         </button>
+                        {/* Other Viewers Indicator */}
+                        {otherViewers.length > 0 && (
+                          <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-full">
+                            <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                              {otherViewers[0].userName} viewing
+                            </span>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1641,44 +1692,35 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                             </a>
                           </div>
 
-                          {/* Contact Person */}
-                          {selectedRequest.locationDetails.contactPerson && (
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.contactPerson', undefined, 'Contact Person')}</span>
-                              <div className="flex items-center gap-2 mt-1 text-sm text-gray-900 dark:text-white">
+                          {/* Contact Information - Compact */}
+                          <div className="space-y-2">
+                            {selectedRequest.locationDetails.contactPerson && (
+                              <div className="flex items-center gap-2 text-sm text-gray-900 dark:text-white">
                                 <User className="h-4 w-4 text-gray-400" />
                                 {selectedRequest.locationDetails.contactPerson}
                               </div>
-                            </div>
-                          )}
+                            )}
 
-                          {/* Phone Number */}
-                          {selectedRequest.locationDetails.contactPhone && (
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.phone', undefined, 'Phone')}</span>
-                              <a
-                                href={`tel:${selectedRequest.locationDetails.contactPhone}`}
-                                className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                              >
-                                <Phone className="h-4 w-4" />
-                                {formatPhone(selectedRequest.locationDetails.contactPhone)}
-                              </a>
-                            </div>
-                          )}
-
-                          {/* Email */}
-                          {selectedRequest.locationDetails.contactEmail && (
-                            <div>
-                              <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">{t('serviceRequests.email', undefined, 'Email')}</span>
+                            {selectedRequest.locationDetails.contactEmail && (
                               <a
                                 href={`mailto:${selectedRequest.locationDetails.contactEmail}`}
-                                className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
                               >
                                 <Mail className="h-4 w-4" />
                                 {selectedRequest.locationDetails.contactEmail}
                               </a>
-                            </div>
-                          )}
+                            )}
+
+                            {selectedRequest.locationDetails.contactPhone && (
+                              <a
+                                href={`tel:${selectedRequest.locationDetails.contactPhone}`}
+                                className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                <Phone className="h-4 w-4" />
+                                {formatPhone(selectedRequest.locationDetails.contactPhone)}
+                              </a>
+                            )}
+                          </div>
                         </div>
                       </div>
                     )}
@@ -1697,6 +1739,154 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                       )}
                     </div>
                   )}
+
+                  {/* Files Section */}
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium text-gray-700 dark:text-gray-300">
+                        {t('serviceRequests.attachments', undefined, 'Attachments')} ({selectedRequest.fileCount || 0})
+                      </h4>
+                      <>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            const files = e.target.files;
+                            if (files && files.length > 0) {
+                              uploadFiles(files);
+                              // Reset input so the same file can be selected again
+                              if (fileInputRef.current) {
+                                fileInputRef.current.value = '';
+                              }
+                            }
+                          }}
+                          disabled={uploadingFiles || loadingFiles}
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.webp,.txt,.csv,.zip,.rar,.7z"
+                        />
+                        <button
+                          onClick={() => fileInputRef.current?.click()}
+                          disabled={uploadingFiles || loadingFiles}
+                          className={`flex items-center gap-2 px-3 py-1.5 text-sm rounded transition-colors ${
+                            uploadingFiles || loadingFiles
+                              ? 'opacity-50 cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                          title={t('serviceRequests.uploadFiles', undefined, 'Upload files (max 5 files, 50MB each)')}
+                        >
+                          {uploadingFiles ? (
+                            <>
+                              <RefreshCw className="h-4 w-4 animate-spin" />
+                              <span>{t('serviceRequests.uploading', undefined, 'Uploading...')}</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="h-4 w-4" />
+                              <span>{t('serviceRequests.uploadFilesButton', undefined, 'Upload Files')}</span>
+                            </>
+                          )}
+                        </button>
+                      </>
+                    </div>
+                    {selectedRequest.fileCount > 0 && (
+                      <div>
+                      {loadingFiles ? (
+                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
+                          <RefreshCw className="h-4 w-4 animate-spin" />
+                          <span>{t('serviceRequests.loadingFiles', undefined, 'Loading files...')}</span>
+                        </div>
+                      ) : requestFiles.length > 0 ? (
+                        <div className="space-y-2">
+                          {requestFiles.map((file) => (
+                            <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700 rounded-md">
+                              <div className="flex items-center gap-3 flex-1 min-w-0">
+                                <FileText className="h-5 w-5 text-gray-400 flex-shrink-0" />
+                                <div className="flex-1 min-w-0">
+                                  {renamingFileId === file.id ? (
+                                    <div className="flex items-center gap-2">
+                                      <input
+                                        type="text"
+                                        value={newFileName}
+                                        onChange={(e) => setNewFileName(e.target.value)}
+                                        className="flex-1 px-2 py-1 rounded text-sm bg-white dark:bg-gray-600 border border-gray-300 dark:border-gray-500 text-gray-900 dark:text-white"
+                                        disabled={savingEdit}
+                                        autoFocus
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') saveFileName(file.id);
+                                          if (e.key === 'Escape') cancelRenameFile();
+                                        }}
+                                      />
+                                      <button
+                                        onClick={() => saveFileName(file.id)}
+                                        disabled={savingEdit || !newFileName.trim()}
+                                        className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
+                                        title="Save"
+                                      >
+                                        {savingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                                      </button>
+                                      <button
+                                        onClick={cancelRenameFile}
+                                        disabled={savingEdit}
+                                        className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
+                                        title="Cancel"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                                        {file.originalFilename}
+                                      </p>
+                                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                                        {formatFileSize(file.fileSizeBytes)} • {new Date(file.createdAt).toLocaleDateString()}
+                                      </p>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              {renamingFileId !== file.id && (
+                                <div className="flex items-center gap-1 flex-shrink-0">
+                                  <button
+                                    onClick={() => startRenameFile(file)}
+                                    className="p-2 text-gray-400 hover:text-blue-600"
+                                    title={t('serviceRequests.renameFile', undefined, 'Rename file')}
+                                    disabled={!!renamingFileId || !!deletingFileId}
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => downloadFile(file.id, file.originalFilename)}
+                                    className="p-2 text-gray-400 hover:text-green-600"
+                                    title={t('serviceRequests.downloadFile', undefined, 'Download file')}
+                                    disabled={!!renamingFileId || !!deletingFileId}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => deleteFile(file.id)}
+                                    disabled={!!renamingFileId || deletingFileId === file.id}
+                                    className="p-2 text-gray-400 hover:text-red-600 disabled:opacity-50"
+                                    title={t('serviceRequests.deleteFile', undefined, 'Delete file')}
+                                  >
+                                    {deletingFileId === file.id ? (
+                                      <RefreshCw className="h-4 w-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="h-4 w-4" />
+                                    )}
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">{t('serviceRequests.noFiles', undefined, 'No files available')}</p>
+                      )}
+                      </div>
+                    )}
+                  </div>
 
                   <div className="p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
                     <div className="flex items-center justify-between mb-2">
@@ -1809,21 +1999,27 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                       <div className="space-y-3">
                         {requestNotes.map((note, index) => {
                           const timestamps = formatTimestampWithUTC(note.createdAt, getLocale(), (authUser?.timeFormatPreference as '12h' | '24h') || '12h');
+                          const isHighlighted = newlyReceivedNoteId === note.id;
                           return (
                             <div key={note.id}>
                               {index > 0 && <hr className="border-gray-300 dark:border-gray-600 mb-3" />}
-                              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                                <span className="font-medium">{note.createdByName}</span>
-                                {' • '}
-                                <span className="inline-flex flex-col sm:flex-row sm:gap-1">
-                                  <span>{timestamps.local} ({t('serviceRequests.localTime', undefined, 'Local')})</span>
-                                  <span className="hidden sm:inline">•</span>
-                                  <span>{timestamps.utc} (UTC)</span>
-                                </span>
+                              <div className={`
+                                p-2 rounded-lg transition-all duration-300
+                                ${isHighlighted ? 'ring-2 ring-blue-400 shadow-lg shadow-blue-400/50 dark:ring-blue-500 dark:shadow-blue-500/50' : ''}
+                              `}>
+                                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+                                  <span className="font-medium">{note.createdByName}</span>
+                                  {' • '}
+                                  <span className="inline-flex flex-col sm:flex-row sm:gap-1">
+                                    <span>{timestamps.local} ({t('serviceRequests.localTime', undefined, 'Local')})</span>
+                                    <span className="hidden sm:inline">•</span>
+                                    <span>{timestamps.utc} (UTC)</span>
+                                  </span>
+                                </div>
+                                <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
+                                  {note.noteText}
+                                </p>
                               </div>
-                              <p className="text-sm text-gray-900 dark:text-white whitespace-pre-wrap">
-                                {note.noteText}
-                              </p>
                             </div>
                           );
                         })}
@@ -1885,7 +2081,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                     {selectedRequest.fileCount > 0 && (
                       <div>
                       {loadingFiles ? (
-                        <div className="flex items-center gap-2 text-gray-500">
+                        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
                           <RefreshCw className="h-4 w-4 animate-spin" />
                           <span>{t('serviceRequests.loadingFiles', undefined, 'Loading files...')}</span>
                         </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   ClipboardList,
   Search,
@@ -95,6 +95,9 @@ const AdminServiceRequests: React.FC = () => {
   const [loadingNotes, setLoadingNotes] = useState(false);
   const [newNoteText, setNewNoteText] = useState('');
   const [submittingNote, setSubmittingNote] = useState(false);
+  const [newlyReceivedNoteId, setNewlyReceivedNoteId] = useState<string | null>(null);
+  const [lastSubmittedNoteId, setLastSubmittedNoteId] = useState<string | null>(null);
+  const lastSubmittedNoteIdRef = useRef<string | null>(null);
 
   // Inline editing state
   const [editingTitle, setEditingTitle] = useState(false);
@@ -210,13 +213,45 @@ const AdminServiceRequests: React.FC = () => {
     fetchFilterPresets();
   }, []);
 
-  // Listen for websocket note updates
+  // Listen for websocket note updates and file uploads
   useEffect(() => {
     const handleEntityChange = (change: any) => {
       // If a service request was updated with a note added, and it's the currently selected request
       if (change.entityType === 'serviceRequest' && change.noteAdded && selectedRequest && change.entityId === selectedRequest.id) {
-        console.log('📝 Note added to current service request, refreshing notes...');
-        fetchRequestNotes(selectedRequest.id);
+        console.log('📝 Note added to current service request, inserting new note...');
+        // Instead of reloading all notes, directly insert the new note at the top
+        if (change.note) {
+          console.log('🔍 Admin Debug - Websocket received note.id:', change.note.id);
+          console.log('🔍 Admin Debug - lastSubmittedNoteIdRef.current:', lastSubmittedNoteIdRef.current);
+
+          // Check if note already exists in the array
+          setRequestNotes(prev => {
+            const noteExists = prev.some(n => n.id === change.note.id);
+            if (noteExists) {
+              console.log('📝 Skipping duplicate note - already exists in array');
+              return prev;
+            }
+
+            // Skip if this is the note we just submitted (already added optimistically)
+            if (change.note.id === lastSubmittedNoteIdRef.current) {
+              console.log('📝 Skipping duplicate note (we just submitted this one)');
+              lastSubmittedNoteIdRef.current = null; // Clear the flag
+              setLastSubmittedNoteId(null); // Clear state too
+              return prev;
+            }
+
+            console.log('🔍 Admin Debug - Adding note from websocket to array of length:', prev.length);
+            // Trigger blue halo effect for the newly received note
+            setNewlyReceivedNoteId(change.note.id);
+            return [change.note, ...prev];
+          });
+        }
+      }
+
+      // If files were uploaded to the currently selected request, refresh the files list
+      if (change.entityType === 'serviceRequest' && change.filesUploaded && selectedRequest && change.entityId === selectedRequest.id) {
+        console.log(`📎 Files uploaded to current service request, refreshing files list (${change.fileCount} files)...`);
+        fetchRequestFiles(selectedRequest.id);
       }
     };
 
@@ -226,7 +261,7 @@ const AdminServiceRequests: React.FC = () => {
       // Cleanup: remove listener when component unmounts or selectedRequest changes
       websocketService.onEntityDataChange(() => {});
     };
-  }, [selectedRequest]);
+  }, [selectedRequest]); // Removed lastSubmittedNoteId from dependencies since we use ref
 
   // Track viewers of the selected service request
   useEffect(() => {
@@ -691,8 +726,24 @@ const AdminServiceRequests: React.FC = () => {
       );
 
       if (response.success) {
-        // Add the new note to the list
-        setRequestNotes(prev => [response.data.note, ...prev]);
+        console.log('🔍 Admin Debug - Submitted note ID:', response.data.note.id);
+        console.log('🔍 Admin Debug - Full response.data.note:', JSON.stringify(response.data.note));
+        // Track this note ID immediately in ref (synchronous) AND state
+        lastSubmittedNoteIdRef.current = response.data.note.id;
+        setLastSubmittedNoteId(response.data.note.id);
+        console.log('🔍 Admin Debug - Set lastSubmittedNoteIdRef.current to:', lastSubmittedNoteIdRef.current);
+        // Add the new note to the list (optimistic update) - but check for duplicates first
+        console.log('🔍 Admin Debug - About to add note optimistically');
+        setRequestNotes(prev => {
+          // Check if note already exists (websocket may have added it already)
+          const noteExists = prev.some(n => n.id === response.data.note.id);
+          if (noteExists) {
+            console.log('📝 Skipping optimistic update - note already exists in array (websocket was faster)');
+            return prev;
+          }
+          console.log('🔍 Admin Debug - Adding note optimistically to prev array of length:', prev.length);
+          return [response.data.note, ...prev];
+        });
         setNewNoteText('');
       } else {
         throw new Error(response.message || 'Failed to submit note');
@@ -1021,12 +1072,8 @@ const AdminServiceRequests: React.FC = () => {
     setNewNoteText('');
     setActionError(null);
 
-    // Fetch files if there are any
-    if (request.file_count && request.file_count > 0) {
-      fetchRequestFiles(request.id);
-    } else {
-      setRequestFiles([]);
-    }
+    // Always fetch files (don't rely on file_count as it may be stale)
+    fetchRequestFiles(request.id);
 
     // Always fetch notes
     fetchRequestNotes(request.id);
@@ -1729,6 +1776,15 @@ const AdminServiceRequests: React.FC = () => {
                       >
                         <Edit2 className="h-4 w-4" />
                       </button>
+                      {/* Other Viewers Indicator */}
+                      {otherViewers.length > 0 && (
+                        <div className="flex items-center gap-1 px-2 py-1 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-full">
+                          <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                          <span className="text-xs font-medium text-green-700 dark:text-green-300">
+                            {otherViewers[0].userName} viewing
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
                   <p className={`text-lg ${themeClasses.text.secondary} mt-1 font-mono`}>
@@ -1910,74 +1966,38 @@ const AdminServiceRequests: React.FC = () => {
                         </a>
                       </div>
 
-                      {/* Contact Person */}
-                      {selectedRequest.locationDetails.contact_person && (
-                        <div>
-                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Contact Person</span>
-                          <div className={`flex items-center gap-2 mt-1 text-sm ${themeClasses.text.primary}`}>
-                            <User className="h-4 w-4 text-gray-400" />
-                            {selectedRequest.locationDetails.contact_person}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Phone Number */}
-                      {selectedRequest.locationDetails.contact_phone && (
-                        <div>
-                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Phone</span>
-                          <a
-                            href={`tel:${selectedRequest.locationDetails.contact_phone}`}
-                            className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            <Phone className="h-4 w-4" />
-                            {formatPhone(selectedRequest.locationDetails.contact_phone)}
-                          </a>
-                        </div>
-                      )}
-
-                      {/* Email */}
-                      {selectedRequest.locationDetails.contact_email && (
-                        <div>
-                          <span className={`text-xs font-medium ${themeClasses.text.muted} uppercase`}>Email</span>
-                          <a
-                            href={`mailto:${selectedRequest.locationDetails.contact_email}`}
-                            className="flex items-center gap-2 mt-1 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                          >
-                            <Mail className="h-4 w-4" />
-                            {selectedRequest.locationDetails.contact_email}
-                          </a>
+                      {/* Contact Information */}
+                      {(selectedRequest.locationDetails.contact_person || selectedRequest.locationDetails.contact_phone || selectedRequest.locationDetails.contact_email) && (
+                        <div className="space-y-2">
+                          {selectedRequest.locationDetails.contact_person && (
+                            <div className={`flex items-center gap-2 text-sm ${themeClasses.text.primary}`}>
+                              <User className="h-4 w-4 text-gray-400" />
+                              {selectedRequest.locationDetails.contact_person}
+                            </div>
+                          )}
+                          {selectedRequest.locationDetails.contact_email && (
+                            <a
+                              href={`mailto:${selectedRequest.locationDetails.contact_email}`}
+                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              <Mail className="h-4 w-4" />
+                              {selectedRequest.locationDetails.contact_email}
+                            </a>
+                          )}
+                          {selectedRequest.locationDetails.contact_phone && (
+                            <a
+                              href={`tel:${selectedRequest.locationDetails.contact_phone}`}
+                              className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              <Phone className="h-4 w-4" />
+                              {formatPhone(selectedRequest.locationDetails.contact_phone)}
+                            </a>
+                          )}
                         </div>
                       )}
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Client Information */}
-              <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
-                <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>Client Information</h4>
-                <div className="space-y-2">
-                  <div className={`flex items-center gap-2 text-sm ${themeClasses.text.primary}`}>
-                    <User className="h-4 w-4 text-gray-400" />
-                    {selectedRequest.client_name}
-                  </div>
-                  <a
-                    href={`mailto:${selectedRequest.client_email}`}
-                    className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  >
-                    <Mail className="h-4 w-4" />
-                    {selectedRequest.client_email}
-                  </a>
-                  {selectedRequest.client_phone && (
-                    <a
-                      href={`tel:${selectedRequest.client_phone}`}
-                      className="flex items-center gap-2 text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                    >
-                      <Phone className="h-4 w-4" />
-                      {formatPhone(selectedRequest.client_phone)}
-                    </a>
-                  )}
-                </div>
               </div>
 
               {/* Additional Details */}
@@ -2001,6 +2021,100 @@ const AdminServiceRequests: React.FC = () => {
                   </div>
                 </div>
               )}
+
+              {/* Display error if any */}
+              {actionError && (
+                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
+                  {actionError}
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="mt-6 mb-6">
+                <div className="flex flex-wrap gap-3">
+                  {/* Time tracking toggle button - changes based on status */}
+                  {selectedRequest.technician_name && selectedRequest.status.toLowerCase() !== 'completed' && (
+                    <>
+                      {selectedRequest.status === 'Started' ? (
+                        <button
+                          onClick={() => handleTimeTracking('stop')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center"
+                        >
+                          <Pause className="h-4 w-4 mr-2" />
+                          Pause Work
+                        </button>
+                      ) : selectedRequest.status === 'Paused' ? (
+                        <button
+                          onClick={() => handleTimeTracking('start')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                        >
+                          <Clock className="h-4 w-4 mr-2" />
+                          Resume Work
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => handleTimeTracking('start')}
+                          disabled={actionLoading}
+                          className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
+                        >
+                          <Clock className="h-4 w-4 mr-2" />
+                          Start Work
+                        </button>
+                      )}
+                    </>
+                  )}
+
+                  {canCompleteRequest(selectedRequest) && (
+                    <button
+                      onClick={() => {
+                        setShowCloseModal(true);
+                        setActionError(null);
+                        // Fetch time breakdown and auto-populate duration
+                        if (selectedRequest?.id) {
+                          fetchTimeBreakdown(selectedRequest.id);
+                        }
+                      }}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Complete Request
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => {
+                      setShowStatusModal(true);
+                      setActionError(null);
+                    }}
+                    disabled={actionLoading}
+                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
+                  >
+                    Change Status
+                  </button>
+                </div>
+              </div>
+
+              {/* Files Section */}
+              <ServiceRequestFilesSection
+                files={requestFiles}
+                loading={loadingFiles}
+                fileCount={selectedRequest.file_count || 0}
+                renamingFileId={renamingFileId}
+                newFileName={newFileName}
+                savingEdit={savingEdit}
+                deletingFileId={deletingFileId}
+                apiBaseUrl={API_BASE_URL}
+                uploading={uploadingFiles}
+                onStartRename={startRenameFile}
+                onCancelRename={cancelRenameFile}
+                onSaveFileName={saveFileName}
+                onDeleteFile={deleteFile}
+                onFileNameChange={setNewFileName}
+                onUploadFiles={uploadFiles}
+              />
 
               {/* Description */}
               <div className="mb-4 p-4 bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-lg">
@@ -2068,165 +2182,18 @@ const AdminServiceRequests: React.FC = () => {
                 onSubmitNote={submitNote}
                 otherViewers={otherViewers}
                 timeFormatPreference={(user?.timeFormatPreference as '12h' | '24h') || '12h'}
+                newlyReceivedNoteId={newlyReceivedNoteId}
               />
 
-              {/* Files Section */}
-              <ServiceRequestFilesSection
-                files={requestFiles}
-                loading={loadingFiles}
-                fileCount={selectedRequest.file_count || 0}
-                renamingFileId={renamingFileId}
-                newFileName={newFileName}
-                savingEdit={savingEdit}
-                deletingFileId={deletingFileId}
-                apiBaseUrl={API_BASE_URL}
-                uploading={uploadingFiles}
-                onStartRename={startRenameFile}
-                onCancelRename={cancelRenameFile}
-                onSaveFileName={saveFileName}
-                onDeleteFile={deleteFile}
-                onFileNameChange={setNewFileName}
-                onUploadFiles={uploadFiles}
-              />
-
-              {/* Display error if any */}
-              {actionError && (
-                <div className="mb-4 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg text-sm">
-                  {actionError}
-                </div>
-              )}
-
-              {/* Action Buttons */}
-              <div className="mt-6 space-y-3">
-                {/* Row 1: Assignment and Status */}
-                <div className="flex space-x-3">
-                  {!selectedRequest.technician_name && (
-                    <button
-                      onClick={() => {
-                        setShowAssignModal(true);
-                        setActionError(null);
-                      }}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      Assign Technician
-                    </button>
-                  )}
-                  {canAssumeOwnership(selectedRequest) && (
-                    <button
-                      onClick={handleAssumeOwnership}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 flex items-center"
-                    >
-                      <User className="h-4 w-4 mr-2" />
-                      {actionLoading ? 'Assuming...' : 'Assume Ownership'}
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      setShowStatusModal(true);
-                      setActionError(null);
-                    }}
-                    disabled={actionLoading}
-                    className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50"
-                  >
-                    Change Status
-                  </button>
-                  {selectedRequest.status.toLowerCase() === 'cancelled' && (() => {
-                    // Check if request hasn't started yet
-                    const now = new Date();
-                    const requestedDateTime = selectedRequest.requested_datetime
-                      ? new Date(selectedRequest.requested_datetime)
-                      : new Date(`${selectedRequest.requested_date.includes('T') ? selectedRequest.requested_date.split('T')[0] : selectedRequest.requested_date}T${selectedRequest.requested_time_start}Z`);
-                    return requestedDateTime > now;
-                  })() && (
-                    <button
-                      onClick={() => {
-                        setShowUncancelModal(true);
-                        setActionError(null);
-                      }}
-                      disabled={actionLoading}
-                      className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-                    >
-                      Restore Request
-                    </button>
-                  )}
-                </div>
-
-                {/* Row 2: Acknowledgment and Time Tracking */}
-                {selectedRequest.technician_name && selectedRequest.status.toLowerCase() !== 'completed' && (
-                  <div className="flex space-x-3">
-                    {!selectedRequest.acknowledged_at && (
-                      <button
-                        onClick={handleAcknowledge}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        {actionLoading ? 'Acknowledging...' : 'Acknowledge'}
-                      </button>
-                    )}
-
-                    {/* Time tracking toggle button - changes based on status */}
-                    {selectedRequest.status === 'Started' ? (
-                      <button
-                        onClick={() => handleTimeTracking('stop')}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 flex items-center"
-                      >
-                        <Pause className="h-4 w-4 mr-2" />
-                        Pause Work
-                      </button>
-                    ) : selectedRequest.status === 'Paused' ? (
-                      <button
-                        onClick={() => handleTimeTracking('start')}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
-                      >
-                        <Clock className="h-4 w-4 mr-2" />
-                        Resume Work
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => handleTimeTracking('start')}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 flex items-center"
-                      >
-                        <Clock className="h-4 w-4 mr-2" />
-                        Start Work
-                      </button>
-                    )}
-
-                    {canCompleteRequest(selectedRequest) && (
-                      <button
-                        onClick={() => {
-                          setShowCloseModal(true);
-                          setActionError(null);
-                          // Fetch time breakdown and auto-populate duration
-                          if (selectedRequest?.id) {
-                            fetchTimeBreakdown(selectedRequest.id);
-                          }
-                        }}
-                        disabled={actionLoading}
-                        className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 flex items-center"
-                      >
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                        Complete Request
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Row 3: Close */}
-                <div className="flex justify-end">
-                  <button
-                    onClick={handleCloseDetailModal}
-                    disabled={actionLoading}
-                    className={`px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
-                  >
-                    Close
-                  </button>
-                </div>
+              {/* Row 3: Close */}
+              <div className="mt-6 flex justify-end">
+                <button
+                  onClick={handleCloseDetailModal}
+                  disabled={actionLoading}
+                  className={`px-4 py-2 ${themeClasses.bg.secondary} ${themeClasses.text.primary} rounded-lg hover:opacity-80 disabled:opacity-50`}
+                >
+                  Close
+                </button>
               </div>
             </div>
           </div>
