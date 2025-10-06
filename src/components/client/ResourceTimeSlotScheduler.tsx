@@ -607,7 +607,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   // Handle slot click
   const handleSlotClick = (slot: TimeSlot) => {
     if (slot.isPast) {
-      setErrorMessage(t('scheduler.error.pastOrTooSoon', 'Cannot schedule appointments in the past or less than 1 hour from now'));
+      setErrorMessage(t('scheduler.error.pastOrTooSoon', undefined, 'Cannot schedule appointments in the past or less than 1 hour from now'));
       return;
     }
 
@@ -626,7 +626,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
     const blockCheck = checkIfSlotBlocked(slotTime, selectedDuration);
     if (blockCheck.isBlocked) {
-      setErrorMessage(blockCheck.reason || t('scheduler.error.slotUnavailable', 'This time slot is not available'));
+      setErrorMessage(blockCheck.reason || t('scheduler.error.slotUnavailable', undefined, 'This time slot is not available'));
       return;
     }
 
@@ -656,7 +656,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
       const blockCheck = checkIfSlotBlocked(selectedStartTime, newDuration);
       if (blockCheck.isBlocked) {
-        setErrorMessage(blockCheck.reason || t('scheduler.error.durationUnavailable', 'This time slot is not available with the new duration'));
+        setErrorMessage(blockCheck.reason || t('scheduler.error.durationUnavailable', undefined, 'This time slot is not available with the new duration'));
         setSelectedStartTime(null);
         setSelectedEndTime(null);
         return;
@@ -821,7 +821,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         const durationHours = (selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60);
         const blockCheck = checkIfSlotBlocked(selectedStartTime, durationHours);
         if (blockCheck.isBlocked) {
-          setErrorMessage(blockCheck.reason || t('scheduler.error.invalidSelection', 'Invalid time selection'));
+          setErrorMessage(blockCheck.reason || t('scheduler.error.invalidSelection', undefined, 'Invalid time selection'));
           // Don't clear selection immediately - let user see the error and adjust
         } else {
           setErrorMessage(''); // Clear error on successful validation
@@ -888,7 +888,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         const durationHours = (selectedEndTime.getTime() - selectedStartTime.getTime()) / (1000 * 60 * 60);
         const blockCheck = checkIfSlotBlocked(selectedStartTime, durationHours);
         if (blockCheck.isBlocked) {
-          setErrorMessage(blockCheck.reason || t('scheduler.error.invalidSelection', 'Invalid time selection'));
+          setErrorMessage(blockCheck.reason || t('scheduler.error.invalidSelection', undefined, 'Invalid time selection'));
           // Don't clear selection immediately - let user see the error and adjust
         } else {
           setErrorMessage(''); // Clear error on successful validation
@@ -941,7 +941,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
         <div className={`bg-white dark:bg-gray-800 rounded-lg p-6 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-sm">{t('scheduler.loading', 'Loading scheduler...')}</p>
+          <p className="mt-2 text-sm">{t('scheduler.loading', undefined, 'Loading scheduler...')}</p>
         </div>
       </div>
     );
@@ -965,7 +965,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-start sm:items-center justify-between gap-2">
             <div className="flex-1 min-w-0">
-              <h2 className="text-lg sm:text-2xl font-bold truncate">{t('scheduler.title', 'Schedule Appointment')}</h2>
+              <h2 className="text-lg sm:text-2xl font-bold truncate">{t('scheduler.title', undefined, 'Schedule Appointment')}</h2>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
                 {formatDateString(selectedDate, language === 'es' ? 'es-ES' : 'en-US', {
                   weekday: 'long',
@@ -984,8 +984,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 onClose();
               }}
               className="flex-shrink-0 p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors cursor-pointer"
-              aria-label={t('scheduler.close', 'Close scheduler')}
-              title="Close"
+              aria-label={t('scheduler.close', undefined, 'Close scheduler')}
+              title={t('scheduler.close', undefined, 'Close scheduler')}
             >
               <X className="h-5 w-5 sm:h-6 sm:w-6 pointer-events-none" />
             </button>
@@ -995,7 +995,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           <div className="flex flex-wrap items-center gap-3 mt-4">
             {/* Time Format Toggle */}
             <div className="flex items-center gap-2 min-w-fit">
-              <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.timeFormat', 'Time:')}</label>
+              <label className="text-sm font-medium whitespace-nowrap">{t('scheduler.timeFormat', undefined, 'Time:')}</label>
               <button
                 type="button"
                 onClick={() => setIs24HourFormat(!is24HourFormat)}
@@ -1004,7 +1004,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                     ? 'bg-gray-700 border-gray-600 text-white hover:bg-gray-600'
                     : 'bg-white border-gray-300 text-gray-900 hover:bg-gray-50'
                 }`}
-                title={is24HourFormat ? t('scheduler.switchTo12Hour', 'Switch to 12-hour format') : t('scheduler.switchTo24Hour', 'Switch to 24-hour format')}
+                title={is24HourFormat ? t('scheduler.switchTo12Hour', undefined, 'Switch to 12-hour format') : t('scheduler.switchTo24Hour', undefined, 'Switch to 24-hour format')}
               >
                 {is24HourFormat ? '24h' : '12h'}
               </button>
@@ -1016,7 +1016,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 onClick={scrollToNow}
                 className="px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium whitespace-nowrap"
               >
-                {t('scheduler.now', 'Now')}
+                {t('scheduler.now', undefined, 'Now')}
               </button>
             )}
           </div>
@@ -1035,7 +1035,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               <AlertCircle className="h-5 w-5 text-orange-600 dark:text-orange-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-orange-800 dark:text-orange-300 font-medium">
-                  {t('scheduler.emergencyHoursTitle', '⚠️ Emergency Hours Selected')}
+                  {t('scheduler.emergencyHoursTitle', undefined, '⚠️ Emergency Hours Selected')}
                 </p>
                 <p className="text-xs text-orange-700 dark:text-orange-400 mt-1">
                   {t('scheduler.emergencyHoursMessage', { multiplier: selectedRateInfo.maxMultiplier.toString() }, 'Your selected time includes Emergency rate hours ({{multiplier}}x rate). This appointment will be charged at a higher rate than standard hours.')}
@@ -1050,7 +1050,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
                 <p className="text-sm text-yellow-800 dark:text-yellow-300 font-medium">
-                  {t('scheduler.premiumHoursTitle', 'Premium Hours Selected')}
+                  {t('scheduler.premiumHoursTitle', undefined, 'Premium Hours Selected')}
                 </p>
                 <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
                   {t('scheduler.premiumHoursMessage', { multiplier: selectedRateInfo.maxMultiplier.toString() }, 'Your selected time includes Premium rate hours ({{multiplier}}x rate).')}
@@ -1062,7 +1062,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           {isSelectedDateInPast && (
             <div className="mt-4 p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-600 rounded-lg">
               <p className="text-sm text-red-700 dark:text-red-300 font-medium">
-                {t('scheduler.pastDateWarning', '⚠️ Cannot schedule appointments in the past. Please select a future date.')}
+                {t('scheduler.pastDateWarning', undefined, '⚠️ Cannot schedule appointments in the past. Please select a future date.')}
               </p>
             </div>
           )}
@@ -1090,7 +1090,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
             <ChevronLeft className="h-4 w-4" />
-            <span className="hidden sm:inline">{t('scheduler.previousDay', 'Previous Day')}</span>
+            <span className="hidden sm:inline">{t('scheduler.previousDay', undefined, 'Previous Day')}</span>
           </button>
 
           <div className="text-center flex-1 sm:flex-initial px-2">
@@ -1112,7 +1112,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
             }}
             className="flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
           >
-            <span className="hidden sm:inline">{t('scheduler.nextDay', 'Next Day')}</span>
+            <span className="hidden sm:inline">{t('scheduler.nextDay', undefined, 'Next Day')}</span>
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>
@@ -1124,10 +1124,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               <div className="text-center">
                 <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-red-700 dark:text-red-400 mb-2">
-                  {t('scheduler.pastDateTitle', 'Past Date Selected')}
+                  {t('scheduler.pastDateTitle', undefined, 'Past Date Selected')}
                 </h3>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {t('scheduler.pastDateMessage', 'Please select today or a future date to schedule appointments.')}
+                  {t('scheduler.pastDateMessage', undefined, 'Please select today or a future date to schedule appointments.')}
                 </p>
               </div>
             </div>
@@ -1136,10 +1136,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               {/* Row labels */}
               <div className="flex flex-col border-r border-gray-200 dark:border-gray-700">
                 <div className="w-20 sm:w-32 h-[26px] border-b border-gray-200 dark:border-gray-700 flex items-center justify-center bg-white dark:bg-gray-800">
-                  <span className="font-medium text-xs">{t('scheduler.time', 'Time')}</span>
+                  <span className="font-medium text-xs">{t('scheduler.time', undefined, 'Time')}</span>
                 </div>
                 <div className="w-20 sm:w-32 flex-1 flex items-center justify-center bg-gray-50 dark:bg-gray-900 px-2">
-                  <span className="text-xs sm:text-sm font-medium text-center leading-tight">{t('scheduler.availableSlots', 'Available Slots')}</span>
+                  <span className="text-xs sm:text-sm font-medium text-center leading-tight">{t('scheduler.availableSlots', undefined, 'Available Slots')}</span>
                 </div>
               </div>
 
@@ -1183,13 +1183,13 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
                         if (slot.isPast) {
                           bgColor = 'bg-gray-200 dark:bg-gray-700 cursor-not-allowed';
-                          tierLabel = t('scheduler.pastTimeSlot', 'Past time slot');
+                          tierLabel = t('scheduler.pastTimeSlot', undefined, 'Past time slot');
                         } else if (blockCheck.isBlocked) {
                           bgColor = 'cursor-not-allowed';
-                          tierLabel = blockCheck.reason || t('scheduler.buffer', 'Buffer');
+                          tierLabel = blockCheck.reason || t('scheduler.buffer', undefined, 'Buffer');
                         } else if (isInSelectedRange) {
                           bgColor = 'bg-blue-500 text-white';
-                          tierLabel = t('scheduler.selected', 'Selected');
+                          tierLabel = t('scheduler.selected', undefined, 'Selected');
                         } else if (slot.rateTier) {
                           // Use color from database
                           const lightenedColor = slot.rateTier.colorCode + '1A'; // Add transparency
@@ -1204,7 +1204,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             : t('scheduler.standardHours', multiplier, 'Standard hours ({{multiplier}}x rate)');
                         } else {
                           bgColor = 'bg-gray-100 dark:bg-gray-800 cursor-pointer';
-                          tierLabel = t('scheduler.unavailable', 'Unavailable');
+                          tierLabel = t('scheduler.unavailable', undefined, 'Unavailable');
                         }
 
                         return (
@@ -1261,11 +1261,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             style={{ left: '12px', right: '12px' }} // Leave space for resize handles
                             onMouseDown={handleMoveStart}
                             onTouchStart={handleMoveStart}
-                            title={t('scheduler.dragToMove', 'Drag to move appointment')}
+                            title={t('scheduler.dragToMove', undefined, 'Drag to move appointment')}
                           >
                             <div className="text-center pointer-events-none">
                               <div>{formatTime(selectedStartTime.getHours(), selectedStartTime.getMinutes())}</div>
-                              <div className="text-[10px]">{t('scheduler.to', 'to')}</div>
+                              <div className="text-[10px]">{t('scheduler.to', undefined, 'to')}</div>
                               <div>{formatTime(selectedEndTime.getHours(), selectedEndTime.getMinutes())}</div>
                             </div>
                           </div>
@@ -1275,7 +1275,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             className="absolute left-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center touch-none"
                             onMouseDown={(e) => handleResizeStart(e, 'start')}
                             onTouchStart={(e) => handleResizeStart(e, 'start')}
-                            title={t('scheduler.dragStartTime', 'Drag to adjust start time')}
+                            title={t('scheduler.dragStartTime', undefined, 'Drag to adjust start time')}
                           >
                             <div className="text-white text-xs pointer-events-none">⟨</div>
                           </div>
@@ -1285,7 +1285,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             className="absolute right-0 top-0 w-3 h-20 bg-blue-900 cursor-ew-resize pointer-events-auto hover:bg-blue-950 z-10 flex items-center justify-center touch-none"
                             onMouseDown={(e) => handleResizeStart(e, 'end')}
                             onTouchStart={(e) => handleResizeStart(e, 'end')}
-                            title={t('scheduler.dragEndTime', 'Drag to adjust end time')}
+                            title={t('scheduler.dragEndTime', undefined, 'Drag to adjust end time')}
                           >
                             <div className="text-white text-xs pointer-events-none">⟩</div>
                           </div>
@@ -1313,7 +1313,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             }}
                             title={`${booking.clientName} - ${booking.serviceType}`}
                           >
-                            <span className="truncate">Unavailable</span>
+                            <span className="truncate">{t('scheduler.unavailable', undefined, 'Unavailable')}</span>
                           </div>
                         );
                       })}
@@ -1370,11 +1370,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                       : 'repeating-linear-gradient(45deg, #D1D5DB 0px, #D1D5DB 2px, #E5E7EB 2px, #E5E7EB 4px)'
                   }}
                 ></div>
-                <span>{t('scheduler.buffer', 'Buffer')}</span>
+                <span>{t('scheduler.buffer', undefined, 'Buffer')}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <div className="w-4 h-4 bg-blue-500"></div>
-                <span>{t('scheduler.selected', 'Selected')}</span>
+                <span>{t('scheduler.selected', undefined, 'Selected')}</span>
               </div>
             </div>
 
@@ -1383,7 +1383,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                 <div className="flex flex-col px-3 sm:px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
                   {/* Base Rate */}
                   <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                    {t('scheduler.baseRate', 'Base Rate')} ({rateCategoryName}): ${baseHourlyRate}/hr
+                    {t('scheduler.baseRate', undefined, 'Base Rate')} ({rateCategoryName}): ${baseHourlyRate}/hr
                   </div>
                   {/* Breakdown */}
                   {estimatedCost.breakdown.map((block, idx) => {
@@ -1401,10 +1401,10 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   {estimatedCost.firstHourDiscount && estimatedCost.firstHourDiscount > 0 && (
                     <>
                       <div className="text-xs text-green-700 dark:text-green-400 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
-                        {t('scheduler.subtotal', 'Subtotal')}: ${estimatedCost.subtotal?.toFixed(2)}
+                        {t('scheduler.subtotal', undefined, 'Subtotal')}: ${estimatedCost.subtotal?.toFixed(2)}
                       </div>
                       <div className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">
-                        🎁 {t('scheduler.firstHourComp', 'First Hour Comp (New Client)')}:
+                        🎁 {t('scheduler.firstHourComp', undefined, 'First Hour Comp (New Client)')}:
                       </div>
                       {estimatedCost.firstHourCompBreakdown?.map((compBlock, idx) => {
                         const tierKey = `scheduler.tier.${compBlock.tierName.toLowerCase()}`;
@@ -1417,14 +1417,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                       })}
                       {estimatedCost.firstHourCompBreakdown && estimatedCost.firstHourCompBreakdown.length > 1 && (
                         <div className="text-xs text-green-700 dark:text-green-400 font-medium ml-4">
-                          {t('scheduler.totalDiscount', 'Total Discount')}: -${estimatedCost.firstHourDiscount.toFixed(2)}
+                          {t('scheduler.totalDiscount', undefined, 'Total Discount')}: -${estimatedCost.firstHourDiscount.toFixed(2)}
                         </div>
                       )}
                     </>
                   )}
                   {/* Total */}
                   <div className="text-xs sm:text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
-                    {t('scheduler.total', 'Total')}: ${estimatedCost.total.toFixed(2)}
+                    {t('scheduler.total', undefined, 'Total')}: ${estimatedCost.total.toFixed(2)}
                   </div>
                 </div>
               )}
@@ -1439,7 +1439,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   }}
                   className="flex-1 sm:flex-initial px-6 py-3 sm:py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 font-medium transition-colors"
                 >
-                  {t('scheduler.cancel', 'Cancel')}
+                  {t('scheduler.cancel', undefined, 'Cancel')}
                 </button>
 
                 {selectedStartTime && selectedEndTime && !isSelectedDateInPast && (
@@ -1448,7 +1448,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                     onClick={handleConfirmBooking}
                     className="flex-1 sm:flex-initial px-6 py-3 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 font-medium transition-colors"
                   >
-                    {t('scheduler.selectTimeslot', 'Select Timeslot')}
+                    {t('scheduler.selectTimeslot', undefined, 'Select Timeslot')}
                   </button>
                 )}
               </div>

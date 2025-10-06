@@ -452,11 +452,11 @@ const ServiceScheduler: React.FC = () => {
         // Open the time slot scheduler to show the suggested time
         setShowTimeSlotScheduler(true);
       } else {
-        alert(result.message || t('scheduler.noSlotsAvailable', 'No available slots found for the selected criteria'));
+        alert(result.message || t('scheduler.noSlotsAvailable', undefined, 'No available slots found for the selected criteria'));
       }
     } catch (error) {
       console.error('Auto-suggest error:', error);
-      alert(t('scheduler.autoSuggestError', 'Error finding available slots'));
+      alert(t('scheduler.autoSuggestError', undefined, 'Error finding available slots'));
     } finally {
       setIsAutoSuggesting(false);
     }
@@ -903,7 +903,7 @@ const ServiceScheduler: React.FC = () => {
               {/* Duration Selector */}
               <div className="flex items-center gap-2 min-w-fit">
                 <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {t('scheduler.duration', 'Duration:')}
+                  {t('scheduler.duration', undefined, 'Duration:')}
                 </label>
                 <select
                   value={selectedDuration}
@@ -916,7 +916,7 @@ const ServiceScheduler: React.FC = () => {
                 >
                   {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map(hours => (
                     <option key={hours} value={hours}>
-                      {hours} {hours === 1 ? t('scheduler.hour', 'hour') : t('scheduler.hours', 'hours')}
+                      {hours} {hours === 1 ? t('scheduler.hour', undefined, 'hour') : t('scheduler.hours', undefined, 'hours')}
                     </option>
                   ))}
                 </select>
@@ -925,7 +925,7 @@ const ServiceScheduler: React.FC = () => {
               {/* Tier Preference Selector */}
               <div className="flex items-center gap-2 min-w-fit">
                 <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {t('scheduler.tierPreference', 'Prefer:')}
+                  {t('scheduler.tierPreference', undefined, 'Prefer:')}
                 </label>
                 <select
                   value={tierPreference}
@@ -936,17 +936,17 @@ const ServiceScheduler: React.FC = () => {
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 >
-                  <option value="any">{t('scheduler.tierAny', 'Any Rate')}</option>
-                  <option value="standard">{t('scheduler.tierStandard', 'Standard')}</option>
-                  <option value="premium">{t('scheduler.tierPremium', 'Premium')}</option>
-                  <option value="emergency">{t('scheduler.tierEmergency', 'Emergency')}</option>
+                  <option value="any">{t('scheduler.tierAny', undefined, 'Any Rate')}</option>
+                  <option value="standard">{t('scheduler.tierStandard', undefined, 'Standard')}</option>
+                  <option value="premium">{t('scheduler.tierPremium', undefined, 'Premium')}</option>
+                  <option value="emergency">{t('scheduler.tierEmergency', undefined, 'Emergency')}</option>
                 </select>
               </div>
 
               {/* Days From Now Selector */}
               <div className="flex items-center gap-2 min-w-fit">
                 <label className={`text-sm font-medium whitespace-nowrap ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
-                  {t('scheduler.minDaysFromNow', 'Days from now:')}
+                  {t('scheduler.minDaysFromNow', undefined, 'Days from now:')}
                 </label>
                 <select
                   value={minDaysFromNow}
@@ -957,14 +957,14 @@ const ServiceScheduler: React.FC = () => {
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
                 >
-                  <option value="0">{t('scheduler.today', 'Today')}</option>
-                  <option value="1">{t('scheduler.tomorrow', 'Tomorrow')}</option>
-                  <option value="2">2 {t('scheduler.days', 'days')}</option>
-                  <option value="3">3 {t('scheduler.days', 'days')}</option>
-                  <option value="5">5 {t('scheduler.days', 'days')}</option>
-                  <option value="7">1 {t('scheduler.week', 'week')}</option>
-                  <option value="14">2 {t('scheduler.weeks', 'weeks')}</option>
-                  <option value="30">1 {t('scheduler.month', 'month')}</option>
+                  <option value="0">{t('scheduler.daysFromNow.today', undefined, 'Today')}</option>
+                  <option value="1">{t('scheduler.daysFromNow.tomorrow', undefined, 'Tomorrow')}</option>
+                  <option value="2">{t('scheduler.daysFromNow.2days', undefined, '2 days')}</option>
+                  <option value="3">{t('scheduler.daysFromNow.3days', undefined, '3 days')}</option>
+                  <option value="5">{t('scheduler.daysFromNow.5days', undefined, '5 days')}</option>
+                  <option value="7">{t('scheduler.daysFromNow.1week', undefined, '1 week')}</option>
+                  <option value="14">{t('scheduler.daysFromNow.2weeks', undefined, '2 weeks')}</option>
+                  <option value="30">{t('scheduler.daysFromNow.1month', undefined, '1 month')}</option>
                 </select>
               </div>
 
@@ -977,10 +977,10 @@ const ServiceScheduler: React.FC = () => {
               >
                 <Sparkles className="h-4 w-4 flex-shrink-0" />
                 <span className="hidden md:inline">
-                  {isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest Available Slot')}
+                  {isAutoSuggesting ? t('scheduler.finding', undefined, 'Finding...') : t('scheduler.autoSuggest', undefined, 'Auto-Suggest Available Slot')}
                 </span>
                 <span className="md:hidden">
-                  {isAutoSuggesting ? t('scheduler.finding', 'Finding...') : t('scheduler.autoSuggest', 'Auto-Suggest')}
+                  {isAutoSuggesting ? t('scheduler.finding', undefined, 'Finding...') : t('scheduler.autoSuggest', undefined, 'Auto-Suggest')}
                 </span>
               </button>
             </div>
@@ -1021,7 +1021,7 @@ const ServiceScheduler: React.FC = () => {
                   <div className="flex flex-col px-4 py-2 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-600 rounded-md">
                     {/* Base Rate */}
                     <div className="text-xs text-green-600 dark:text-green-500 mb-1">
-                      {t('scheduler.baseRate', 'Base Rate')} ({costBreakdown.rateCategoryName || 'Standard'}): ${costBreakdown.baseHourlyRate}/hr
+                      {t('scheduler.baseRate', undefined, 'Base Rate')} ({costBreakdown.rateCategoryName || 'Standard'}): ${costBreakdown.baseHourlyRate}/hr
                     </div>
                     {/* Breakdown */}
                     {costBreakdown.breakdown.map((block, idx) => {
@@ -1039,10 +1039,10 @@ const ServiceScheduler: React.FC = () => {
                     {costBreakdown.firstHourDiscount && costBreakdown.firstHourDiscount > 0 && (
                       <>
                         <div className="text-xs text-green-700 dark:text-green-400 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
-                          {t('scheduler.subtotal', 'Subtotal')}: ${costBreakdown.subtotal?.toFixed(2)}
+                          {t('scheduler.subtotal', undefined, 'Subtotal')}: ${costBreakdown.subtotal?.toFixed(2)}
                         </div>
                         <div className="text-xs text-green-700 dark:text-green-400 font-medium mb-1">
-                          🎁 {t('scheduler.firstHourComp', 'First Hour Comp (New Client)')}:
+                          🎁 {t('scheduler.firstHourComp', undefined, 'First Hour Comp (New Client)')}:
                         </div>
                         {costBreakdown.firstHourCompBreakdown?.map((compBlock, idx) => {
                           const tierKey = `scheduler.tier.${compBlock.tierName.toLowerCase()}`;
@@ -1055,19 +1055,19 @@ const ServiceScheduler: React.FC = () => {
                         })}
                         {costBreakdown.firstHourCompBreakdown && costBreakdown.firstHourCompBreakdown.length > 1 && (
                           <div className="text-xs text-green-700 dark:text-green-400 font-medium ml-4">
-                            {t('scheduler.totalDiscount', 'Total Discount')}: -${costBreakdown.firstHourDiscount.toFixed(2)}
+                            {t('scheduler.totalDiscount', undefined, 'Total Discount')}: -${costBreakdown.firstHourDiscount.toFixed(2)}
                           </div>
                         )}
                       </>
                     )}
                     {/* Total */}
                     <div className="text-sm font-semibold text-green-800 dark:text-green-300 mt-1 pt-1 border-t border-green-300 dark:border-green-600">
-                      {t('scheduler.total', 'Total')}*: ${costBreakdown.total.toFixed(2)}
+                      {t('scheduler.total', undefined, 'Total')}*: ${costBreakdown.total.toFixed(2)}
                     </div>
                   </div>
                   {/* Disclaimer */}
                   <div className="text-xs text-gray-600 dark:text-gray-400 mt-1 italic">
-                    * {t('scheduler.costDisclaimer', 'Actual cost may vary based on time required to complete the service')}
+                    * {t('scheduler.costDisclaimer', undefined, 'Actual cost may vary based on time required to complete the service')}
                   </div>
                 </>
               )}
