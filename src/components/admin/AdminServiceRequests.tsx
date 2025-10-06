@@ -72,6 +72,14 @@ const AdminServiceRequests: React.FC = () => {
     premiumBillableHours: number;
     emergencyBillableHours: number;
     totalBillableHours: number;
+    baseRate: number;
+    standardRate: number;
+    premiumRate: number;
+    emergencyRate: number;
+    standardCost: number;
+    premiumCost: number;
+    emergencyCost: number;
+    totalCost: number;
   } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -496,14 +504,22 @@ const AdminServiceRequests: React.FC = () => {
           standardBillableHours: response.data.standardBillableHours,
           premiumBillableHours: response.data.premiumBillableHours,
           emergencyBillableHours: response.data.emergencyBillableHours,
-          totalBillableHours: response.data.totalBillableHours
+          totalBillableHours: response.data.totalBillableHours,
+          baseRate: response.data.baseRate,
+          standardRate: response.data.standardRate,
+          premiumRate: response.data.premiumRate,
+          emergencyRate: response.data.emergencyRate,
+          standardCost: response.data.standardCost,
+          premiumCost: response.data.premiumCost,
+          emergencyCost: response.data.emergencyCost,
+          totalCost: response.data.totalCost
         });
 
-        // Auto-populate actual duration field with total billable minutes
-        if (response.data.totalBillableMinutes !== undefined && response.data.totalBillableMinutes !== null) {
-          setActualDurationMinutes(response.data.totalBillableMinutes.toString());
+        // Auto-populate actual duration field with total tracked minutes (before waivers)
+        if (response.data.totalMinutes !== undefined && response.data.totalMinutes !== null) {
+          setActualDurationMinutes(response.data.totalMinutes.toString());
         } else {
-          console.warn('⚠️ totalBillableMinutes is undefined or null');
+          console.warn('⚠️ totalMinutes is undefined or null');
         }
       }
     } catch (err) {

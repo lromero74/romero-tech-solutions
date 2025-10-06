@@ -511,11 +511,16 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const { id } = req.params;
     const pool = await getPool();
 
-    // Get business_id for this service request to check if it's their first request
+    // Get business_id and rate for this service request
     const serviceRequestQuery = `
-      SELECT business_id, client_id
-      FROM service_requests
-      WHERE id = $1
+      SELECT
+        sr.business_id,
+        sr.client_id,
+        COALESCE(hrc.base_hourly_rate, 75.00) as base_hourly_rate
+      FROM service_requests sr
+      LEFT JOIN businesses b ON sr.business_id = b.id
+      LEFT JOIN hourly_rate_categories hrc ON b.rate_category_id = hrc.id
+      WHERE sr.id = $1
     `;
     const srResult = await pool.query(serviceRequestQuery, [id]);
 
@@ -528,6 +533,7 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
 
     const businessId = srResult.rows[0].business_id;
     const clientId = srResult.rows[0].client_id;
+    const baseRate = parseFloat(srResult.rows[0].base_hourly_rate) || 75.00;
 
     // Check if this is the client's first COMPLETED service request
     // Only count "Closed" status (not "Cancelled") that were created before this one
@@ -723,6 +729,16 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const emergencyBillableHours = emergencyMinutes / 60;
     const totalBillableHours = standardBillableHours + premiumBillableHours + emergencyBillableHours;
 
+    // Calculate costs
+    const standardRate = baseRate;
+    const premiumRate = baseRate * 1.5;
+    const emergencyRate = baseRate * 2.0;
+
+    const standardCost = standardBillableHours * standardRate;
+    const premiumCost = premiumBillableHours * premiumRate;
+    const emergencyCost = emergencyBillableHours * emergencyRate;
+    const totalCost = standardCost + premiumCost + emergencyCost;
+
     res.json({
       success: true,
       data: {
@@ -737,7 +753,17 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
         emergencyBillableHours,
         totalMinutes: chronologicalMinutes.length,
         totalBillableMinutes: billableArray.length,
-        totalBillableHours
+        totalBillableHours,
+        // Rates
+        baseRate,
+        standardRate,
+        premiumRate,
+        emergencyRate,
+        // Costs
+        standardCost,
+        premiumCost,
+        emergencyCost,
+        totalCost
       }
     });
 

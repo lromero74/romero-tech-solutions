@@ -9,6 +9,14 @@ interface TimeBreakdown {
   premiumBillableHours: number;
   emergencyBillableHours: number;
   totalBillableHours: number;
+  baseRate: number;
+  standardRate: number;
+  premiumRate: number;
+  emergencyRate: number;
+  standardCost: number;
+  premiumCost: number;
+  emergencyCost: number;
+  totalCost: number;
 }
 
 interface CompleteRequestModalProps {
@@ -123,21 +131,40 @@ const CompleteRequestModal: React.FC<CompleteRequestModalProps> = ({
             )}
             {timeBreakdown && (
               <div className={`mt-3 p-3 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
-                {/* Show waived time for first-time clients */}
-                {timeBreakdown.isFirstServiceRequest && parseFloat(timeBreakdown.waivedHours) > 0 && (
-                  <div className={`mb-3 pb-3 border-b ${themeClasses.border}`}>
-                    <p className={`text-xs ${themeClasses.text.secondary} mb-1`}>
-                      First Service Request Discount:
-                    </p>
-                    <p className={`text-sm font-medium text-green-600 dark:text-green-400`}>
-                      New Client Assessment - Waived: {timeBreakdown.waivedHours} hours
-                    </p>
+                {/* Total Time Calculation */}
+                <div className={`mb-3 pb-3 border-b ${themeClasses.border}`}>
+                  <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
+                    Time Calculation:
+                  </p>
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className={themeClasses.text.secondary}>Total time tracked:</span>
+                      <span className={`font-semibold ${themeClasses.text.primary}`}>
+                        {(timeBreakdown.totalBillableHours + parseFloat(timeBreakdown.waivedHours)).toFixed(2)} hours
+                      </span>
+                    </div>
+                    {timeBreakdown.isFirstServiceRequest && parseFloat(timeBreakdown.waivedHours) > 0 && (
+                      <div className="flex justify-between">
+                        <span className="text-green-600 dark:text-green-400">
+                          First hour waived (new client):
+                        </span>
+                        <span className="font-semibold text-green-600 dark:text-green-400">
+                          -{timeBreakdown.waivedHours} hours
+                        </span>
+                      </div>
+                    )}
+                    <div className={`flex justify-between pt-1 border-t ${themeClasses.border}`}>
+                      <span className={`font-semibold ${themeClasses.text.primary}`}>Billable time:</span>
+                      <span className={`font-bold ${themeClasses.text.primary}`}>
+                        {timeBreakdown.totalBillableHours.toFixed(2)} hours
+                      </span>
+                    </div>
                   </div>
-                )}
+                </div>
 
-                {/* Billable hours breakdown */}
+                {/* Billable hours breakdown by tier */}
                 <p className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
-                  Billable Hours:
+                  Billable Hours by Rate Tier:
                 </p>
                 <div className="grid grid-cols-3 gap-2 text-xs">
                   <div className="text-center">
@@ -167,6 +194,55 @@ const CompleteRequestModal: React.FC<CompleteRequestModalProps> = ({
                   <span className={`text-sm font-bold ${themeClasses.text.primary}`}>
                     {timeBreakdown.totalBillableHours.toFixed(2)} hours
                   </span>
+                </div>
+
+                {/* Cost Breakdown */}
+                <div className={`mt-4 pt-4 border-t ${themeClasses.border}`}>
+                  <p className={`text-sm font-medium ${themeClasses.text.primary} mb-3`}>
+                    Cost Breakdown:
+                  </p>
+                  <div className="space-y-2 text-xs">
+                    {/* Standard Cost */}
+                    {timeBreakdown.standardBillableHours > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className={themeClasses.text.secondary}>
+                          Standard ({timeBreakdown.standardBillableHours.toFixed(2)} hrs × ${timeBreakdown.standardRate.toFixed(2)})
+                        </span>
+                        <span className={`font-semibold ${themeClasses.text.primary}`}>
+                          ${timeBreakdown.standardCost.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {/* Premium Cost */}
+                    {timeBreakdown.premiumBillableHours > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className={themeClasses.text.secondary}>
+                          Premium ({timeBreakdown.premiumBillableHours.toFixed(2)} hrs × ${timeBreakdown.premiumRate.toFixed(2)})
+                        </span>
+                        <span className={`font-semibold ${themeClasses.text.primary}`}>
+                          ${timeBreakdown.premiumCost.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {/* Emergency Cost */}
+                    {timeBreakdown.emergencyBillableHours > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className={themeClasses.text.secondary}>
+                          Emergency ({timeBreakdown.emergencyBillableHours.toFixed(2)} hrs × ${timeBreakdown.emergencyRate.toFixed(2)})
+                        </span>
+                        <span className={`font-semibold ${themeClasses.text.primary}`}>
+                          ${timeBreakdown.emergencyCost.toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  {/* Total Cost */}
+                  <div className={`mt-3 pt-3 border-t ${themeClasses.border} flex justify-between items-center`}>
+                    <span className={`text-sm font-bold ${themeClasses.text.primary}`}>Total Cost:</span>
+                    <span className={`text-lg font-bold text-teal-600 dark:text-teal-400`}>
+                      ${timeBreakdown.totalCost.toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
             )}
