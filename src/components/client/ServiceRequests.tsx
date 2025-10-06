@@ -1245,7 +1245,7 @@ const ServiceRequests: React.FC = () => {
                     <div className="mb-3 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
                       <h4 className="text-sm font-semibold text-green-900 dark:text-green-100 mb-2">{t('serviceRequests.costEstimate', undefined, 'Cost Estimate')}</h4>
                       <div className="text-xs text-green-700 dark:text-green-300 mb-1">
-                        {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate')} ({request.cost.rateCategoryName || 'Standard'}): ${request.cost.baseRate}/hr
+                        {t('serviceRequests.baseRatePerHour', { rate: String(request.cost.baseRate) }, 'Base Rate: ${{rate}}/hr')} ({request.cost.rateCategoryName || 'Standard'})
                       </div>
                       {/* Tier Breakdown */}
                       {request.cost.breakdown && request.cost.breakdown.map((block, idx) => (
@@ -1257,10 +1257,10 @@ const ServiceRequests: React.FC = () => {
                       {request.cost.firstHourDiscount && request.cost.firstHourDiscount > 0 && (
                         <>
                           <div className="text-xs text-green-700 dark:text-green-300 mt-1 pt-1 border-t border-green-200 dark:border-green-700">
-                            {t('serviceRequests.subtotal', 'Subtotal')}: ${request.cost.subtotal?.toFixed(2)}
+                            {t('serviceRequests.subtotal', undefined, 'subtotal')}: ${request.cost.subtotal?.toFixed(2)}
                           </div>
                           <div className="text-xs text-green-700 dark:text-green-300 font-medium mb-1">
-                            🎁 {t('serviceRequests.firstHourComp', 'First Hour Comp (New Client)')}:
+                            🎁 {t('serviceRequests.firstHourComp', undefined, 'First Hour Comp (New Client)')}:
                           </div>
                           {request.cost.firstHourCompBreakdown?.map((compBlock, idx) => (
                             <div key={idx} className="text-xs text-green-700 dark:text-green-300 ml-4">
@@ -1269,7 +1269,7 @@ const ServiceRequests: React.FC = () => {
                           ))}
                           {request.cost.firstHourCompBreakdown && request.cost.firstHourCompBreakdown.length > 1 && (
                             <div className="text-xs text-green-700 dark:text-green-300 font-medium ml-4">
-                              {t('serviceRequests.totalDiscount', 'Total Discount')}: -${request.cost.firstHourDiscount.toFixed(2)}
+                              {t('serviceRequests.totalDiscount', undefined, 'Total Discount')}: -${request.cost.firstHourDiscount.toFixed(2)}
                             </div>
                           )}
                         </>
