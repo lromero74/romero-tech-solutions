@@ -553,6 +553,10 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
         localStorage.removeItem(key);
       });
 
+      // Also clear currentPage and clientData to prevent navigation loop
+      localStorage.removeItem('currentPage');
+      sessionStorage.removeItem('clientData');
+
       // Immediately clear React state
       setUser(null);
       setSessionToken(null);

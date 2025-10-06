@@ -81,6 +81,9 @@
         const manifestLink = document.createElement('link');
         manifestLink.rel = 'manifest';
         manifestLink.href = manifestPath;
+        manifestLink.onerror = function() {
+          console.warn('Failed to load manifest:', manifestPath);
+        };
         document.head.appendChild(manifestLink);
 
         // Add iOS-specific meta tags
