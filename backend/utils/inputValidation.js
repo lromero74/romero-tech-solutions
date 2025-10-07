@@ -34,6 +34,7 @@ export const FILE_VALIDATION = {
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       // Images
       'image/jpeg',
+      'image/jpg', // Some systems use image/jpg instead of image/jpeg
       'image/png',
       'image/gif',
       'image/webp',

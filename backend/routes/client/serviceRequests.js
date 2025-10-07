@@ -1866,6 +1866,7 @@ const fileFilter = (req, file, cb) => {
     'application/vnd.ms-excel',
     'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     'image/jpeg',
+    'image/jpg', // Some systems use image/jpg instead of image/jpeg
     'image/png',
     'image/gif',
     'image/webp',
