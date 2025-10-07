@@ -406,6 +406,50 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     }
   }, [suggestedStartTime, suggestedEndTime]);
 
+  // Scroll to suggested time AFTER loading completes
+  useEffect(() => {
+    if (loading || !suggestedStartTime || !suggestedEndTime) return;
+
+    // Scroll to show the suggested slot with 1-hour buffer context
+    setTimeout(() => {
+      console.log('🎯 Attempting to scroll to suggested time with buffer...');
+
+      const hours = suggestedStartTime.getHours();
+      const minutes = suggestedStartTime.getMinutes();
+
+      const container = document.getElementById('timeline-scroll');
+      if (!container) {
+        console.warn('⚠️ Timeline scroll container not found!');
+        return;
+      }
+
+      console.log('✅ Timeline container found');
+
+      // Calculate the start of the 1-hour buffer before the selected slot
+      const bufferStartTime = new Date(suggestedStartTime.getTime() - (60 * 60 * 1000)); // 1 hour before
+      const bufferHours = bufferStartTime.getHours();
+      const bufferMinutes = bufferStartTime.getMinutes();
+
+      // Calculate position for the buffer start (24-hour day starting at midnight)
+      const bufferSlotIndex = bufferHours * 2 + (bufferMinutes / 30);
+      const bufferPosition = bufferSlotIndex * 64; // Each 30-min slot is 64px wide
+
+      // Don't scroll before timeline start (midnight)
+      const finalScrollPosition = Math.max(0, bufferPosition);
+
+      console.log('🎯 Scrolling to buffer position:', {
+        suggestedTime: `${hours}:${String(minutes).padStart(2, '0')}`,
+        bufferTime: `${bufferHours}:${String(bufferMinutes).padStart(2, '0')}`,
+        bufferSlotIndex,
+        bufferPosition,
+        finalScrollPosition
+      });
+
+      container.scrollTo({ left: finalScrollPosition, behavior: 'smooth' });
+      console.log('✅ Scroll command executed');
+    }, 200); // Shorter delay since loading is already complete
+  }, [loading, suggestedStartTime, suggestedEndTime]);
+
   // Load rate tiers and existing bookings
   useEffect(() => {
     const loadData = async () => {
@@ -486,6 +530,12 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   useEffect(() => {
     if (loading) return; // Wait until loading completes
 
+    // Don't auto-scroll if we have suggested times - let the suggestion scroll handle it
+    if (suggestedStartTime && suggestedEndTime) {
+      console.log('⏭️ Skipping default auto-scroll because suggested times are present');
+      return;
+    }
+
     const now = new Date();
     const isToday = selectedDate.toDateString() === now.toDateString();
     const isFutureDate = selectedDate > now;
@@ -493,9 +543,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     // Small delay to ensure DOM is ready
     setTimeout(() => {
       if (isToday) {
+        console.log('📍 Auto-scrolling to current time');
         // Scroll to current time for today
         scrollToNow();
       } else if (isFutureDate) {
+        console.log('📍 Auto-scrolling to 8:00 AM');
         // Scroll to first standard hour (08:00) for future dates
         const firstStandardHour = 8; // 08:00
         const slotIndex = firstStandardHour * 2; // Each hour has 2 slots (30-min intervals)
@@ -507,7 +559,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         }
       }
     }, 150);
-  }, [loading, selectedDate]); // Only trigger on loading completion or date change
+  }, [loading, selectedDate, suggestedStartTime, suggestedEndTime]); // Include suggested times in dependencies
 
   // ESC key handler to close modal
   useEffect(() => {
@@ -711,7 +763,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         setSelectedEndTime(endTime);
         setErrorMessage('');
 
-        // Scroll to show the suggested slot with good context, especially on mobile
+        // Scroll to show the suggested slot with 1-hour buffer context
         setTimeout(() => {
           const hours = startTime.getHours();
           const minutes = startTime.getMinutes();
@@ -719,19 +771,17 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           const container = document.getElementById('timeline-scroll');
           if (!container) return;
 
-          // Calculate slot position in timeline
-          const slotIndex = (hours - 6) * 2 + (minutes / 30);
-          const slotPosition = slotIndex * 64; // Each 30-min slot is 64px wide
+          // Calculate the start of the 1-hour buffer before the selected slot
+          const bufferStartTime = new Date(startTime.getTime() - (60 * 60 * 1000)); // 1 hour before
+          const bufferHours = bufferStartTime.getHours();
+          const bufferMinutes = bufferStartTime.getMinutes();
 
-          // Get viewport width to adjust scroll for mobile
-          const viewportWidth = container.clientWidth;
+          // Calculate position for the buffer start (24-hour day starting at midnight)
+          const bufferSlotIndex = bufferHours * 2 + (bufferMinutes / 30);
+          const bufferPosition = bufferSlotIndex * 64; // Each 30-min slot is 64px wide
 
-          // Position slot at 20% from left edge (works well on mobile and desktop)
-          // This shows plenty of context before the slot
-          const targetScrollPosition = slotPosition - (viewportWidth * 0.2);
-
-          // Don't scroll before timeline start (6 AM)
-          const finalScrollPosition = Math.max(0, targetScrollPosition);
+          // Don't scroll before timeline start (midnight)
+          const finalScrollPosition = Math.max(0, bufferPosition);
 
           container.scrollTo({ left: finalScrollPosition, behavior: 'smooth' });
         }, 500); // Longer delay to allow for date change and timeline re-render

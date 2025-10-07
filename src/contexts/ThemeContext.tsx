@@ -27,7 +27,7 @@ export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
       return 'dark';
     }
 
-    return 'light';
+    return 'dark';
   });
 
   const toggleTheme = () => {

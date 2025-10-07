@@ -15,7 +15,9 @@ interface ClientThemeProviderProps {
 export const ClientThemeProvider: React.FC<ClientThemeProviderProps> = ({ children }) => {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('client-theme');
-    return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    if (saved) return saved === 'dark';
+    // Default to dark mode when no preference is saved
+    return true;
   });
 
   useEffect(() => {
