@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const CURRENT_VERSION = '1.56.0';
+const CURRENT_VERSION = '1.57.0';
 const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 interface VersionInfo {
@@ -54,23 +54,26 @@ export function useVersionCheck() {
           console.log(
             `🔄 New version available: ${versionInfo.version} (current: ${CURRENT_VERSION})`
           );
-          console.log('Reloading to get latest version...');
+          console.log('Version mismatch detected - manual refresh recommended');
+
+          // TEMPORARILY DISABLED AUTO-RELOAD TO PREVENT REFRESH LOOP
+          // Will re-enable after deployment stabilizes
 
           // Show user-friendly message before reload
-          if (hasCheckedRef.current) {
-            // Only show alert if this isn't the first check (to avoid disrupting initial load)
-            const shouldReload = window.confirm(
-              'A new version of the application is available. Click OK to reload and get the latest updates.'
-            );
-            if (shouldReload) {
-              sessionStorage.setItem('versionCheckReloadTime', now.toString());
-              window.location.reload();
-            }
-          } else {
-            // Silent reload on first check (page just loaded with old cache)
-            sessionStorage.setItem('versionCheckReloadTime', now.toString());
-            window.location.reload();
-          }
+          // if (hasCheckedRef.current) {
+          //   // Only show alert if this isn't the first check (to avoid disrupting initial load)
+          //   const shouldReload = window.confirm(
+          //     'A new version of the application is available. Click OK to reload and get the latest updates.'
+          //   );
+          //   if (shouldReload) {
+          //     sessionStorage.setItem('versionCheckReloadTime', now.toString());
+          //     window.location.reload();
+          //   }
+          // } else {
+          //   // Silent reload on first check (page just loaded with old cache)
+          //   sessionStorage.setItem('versionCheckReloadTime', now.toString());
+          //   window.location.reload();
+          // }
         } else {
           console.log(`✅ Version check: Already on latest (${CURRENT_VERSION})`);
         }
