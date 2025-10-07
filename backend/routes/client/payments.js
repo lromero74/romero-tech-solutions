@@ -8,6 +8,8 @@ import {
   getPaymentIntent,
   constructWebhookEvent,
 } from '../../services/stripeService.js';
+import { sendNotificationToEmployees } from '../pushRoutes.js';
+import { websocketService } from '../../services/websocketService.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
@@ -333,6 +335,60 @@ router.post('/sync-status/:invoiceId', authenticateClient, async (req, res) => {
 
       console.log(`✅ Updated invoice ${invoice.invoice_number} to paid`);
 
+      // Get invoice details for notifications
+      const invoiceDetails = await pool.query(
+        `
+        SELECT i.*, b.business_name, u.id as user_id
+        FROM invoices i
+        JOIN businesses b ON i.business_id = b.id
+        JOIN users u ON b.id = u.business_id
+        WHERE i.id = $1
+        `,
+        [invoiceId]
+      );
+
+      if (invoiceDetails.rows.length > 0) {
+        const invoiceData = invoiceDetails.rows[0];
+
+        // Send push notifications to employees who subscribed to invoice_paid notifications
+        try {
+          await sendNotificationToEmployees('invoice_paid', {
+            title: '💰 Invoice Paid',
+            body: `Invoice ${invoice.invoice_number} for ${invoiceData.business_name} has been paid - $${parseFloat(invoiceData.total_amount).toFixed(2)}`,
+            icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+            badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+            data: {
+              type: 'invoice_paid',
+              invoiceId: invoiceId,
+              invoiceNumber: invoice.invoice_number,
+              amount: invoiceData.total_amount,
+              timestamp: Date.now()
+            }
+          }, 'receive.notifications.invoice_paid');
+          console.log(`📢 Sent invoice_paid push notifications`);
+        } catch (notifError) {
+          console.error('⚠️ Failed to send push notifications:', notifError);
+        }
+
+        // Broadcast to admins via WebSocket
+        websocketService.broadcastInvoiceUpdateToAdmins({
+          invoiceId: invoiceId,
+          invoiceNumber: invoice.invoice_number,
+          totalAmount: invoiceData.total_amount,
+          paymentStatus: 'paid',
+          type: 'invoice_paid'
+        });
+
+        // Notify the specific client via WebSocket
+        websocketService.notifyClientOfInvoiceUpdate(invoiceData.user_id, {
+          invoiceId: invoiceId,
+          invoiceNumber: invoice.invoice_number,
+          totalAmount: invoiceData.total_amount,
+          paymentStatus: 'paid',
+          type: 'invoice_paid'
+        });
+      }
+
       return res.json({
         success: true,
         message: 'Invoice updated to paid',
@@ -412,6 +468,61 @@ webhookRouter.post(
           );
 
           console.log(`✅ Updated invoice for payment intent: ${paymentIntent.id}`);
+
+          // Get invoice details for notifications
+          const invoiceDetails = await pool.query(
+            `
+            SELECT i.*, b.business_name, u.id as user_id
+            FROM invoices i
+            JOIN businesses b ON i.business_id = b.id
+            JOIN users u ON b.id = u.business_id
+            WHERE i.stripe_payment_intent_id = $1
+            `,
+            [paymentIntent.id]
+          );
+
+          if (invoiceDetails.rows.length > 0) {
+            const invoiceData = invoiceDetails.rows[0];
+
+            // Send push notifications to employees who subscribed to invoice_paid notifications
+            try {
+              await sendNotificationToEmployees('invoice_paid', {
+                title: '💰 Invoice Paid',
+                body: `Invoice ${invoiceData.invoice_number} for ${invoiceData.business_name} has been paid - $${parseFloat(invoiceData.total_amount).toFixed(2)}`,
+                icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+                badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+                data: {
+                  type: 'invoice_paid',
+                  invoiceId: invoiceData.id,
+                  invoiceNumber: invoiceData.invoice_number,
+                  amount: invoiceData.total_amount,
+                  timestamp: Date.now()
+                }
+              }, 'receive.notifications.invoice_paid');
+              console.log(`📢 Sent invoice_paid push notifications via webhook`);
+            } catch (notifError) {
+              console.error('⚠️ Failed to send push notifications:', notifError);
+            }
+
+            // Broadcast to admins via WebSocket
+            websocketService.broadcastInvoiceUpdateToAdmins({
+              invoiceId: invoiceData.id,
+              invoiceNumber: invoiceData.invoice_number,
+              totalAmount: invoiceData.total_amount,
+              paymentStatus: 'paid',
+              type: 'invoice_paid'
+            });
+
+            // Notify the specific client via WebSocket
+            websocketService.notifyClientOfInvoiceUpdate(invoiceData.user_id, {
+              invoiceId: invoiceData.id,
+              invoiceNumber: invoiceData.invoice_number,
+              totalAmount: invoiceData.total_amount,
+              paymentStatus: 'paid',
+              type: 'invoice_paid'
+            });
+          }
+
           break;
         }
 
