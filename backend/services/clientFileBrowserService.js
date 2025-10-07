@@ -158,7 +158,7 @@ class ClientFileBrowserService {
       const whereClause = whereConditions.join(' AND ');
 
       // Validate sort column
-      const validSortColumns = ['created_at', 'original_filename', 'file_size_bytes', 'mime_type'];
+      const validSortColumns = ['created_at', 'original_filename', 'file_size_bytes', 'content_type'];
       const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
       const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -179,7 +179,7 @@ class ClientFileBrowserService {
           f.original_filename,
           f.stored_filename,
           f.file_size_bytes,
-          f.mime_type,
+          f.content_type,
           f.file_description,
           f.folder_id,
           f.service_request_id,
@@ -195,12 +195,12 @@ class ClientFileBrowserService {
           u.email as uploader_email,
           folder.folder_name,
           folder.folder_color,
-          sr.request_title as service_request_title,
-          sr.urgency_level as service_request_urgency
+          sr.title as service_request_title,
+          sr.urgency_level_id as service_request_urgency
         FROM t_client_files f
         LEFT JOIN users u ON f.uploaded_by_user_id = u.id
         LEFT JOIN t_client_folders folder ON f.folder_id = folder.id
-        LEFT JOIN t_service_requests sr ON f.service_request_id = sr.id
+        LEFT JOIN service_requests sr ON f.service_request_id = sr.id
         WHERE ${whereClause}
         ORDER BY f.${safeSortBy} ${safeSortOrder}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -218,7 +218,7 @@ class ClientFileBrowserService {
           storedFilename: file.stored_filename,
           fileSizeBytes: parseInt(file.file_size_bytes),
           fileSizeFormatted: this.formatBytes(file.file_size_bytes),
-          mimeType: file.mime_type,
+          mimeType: file.content_type,
           fileDescription: file.file_description,
           folderId: file.folder_id,
           folderName: file.folder_name,
@@ -305,7 +305,7 @@ class ClientFileBrowserService {
       const whereClause = whereConditions.join(' AND ');
 
       // Validate sort column
-      const validSortColumns = ['created_at', 'original_filename', 'file_size_bytes', 'mime_type'];
+      const validSortColumns = ['created_at', 'original_filename', 'file_size_bytes', 'content_type'];
       const safeSortBy = validSortColumns.includes(sortBy) ? sortBy : 'created_at';
       const safeSortOrder = sortOrder.toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
 
@@ -326,7 +326,7 @@ class ClientFileBrowserService {
           f.original_filename,
           f.stored_filename,
           f.file_size_bytes,
-          f.mime_type,
+          f.content_type,
           f.file_description,
           f.folder_id,
           f.service_request_id,
@@ -342,12 +342,12 @@ class ClientFileBrowserService {
           u.email as uploader_email,
           folder.folder_name,
           folder.folder_color,
-          sr.request_title as service_request_title,
-          sr.urgency_level as service_request_urgency
+          sr.title as service_request_title,
+          sr.urgency_level_id as service_request_urgency
         FROM t_client_files f
         LEFT JOIN users u ON f.uploaded_by_user_id = u.id
         LEFT JOIN t_client_folders folder ON f.folder_id = folder.id
-        LEFT JOIN t_service_requests sr ON f.service_request_id = sr.id
+        LEFT JOIN service_requests sr ON f.service_request_id = sr.id
         WHERE ${whereClause}
         ORDER BY f.${safeSortBy} ${safeSortOrder}
         LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
@@ -365,7 +365,7 @@ class ClientFileBrowserService {
           storedFilename: file.stored_filename,
           fileSizeBytes: parseInt(file.file_size_bytes),
           fileSizeFormatted: this.formatBytes(file.file_size_bytes),
-          mimeType: file.mime_type,
+          mimeType: file.content_type,
           fileDescription: file.file_description,
           folderId: file.folder_id,
           folderName: file.folder_name,

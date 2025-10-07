@@ -4,6 +4,7 @@ import { usePermission } from '../../hooks/usePermission';
 import { themeClasses } from '../../contexts/ThemeContext';
 import GlobalQuotaSettings from './AdminQuotaManagement_Modals/GlobalQuotaSettings';
 import ClientQuotaManager from './AdminQuotaManagement_Modals/ClientQuotaManager';
+import apiService from '../../services/apiService';
 
 interface GlobalQuota {
   id: string;
@@ -26,7 +27,7 @@ interface QuotaSummary {
 }
 
 const AdminQuotaManagement: React.FC = () => {
-  const { checkPermission } = usePermission();
+  const { checkPermission, loading: permissionsLoading } = usePermission();
 
   // Permission checks
   const canManageGlobalQuotas = checkPermission('manage.global_quotas.enable');
@@ -45,22 +46,16 @@ const AdminQuotaManagement: React.FC = () => {
     setLoading(true);
     try {
       const [quotaResponse, summaryResponse] = await Promise.all([
-        fetch('/api/admin/global-quotas/active', {
-          credentials: 'include'
-        }),
-        fetch('/api/admin/global-quotas/summary', {
-          credentials: 'include'
-        })
+        apiService.get('/admin/global-quotas/active'),
+        apiService.get('/admin/global-quotas/summary')
       ]);
 
-      if (quotaResponse.ok) {
-        const quotaData = await quotaResponse.json();
-        setGlobalQuota(quotaData.data);
+      if (quotaResponse.success && quotaResponse.data) {
+        setGlobalQuota(quotaResponse.data);
       }
 
-      if (summaryResponse.ok) {
-        const summaryData = await summaryResponse.json();
-        setQuotaSummary(summaryData.data);
+      if (summaryResponse.success && summaryResponse.data) {
+        setQuotaSummary(summaryResponse.data);
       }
     } catch (error) {
       console.error('Failed to load quota data:', error);
@@ -82,15 +77,27 @@ const AdminQuotaManagement: React.FC = () => {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
   };
 
-  // Permission denied view
+  // Show loading spinner while permissions are loading
+  if (permissionsLoading) {
+    return (
+      <div className={`${themeClasses.container} rounded-lg p-8`}>
+        <div className="flex items-center justify-center">
+          <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
+          <span className="ml-3 text-gray-900 dark:text-gray-100">Loading permissions...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // Permission denied view (only show after permissions are loaded)
   if (!canManageGlobalQuotas && !canManageClientQuotas && !canViewQuotaStats) {
     return (
       <div className={`${themeClasses.container} rounded-lg p-8 text-center`}>
         <AlertTriangle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-        <h2 className={`text-xl font-semibold ${themeClasses.text} mb-2`}>
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
           Access Denied
         </h2>
-        <p className={themeClasses.mutedText}>
+        <p className="text-gray-600 dark:text-gray-400">
           You don't have permission to access quota management.
         </p>
       </div>
@@ -102,7 +109,7 @@ const AdminQuotaManagement: React.FC = () => {
       <div className={`${themeClasses.container} rounded-lg p-8`}>
         <div className="flex items-center justify-center">
           <RefreshCw className="h-8 w-8 animate-spin text-blue-500" />
-          <span className={`ml-3 ${themeClasses.text}`}>Loading quota information...</span>
+          <span className="ml-3 text-gray-900 dark:text-gray-100">Loading quota information...</span>
         </div>
       </div>
     );
@@ -115,20 +122,20 @@ const AdminQuotaManagement: React.FC = () => {
         <div className="flex items-center">
           <HardDrive className="h-8 w-8 text-blue-500 mr-3" />
           <div>
-            <h1 className={`text-2xl font-bold ${themeClasses.text}`}>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
               Quota Management
             </h1>
-            <p className={themeClasses.mutedText}>
+            <p className="text-gray-600 dark:text-gray-200">
               Manage storage quotas and monitor client usage
             </p>
           </div>
         </div>
         <button
           onClick={loadData}
-          className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
+          className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
           title="Refresh"
         >
-          <RefreshCw className={`h-5 w-5 ${themeClasses.text}`} />
+          <RefreshCw className="h-5 w-5" />
         </button>
       </div>
 
@@ -136,7 +143,7 @@ const AdminQuotaManagement: React.FC = () => {
       {canViewQuotaStats && globalQuota && (
         <div className={`${themeClasses.container} rounded-lg p-6`}>
           <div className="flex items-center justify-between mb-4">
-            <h2 className={`text-lg font-semibold ${themeClasses.text} flex items-center`}>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center">
               <Settings className="h-5 w-5 mr-2" />
               Global Default Quota
             </h2>
@@ -152,27 +159,27 @@ const AdminQuotaManagement: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Soft Limit</p>
-              <p className={`text-xl font-semibold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Soft Limit</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">
                 {formatBytes(globalQuota.softLimitBytes)}
               </p>
-              <p className={`text-xs ${themeClasses.mutedText} mt-1`}>Warning threshold</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Warning threshold</p>
             </div>
 
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Hard Limit</p>
-              <p className={`text-xl font-semibold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Hard Limit</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">
                 {formatBytes(globalQuota.hardLimitBytes)}
               </p>
-              <p className={`text-xs ${themeClasses.mutedText} mt-1`}>Maximum allowed</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Maximum allowed</p>
             </div>
 
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Warning At</p>
-              <p className={`text-xl font-semibold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Warning At</p>
+              <p className="text-xl font-semibold text-gray-900 dark:text-white">
                 {globalQuota.warningThresholdPercent}%
               </p>
-              <p className={`text-xs ${themeClasses.mutedText} mt-1`}>Of soft limit</p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Of soft limit</p>
             </div>
           </div>
         </div>
@@ -181,56 +188,56 @@ const AdminQuotaManagement: React.FC = () => {
       {/* Usage Summary */}
       {canViewQuotaStats && quotaSummary && (
         <div className={`${themeClasses.container} rounded-lg p-6`}>
-          <h2 className={`text-lg font-semibold ${themeClasses.text} mb-4 flex items-center`}>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
             <Users className="h-5 w-5 mr-2" />
             Client Storage Overview
           </h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Total Clients</p>
-              <p className={`text-2xl font-bold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Total Clients</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {quotaSummary.totalClients}
               </p>
             </div>
 
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Custom Quotas</p>
-              <p className={`text-2xl font-bold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Custom Quotas</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {quotaSummary.clientsWithCustomQuotas}
               </p>
-              <p className={`text-xs ${themeClasses.mutedText} mt-1`}>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {quotaSummary.clientsUsingDefaultQuota} using default
               </p>
             </div>
 
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
-              <p className={`text-sm ${themeClasses.mutedText} mb-1`}>Total Storage Used</p>
-              <p className={`text-2xl font-bold ${themeClasses.text}`}>
+              <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">Total Storage Used</p>
+              <p className="text-2xl font-bold text-gray-900 dark:text-white">
                 {formatBytes(quotaSummary.totalStorageUsed)}
               </p>
-              <p className={`text-xs ${themeClasses.mutedText} mt-1`}>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 Avg: {quotaSummary.averageUsagePercent}%
               </p>
             </div>
 
             <div className={`p-4 rounded-lg ${themeClasses.cardBg}`}>
               <div className="flex items-center justify-between mb-2">
-                <p className={`text-sm ${themeClasses.mutedText}`}>Alerts</p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">Alerts</p>
                 {(quotaSummary.clientsNearLimit > 0 || quotaSummary.clientsOverLimit > 0) && (
                   <AlertTriangle className="h-4 w-4 text-yellow-500" />
                 )}
               </div>
               <div className="space-y-1">
                 <div className="flex justify-between">
-                  <span className={`text-sm ${themeClasses.mutedText}`}>Near limit:</span>
-                  <span className={`text-sm font-semibold ${themeClasses.text}`}>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Near limit:</span>
+                  <span className="text-sm font-semibold text-gray-900 dark:text-white">
                     {quotaSummary.clientsNearLimit}
                   </span>
                 </div>
                 <div className="flex justify-between">
-                  <span className={`text-sm ${themeClasses.mutedText}`}>Over limit:</span>
-                  <span className={`text-sm font-semibold text-red-600`}>
+                  <span className="text-sm text-gray-600 dark:text-gray-300">Over limit:</span>
+                  <span className="text-sm font-semibold text-red-600 dark:text-red-400">
                     {quotaSummary.clientsOverLimit}
                   </span>
                 </div>
@@ -245,10 +252,10 @@ const AdminQuotaManagement: React.FC = () => {
         <div className={`${themeClasses.container} rounded-lg p-6`}>
           <div className="flex items-center justify-between">
             <div>
-              <h2 className={`text-lg font-semibold ${themeClasses.text} mb-1`}>
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
                 Client-Specific Quotas
               </h2>
-              <p className={themeClasses.mutedText}>
+              <p className="text-gray-600 dark:text-gray-200">
                 Customize storage limits for individual clients
               </p>
             </div>

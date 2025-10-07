@@ -293,6 +293,88 @@ class ClientQuotaService {
   }
 
   /**
+   * Get all clients with their quota information
+   * @returns {Array} List of clients with quota and usage data
+   */
+  async getAllClientsWithQuotas() {
+    try {
+      const pool = await getPool();
+
+      // Get all businesses with their quota and usage information
+      const query = `
+        SELECT
+          b.id as business_id,
+          b.business_name,
+          COALESCE(cf.file_count, 0) as file_count,
+          COALESCE(cf.total_bytes, 0) as current_usage_bytes,
+          q.storage_soft_limit_bytes,
+          q.storage_limit_bytes as hard_limit_bytes,
+          q.warning_threshold_percentage,
+          q.custom_quota_enabled
+        FROM businesses b
+        LEFT JOIN (
+          SELECT
+            business_id,
+            COUNT(*) as file_count,
+            SUM(file_size_bytes) as total_bytes
+          FROM t_client_files
+          WHERE soft_delete = false
+          GROUP BY business_id
+        ) cf ON b.id = cf.business_id
+        LEFT JOIN t_client_storage_quotas q ON b.id = q.business_id AND q.quota_type = 'business'
+        WHERE b.soft_delete = false
+        ORDER BY b.business_name ASC
+      `;
+
+      const result = await pool.query(query);
+
+      // Import global quota service to get effective quotas
+      const globalQuotaService = (await import('./globalQuotaService.js')).default;
+
+      const clients = await Promise.all(result.rows.map(async (row) => {
+        // If no custom quota, get global defaults
+        let softLimit = row.storage_soft_limit_bytes;
+        let hardLimit = row.hard_limit_bytes;
+        let warningThreshold = row.warning_threshold_percentage;
+        let isUsingCustomQuota = row.custom_quota_enabled || false;
+
+        if (!softLimit || !hardLimit) {
+          const effectiveQuota = await globalQuotaService.getEffectiveQuota(row.business_id);
+          softLimit = effectiveQuota.softLimitBytes;
+          hardLimit = effectiveQuota.hardLimitBytes;
+          warningThreshold = effectiveQuota.warningThresholdPercent;
+          isUsingCustomQuota = false;
+        }
+
+        const currentUsageBytes = parseInt(row.current_usage_bytes) || 0;
+        const usagePercent = softLimit > 0 ? Math.round((currentUsageBytes / softLimit) * 100) : 0;
+        const warningThresholdBytes = softLimit * (warningThreshold / 100);
+        const isNearLimit = currentUsageBytes >= warningThresholdBytes && currentUsageBytes < hardLimit;
+        const isOverLimit = currentUsageBytes >= hardLimit;
+
+        return {
+          businessId: row.business_id,
+          businessName: row.business_name,
+          currentUsageBytes,
+          softLimitBytes: parseInt(softLimit),
+          hardLimitBytes: parseInt(hardLimit),
+          warningThresholdPercent: warningThreshold,
+          usagePercent,
+          isOverLimit,
+          isNearLimit,
+          isUsingCustomQuota
+        };
+      }));
+
+      return clients;
+
+    } catch (error) {
+      console.error('❌ Failed to get all clients with quotas:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Format bytes into human-readable format
    * @param {number} bytes - Number of bytes
    * @returns {string} Formatted string

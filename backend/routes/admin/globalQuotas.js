@@ -88,6 +88,76 @@ router.put('/',
 );
 
 /**
+ * GET /api/admin/global-quotas/active
+ * Get the currently active global quota configuration
+ * Permission: view.quota_statistics.enable
+ */
+router.get('/active',
+  requirePermission('view.quota_statistics.enable'),
+  async (req, res) => {
+    try {
+      const activeQuota = await globalQuotaService.getGlobalQuotaDefaults();
+
+      if (!activeQuota) {
+        return res.status(404).json({
+          success: false,
+          message: 'No active global quota found'
+        });
+      }
+
+      // Map to the format expected by frontend
+      return res.status(200).json({
+        success: true,
+        data: {
+          id: activeQuota.id,
+          softLimitBytes: activeQuota.storageSoftLimitBytes,
+          hardLimitBytes: activeQuota.maxTotalStorageBytes,
+          warningThresholdPercent: activeQuota.warningThresholdPercentage,
+          isActive: activeQuota.isActive,
+          createdAt: activeQuota.createdAt,
+          updatedAt: activeQuota.updatedAt
+        }
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching active quota:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch active quota',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/admin/global-quotas/summary
+ * Get quota usage summary across all clients
+ * Permission: view.quota_statistics.enable
+ */
+router.get('/summary',
+  requirePermission('view.quota_statistics.enable'),
+  async (req, res) => {
+    try {
+      const summary = await globalQuotaService.getQuotaSummary();
+
+      return res.status(200).json({
+        success: true,
+        data: summary
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching quota summary:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch quota summary',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
  * GET /api/admin/global-quotas/effective/:businessId
  * Get effective quota for a specific business (global or custom)
  * Permission: manage.global_quotas.enable or manage.client_quotas.enable

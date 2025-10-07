@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Search, Users, HardDrive, AlertTriangle, RotateCcw } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
+import apiService from '../../../services/apiService';
 
 interface ClientQuota {
   businessId: string;
@@ -69,15 +70,12 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
   const loadClients = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/client-quotas', {
-        credentials: 'include'
-      });
+      const response = await apiService.get('/admin/client-quotas');
 
-      if (response.ok) {
-        const data = await response.json();
-        setClients(data.data);
+      if (response.success && response.data) {
+        setClients(response.data);
       } else {
-        setError('Failed to load client quotas');
+        setError(response.message || 'Failed to load client quotas');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -88,8 +86,8 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
 
   const selectClient = (client: ClientQuota) => {
     setSelectedClient(client.businessId);
-    setCustomSoftLimitGB(client.softLimitBytes ? Math.round(client.softLimitBytes / (1024 * 1024 * 1024)) : null);
-    setCustomHardLimitGB(client.hardLimitBytes ? Math.round(client.hardLimitBytes / (1024 * 1024 * 1024)) : null);
+    setCustomSoftLimitGB(client.softLimitBytes ? parseFloat((client.softLimitBytes / (1024 * 1024 * 1024)).toFixed(2)) : null);
+    setCustomHardLimitGB(client.hardLimitBytes ? parseFloat((client.hardLimitBytes / (1024 * 1024 * 1024)).toFixed(2)) : null);
     setCustomWarningPercent(client.warningThresholdPercent);
     setError('');
   };
@@ -112,18 +110,13 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/client-quotas/${selectedClient}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          softLimitBytes: customSoftLimitGB ? customSoftLimitGB * 1024 * 1024 * 1024 : null,
-          hardLimitBytes: customHardLimitGB ? customHardLimitGB * 1024 * 1024 * 1024 : null,
-          warningThresholdPercent: customWarningPercent
-        })
+      const response = await apiService.put(`/admin/client-quotas/${selectedClient}`, {
+        softLimitBytes: customSoftLimitGB ? customSoftLimitGB * 1024 * 1024 * 1024 : null,
+        hardLimitBytes: customHardLimitGB ? customHardLimitGB * 1024 * 1024 * 1024 : null,
+        warningThresholdPercent: customWarningPercent
       });
 
-      if (response.ok) {
+      if (response.success) {
         await loadClients();
         setSelectedClient(null);
         setCustomSoftLimitGB(null);
@@ -131,8 +124,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
         setCustomWarningPercent(null);
         onUpdate();
       } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to save quota');
+        setError(response.message || 'Failed to save quota');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -149,12 +141,9 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
     setError('');
 
     try {
-      const response = await fetch(`/api/admin/client-quotas/${selectedClient}`, {
-        method: 'DELETE',
-        credentials: 'include'
-      });
+      const response = await apiService.delete(`/admin/client-quotas/${selectedClient}`);
 
-      if (response.ok) {
+      if (response.success) {
         await loadClients();
         setSelectedClient(null);
         setCustomSoftLimitGB(null);
@@ -162,8 +151,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
         setCustomWarningPercent(null);
         onUpdate();
       } else {
-        const data = await response.json();
-        setError(data.message || 'Failed to reset quota');
+        setError(response.message || 'Failed to reset quota');
       }
     } catch (err) {
       setError('Network error. Please try again.');
@@ -181,25 +169,25 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
   };
 
   const getUsageColor = (client: ClientQuota): string => {
-    if (client.isOverLimit) return 'text-red-600';
-    if (client.isNearLimit) return 'text-yellow-600';
-    return themeClasses.text;
+    if (client.isOverLimit) return 'text-red-600 dark:text-red-400';
+    if (client.isNearLimit) return 'text-yellow-600 dark:text-yellow-400';
+    return 'text-gray-900 dark:text-white';
   };
 
   const getUsageBgColor = (client: ClientQuota): string => {
     if (client.isOverLimit) return 'bg-red-100 dark:bg-red-900/20';
     if (client.isNearLimit) return 'bg-yellow-100 dark:bg-yellow-900/20';
-    return themeClasses.cardBg;
+    return 'bg-white dark:bg-gray-700';
   };
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className={`${themeClasses.container} rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto`}>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-6xl w-full mx-4 max-h-[90vh] overflow-y-auto shadow-xl">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center">
             <Users className="h-6 w-6 text-blue-500 mr-2" />
-            <h2 className={`text-xl font-bold ${themeClasses.text}`}>
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
               Client Quota Management
             </h2>
           </div>
@@ -207,22 +195,22 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
             onClick={onClose}
             className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700"
           >
-            <X className={`h-5 w-5 ${themeClasses.text}`} />
+            <X className="h-5 w-5 text-gray-900 dark:text-white" />
           </button>
         </div>
 
         {/* Error Message */}
         {error && (
           <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center">
-            <AlertTriangle className="h-5 w-5 text-red-600 mr-2" />
-            <span className="text-sm text-red-600">{error}</span>
+            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mr-2" />
+            <span className="text-sm text-red-600 dark:text-red-400">{error}</span>
           </div>
         )}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-            <span className={`ml-3 ${themeClasses.text}`}>Loading clients...</span>
+            <span className="ml-3 text-gray-900 dark:text-white">Loading clients...</span>
           </div>
         ) : (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -237,7 +225,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                     placeholder="Search clients..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className={`w-full pl-10 pr-4 py-2 rounded-lg border ${themeClasses.input}`}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -289,7 +277,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                     }`}
                   >
                     <div className="flex items-center justify-between mb-2">
-                      <span className={`font-semibold ${themeClasses.text}`}>
+                      <span className="font-semibold text-gray-900 dark:text-white">
                         {client.businessName}
                       </span>
                       {client.isUsingCustomQuota && (
@@ -299,15 +287,15 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                       )}
                     </div>
                     <div className="flex items-center justify-between text-sm">
-                      <span className={themeClasses.mutedText}>Usage:</span>
+                      <span className="text-gray-600 dark:text-gray-400">Usage:</span>
                       <span className={getUsageColor(client)}>
                         {formatBytes(client.currentUsageBytes)} ({client.usagePercent}%)
                       </span>
                     </div>
                     {client.hardLimitBytes && (
                       <div className="flex items-center justify-between text-sm">
-                        <span className={themeClasses.mutedText}>Limit:</span>
-                        <span className={themeClasses.text}>
+                        <span className="text-gray-600 dark:text-gray-400">Limit:</span>
+                        <span className="text-gray-900 dark:text-white">
                           {formatBytes(client.hardLimitBytes)}
                         </span>
                       </div>
@@ -315,7 +303,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                   </div>
                 ))}
                 {filteredClients.length === 0 && (
-                  <div className={`text-center py-8 ${themeClasses.mutedText}`}>
+                  <div className="text-center py-8 text-gray-600 dark:text-gray-400">
                     No clients found
                   </div>
                 )}
@@ -325,53 +313,55 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
             {/* Client Details / Editor */}
             <div>
               {selectedClient ? (
-                <div className={`p-6 rounded-lg ${themeClasses.cardBg} border border-gray-200 dark:border-gray-700`}>
-                  <h3 className={`text-lg font-semibold ${themeClasses.text} mb-4`}>
+                <div className="p-6 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
                     Configure Quota
                   </h3>
 
                   <div className="space-y-4">
                     {/* Soft Limit */}
                     <div>
-                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                         Soft Limit (GB)
                       </label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.01"
                         max="1000"
+                        step="0.01"
                         value={customSoftLimitGB || ''}
-                        onChange={(e) => setCustomSoftLimitGB(e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => setCustomSoftLimitGB(e.target.value ? parseFloat(e.target.value) : null)}
                         placeholder="Use default"
-                        className={`w-full px-4 py-2 rounded-lg border ${themeClasses.input}`}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
                       />
-                      <p className={`mt-1 text-sm ${themeClasses.mutedText}`}>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                         Leave empty to use global default
                       </p>
                     </div>
 
                     {/* Hard Limit */}
                     <div>
-                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                         Hard Limit (GB)
                       </label>
                       <input
                         type="number"
-                        min="1"
+                        min="0.01"
                         max="1000"
+                        step="0.01"
                         value={customHardLimitGB || ''}
-                        onChange={(e) => setCustomHardLimitGB(e.target.value ? parseInt(e.target.value) : null)}
+                        onChange={(e) => setCustomHardLimitGB(e.target.value ? parseFloat(e.target.value) : null)}
                         placeholder="Use default"
-                        className={`w-full px-4 py-2 rounded-lg border ${themeClasses.input}`}
+                        className="w-full px-4 py-2 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
                       />
-                      <p className={`mt-1 text-sm ${themeClasses.mutedText}`}>
+                      <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
                         Leave empty to use global default
                       </p>
                     </div>
 
                     {/* Warning Threshold */}
                     <div>
-                      <label className={`block text-sm font-medium ${themeClasses.text} mb-2`}>
+                      <label className="block text-sm font-medium text-gray-900 dark:text-white mb-2">
                         Warning Threshold (%)
                       </label>
                       <div className="flex items-center space-x-4">
@@ -384,7 +374,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                           className="flex-1"
                           disabled={customWarningPercent === null}
                         />
-                        <span className={`text-lg font-semibold ${themeClasses.text} w-16 text-right`}>
+                        <span className="text-lg font-semibold text-gray-900 dark:text-white w-16 text-right">
                           {customWarningPercent || 80}%
                         </span>
                       </div>
@@ -396,7 +386,7 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                             onChange={(e) => setCustomWarningPercent(e.target.checked ? 80 : null)}
                             className="mr-2"
                           />
-                          <span className={`text-sm ${themeClasses.mutedText}`}>
+                          <span className="text-sm text-gray-600 dark:text-gray-400">
                             Use custom threshold
                           </span>
                         </label>
@@ -405,26 +395,26 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
 
                     {/* Preview */}
                     {(customSoftLimitGB || customHardLimitGB) && (
-                      <div className={`p-4 rounded-lg ${themeClasses.cardBg} border border-gray-200 dark:border-gray-700`}>
-                        <h4 className={`text-sm font-semibold ${themeClasses.text} mb-2`}>Preview</h4>
+                      <div className="p-4 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                        <h4 className="text-sm font-semibold text-gray-900 dark:text-white mb-2">Preview</h4>
                         <div className="space-y-1 text-sm">
                           {customSoftLimitGB && (
                             <div className="flex justify-between">
-                              <span className={themeClasses.mutedText}>Soft Limit:</span>
-                              <span className={themeClasses.text}>{customSoftLimitGB} GB</span>
+                              <span className="text-gray-600 dark:text-gray-400">Soft Limit:</span>
+                              <span className="text-gray-900 dark:text-white">{customSoftLimitGB.toFixed(2)} GB</span>
                             </div>
                           )}
                           {customHardLimitGB && (
                             <div className="flex justify-between">
-                              <span className={themeClasses.mutedText}>Hard Limit:</span>
-                              <span className={themeClasses.text}>{customHardLimitGB} GB</span>
+                              <span className="text-gray-600 dark:text-gray-400">Hard Limit:</span>
+                              <span className="text-gray-900 dark:text-white">{customHardLimitGB.toFixed(2)} GB</span>
                             </div>
                           )}
                           {customSoftLimitGB && customWarningPercent && (
                             <div className="flex justify-between">
-                              <span className={themeClasses.mutedText}>Warning at:</span>
-                              <span className={themeClasses.text}>
-                                {Math.round((customSoftLimitGB * customWarningPercent) / 100 * 10) / 10} GB
+                              <span className="text-gray-600 dark:text-gray-400">Warning at:</span>
+                              <span className="text-gray-900 dark:text-white">
+                                {((customSoftLimitGB * customWarningPercent) / 100).toFixed(2)} GB
                               </span>
                             </div>
                           )}
@@ -463,9 +453,9 @@ const ClientQuotaManager: React.FC<Props> = ({ onClose, onUpdate }) => {
                   </div>
                 </div>
               ) : (
-                <div className={`p-12 rounded-lg ${themeClasses.cardBg} border border-gray-200 dark:border-gray-700 text-center`}>
-                  <HardDrive className={`h-16 w-16 ${themeClasses.mutedText} mx-auto mb-4`} />
-                  <p className={themeClasses.mutedText}>
+                <div className="p-12 rounded-lg bg-gray-50 dark:bg-gray-900 border border-gray-200 dark:border-gray-700 text-center">
+                  <HardDrive className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
+                  <p className="text-gray-600 dark:text-gray-400">
                     Select a client to configure their quota
                   </p>
                 </div>

@@ -6,6 +6,33 @@ import globalQuotaService from '../../services/globalQuotaService.js';
 const router = express.Router();
 
 /**
+ * GET /api/admin/client-quotas
+ * Get all clients with their quota information
+ * Permission: manage.client_quotas.enable
+ */
+router.get('/',
+  requirePermission('manage.client_quotas.enable'),
+  async (req, res) => {
+    try {
+      const clients = await clientQuotaService.getAllClientsWithQuotas();
+
+      return res.status(200).json({
+        success: true,
+        data: clients
+      });
+
+    } catch (error) {
+      console.error('❌ Error fetching all client quotas:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to fetch client quotas',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
  * GET /api/admin/client-quotas/:businessId
  * Get quota configuration for a specific client
  * Permission: manage.client_quotas.enable
@@ -63,7 +90,7 @@ router.put('/:businessId',
     try {
       const { businessId } = req.params;
       const employeeId = req.session.userId;
-      const quotaData = req.body;
+      const { softLimitBytes, hardLimitBytes, warningThresholdPercent } = req.body;
 
       if (!businessId) {
         return res.status(400).json({
@@ -71,6 +98,15 @@ router.put('/:businessId',
           message: 'Business ID is required'
         });
       }
+
+      // Transform frontend field names to service field names
+      const quotaData = {
+        storageSoftLimitBytes: softLimitBytes,
+        maxTotalStorageBytes: hardLimitBytes,
+        warningThresholdPercentage: warningThresholdPercent,
+        customQuotaEnabled: !!(softLimitBytes || hardLimitBytes),
+        useGlobalDefaults: !(softLimitBytes || hardLimitBytes)
+      };
 
       const updatedQuota = await clientQuotaService.updateClientQuota(
         businessId,
@@ -105,8 +141,49 @@ router.put('/:businessId',
 );
 
 /**
+ * DELETE /api/admin/client-quotas/:businessId
+ * Reset client to use global defaults (remove custom quota)
+ * Permission: manage.client_quotas.enable
+ */
+router.delete('/:businessId',
+  requirePermission('manage.client_quotas.enable'),
+  async (req, res) => {
+    try {
+      const { businessId } = req.params;
+      const employeeId = req.session.userId;
+
+      if (!businessId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Business ID is required'
+        });
+      }
+
+      const updatedQuota = await clientQuotaService.resetToGlobalDefaults(
+        businessId,
+        employeeId
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: 'Client quota reset to global defaults',
+        data: updatedQuota
+      });
+
+    } catch (error) {
+      console.error('❌ Error resetting client quota:', error);
+      return res.status(500).json({
+        success: false,
+        message: 'Failed to reset client quota',
+        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
+    }
+  }
+);
+
+/**
  * POST /api/admin/client-quotas/:businessId/reset
- * Reset client to use global defaults
+ * Reset client to use global defaults (legacy endpoint)
  * Permission: manage.client_quotas.enable
  */
 router.post('/:businessId/reset',

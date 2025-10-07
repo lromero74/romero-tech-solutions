@@ -118,9 +118,47 @@ class GlobalQuotaService {
       const result = await client.query(insertQuery, values);
       const newQuota = result.rows[0];
 
-      await client.query('COMMIT');
+      // Update clients using global defaults (custom_quota_enabled = false)
+      // Get clients with current usage to check against new limits
+      const updateClientsQuery = `
+        WITH client_usage AS (
+          SELECT
+            b.id as business_id,
+            COALESCE(SUM(cf.file_size_bytes), 0) as current_usage_bytes
+          FROM businesses b
+          LEFT JOIN t_client_files cf ON b.id = cf.business_id AND cf.soft_delete = false
+          WHERE b.soft_delete = false
+          GROUP BY b.id
+        )
+        UPDATE t_client_storage_quotas q
+        SET
+          storage_limit_bytes = $1,
+          storage_soft_limit_bytes = $2,
+          max_file_size_bytes = $3,
+          max_file_count = $4,
+          warning_threshold_percentage = $5,
+          alert_threshold_percentage = $6,
+          updated_at = CURRENT_TIMESTAMP
+        FROM client_usage cu
+        WHERE q.business_id = cu.business_id
+          AND q.quota_type = 'business'
+          AND (q.custom_quota_enabled = false OR q.custom_quota_enabled IS NULL)
+        RETURNING q.business_id
+      `;
 
-      console.log(`📊 Global quota updated by employee ${employeeId}`);
+      const updateResult = await client.query(updateClientsQuery, [
+        quotaData.maxTotalStorageBytes,
+        quotaData.storageSoftLimitBytes,
+        quotaData.maxFileSizeBytes,
+        quotaData.maxFileCount,
+        quotaData.warningThresholdPercentage || 80,
+        quotaData.alertThresholdPercentage || 95
+      ]);
+
+      const clientsUpdated = updateResult.rowCount;
+      console.log(`📊 Global quota updated by employee ${employeeId} - ${clientsUpdated} clients using global defaults were updated`);
+
+      await client.query('COMMIT');
 
       return {
         id: newQuota.id,
@@ -225,6 +263,69 @@ class GlobalQuotaService {
 
     if (warningThreshold >= alertThreshold) {
       throw new Error('Warning threshold must be less than alert threshold');
+    }
+  }
+
+  /**
+   * Get quota usage summary across all clients
+   * @returns {object} Summary statistics
+   */
+  async getQuotaSummary() {
+    try {
+      const pool = await getPool();
+
+      // Get total number of businesses (clients)
+      const totalClientsQuery = `
+        SELECT COUNT(DISTINCT business_id) as total
+        FROM v_file_storage_by_business
+      `;
+      const totalResult = await pool.query(totalClientsQuery);
+      const totalClients = parseInt(totalResult.rows[0]?.total || 0);
+
+      // Get clients with custom quotas
+      const customQuotasQuery = `
+        SELECT COUNT(DISTINCT business_id) as total
+        FROM t_client_storage_quotas
+        WHERE custom_quota_enabled = true
+      `;
+      const customResult = await pool.query(customQuotasQuery);
+      const clientsWithCustomQuotas = parseInt(customResult.rows[0]?.total || 0);
+
+      // Get total storage used across all clients
+      const storageQuery = `
+        SELECT
+          COALESCE(SUM(total_storage_used), 0) as total_storage,
+          COALESCE(AVG(total_storage_used), 0) as avg_storage
+        FROM v_file_storage_by_business
+      `;
+      const storageResult = await pool.query(storageQuery);
+      const totalStorageUsed = parseInt(storageResult.rows[0]?.total_storage || 0);
+
+      // Get usage statistics from quota summary view
+      const usageQuery = `
+        SELECT
+          COALESCE(AVG(usage_percentage), 0) as avg_usage_percent,
+          COUNT(CASE WHEN usage_percentage >= warning_threshold_percentage AND usage_percentage < 100 THEN 1 END) as near_limit,
+          COUNT(CASE WHEN usage_percentage >= 100 THEN 1 END) as over_limit
+        FROM v_quota_usage_summary
+        WHERE quota_type = 'business'
+      `;
+      const usageResult = await pool.query(usageQuery);
+      const usageStats = usageResult.rows[0] || {};
+
+      return {
+        totalClients,
+        clientsWithCustomQuotas,
+        clientsUsingDefaultQuota: totalClients - clientsWithCustomQuotas,
+        totalStorageUsed,
+        averageUsagePercent: parseFloat(usageStats.avg_usage_percent || 0).toFixed(2),
+        clientsNearLimit: parseInt(usageStats.near_limit || 0),
+        clientsOverLimit: parseInt(usageStats.over_limit || 0)
+      };
+
+    } catch (error) {
+      console.error('❌ Failed to get quota summary:', error);
+      throw error;
     }
   }
 
