@@ -116,19 +116,16 @@ const CompleteRequestModal: React.FC<CompleteRequestModalProps> = ({
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-2`}>
               Actual Duration (minutes)
             </label>
-            <input
-              type="number"
-              value={actualDurationMinutes}
-              onChange={(e) => onActualDurationChange(e.target.value)}
-              placeholder="Enter actual time spent"
-              min="0"
-              className={`w-full px-3 py-2 rounded-lg ${themeClasses.input}`}
-            />
-            {selectedRequest.total_work_duration_minutes > 0 && (
-              <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
-                Tracked time: {formatDuration(selectedRequest.total_work_duration_minutes)}
+            <div className={`px-3 py-2 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
+              <p className={`text-lg font-semibold ${themeClasses.text.primary}`}>
+                {actualDurationMinutes || '0'} minutes
               </p>
-            )}
+              {actualDurationMinutes && parseFloat(actualDurationMinutes) > 0 && (
+                <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                  ({formatDuration(parseFloat(actualDurationMinutes))})
+                </p>
+              )}
+            </div>
             {timeBreakdown && (
               <div className={`mt-3 p-3 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
                 {/* Total Time Calculation */}

@@ -2386,6 +2386,15 @@ router.put('/service-requests/:id/close', async (req, res) => {
       type: 'new_invoice'
     });
 
+    // Broadcast service request status change to all admins/employees
+    websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+      statusChanged: true,
+      newStatus: 'Closed',
+      closed: true,
+      invoiceGenerated: true,
+      invoiceId: createdInvoice.id
+    });
+
     res.json({
       success: true,
       message: 'Service request closed successfully and invoice generated',

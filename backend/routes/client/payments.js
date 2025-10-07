@@ -23,9 +23,15 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
   const { invoiceId } = req.body;
   const clientId = req.user.clientId;
 
+  // Get a client from the pool for transaction
+  const client = await pool.connect();
+
   try {
-    // Get invoice details and verify ownership
-    const invoiceQuery = await pool.query(
+    // Start transaction
+    await client.query('BEGIN');
+
+    // Get invoice details and verify ownership WITH ROW LOCK
+    const invoiceQuery = await client.query(
       `
       SELECT
         i.*,
@@ -39,11 +45,14 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
       WHERE i.id = $1
         AND u.id = $2
         AND i.payment_status != 'paid'
+      FOR UPDATE OF i
       `,
       [invoiceId, clientId]
     );
 
     if (invoiceQuery.rows.length === 0) {
+      await client.query('ROLLBACK');
+      client.release();
       return res.status(404).json({
         success: false,
         error: 'Invoice not found or already paid',
@@ -52,62 +61,102 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
 
     const invoice = invoiceQuery.rows[0];
 
-    // Create or get Stripe customer
-    const customer = await createOrGetCustomer({
-      email: invoice.user_email,
-      name: `${invoice.first_name} ${invoice.last_name}`,
-      metadata: {
-        businessId: invoice.business_id,
-        userId: clientId,
-      },
-    });
+    // Get or create Stripe customer (invoice is already locked by FOR UPDATE)
+    let customer;
+    if (invoice.stripe_customer_id) {
+      // Use existing customer ID from invoice
+      console.log(`✅ Using existing Stripe customer from invoice: ${invoice.stripe_customer_id}`);
+      const Stripe = (await import('stripe')).default;
+      const stripeInstance = new Stripe(process.env.STRIPE_SECRET_KEY);
+      customer = await stripeInstance.customers.retrieve(invoice.stripe_customer_id);
+    } else {
+      // Create or find customer
+      customer = await createOrGetCustomer({
+        email: invoice.user_email,
+        name: `${invoice.first_name} ${invoice.last_name}`,
+        metadata: {
+          businessId: invoice.business_id,
+          userId: clientId,
+        },
+      });
 
-    // Update invoice with Stripe customer ID if not already set
-    if (!invoice.stripe_customer_id) {
-      await pool.query(
+      // Store customer ID in invoice for future use
+      await client.query(
         `UPDATE invoices SET stripe_customer_id = $1 WHERE id = $2`,
         [customer.id, invoiceId]
       );
+      console.log(`✅ Stored Stripe customer ID in invoice: ${customer.id}`);
     }
 
-    // Cancel previous payment intent if exists and not succeeded
+    // Check if we can reuse existing payment intent
+    let paymentIntent;
     if (invoice.stripe_payment_intent_id) {
       try {
         const existingPI = await getPaymentIntent(invoice.stripe_payment_intent_id);
-        if (existingPI.status !== 'succeeded' && existingPI.status !== 'processing') {
-          console.log(`🔄 Canceling previous payment intent: ${invoice.stripe_payment_intent_id}`);
+
+        // Reuse if it's still waiting for payment method (not attempted yet)
+        if (existingPI.status === 'requires_payment_method' && existingPI.amount === Math.round(parseFloat(invoice.total_amount) * 100)) {
+          console.log(`♻️ Reusing existing payment intent: ${invoice.stripe_payment_intent_id}`);
+          paymentIntent = existingPI;
+        }
+        // Cancel if it was started but not completed
+        else if (existingPI.status !== 'succeeded' && existingPI.status !== 'processing' && existingPI.status !== 'canceled') {
+          console.log(`🔄 Canceling stale payment intent (status: ${existingPI.status}): ${invoice.stripe_payment_intent_id}`);
           const { cancelPaymentIntent } = await import('../../services/stripeService.js');
           await cancelPaymentIntent(invoice.stripe_payment_intent_id);
+          paymentIntent = null; // Will create new one below
+        } else {
+          console.log(`ℹ️ Previous payment intent status: ${existingPI.status}`);
+          paymentIntent = null; // Will create new one below
         }
       } catch (error) {
-        console.warn('⚠️ Could not cancel previous payment intent:', error.message);
+        console.warn('⚠️ Could not check previous payment intent:', error.message);
+        paymentIntent = null; // Will create new one below
       }
     }
 
-    // Create payment intent
-    const paymentIntent = await createPaymentIntent({
-      amount: parseFloat(invoice.total_amount),
-      currency: 'usd',
-      customerId: customer.id,
-      invoiceId: invoice.id,
-      description: `Invoice ${invoice.invoice_number} - ${invoice.business_name}`,
-      metadata: {
-        invoiceNumber: invoice.invoice_number,
-        businessId: invoice.business_id,
-        userId: clientId,
-      },
-    });
+    // Create new payment intent only if we don't have a reusable one
+    if (!paymentIntent) {
+      paymentIntent = await createPaymentIntent({
+        amount: parseFloat(invoice.total_amount),
+        currency: 'usd',
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        description: `Invoice ${invoice.invoice_number} - ${invoice.business_name}`,
+        metadata: {
+          invoiceNumber: invoice.invoice_number,
+          businessId: invoice.business_id,
+          userId: clientId,
+        },
+      });
+    }
 
-    // Update invoice with NEW payment intent ID (always replace)
-    await pool.query(
-      `
-      UPDATE invoices
-      SET stripe_payment_intent_id = $1,
-          updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-      `,
-      [paymentIntent.id, invoiceId]
-    );
+    // Update invoice with payment intent ID if it changed
+    if (invoice.stripe_payment_intent_id !== paymentIntent.id) {
+      console.log(`💳 Updating invoice ${invoiceId} with payment intent: ${paymentIntent.id}`);
+      const updateResult = await client.query(
+        `
+        UPDATE invoices
+        SET stripe_payment_intent_id = $1,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+        RETURNING id, invoice_number, stripe_payment_intent_id
+        `,
+        [paymentIntent.id, invoiceId]
+      );
+
+      if (updateResult.rows.length > 0) {
+        console.log(`✅ Invoice updated with new payment intent:`, updateResult.rows[0]);
+      } else {
+        console.error(`❌ Failed to update invoice ${invoiceId} - no rows affected`);
+      }
+    } else {
+      console.log(`✓ Invoice already has correct payment intent ID`);
+    }
+
+    // Commit transaction
+    await client.query('COMMIT');
+    client.release();
 
     res.json({
       success: true,
@@ -116,6 +165,15 @@ router.post('/create-intent', authenticateClient, async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error creating payment intent:', error);
+
+    // Rollback transaction on error
+    try {
+      await client.query('ROLLBACK');
+      client.release();
+    } catch (rollbackError) {
+      console.error('❌ Error rolling back transaction:', rollbackError);
+    }
+
     res.status(500).json({
       success: false,
       error: 'Failed to create payment intent',

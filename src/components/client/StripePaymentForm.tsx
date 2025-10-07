@@ -40,7 +40,7 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
     setErrorMessage(null);
 
     try {
-      const { error } = await stripe.confirmPayment({
+      const result = await stripe.confirmPayment({
         elements,
         confirmParams: {
           return_url: `${window.location.origin}/client/payments/success`,
@@ -48,10 +48,15 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
         redirect: 'if_required',
       });
 
+      console.log('🔍 Stripe confirmPayment result:', result);
+      const { error, paymentIntent } = result;
+
       if (error) {
+        console.error('❌ Payment error:', error);
         setErrorMessage(error.message || 'An unexpected error occurred.');
         setIsProcessing(false);
-      } else {
+      } else if (paymentIntent && paymentIntent.status === 'succeeded') {
+        console.log('✅ Payment succeeded! PaymentIntent:', paymentIntent);
         // Payment succeeded - sync status with backend
         try {
           console.log('✅ Payment confirmed, syncing status with backend...');
@@ -66,6 +71,16 @@ export const StripePaymentForm: React.FC<StripePaymentFormProps> = ({
         setTimeout(() => {
           onSuccess();
         }, 2000);
+      } else {
+        // Payment didn't complete successfully
+        console.error('❌ Payment not completed. PaymentIntent:', paymentIntent);
+        console.error('❌ Status:', paymentIntent?.status);
+        setErrorMessage(
+          paymentIntent?.status === 'requires_payment_method'
+            ? 'Payment method validation failed. Please check your card details.'
+            : `Payment was not completed (status: ${paymentIntent?.status}). Please try again.`
+        );
+        setIsProcessing(false);
       }
     } catch (error) {
       setErrorMessage('Payment failed. Please try again.');

@@ -2,7 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   ClipboardList,
   AlertCircle,
-  FileText
+  FileText,
+  Clock,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  Pause
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
@@ -334,6 +339,20 @@ const AdminServiceRequests: React.FC = () => {
               prev.map(req => req.id === selectedRequest.id ? { ...req, file_count: newFileCount } : req)
             );
           }
+        }
+      }
+
+      // If a service request status changed (e.g., completed/closed), refresh the list
+      if (change.entityType === 'serviceRequest' && change.statusChanged) {
+        console.log(`🔄 Service request ${change.entityId} status changed to ${change.newStatus}, refreshing list...`);
+        // Refresh the service requests list to reflect status change
+        fetchServiceRequests();
+
+        // If this was the selected request and it was closed, close the detail modal
+        if (selectedRequest && change.entityId === selectedRequest.id && change.closed) {
+          console.log(`✅ Service request ${change.entityId} was completed, closing detail modal...`);
+          setSelectedRequest(null);
+          setShowCloseModal(false);
         }
       }
     };
