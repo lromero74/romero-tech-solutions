@@ -1103,7 +1103,7 @@ const ServiceScheduler: React.FC = () => {
           {/* Service Type */}
           <div>
             <label className={`block text-sm font-medium mb-3 ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
-              {t('schedule.serviceType')}
+              {t('schedule.serviceType')} <span className="text-red-500">*</span>
             </label>
             <select
               value={selectedServiceType}
