@@ -24,6 +24,9 @@ class VirusScanService {
   async initializeScanner() {
     try {
       // ClamAV configuration
+      // ClamAV is now enabled with correct socket path
+      const useMockScanner = false; // Set to true to disable ClamAV
+
       const clamConfig = {
         removeInfected: false, // Don't auto-remove, log instead
         quarantineInfected: false, // We'll handle quarantine manually
@@ -31,23 +34,23 @@ class VirusScanService {
 
         // Try different ClamAV paths
         clamdscan: {
-          socket: '/var/run/clamav/clamd.sock',
+          socket: '/run/clamd.scan/clamd.sock', // Correct socket path for RHEL
           host: '127.0.0.1',
           port: 3310,
           timeout: 30000,
           localFallback: false, // Disable fallback to reduce error noise
           path: '/usr/bin/clamdscan',
-          config_file: '/etc/clamav/clamd.conf',
+          config_file: '/etc/clamd.d/scan.conf', // Correct config path for RHEL
           multiscan: true,
           reloadDb: false,
-          active: false // Disable in development since ClamAV isn't installed
+          active: !useMockScanner // Disable when using mock scanner
         },
 
         clamscan: {
           path: '/usr/bin/clamscan',
           db: '/var/lib/clamav',
           scanArchives: true,
-          active: false // Disable in development since ClamAV isn't installed
+          active: !useMockScanner // Disable when using mock scanner
         },
 
         preference: 'clamdscan' // Prefer daemon for performance
