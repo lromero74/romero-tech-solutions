@@ -40,23 +40,49 @@ import {
   ServiceRequestsMobileView
 } from './AdminServiceRequests_Modals';
 
-const AdminServiceRequests: React.FC = () => {
+interface AdminServiceRequestsProps {
+  serviceRequests?: ServiceRequest[];
+  clients?: any[];
+  services?: any[];
+  employees?: any[];
+  technicians?: Technician[];
+  serviceRequestStatuses?: Status[];
+  closureReasons?: ClosureReason[];
+  loading?: boolean;
+  error?: string | null;
+  selectedServiceRequest?: ServiceRequest | null;
+  onSelectServiceRequest?: (request: ServiceRequest | null) => void;
+  onRefresh?: () => Promise<void>;
+  refreshTechnicians?: (force?: boolean) => Promise<void>;
+  refreshServiceRequestStatuses?: (force?: boolean) => Promise<void>;
+}
+
+const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
+  serviceRequests: propsServiceRequests = [],
+  technicians: propsTechnicians = [],
+  serviceRequestStatuses: propsStatuses = [],
+  closureReasons: propsClosureReasons = [],
+  loading: propsLoading = false,
+  refreshTechnicians,
+  refreshServiceRequestStatuses
+}) => {
   const { isDark } = useTheme();
   const { user } = useEnhancedAuth();
   const { checkPermission } = usePermission();
   const canViewCosts = checkPermission('view.service_request_costs.enable');
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
-  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use props or local state for backward compatibility
+  const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>(propsServiceRequests);
+  const [loading, setLoading] = useState(propsLoading);
   const [error, setError] = useState<string | null>(null);
   const [selectedRequest, setSelectedRequest] = useState<ServiceRequest | null>(null);
   const [showFilters, setShowFilters] = useState(false);
 
-  // Assignment and status change state
-  const [technicians, setTechnicians] = useState<Technician[]>([]);
-  const [statuses, setStatuses] = useState<Status[]>([]);
-  const [closureReasons, setClosureReasons] = useState<ClosureReason[]>([]);
+  // Use cached data from props
+  const technicians = propsTechnicians;
+  const statuses = propsStatuses;
+  const closureReasons = propsClosureReasons;
   const [filterPresets, setFilterPresets] = useState<Array<{id: string; name: string; description: string}>>([]);
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
@@ -267,12 +293,20 @@ const AdminServiceRequests: React.FC = () => {
     }
   }, [serviceRequests]);
 
-  // Fetch technicians, statuses, closure reasons, and filter presets on mount
+  // Sync service requests from props (always sync, even if empty)
   useEffect(() => {
-    fetchTechnicians();
-    fetchStatuses();
-    fetchClosureReasons();
+    console.log('🔄 AdminServiceRequests: Props changed! Syncing service requests from props:', propsServiceRequests.length);
+    console.log('🔄 AdminServiceRequests: First 3 request numbers:', propsServiceRequests.slice(0, 3).map(r => r.request_number));
+    setServiceRequests(propsServiceRequests);
+    setLoading(false);
+  }, [propsServiceRequests]);
+
+  // Fetch filter presets on mount (not cached yet)
+  useEffect(() => {
     fetchFilterPresets();
+    // Refresh cached data on mount if needed
+    if (refreshTechnicians) refreshTechnicians();
+    if (refreshServiceRequestStatuses) refreshServiceRequestStatuses();
   }, []);
 
   // Listen for websocket note updates and file uploads
@@ -357,11 +391,11 @@ const AdminServiceRequests: React.FC = () => {
       }
     };
 
-    websocketService.onEntityDataChange(handleEntityChange);
+    const unsubscribe = websocketService.onEntityDataChange(handleEntityChange);
 
     return () => {
-      // Cleanup: remove listener when component unmounts or selectedRequest changes
-      websocketService.onEntityDataChange(() => {});
+      // Cleanup: unsubscribe when component unmounts or selectedRequest changes
+      unsubscribe();
     };
   }, [selectedRequest]); // Removed lastSubmittedNoteId from dependencies since we use ref
 
@@ -1264,9 +1298,90 @@ const AdminServiceRequests: React.FC = () => {
     }
   };
 
-  // Filter requests locally by search term
-  // No client-side filtering needed - backend handles all filtering including search
-  const filteredRequests = serviceRequests;
+  // Filter requests locally to match the filter state
+  // When using cached data from props, we need to apply filters client-side
+  const filteredRequests = React.useMemo(() => {
+    console.log('🔍 FILTER: Starting filter computation...');
+    console.log('🔍 FILTER: Input serviceRequests count:', serviceRequests.length);
+    console.log('🔍 FILTER: Current filter state:', filters);
+
+    let filtered = serviceRequests;
+
+    // Filter by status
+    if (filters.status && filters.status !== 'all') {
+      console.log('🔍 FILTER: Applying status filter:', filters.status);
+      const beforeCount = filtered.length;
+
+      if (filters.status === '*Open') {
+        // Show only non-final statuses (not Completed, Cancelled, or Closed)
+        filtered = filtered.filter(req => {
+          const statusName = req.status || '';
+          const statusLower = statusName.toLowerCase();
+          return !['completed', 'cancelled', 'closed'].includes(statusLower);
+        });
+        console.log(`🔍 FILTER: *Open filter - ${beforeCount} → ${filtered.length}`);
+      } else {
+        // Filter by specific status
+        filtered = filtered.filter(req => {
+          const statusName = req.status || '';
+          return statusName.toLowerCase() === filters.status.toLowerCase();
+        });
+        console.log(`🔍 FILTER: Specific status filter - ${beforeCount} → ${filtered.length}`);
+      }
+    }
+
+    // Filter by search term
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(req => {
+        const requestNumber = (req.request_number || '').toLowerCase();
+        const title = (req.title || '').toLowerCase();
+        const clientName = (req.client_name || req.business_name || '').toLowerCase();
+        const businessName = (req.business_name || '').toLowerCase();
+        return requestNumber.includes(searchLower) ||
+               title.includes(searchLower) ||
+               clientName.includes(searchLower) ||
+               businessName.includes(searchLower);
+      });
+    }
+
+    // Filter by urgency
+    if (filters.urgency && filters.urgency !== 'all') {
+      filtered = filtered.filter(req => {
+        const urgency = req.urgency_name || '';
+        return urgency.toLowerCase() === filters.urgency.toLowerCase();
+      });
+    }
+
+    // Filter by priority
+    if (filters.priority && filters.priority !== 'all') {
+      filtered = filtered.filter(req => {
+        const priority = req.priority_name || '';
+        return priority.toLowerCase() === filters.priority.toLowerCase();
+      });
+    }
+
+    // Filter by business/client
+    if (filters.business && filters.business !== 'all') {
+      filtered = filtered.filter(req => req.business_id === filters.business);
+    }
+
+    // Filter by technician
+    if (filters.technician && filters.technician !== 'all') {
+      filtered = filtered.filter(req => req.assigned_to_employee_id === filters.technician);
+    }
+
+    console.log('🔍 FILTER: Final filtered count:', filtered.length);
+    console.log('🔍 FILTER: First 3 filtered request numbers:', filtered.slice(0, 3).map(r => r.request_number));
+
+    return filtered;
+  }, [serviceRequests, filters]);
+
+  // Debug: Log when filteredRequests changes
+  React.useEffect(() => {
+    console.log('🔔 RENDER: filteredRequests array changed, count:', filteredRequests.length);
+    console.log('🔔 RENDER: First 3 filtered request numbers:', filteredRequests.slice(0, 3).map(r => r.request_number));
+  }, [filteredRequests]);
 
   // Get unique clients for filter dropdown
   const uniqueClients = React.useMemo(() => {
@@ -1479,6 +1594,11 @@ const AdminServiceRequests: React.FC = () => {
           }}
           onShowStatusModal={() => {
             setShowStatusModal(true);
+            setActionError(null);
+          }}
+          onAcknowledge={handleAcknowledge}
+          onShowAssignModal={() => {
+            setShowAssignModal(true);
             setActionError(null);
           }}
           formatFullAddress={formatFullAddress}

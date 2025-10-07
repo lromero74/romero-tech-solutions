@@ -68,6 +68,8 @@ interface ServiceRequestDetailModalProps {
   onTimeTracking: (action: 'start' | 'stop') => void;
   onShowCompleteModal: () => void;
   onShowStatusModal: () => void;
+  onAcknowledge: () => void;
+  onShowAssignModal: () => void;
   formatFullAddress: (locationDetails: ServiceRequest['locationDetails']) => string;
   getMapUrl: (locationDetails: ServiceRequest['locationDetails']) => string;
   formatPhone: (phone: string | null | undefined) => string;
@@ -125,6 +127,8 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
   onTimeTracking,
   onShowCompleteModal,
   onShowStatusModal,
+  onAcknowledge,
+  onShowAssignModal,
   formatFullAddress,
   getMapUrl,
   formatPhone,
@@ -211,24 +215,24 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
           <div className="flex flex-wrap gap-2 mb-6">
             <span
               className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${
-                selectedRequest.status.toLowerCase() === 'cancelled'
+                (selectedRequest.status || '').toLowerCase() === 'cancelled'
                   ? 'bg-gray-500 text-white'
-                  : selectedRequest.status.toLowerCase() === 'submitted'
+                  : (selectedRequest.status || '').toLowerCase() === 'submitted'
                   ? 'bg-blue-600 text-white'
-                  : selectedRequest.status.toLowerCase() === 'acknowledged'
+                  : (selectedRequest.status || '').toLowerCase() === 'acknowledged'
                   ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
                   : themeClasses.text.primary
               }`}
               style={
-                selectedRequest.status.toLowerCase() === 'cancelled' ||
-                selectedRequest.status.toLowerCase() === 'submitted' ||
-                selectedRequest.status.toLowerCase() === 'acknowledged'
+                (selectedRequest.status || '').toLowerCase() === 'cancelled' ||
+                (selectedRequest.status || '').toLowerCase() === 'submitted' ||
+                (selectedRequest.status || '').toLowerCase() === 'acknowledged'
                   ? {}
-                  : { backgroundColor: `${selectedRequest.status_color}20` }
+                  : { backgroundColor: `${selectedRequest.status_color || '#ccc'}20` }
               }
             >
-              {getStatusIcon(selectedRequest.status)}
-              <span className="ml-1">{selectedRequest.status}</span>
+              {getStatusIcon(selectedRequest.status || 'Unknown')}
+              <span className="ml-1">{selectedRequest.status || 'Unknown'}</span>
             </span>
             <span
               className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${themeClasses.text.primary}`}
@@ -252,9 +256,13 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
             </div>
             <div>
               <span className={`font-medium ${themeClasses.text.secondary}`}>Technician:</span>
-              <p className={`${themeClasses.text.primary}`}>
+              <button
+                onClick={onShowAssignModal}
+                className={`${themeClasses.text.primary} hover:text-blue-600 dark:hover:text-blue-400 underline cursor-pointer text-left`}
+                title={selectedRequest.technician_name ? 'Reassign to different technician' : 'Assign technician'}
+              >
                 {selectedRequest.technician_name || 'Unassigned'}
-              </p>
+              </button>
             </div>
             <div>
               <span className={`font-medium ${themeClasses.text.secondary}`}>Created:</span>
@@ -472,6 +480,18 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                     </button>
                   )}
                 </>
+              )}
+
+              {/* Acknowledge button - only show for Submitted status */}
+              {selectedRequest.status.toLowerCase() === 'submitted' && (
+                <button
+                  onClick={onAcknowledge}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Acknowledge
+                </button>
               )}
 
               {canCompleteRequest && (

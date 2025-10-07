@@ -1220,7 +1220,7 @@ router.get('/service-requests/:id', async (req, res) => {
       SELECT
         sr.*,
         sr.assigned_to_employee_id as assigned_technician_id,
-        srs.name as status_name,
+        srs.name as status,
         srs.description as status_description,
         srs.color_code as status_color,
         ul.name as urgency_name,

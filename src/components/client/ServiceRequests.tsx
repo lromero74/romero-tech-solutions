@@ -790,6 +790,34 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     };
   }, []);
 
+  // Listen for service request updates via WebSocket
+  useEffect(() => {
+    const handleEntityChange = (change: any) => {
+      // Only handle service request entity changes
+      if (change.entityType === 'serviceRequest') {
+        console.log('🔔 Client received service request update:', change);
+
+        // Refresh the service requests list to show latest changes
+        // This handles: create, update, cancel, delete, status changes
+        fetchServiceRequests(pagination.page);
+      }
+    };
+
+    const unsubscribe = websocketService.onEntityDataChange(handleEntityChange);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [pagination.page]);
+
+  // Fetch immediately when filters change (don't wait for polling)
+  useEffect(() => {
+    // Skip initial mount (handled by mount effect above)
+    if (serviceRequests.length > 0 || loading) {
+      fetchServiceRequests(1); // Reset to page 1 when filters change
+    }
+  }, [filters.hideClosed, filters.status]);
+
   // Set up periodic polling for service request changes
   useEffect(() => {
     const pollInterval = setInterval(() => {
@@ -863,11 +891,11 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
       }
     };
 
-    websocketService.onEntityDataChange(handleEntityChange);
+    const unsubscribe = websocketService.onEntityDataChange(handleEntityChange);
 
     return () => {
-      // Cleanup: remove listener when component unmounts or selectedRequest changes
-      websocketService.onEntityDataChange(() => {});
+      // Cleanup: unsubscribe when component unmounts or selectedRequest changes
+      unsubscribe();
     };
   }, [selectedRequest, lastSubmittedNoteId]);
 

@@ -296,6 +296,90 @@ router.post('/', async (req, res) => {
     // Send push notification asynchronously
     sendPushNotification();
 
+    // Fetch full service request data for WebSocket broadcast (optimistic updates)
+    const fetchAndBroadcast = async () => {
+      try {
+        console.log(`🔍 Fetching full data for service request ${serviceRequestId} to broadcast...`);
+        const fullDataQuery = `
+          SELECT
+            sr.id,
+            sr.request_number,
+            sr.title,
+            sr.description,
+            sr.client_id,
+            sr.business_id,
+            sr.service_location_id,
+            sr.status_id,
+            sr.priority_level_id,
+            sr.urgency_level_id,
+            sr.service_type_id,
+            sr.assigned_to_employee_id,
+            sr.requested_datetime,
+            sr.requested_duration_minutes,
+            sr.scheduled_datetime,
+            sr.scheduled_duration_minutes,
+            sr.actual_start_datetime,
+            sr.actual_end_datetime,
+            sr.actual_duration_minutes,
+            sr.completion_datetime,
+            sr.created_at,
+            sr.updated_at,
+            sr.soft_delete,
+            u.first_name as client_first_name,
+            u.last_name as client_last_name,
+            u.email as client_email,
+            b.business_name,
+            srs.name as status,
+            srs.color_code as status_color,
+            pl.name as priority_name,
+            ul.name as urgency_name,
+            st.type_name as service_type_name,
+            e.first_name as assigned_employee_first_name,
+            e.last_name as assigned_employee_last_name
+          FROM service_requests sr
+          LEFT JOIN users u ON sr.client_id = u.id
+          LEFT JOIN businesses b ON sr.business_id = b.id
+          LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
+          LEFT JOIN priority_levels pl ON sr.priority_level_id = pl.id
+          LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
+          LEFT JOIN service_types st ON sr.service_type_id = st.id
+          LEFT JOIN employees e ON sr.assigned_to_employee_id = e.id
+          WHERE sr.id = $1
+        `;
+        const fullDataResult = await pool.query(fullDataQuery, [serviceRequestId]);
+        console.log(`📊 Query returned ${fullDataResult.rows.length} row(s)`);
+
+        if (fullDataResult.rows.length > 0) {
+          const fullData = fullDataResult.rows[0];
+          console.log(`✅ Broadcasting full service request data: ${fullData.request_number}`);
+          // Broadcast service request creation with full data for optimistic updates
+          websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'created', {
+            serviceRequest: fullData
+          });
+        } else {
+          console.warn(`⚠️ Query returned no rows, using fallback broadcast`);
+          // Fallback: broadcast with partial data
+          websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'created', {
+            requestNumber: result.rows[0].request_number,
+            title,
+            businessId
+          });
+        }
+      } catch (error) {
+        console.error('❌ Error fetching full service request data for broadcast:', error);
+        console.error('Stack trace:', error.stack);
+        // Fallback: broadcast with partial data
+        websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'created', {
+          requestNumber: result.rows[0].request_number,
+          title,
+          businessId
+        });
+      }
+    };
+
+    // Fetch and broadcast asynchronously (don't block response)
+    fetchAndBroadcast();
+
     res.status(201).json({
       success: true,
       message: 'Service request created successfully',
@@ -341,7 +425,7 @@ router.get('/', async (req, res) => {
         sr.scheduled_duration_minutes,
         sr.created_at,
         sr.updated_at,
-        srs.name as status_name,
+        srs.name as status,
         srs.description as status_description,
         ul.name as urgency_name,
         pl.name as priority_name,
@@ -593,7 +677,7 @@ router.get('/', async (req, res) => {
             requestedDurationMinutes: row.requested_duration_minutes,
             scheduledDatetime: row.scheduled_datetime,
             scheduledDurationMinutes: row.scheduled_duration_minutes,
-            status: row.status_name,
+            status: row.status,
             statusDescription: row.status_description,
             urgency: row.urgency_name,
             priority: row.priority_name,
@@ -1148,6 +1232,14 @@ router.post('/:id/cancel', async (req, res) => {
 
     // Send push notification asynchronously
     sendCancellationPushNotification();
+
+    // Broadcast WebSocket update for real-time UI refresh
+    websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+      id,
+      requestNumber: serviceRequest.request_number,
+      businessId,
+      reason: 'Service request cancelled by client'
+    });
 
     // If late cancellation, send email to employees with permission to view service requests
     // (typically executives and admins, but uses RBAC permission system)
