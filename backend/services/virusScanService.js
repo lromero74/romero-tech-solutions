@@ -34,11 +34,11 @@ class VirusScanService {
 
         // Try different ClamAV paths
         clamdscan: {
-          socket: '/run/clamd.scan/clamd.sock', // Correct socket path for RHEL
+          socket: '/var/run/clamd.scan/clamd.sock', // Correct socket path for RHEL
           host: '127.0.0.1',
           port: 3310,
           timeout: 30000,
-          localFallback: false, // Disable fallback to reduce error noise
+          localFallback: true, // Enable fallback to clamscan if daemon fails
           path: '/usr/bin/clamdscan',
           config_file: '/etc/clamd.d/scan.conf', // Correct config path for RHEL
           multiscan: true,
