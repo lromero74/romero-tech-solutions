@@ -725,6 +725,113 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * GET /api/client/service-requests/:id
+ * Get a single service request for authenticated client (for WebSocket cache updates)
+ */
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const businessId = req.user.businessId;
+    const clientId = req.user.id;
+    const pool = await getPool();
+
+    // Query for single service request
+    const query = `
+      SELECT
+        sr.id,
+        sr.request_number,
+        sr.title,
+        sr.description,
+        sr.requested_datetime,
+        sr.requested_duration_minutes,
+        sr.scheduled_datetime,
+        sr.scheduled_duration_minutes,
+        sr.created_at,
+        sr.updated_at,
+        srs.name as status,
+        srs.description as status_description,
+        ul.name as urgency_name,
+        pl.name as priority_name,
+        st.name as service_name,
+        sl.location_name,
+        sl.street_address_1,
+        sl.street_address_2,
+        sl.city,
+        sl.state,
+        sl.zip_code,
+        sl.contact_phone as location_contact_phone,
+        sl.contact_person as location_contact_person,
+        sl.contact_email as location_contact_email,
+        (SELECT COUNT(*) FROM t_client_files cf WHERE cf.service_request_id = sr.id AND cf.soft_delete = false) as file_count
+      FROM service_requests sr
+      LEFT JOIN service_request_statuses srs ON sr.status_id = srs.id
+      LEFT JOIN urgency_levels ul ON sr.urgency_level_id = ul.id
+      LEFT JOIN priority_levels pl ON sr.priority_level_id = pl.id
+      LEFT JOIN service_types st ON sr.service_type_id = st.id
+      LEFT JOIN service_locations sl ON sr.service_location_id = sl.id
+      WHERE sr.id = $1 AND sr.business_id = $2 AND sr.client_id = $3 AND sr.soft_delete = false
+    `;
+
+    const result = await pool.query(query, [id, businessId, clientId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    const row = result.rows[0];
+    const hasLocationData = row.street_address_1 || row.city || row.state ||
+                           row.location_contact_phone || row.location_contact_person ||
+                           row.location_contact_email;
+
+    const serviceRequest = {
+      id: row.id,
+      requestNumber: row.request_number,
+      title: row.title,
+      description: row.description,
+      requestedDatetime: row.requested_datetime,
+      requestedDurationMinutes: row.requested_duration_minutes,
+      scheduledDatetime: row.scheduled_datetime,
+      scheduledDurationMinutes: row.scheduled_duration_minutes,
+      status: row.status,
+      statusDescription: row.status_description,
+      urgency: row.urgency_name,
+      priority: row.priority_name,
+      serviceType: row.service_name,
+      location: row.location_name,
+      locationDetails: hasLocationData ? {
+        name: row.location_name || 'Service Location',
+        streetAddress1: row.street_address_1,
+        streetAddress2: row.street_address_2,
+        city: row.city,
+        state: row.state,
+        zipCode: row.zip_code,
+        contactPhone: row.location_contact_phone,
+        contactPerson: row.location_contact_person,
+        contactEmail: row.location_contact_email
+      } : null,
+      fileCount: parseInt(row.file_count),
+      createdAt: row.created_at,
+      updatedAt: row.updated_at
+    };
+
+    res.json({
+      success: true,
+      data: serviceRequest
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch service request'
+    });
+  }
+});
+
+/**
  * GET /api/client/service-requests/:id/files
  * Get files associated with a specific service request
  */

@@ -217,7 +217,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
         throw new Error('No session token found');
       }
 
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests?page=${page}&limit=${pagination.limit}&hideClosed=${filters.hideClosed}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests?page=${page}&limit=${pagination.limit}&hideClosed=false`, {
         method: 'GET',
         headers: {
           'Authorization': `Bearer ${sessionToken}`,
@@ -716,8 +716,12 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     }
   };
 
-  // Filter service requests (hideClosed is now handled by backend)
+  // Filter service requests (all filtering happens client-side for instant updates)
   const filteredRequests = serviceRequests.filter(request => {
+    // Check if request is closed/cancelled
+    const isClosed = request.status === 'Closed' || request.status === 'Cancelled';
+    const matchesClosedFilter = !filters.hideClosed || !isClosed;
+
     const matchesSearch = !filters.search ||
       request.title.toLowerCase().includes(filters.search.toLowerCase()) ||
       request.requestNumber.toLowerCase().includes(filters.search.toLowerCase()) ||
@@ -726,7 +730,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     const matchesStatus = filters.status === 'all' ||
       request.status.toLowerCase().includes(filters.status.toLowerCase());
 
-    return matchesSearch && matchesStatus;
+    return matchesClosedFilter && matchesSearch && matchesStatus;
   });
 
   // Load service requests on component mount
@@ -792,14 +796,55 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
 
   // Listen for service request updates via WebSocket
   useEffect(() => {
-    const handleEntityChange = (change: any) => {
+    const handleEntityChange = async (change: any) => {
       // Only handle service request entity changes
       if (change.entityType === 'serviceRequest') {
         console.log('🔔 Client received service request update:', change);
 
-        // Refresh the service requests list to show latest changes
-        // This handles: create, update, cancel, delete, status changes
-        fetchServiceRequests(pagination.page);
+        try {
+          const sessionToken = RoleBasedStorage.getItem('sessionToken');
+          if (!sessionToken) return;
+
+          // Fetch ONLY the updated service request to update cache
+          const response = await fetch(
+            `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/service-requests/${change.entityId}`,
+            {
+              method: 'GET',
+              headers: {
+                'Authorization': `Bearer ${sessionToken}`,
+                'Content-Type': 'application/json'
+              },
+              credentials: 'include'
+            }
+          );
+
+          if (response.ok) {
+            const data = await response.json();
+            if (data.success && data.data) {
+              const updatedRequest = data.data;
+
+              // Update cache: add or update the request in our local list
+              setServiceRequests(prev => {
+                const existingIndex = prev.findIndex(req => req.id === updatedRequest.id);
+                if (existingIndex >= 0) {
+                  // Update existing request in cache
+                  const updated = [...prev];
+                  updated[existingIndex] = updatedRequest;
+                  console.log('✅ Updated cached service request:', updatedRequest.requestNumber);
+                  return updated;
+                } else {
+                  // Add new request to cache (e.g., created by another user)
+                  console.log('✅ Added new service request to cache:', updatedRequest.requestNumber);
+                  return [updatedRequest, ...prev];
+                }
+              });
+            }
+          } else {
+            console.error('❌ Failed to fetch updated service request, status:', response.status);
+          }
+        } catch (error) {
+          console.error('❌ Error fetching updated service request:', error);
+        }
       }
     };
 
@@ -808,15 +853,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     return () => {
       unsubscribe();
     };
-  }, [pagination.page]);
-
-  // Fetch immediately when filters change (don't wait for polling)
-  useEffect(() => {
-    // Skip initial mount (handled by mount effect above)
-    if (serviceRequests.length > 0 || loading) {
-      fetchServiceRequests(1); // Reset to page 1 when filters change
-    }
-  }, [filters.hideClosed, filters.status]);
+  }, []);
 
   // Set up periodic polling for service request changes
   useEffect(() => {
