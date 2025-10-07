@@ -15,13 +15,13 @@ After saving, Amplify will apply these headers on the next deployment:
 
 ```bash
 # Test HTML caching (should be no-cache)
-curl -I https://prod.romerotechsolutions.com/
+curl -I https://romerotechsolutions.com/
 
 # Test version.json (should be no-cache)
-curl -I https://prod.romerotechsolutions.com/version.json
+curl -I https://romerotechsolutions.com/version.json
 
 # Test JS file (should cache for 1 year with immutable)
-curl -I https://prod.romerotechsolutions.com/assets/index-*.js
+curl -I https://romerotechsolutions.com/assets/index-*.js
 ```
 
 Expected results:
@@ -93,7 +93,7 @@ Result: Users get updates within 5 minutes, but static assets load instantly fro
 
 **Version check not working?**
 - Check browser console for errors
-- Verify version.json is accessible: `curl https://prod.romerotechsolutions.com/version.json`
+- Verify version.json is accessible: `curl https://romerotechsolutions.com/version.json`
 - Check `useVersionCheck.ts` has correct version number
 
 **Still seeing old content?**

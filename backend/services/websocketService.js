@@ -19,9 +19,8 @@ class WebSocketService {
           "http://localhost:5174",
           "http://192.168.12.194:5173",
           "https://romerotechsolutions.com",
-          "https://main.d3s921l1b6dx60.amplifyapp.com",
-          "https://prod.romerotechsolutions.com",
           "https://www.romerotechsolutions.com",
+          "https://main.d3s921l1b6dx60.amplifyapp.com",
           /https:\/\/.*\.amplifyapp\.com$/
         ],
         methods: ["GET", "POST"]
