@@ -65,6 +65,10 @@ export default defineConfig({
           if (/css/i.test(extType || '')) {
             return 'css/[name]-[hash].[ext]';
           }
+          // Keep manifest files with original names (no hash)
+          if (/webmanifest|json/i.test(extType || '')) {
+            return '[name].[ext]';
+          }
           return 'assets/[name]-[hash].[ext]';
         },
       },
