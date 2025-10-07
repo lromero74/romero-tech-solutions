@@ -4,6 +4,7 @@ import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import AlertModal from '../shared/AlertModal';
 import TrustedDeviceManagement from '../shared/TrustedDeviceManagement';
+import ClientPushNotificationManager from './ClientPushNotificationManager';
 import { apiService } from '../../services/apiService';
 import {
   User,
@@ -19,7 +20,8 @@ import {
   Save,
   RefreshCw,
   Smartphone,
-  Clock
+  Clock,
+  Bell
 } from 'lucide-react';
 
 interface ContactInfo {
@@ -443,6 +445,7 @@ const ClientSettings: React.FC = () => {
               { id: 'profile', label: t('settings.tabs.profile', 'Profile'), icon: User },
               { id: 'password', label: t('settings.tabs.password', 'Password'), icon: Lock },
               { id: 'security', label: t('settings.tabs.security', 'Security'), icon: Shield },
+              { id: 'notifications', label: t('settings.tabs.notifications', 'Notifications'), icon: Bell },
               { id: 'devices', label: t('settings.tabs.trustedDevices', 'Trusted Devices'), icon: Smartphone }
             ].map(tab => (
               <button
@@ -797,6 +800,11 @@ const ClientSettings: React.FC = () => {
               </div>
             )}
           </div>
+        )}
+
+        {/* Notifications Tab */}
+        {activeTab === 'notifications' && (
+          <ClientPushNotificationManager />
         )}
 
         {/* Trusted Devices Tab */}
