@@ -286,12 +286,18 @@ router.patch('/invoices/:id/payment-status', async (req, res) => {
       });
     }
 
-    // Also notify admins
+    // Also notify admins (specialized invoice event)
     websocketService.broadcastInvoiceUpdateToAdmins({
       invoiceId: updatedInvoice.id,
       invoiceNumber: updatedInvoice.invoice_number,
       paymentStatus: updatedInvoice.payment_status,
       type: 'status_change'
+    });
+
+    // Broadcast generic entity change for cache invalidation
+    websocketService.broadcastEntityUpdate('invoice', updatedInvoice.id, 'updated', {
+      invoiceNumber: updatedInvoice.invoice_number,
+      paymentStatus: updatedInvoice.payment_status
     });
 
     res.json({

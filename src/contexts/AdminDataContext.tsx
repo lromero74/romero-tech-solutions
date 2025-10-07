@@ -119,6 +119,129 @@ export interface DashboardData {
   completedServiceRequests: number;
 }
 
+export interface GlobalQuota {
+  id: string;
+  maxFileSizeBytes: number;
+  maxTotalStorageBytes: number;
+  maxFileCount: number;
+  storageSoftLimitBytes: number;
+  warningThresholdPercentage: number;
+  alertThresholdPercentage: number;
+  softLimitBytes?: number;
+  hardLimitBytes?: number;
+  warningThresholdPercent?: number;
+}
+
+export interface QuotaSummary {
+  totalStorageUsed: number;
+  totalFiles: number;
+  clientsWithCustomQuotas: number;
+  clientsNearLimit: number;
+  clientsOverLimit: number;
+}
+
+export interface ClientFile {
+  id: string;
+  originalFilename: string;
+  storedFilename: string;
+  fileSizeBytes: number;
+  fileSizeFormatted: string;
+  mimeType: string;
+  fileDescription: string | null;
+  folderId: string | null;
+  folderName: string | null;
+  folderColor: string | null;
+  serviceRequestId: string | null;
+  serviceRequestTitle: string | null;
+  virusScanStatus: 'clean' | 'pending' | 'infected' | null;
+  virusScanResult: string | null;
+  virusScanDate: string | null;
+  isPublicToBusiness: boolean;
+  createdAt: string;
+  updatedAt: string;
+  uploader: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    fullName: string;
+  } | null;
+}
+
+export interface ClientFilesData {
+  businesses: Array<{
+    id: string;
+    name: string;
+    totalFiles: number;
+    totalStorageBytes: number;
+  }>;
+  files: ClientFile[];
+}
+
+export interface Technician {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  fullName: string;
+}
+
+export interface ServiceRequestStatus {
+  id: string;
+  status_key: string;
+  display_name: string;
+  description: string;
+  is_terminal: boolean;
+  sort_order: number;
+}
+
+export interface InvoiceSummary {
+  id: string;
+  invoice_number: string;
+  issue_date: string;
+  due_date: string;
+  payment_date: string | null;
+  payment_status: string;
+  total_amount: number;
+  is_first_service_request: boolean;
+  business_name: string;
+  request_number: string;
+  service_title: string;
+}
+
+export interface RateCategory {
+  id: string;
+  categoryName: string;
+  baseHourlyRate: number;
+  description: string;
+  isDefault: boolean;
+  isActive: boolean;
+  displayOrder: number;
+}
+
+export interface WorkflowRule {
+  id: string;
+  rule_name: string;
+  rule_description: string;
+  trigger_event: string;
+  recipient_type: string;
+  recipient_roles: string[];
+  notification_type: string;
+  email_template_name: string;
+  timeout_minutes: number | null;
+  max_retry_count: number;
+  retry_interval_minutes: number | null;
+  execution_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkflowStats {
+  stateStats: { current_state: string; count: string }[];
+  notificationStats: { trigger_event: string; count: string; sent_count: string; failed_count: string }[];
+  pendingActions: { pending_count: string; next_action_time: string | null };
+}
+
 interface AdminDataContextType {
   // Data
   dashboardData: DashboardData | null;
@@ -134,6 +257,17 @@ interface AdminDataContextType {
   closureReasons: any[];
   passwordPolicy: any | null;
 
+  // Cached data with timestamps
+  globalQuota: GlobalQuota | null;
+  quotaSummary: QuotaSummary | null;
+  clientFilesData: ClientFilesData | null;
+  technicians: Technician[];
+  serviceRequestStatuses: ServiceRequestStatus[];
+  invoices: InvoiceSummary[];
+  rateCategories: RateCategory[];
+  workflowRules: WorkflowRule[];
+  workflowStats: WorkflowStats | null;
+
   // Loading and error states
   loading: boolean;
   error: string | null;
@@ -145,7 +279,7 @@ interface AdminDataContextType {
   refreshClients: () => Promise<void>;
   refreshBusinesses: () => Promise<void>;
   refreshServices: () => Promise<void>;
-  refreshServiceRequests: () => Promise<void>;
+  refreshServiceRequests: (force?: boolean) => Promise<void>;
   refreshServiceLocations: () => Promise<void>;
   refreshOnlineStatus: () => Promise<void>;
   refreshRoles: () => Promise<void>;
@@ -153,6 +287,13 @@ interface AdminDataContextType {
   refreshServiceTypes: () => Promise<void>;
   refreshClosureReasons: () => Promise<void>;
   refreshPasswordPolicy: () => Promise<void>;
+  refreshQuotaData: (force?: boolean) => Promise<void>;
+  refreshClientFilesData: (force?: boolean) => Promise<void>;
+  refreshTechnicians: (force?: boolean) => Promise<void>;
+  refreshServiceRequestStatuses: (force?: boolean) => Promise<void>;
+  refreshInvoices: (force?: boolean) => Promise<void>;
+  refreshRateCategories: (force?: boolean) => Promise<void>;
+  refreshWorkflowData: (force?: boolean) => Promise<void>;
 
   // Data setters (for optimistic updates)
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
@@ -196,8 +337,35 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
   const [closureReasons, setClosureReasons] = useState<any[]>([]);
   const [passwordPolicy, setPasswordPolicy] = useState<any | null>(null);
 
+  // Cached quota and file data
+  const [globalQuota, setGlobalQuota] = useState<GlobalQuota | null>(null);
+  const [quotaSummary, setQuotaSummary] = useState<QuotaSummary | null>(null);
+  const [clientFilesData, setClientFilesData] = useState<ClientFilesData | null>(null);
+  const [technicians, setTechnicians] = useState<Technician[]>([]);
+  const [serviceRequestStatuses, setServiceRequestStatuses] = useState<ServiceRequestStatus[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
+  const [rateCategories, setRateCategories] = useState<RateCategory[]>([]);
+  const [workflowRules, setWorkflowRules] = useState<WorkflowRule[]>([]);
+  const [workflowStats, setWorkflowStats] = useState<WorkflowStats | null>(null);
+
+  // Cache timestamps (5 minutes TTL)
+  const quotaDataTimestampRef = useRef<number>(0);
+  const clientFilesDataTimestampRef = useRef<number>(0);
+  const techniciansTimestampRef = useRef<number>(0);
+  const statusesTimestampRef = useRef<number>(0);
+  const invoicesTimestampRef = useRef<number>(0);
+  const rateCategoriesTimestampRef = useRef<number>(0);
+  const workflowDataTimestampRef = useRef<number>(0);
+  const serviceRequestsTimestampRef = useRef<number>(0);
+  const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Debug: Log when serviceRequests changes
+  useEffect(() => {
+    console.log('🔔 AdminDataContext: serviceRequests array changed, count:', serviceRequests.length);
+  }, [serviceRequests]);
 
   // Get session token for WebSocket authentication
   const { sessionToken } = useEnhancedAuth();
@@ -303,10 +471,22 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     }
   };
 
-  const refreshServiceRequests = async () => {
+  const refreshServiceRequests = async (force: boolean = false) => {
     try {
+      const now = Date.now();
+      const cacheAge = now - serviceRequestsTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && serviceRequests.length > 0) {
+        console.log(`✅ Using cached service requests (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh service requests...');
       const data = await adminService.getServiceRequests();
       setServiceRequests(data.serviceRequests || []);
+      serviceRequestsTimestampRef.current = now;
+      console.log('✅ Service requests refreshed and cached');
     } catch (err) {
       console.error('Error fetching service requests:', err);
       setError('Failed to fetch service requests');
@@ -370,6 +550,202 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     } catch (err) {
       console.error('Error fetching password policy:', err);
       setError('Failed to fetch password policy');
+    }
+  };
+
+  const refreshQuotaData = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - quotaDataTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && globalQuota && quotaSummary) {
+        console.log(`✅ Using cached quota data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh quota data...');
+      const [quotaResponse, summaryResponse] = await Promise.all([
+        apiService.get('/admin/global-quotas/active'),
+        apiService.get('/admin/global-quotas/summary')
+      ]);
+
+      if (quotaResponse.success && quotaResponse.data) {
+        setGlobalQuota(quotaResponse.data);
+      }
+
+      if (summaryResponse.success && summaryResponse.data) {
+        setQuotaSummary(summaryResponse.data);
+      }
+
+      quotaDataTimestampRef.current = now;
+      console.log('✅ Quota data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching quota data:', err);
+      setError('Failed to fetch quota data');
+    }
+  };
+
+  const refreshClientFilesData = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - clientFilesDataTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && clientFilesData) {
+        console.log(`✅ Using cached client files data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh client files data...');
+      const response = await apiService.get('/admin/client-files/all');
+
+      if (response.success && response.data) {
+        setClientFilesData(response.data);
+      }
+
+      clientFilesDataTimestampRef.current = now;
+      console.log('✅ Client files data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching client files data:', err);
+      setError('Failed to fetch client files data');
+    }
+  };
+
+  const refreshTechnicians = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - techniciansTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && technicians.length > 0) {
+        console.log(`✅ Using cached technicians data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh technicians data...');
+      const response = await apiService.get('/admin/service-requests/technicians');
+
+      if (response.success && response.data) {
+        setTechnicians(response.data);
+      }
+
+      techniciansTimestampRef.current = now;
+      console.log('✅ Technicians data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching technicians:', err);
+      setError('Failed to fetch technicians');
+    }
+  };
+
+  const refreshServiceRequestStatuses = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - statusesTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && serviceRequestStatuses.length > 0) {
+        console.log(`✅ Using cached statuses data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh service request statuses...');
+      const response = await apiService.get('/admin/service-requests/statuses');
+
+      if (response.success && response.data) {
+        setServiceRequestStatuses(response.data);
+      }
+
+      statusesTimestampRef.current = now;
+      console.log('✅ Service request statuses refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching service request statuses:', err);
+      setError('Failed to fetch service request statuses');
+    }
+  };
+
+  const refreshInvoices = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - invoicesTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && invoices.length > 0) {
+        console.log(`✅ Using cached invoices data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh invoices data...');
+      const response = await apiService.get('/admin/invoices');
+
+      if (response.success && response.data) {
+        setInvoices(response.data.invoices || []);
+      }
+
+      invoicesTimestampRef.current = now;
+      console.log('✅ Invoices data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching invoices:', err);
+      setError('Failed to fetch invoices');
+    }
+  };
+
+  const refreshRateCategories = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - rateCategoriesTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && rateCategories.length > 0) {
+        console.log(`✅ Using cached rate categories data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh rate categories data...');
+      const response = await apiService.get('/admin/hourly-rate-categories');
+
+      if (response.success && response.data) {
+        setRateCategories(response.data);
+      }
+
+      rateCategoriesTimestampRef.current = now;
+      console.log('✅ Rate categories data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching rate categories:', err);
+      setError('Failed to fetch rate categories');
+    }
+  };
+
+  const refreshWorkflowData = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - workflowDataTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && workflowRules.length > 0 && workflowStats) {
+        console.log(`✅ Using cached workflow data (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh workflow data...');
+      const [rulesResponse, statsResponse] = await Promise.all([
+        apiService.get('/admin/workflow-configuration/rules'),
+        apiService.get('/admin/workflow-configuration/stats')
+      ]);
+
+      if (rulesResponse.success && rulesResponse.data?.rules) {
+        setWorkflowRules(rulesResponse.data.rules);
+      }
+
+      if (statsResponse.success && statsResponse.data) {
+        setWorkflowStats(statsResponse.data);
+      }
+
+      workflowDataTimestampRef.current = now;
+      console.log('✅ Workflow data refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching workflow data:', err);
+      setError('Failed to fetch workflow data');
     }
   };
 
@@ -453,7 +829,13 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         permissionsResult,
         serviceTypesResult,
         closureReasonsResult,
-        passwordPolicyResult
+        passwordPolicyResult,
+        techniciansResult,
+        statusesResult,
+        invoicesResult,
+        rateCategoriesResult,
+        workflowRulesResult,
+        workflowStatsResult
       ] = await Promise.all([
         safeFetch(() => adminService.getDashboardData(), { employees: 0, businesses: 0, services: 0, clients: 0, serviceRequests: 0 }),
         safeFetch(() => adminService.getEmployeesWithLoginStatus(), { employees: [] }),
@@ -466,7 +848,13 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         safeFetch(() => permissionService.getAllPermissions(), []),
         safeFetch(() => apiService.get('/service-types'), { serviceTypes: [] }),
         safeFetch(() => apiService.get('/admin/closure-reasons'), { closureReasons: [] }),
-        safeFetch(() => apiService.get('/admin/password-complexity'), { requirements: null })
+        safeFetch(() => apiService.get('/admin/password-complexity'), { requirements: null }),
+        safeFetch(() => apiService.get('/admin/service-requests/technicians'), { data: [] }),
+        safeFetch(() => apiService.get('/admin/service-requests/statuses'), { data: [] }),
+        safeFetch(() => apiService.get('/admin/invoices'), { data: { invoices: [] } }),
+        safeFetch(() => apiService.get('/admin/hourly-rate-categories'), { data: [] }),
+        safeFetch(() => apiService.get('/admin/workflow-configuration/rules'), { data: { rules: [] } }),
+        safeFetch(() => apiService.get('/admin/workflow-configuration/stats'), { data: null })
       ]);
 
       // Set the data
@@ -484,7 +872,12 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
       setClients(enhancedClients);
 
       setServices(servicesResult.services || []);
-      setServiceRequests(serviceRequestsResult.serviceRequests || []);
+
+      // Set service requests and update timestamp for caching
+      if (serviceRequestsResult.serviceRequests) {
+        setServiceRequests(serviceRequestsResult.serviceRequests);
+        serviceRequestsTimestampRef.current = Date.now();
+      }
 
       // Set the new admin tab data
       setRoles(rolesResult || []);
@@ -492,6 +885,33 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
       setServiceTypes(serviceTypesResult.data?.serviceTypes || serviceTypesResult.serviceTypes || []);
       setClosureReasons(closureReasonsResult.data || closureReasonsResult.closureReasons || []);
       setPasswordPolicy(passwordPolicyResult.requirements || null);
+
+      // Set cached data and update timestamps
+      if (techniciansResult.data) {
+        setTechnicians(techniciansResult.data);
+        techniciansTimestampRef.current = Date.now();
+      }
+      if (statusesResult.data) {
+        setServiceRequestStatuses(statusesResult.data);
+        statusesTimestampRef.current = Date.now();
+      }
+      if (invoicesResult.data?.invoices) {
+        setInvoices(invoicesResult.data.invoices);
+        invoicesTimestampRef.current = Date.now();
+      }
+      if (rateCategoriesResult.data) {
+        setRateCategories(rateCategoriesResult.data);
+        rateCategoriesTimestampRef.current = Date.now();
+      }
+      if (workflowRulesResult.data?.rules) {
+        setWorkflowRules(workflowRulesResult.data.rules);
+      }
+      if (workflowStatsResult.data) {
+        setWorkflowStats(workflowStatsResult.data);
+      }
+      if (workflowRulesResult.data?.rules || workflowStatsResult.data) {
+        workflowDataTimestampRef.current = Date.now();
+      }
 
     } catch (err) {
       console.error('Error fetching admin data:', err);
@@ -642,7 +1062,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
         // Listen for entity data changes (employees, clients, etc.)
         websocketService.onEntityDataChange(async (change) => {
-          console.log(`📡 Entity ${change.entityType} ${change.action}:`, change.entityId);
+          console.log(`📡 Entity ${change.entityType} ${change.action}:`, change.entityId, change);
 
           // Handle employee changes
           if (change.entityType === 'employee') {
@@ -728,6 +1148,113 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
           if (change.entityType === 'passwordPolicy') {
             await refreshPasswordPolicy();
           }
+
+          // Handle service changes
+          if (change.entityType === 'service') {
+            console.log('🔄 Service changed, refreshing services...');
+            await refreshServices();
+          }
+
+          // Handle service request changes
+          if (change.entityType === 'serviceRequest') {
+            try {
+              console.log('🔄 Service request changed (optimistic):', change.action, change.entityId);
+              console.log('🔍 Service request data:', change.serviceRequest);
+
+              if (change.action === 'deleted') {
+                // Remove from local state optimistically
+                setServiceRequests(prevRequests => prevRequests.filter(req => req.id !== change.entityId));
+                serviceRequestsTimestampRef.current = Date.now(); // Keep cache fresh
+                console.log('✅ Service request removed from local state (optimistic)');
+              } else if (change.action === 'created' && change.serviceRequest) {
+                // Add new service request optimistically using data from WebSocket
+                console.log('📝 Adding service request to array...');
+                setServiceRequests(prevRequests => {
+                  console.log('Current requests count:', prevRequests.length);
+                  const newArray = [change.serviceRequest, ...prevRequests];
+                  console.log('New requests count:', newArray.length);
+                  return newArray;
+                });
+                serviceRequestsTimestampRef.current = Date.now(); // Keep cache fresh
+                console.log('✅ New service request added to local state (optimistic)');
+              } else if (change.action === 'updated' && change.serviceRequest) {
+                // Update service request optimistically using data from WebSocket
+                setServiceRequests(prevRequests => {
+                  const index = prevRequests.findIndex(req => req.id === change.entityId);
+                  if (index >= 0) {
+                    const newRequests = [...prevRequests];
+                    newRequests[index] = change.serviceRequest;
+                    return newRequests;
+                  } else {
+                    // Request not in list yet, add it
+                    return [change.serviceRequest, ...prevRequests];
+                  }
+                });
+                serviceRequestsTimestampRef.current = Date.now(); // Keep cache fresh
+                console.log('✅ Service request updated in local state (optimistic)');
+              } else {
+                // Fallback: if full data not in WebSocket event, fetch it
+                console.warn('⚠️ WebSocket event missing full data, fetching from API');
+                try {
+                  const response = await adminService.getServiceRequest(change.entityId);
+                  if (response.success && response.data) {
+                    if (change.action === 'created') {
+                      setServiceRequests(prevRequests => [response.data, ...prevRequests]);
+                    } else {
+                      setServiceRequests(prevRequests => {
+                        const index = prevRequests.findIndex(req => req.id === change.entityId);
+                        if (index >= 0) {
+                          const newRequests = [...prevRequests];
+                          newRequests[index] = response.data;
+                          return newRequests;
+                        }
+                        return prevRequests;
+                      });
+                    }
+                  }
+                } catch (error) {
+                  console.error('❌ Fallback fetch failed, doing full refresh:', error);
+                  await refreshServiceRequests(true);
+                }
+              }
+            } catch (error) {
+              console.error('❌ CRITICAL ERROR in service request handler:', error);
+              console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
+              console.log('Change data that caused error:', change);
+              // Don't crash - force refresh to get fresh data after error
+              await refreshServiceRequests(true);
+            }
+          }
+
+          // Handle invoice changes (optimistic - just refresh for now until backend sends full data)
+          if (change.entityType === 'invoice') {
+            console.log('🔄 Invoice changed, force refreshing invoices...');
+            await refreshInvoices(true);
+          }
+
+          // Handle rate category / pricing settings changes (optimistic - just refresh for now)
+          if (change.entityType === 'rateCategory' || change.entityType === 'pricingSetting') {
+            console.log('🔄 Rate category changed, force refreshing rate categories...');
+            await refreshRateCategories(true);
+          }
+
+          // Handle workflow rule changes (optimistic - just refresh for now)
+          if (change.entityType === 'workflowRule' || change.entityType === 'workflow') {
+            console.log('🔄 Workflow rule changed, force refreshing workflow data...');
+            await refreshWorkflowData(true);
+          }
+
+          // Handle quota changes (optimistic - just refresh for now)
+          if (change.entityType === 'quota' || change.entityType === 'globalQuota' || change.entityType === 'clientQuota') {
+            console.log('🔄 Quota changed, force refreshing quota data...');
+            await refreshQuotaData(true);
+          }
+
+          // Handle client file changes (optimistic - just refresh for now)
+          if (change.entityType === 'clientFile' || change.entityType === 'file') {
+            console.log('🔄 Client file changed, force refreshing file data...');
+            await refreshClientFilesData(true);
+          }
         });
 
         websocketService.onAuthenticationError((error) => {
@@ -772,6 +1299,17 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     closureReasons,
     passwordPolicy,
 
+    // Cached data
+    globalQuota,
+    quotaSummary,
+    clientFilesData,
+    technicians,
+    serviceRequestStatuses,
+    invoices,
+    rateCategories,
+    workflowRules,
+    workflowStats,
+
     // Loading and error states
     loading,
     error,
@@ -791,6 +1329,13 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     refreshServiceTypes,
     refreshClosureReasons,
     refreshPasswordPolicy,
+    refreshQuotaData,
+    refreshClientFilesData,
+    refreshTechnicians,
+    refreshServiceRequestStatuses,
+    refreshInvoices,
+    refreshRateCategories,
+    refreshWorkflowData,
 
     // Data setters
     setEmployees,

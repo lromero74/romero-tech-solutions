@@ -186,11 +186,24 @@ const ClosureReasonModal: React.FC<ClosureReasonModalProps> = ({
   );
 };
 
-const AdminClosureReasons: React.FC = () => {
+interface AdminClosureReasonsProps {
+  closureReasons?: ClosureReason[];
+  loading?: boolean;
+  error?: string | null;
+  refreshClosureReasons?: () => Promise<void>;
+}
+
+const AdminClosureReasons: React.FC<AdminClosureReasonsProps> = ({
+  closureReasons: propsClosureReasons = [],
+  loading: propsLoading = false,
+  error: propsError = null,
+  refreshClosureReasons
+}) => {
   const { isDark } = useTheme();
-  const [closureReasons, setClosureReasons] = useState<ClosureReason[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use cached data from props
+  const [closureReasons, setClosureReasons] = useState<ClosureReason[]>(propsClosureReasons);
+  const [loading, setLoading] = useState(propsLoading);
+  const [error, setError] = useState<string | null>(propsError);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReason, setEditingReason] = useState<ClosureReason | null>(null);
   const [deleteReason, setDeleteReason] = useState<ClosureReason | null>(null);
@@ -229,8 +242,28 @@ const AdminClosureReasons: React.FC = () => {
     }
   };
 
+  // Sync with props
   useEffect(() => {
-    fetchClosureReasons();
+    if (propsClosureReasons.length > 0) {
+      setClosureReasons(propsClosureReasons);
+      setLoading(false);
+    }
+  }, [propsClosureReasons]);
+
+  useEffect(() => {
+    if (propsError) {
+      setError(propsError);
+    }
+  }, [propsError]);
+
+  // Refresh on mount
+  useEffect(() => {
+    if (refreshClosureReasons) {
+      refreshClosureReasons();
+    } else {
+      // Fallback if no refresh function provided
+      fetchClosureReasons();
+    }
   }, []);
 
   const handleSave = async (data: Partial<ClosureReason>) => {

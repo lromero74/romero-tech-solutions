@@ -71,7 +71,24 @@ interface ClientFile {
   } | null;
 }
 
-const AdminClientFileBrowser: React.FC = () => {
+interface ClientFilesData {
+  businesses: Business[];
+  files: ClientFile[];
+}
+
+interface AdminClientFileBrowserProps {
+  clientFilesData?: ClientFilesData | null;
+  loading?: boolean;
+  error?: string | null;
+  refreshClientFilesData?: (force?: boolean) => Promise<void>;
+}
+
+const AdminClientFileBrowser: React.FC<AdminClientFileBrowserProps> = ({
+  clientFilesData: propsClientFilesData,
+  loading: propsLoading = false,
+  error: propsError = null,
+  refreshClientFilesData
+}) => {
   const { checkPermission, loading: permissionsLoading } = usePermission();
 
   // Permission checks
@@ -81,6 +98,10 @@ const AdminClientFileBrowser: React.FC = () => {
 
   // State with session storage caching
   const [businesses, setBusinesses] = useState<Business[]>(() => {
+    // Use props if provided, otherwise check session storage
+    if (propsClientFilesData?.businesses) {
+      return propsClientFilesData.businesses;
+    }
     const cached = sessionStorage.getItem('adminClientFiles_businesses');
     return cached ? JSON.parse(cached) : [];
   });
@@ -183,10 +204,20 @@ const AdminClientFileBrowser: React.FC = () => {
     sessionStorage.setItem('adminClientFiles_allFiles', JSON.stringify(allFiles));
   }, [allFiles]);
 
-  // Load businesses on mount (only if cache is empty)
+  // Sync businesses from props
   useEffect(() => {
-    if (canViewClientFiles && businesses.length === 0) {
+    if (propsClientFilesData?.businesses) {
+      setBusinesses(propsClientFilesData.businesses);
+    }
+  }, [propsClientFilesData?.businesses]);
+
+  // Load businesses on mount (only if cache is empty and no props provided)
+  useEffect(() => {
+    if (canViewClientFiles && businesses.length === 0 && !propsClientFilesData) {
       loadBusinesses();
+    } else if (canViewClientFiles && refreshClientFilesData && !propsClientFilesData) {
+      // If we have a refresh function but no props data, refresh in background
+      refreshClientFilesData();
     }
   }, [canViewClientFiles]);
 

@@ -610,9 +610,11 @@ const ServiceScheduler: React.FC = () => {
       console.log('Service request submitted:', result);
 
       setShowConfirmation(true);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to submit service request:', error);
-      alert(t('schedule.messages.failed'));
+      // Show the actual error message from the server
+      const errorMessage = error?.message || t('schedule.messages.failed');
+      alert(errorMessage);
     } finally {
       setIsSubmitting(false);
     }

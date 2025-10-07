@@ -16,7 +16,18 @@ interface RateCategory {
   displayOrder: number;
 }
 
-const AdminPricingSettings: React.FC = () => {
+interface AdminPricingSettingsProps {
+  rateCategories?: RateCategory[];
+  loading?: boolean;
+  error?: string | null;
+  refreshRateCategories?: (force?: boolean) => Promise<void>;
+}
+
+const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
+  rateCategories: propsRateCategories = [],
+  loading: propsLoading = false,
+  refreshRateCategories
+}) => {
   const { user } = useEnhancedAuth();
   const { hasPermission } = usePermissionContext();
   const { checkPermission } = usePermission();
@@ -41,8 +52,9 @@ const AdminPricingSettings: React.FC = () => {
     );
   }
 
-  const [categories, setCategories] = useState<RateCategory[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  // Use cached data from props
+  const [categories, setCategories] = useState<RateCategory[]>(propsRateCategories);
+  const [isLoading, setIsLoading] = useState(propsLoading);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isAddingNew, setIsAddingNew] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
@@ -55,8 +67,22 @@ const AdminPricingSettings: React.FC = () => {
     description: ''
   });
 
+  // Sync with props
   useEffect(() => {
-    loadCategories();
+    if (propsRateCategories.length > 0) {
+      setCategories(propsRateCategories);
+      setIsLoading(false);
+    }
+  }, [propsRateCategories]);
+
+  // Refresh on mount
+  useEffect(() => {
+    if (refreshRateCategories) {
+      refreshRateCategories();
+    } else {
+      // Fallback if no refresh function provided
+      loadCategories();
+    }
   }, []);
 
   const loadCategories = async () => {

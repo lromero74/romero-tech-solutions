@@ -90,13 +90,26 @@ interface Filters {
   paymentDateTo: string;
 }
 
-const AdminInvoices: React.FC = () => {
+interface AdminInvoicesProps {
+  invoices?: InvoiceSummary[];
+  loading?: boolean;
+  error?: string | null;
+  refreshInvoices?: (force?: boolean) => Promise<void>;
+}
+
+const AdminInvoices: React.FC<AdminInvoicesProps> = ({
+  invoices: propsInvoices = [],
+  loading: propsLoading = false,
+  error: propsError = null,
+  refreshInvoices
+}) => {
   const { isDark } = useTheme();
   const { hasPermission, loading: permissionsLoading } = usePermissionContext();
 
-  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Use props or local state for backward compatibility
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>(propsInvoices);
+  const [loading, setLoading] = useState(propsLoading);
+  const [error, setError] = useState<string | null>(propsError);
   const [showFilters, setShowFilters] = useState(false);
 
   const [filters, setFilters] = useState<Filters>({
@@ -172,12 +185,33 @@ const AdminInvoices: React.FC = () => {
   };
 
   // useEffect must be called before any conditional returns
-  // Fetch invoices when permissions are loaded and user has permission
+  // Sync invoices from props
+  useEffect(() => {
+    if (propsInvoices.length > 0) {
+      setInvoices(propsInvoices);
+      setLoading(false);
+    }
+  }, [propsInvoices]);
+
+  // Sync error from props
+  useEffect(() => {
+    if (propsError) {
+      setError(propsError);
+    }
+  }, [propsError]);
+
+  // Refresh cached data on mount if available, otherwise fetch
   useEffect(() => {
     if (!permissionsLoading && hasPermission('view.invoices.enable')) {
-      fetchInvoices();
+      if (refreshInvoices) {
+        // Use cached data with optional refresh
+        refreshInvoices();
+      } else {
+        // Fallback to direct fetch if no refresh function provided
+        fetchInvoices();
+      }
     }
-  }, [pagination.page, sortBy, sortOrder, filters.paymentStatus, filters.dueDateFrom, filters.dueDateTo, filters.paymentDateFrom, filters.paymentDateTo, permissionsLoading]);
+  }, [permissionsLoading]);
 
   // Handle Escape key to close invoice modal
   useEffect(() => {

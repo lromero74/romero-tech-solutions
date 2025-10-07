@@ -66,7 +66,7 @@ class WebSocketService {
   private onEmployeeStatusUpdate: EmployeeStatusCallback | null = null;
   private onEmployeeLoginChange: EmployeeLoginCallback | null = null;
   private onAuthError: AuthErrorCallback | null = null;
-  private onEntityDataChanged: EntityDataChangedCallback | null = null;
+  private onEntityDataChangedCallbacks: EntityDataChangedCallback[] = []; // Changed to array for multiple listeners
   private onServiceRequestViewers: ServiceRequestViewersCallback | null = null;
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
@@ -166,8 +166,21 @@ class WebSocketService {
 
         this.socket.on('entity-data-changed', (change: EntityDataChanged) => {
           console.log(`📡 Entity ${change.entityType} ${change.action}:`, change.entityId);
-          if (this.onEntityDataChanged) {
-            this.onEntityDataChanged(change);
+          console.log('🔍 Full change data:', change);
+          console.log('🔍 Registered callbacks count:', this.onEntityDataChangedCallbacks.length);
+          if (this.onEntityDataChangedCallbacks.length > 0) {
+            console.log(`✅ Calling ${this.onEntityDataChangedCallbacks.length} callback(s)...`);
+            this.onEntityDataChangedCallbacks.forEach((callback, index) => {
+              try {
+                console.log(`⏳ Executing callback ${index + 1}/${this.onEntityDataChangedCallbacks.length}...`);
+                callback(change);
+                console.log(`✅ Callback ${index + 1} executed successfully`);
+              } catch (error) {
+                console.error(`❌ Error in callback ${index + 1}:`, error);
+              }
+            });
+          } else {
+            console.warn('⚠️ No callbacks registered for entity-data-changed!');
           }
         });
 
@@ -229,8 +242,18 @@ class WebSocketService {
     this.onEmployeeLoginChange = callback;
   }
 
-  onEntityDataChange(callback: EntityDataChangedCallback): void {
-    this.onEntityDataChanged = callback;
+  onEntityDataChange(callback: EntityDataChangedCallback): () => void {
+    console.log('📝 Registering onEntityDataChange callback (total:', this.onEntityDataChangedCallbacks.length + 1, ')');
+    this.onEntityDataChangedCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onEntityDataChangedCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onEntityDataChangedCallbacks.splice(index, 1);
+        console.log('🗑️ Unregistered onEntityDataChange callback (remaining:', this.onEntityDataChangedCallbacks.length, ')');
+      }
+    };
   }
 
   onAuthenticationError(callback: AuthErrorCallback): void {

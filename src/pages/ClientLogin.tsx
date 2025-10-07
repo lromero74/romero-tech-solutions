@@ -131,7 +131,7 @@ const ClientLogin: React.FC<ClientLoginProps> = ({ onSuccess }) => {
     // SECURITY: Block all @romerotechsolutions.com emails from client login
     const emailDomain = emailValue.toLowerCase().split('@')[1];
     if (emailDomain === 'romerotechsolutions.com') {
-      setEmailError('Employee emails cannot be used for client login. Please use /employee to log in.');
+      setEmailError('RomeroTechSolutions domain cannot be used for login.');
       return false;
     }
 

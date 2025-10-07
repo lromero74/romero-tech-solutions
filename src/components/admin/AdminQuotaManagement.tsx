@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Settings, Users, RefreshCw, AlertTriangle, CheckCircle } from 'lucide-react';
 import { usePermission } from '../../hooks/usePermission';
+import { useAdminData } from '../../contexts/AdminDataContext';
 import { themeClasses } from '../../contexts/ThemeContext';
 import GlobalQuotaSettings from './AdminQuotaManagement_Modals/GlobalQuotaSettings';
 import ClientQuotaManager from './AdminQuotaManagement_Modals/ClientQuotaManager';
-import apiService from '../../services/apiService';
 
 interface GlobalQuota {
   id: string;
@@ -26,46 +26,44 @@ interface QuotaSummary {
   clientsOverLimit: number;
 }
 
-const AdminQuotaManagement: React.FC = () => {
+interface AdminQuotaManagementProps {
+  globalQuota?: GlobalQuota | null;
+  quotaSummary?: QuotaSummary | null;
+  loading?: boolean;
+  error?: string | null;
+  refreshQuotaData?: (force?: boolean) => Promise<void>;
+}
+
+const AdminQuotaManagement: React.FC<AdminQuotaManagementProps> = ({
+  globalQuota: propsGlobalQuota,
+  quotaSummary: propsQuotaSummary,
+  loading: propsLoading = false,
+  error: propsError = null,
+  refreshQuotaData: propsRefreshQuotaData
+}) => {
   const { checkPermission, loading: permissionsLoading } = usePermission();
+  const contextData = useAdminData();
+
+  // Use props if provided, otherwise fall back to context
+  const globalQuota = propsGlobalQuota !== undefined ? propsGlobalQuota : contextData.globalQuota;
+  const quotaSummary = propsQuotaSummary !== undefined ? propsQuotaSummary : contextData.quotaSummary;
+  const refreshQuotaData = propsRefreshQuotaData || contextData.refreshQuotaData;
+  const loading = propsLoading;
 
   // Permission checks
   const canManageGlobalQuotas = checkPermission('manage.global_quotas.enable');
   const canManageClientQuotas = checkPermission('manage.client_quotas.enable');
   const canViewQuotaStats = checkPermission('view.quota_statistics.enable');
 
-  // State
-  const [globalQuota, setGlobalQuota] = useState<GlobalQuota | null>(null);
-  const [quotaSummary, setQuotaSummary] = useState<QuotaSummary | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Local UI state
   const [showGlobalSettings, setShowGlobalSettings] = useState(false);
   const [showClientManager, setShowClientManager] = useState(false);
 
-  // Load data
-  const loadData = async () => {
-    setLoading(true);
-    try {
-      const [quotaResponse, summaryResponse] = await Promise.all([
-        apiService.get('/admin/global-quotas/active'),
-        apiService.get('/admin/global-quotas/summary')
-      ]);
-
-      if (quotaResponse.success && quotaResponse.data) {
-        setGlobalQuota(quotaResponse.data);
-      }
-
-      if (summaryResponse.success && summaryResponse.data) {
-        setQuotaSummary(summaryResponse.data);
-      }
-    } catch (error) {
-      console.error('Failed to load quota data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
+  // Refresh data on mount if refresh function is provided
   useEffect(() => {
-    loadData();
+    if (refreshQuotaData && !globalQuota && !quotaSummary) {
+      refreshQuotaData();
+    }
   }, []);
 
   // Format bytes
@@ -131,7 +129,7 @@ const AdminQuotaManagement: React.FC = () => {
           </div>
         </div>
         <button
-          onClick={loadData}
+          onClick={() => refreshQuotaData(true)}
           className="p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
           title="Refresh"
         >
@@ -276,7 +274,7 @@ const AdminQuotaManagement: React.FC = () => {
           onClose={() => setShowGlobalSettings(false)}
           onSave={() => {
             setShowGlobalSettings(false);
-            loadData();
+            refreshQuotaData(true); // Force refresh after save
           }}
         />
       )}
@@ -284,7 +282,7 @@ const AdminQuotaManagement: React.FC = () => {
       {showClientManager && (
         <ClientQuotaManager
           onClose={() => setShowClientManager(false)}
-          onUpdate={loadData}
+          onUpdate={() => refreshQuotaData(true)} // Force refresh after update
         />
       )}
     </div>

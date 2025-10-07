@@ -442,6 +442,18 @@ export class AdminService {
     }
   }
 
+  // Get single service request by ID (for selective refresh)
+  async getServiceRequest(serviceRequestId: string): Promise<{ success: boolean; data: ServiceRequest }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.get(`/admin/service-requests/${serviceRequestId}`);
+      return { success: true, data: result.data };
+    } catch (error) {
+      console.error('Error fetching service request:', error);
+      return { success: false, data: null as any };
+    }
+  }
+
   // Get employees with real-time login status
   async getEmployeesWithLoginStatus(): Promise<{ employees: User[] }> {
     try {

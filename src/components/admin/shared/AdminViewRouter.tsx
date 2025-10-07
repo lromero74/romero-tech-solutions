@@ -118,6 +118,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     serviceTypes,
     closureReasons,
     passwordPolicy,
+    technicians,
+    serviceRequestStatuses,
+    invoices,
+    rateCategories,
+    workflowRules,
+    workflowStats,
+    globalQuota,
+    quotaSummary,
+    clientFilesData,
     loading,
     error,
     refreshAllData,
@@ -130,6 +139,13 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
     refreshServiceTypes,
     refreshClosureReasons,
     refreshPasswordPolicy,
+    refreshTechnicians,
+    refreshServiceRequestStatuses,
+    refreshInvoices,
+    refreshRateCategories,
+    refreshWorkflowData,
+    refreshQuotaData,
+    refreshClientFilesData,
     setEmployees,
     // availableRoles
   } = useAdminData();
@@ -1287,22 +1303,36 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             clients={clients}
             services={services}
             employees={employees}
+            technicians={technicians}
+            serviceRequestStatuses={serviceRequestStatuses}
+            closureReasons={closureReasons}
             loading={loading}
             error={error}
             selectedServiceRequest={serviceRequestCRUD.selectedEntity}
             onSelectServiceRequest={serviceRequestCRUD.setSelectedEntity}
             onRefresh={refreshAllData}
+            refreshTechnicians={refreshTechnicians}
+            refreshServiceRequestStatuses={refreshServiceRequestStatuses}
           />
         );
 
       case 'invoices':
-        return <AdminInvoices />;
+        return (
+          <AdminInvoices
+            invoices={invoices}
+            loading={loading}
+            error={error}
+            refreshInvoices={refreshInvoices}
+          />
+        );
 
       case 'closure-reasons':
         return (
           <AdminClosureReasons
             closureReasons={closureReasons}
-            onRefresh={refreshClosureReasons}
+            loading={loading}
+            error={error}
+            refreshClosureReasons={refreshClosureReasons}
           />
         );
 
@@ -1554,7 +1584,14 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return <AdminServiceHourRates />;
 
       case 'pricing-settings':
-        return <AdminPricingSettings />;
+        return (
+          <AdminPricingSettings
+            rateCategories={rateCategories}
+            loading={loading}
+            error={error}
+            refreshRateCategories={refreshRateCategories}
+          />
+        );
 
       case 'password-complexity':
         return (
@@ -1567,16 +1604,39 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         );
 
       case 'workflow-configuration':
-        return <WorkflowConfiguration />;
+        return (
+          <WorkflowConfiguration
+            workflowRules={workflowRules}
+            workflowStats={workflowStats}
+            loading={loading}
+            error={error}
+            refreshWorkflowData={refreshWorkflowData}
+          />
+        );
 
       case 'filter-presets':
         return <FilterPresetManager />;
 
       case 'quota-management':
-        return <AdminQuotaManagement />;
+        return (
+          <AdminQuotaManagement
+            globalQuota={globalQuota}
+            quotaSummary={quotaSummary}
+            loading={loading}
+            error={error}
+            refreshQuotaData={refreshQuotaData}
+          />
+        );
 
       case 'client-files':
-        return <AdminClientFileBrowser />;
+        return (
+          <AdminClientFileBrowser
+            clientFilesData={clientFilesData}
+            loading={loading}
+            error={error}
+            refreshClientFilesData={refreshClientFilesData}
+          />
+        );
 
       default:
         return (

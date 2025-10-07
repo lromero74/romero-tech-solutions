@@ -38,16 +38,50 @@ interface WorkflowStats {
   pendingActions: { pending_count: string; next_action_time: string | null };
 }
 
-const WorkflowConfiguration: React.FC = () => {
-  const [rules, setRules] = useState<WorkflowRule[]>([]);
-  const [stats, setStats] = useState<WorkflowStats | null>(null);
-  const [loading, setLoading] = useState(true);
+interface WorkflowConfigurationProps {
+  workflowRules?: WorkflowRule[];
+  workflowStats?: WorkflowStats | null;
+  loading?: boolean;
+  error?: string | null;
+  refreshWorkflowData?: (force?: boolean) => Promise<void>;
+}
+
+const WorkflowConfiguration: React.FC<WorkflowConfigurationProps> = ({
+  workflowRules: propsRules = [],
+  workflowStats: propsStats = null,
+  loading: propsLoading = false,
+  refreshWorkflowData
+}) => {
+  // Use cached data from props
+  const [rules, setRules] = useState<WorkflowRule[]>(propsRules);
+  const [stats, setStats] = useState<WorkflowStats | null>(propsStats);
+  const [loading, setLoading] = useState(propsLoading);
   const [editingRule, setEditingRule] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<WorkflowRule>>({});
   const [saving, setSaving] = useState(false);
 
+  // Sync with props
   useEffect(() => {
-    fetchWorkflowData();
+    if (propsRules.length > 0) {
+      setRules(propsRules);
+      setLoading(false);
+    }
+  }, [propsRules]);
+
+  useEffect(() => {
+    if (propsStats) {
+      setStats(propsStats);
+    }
+  }, [propsStats]);
+
+  // Refresh on mount
+  useEffect(() => {
+    if (refreshWorkflowData) {
+      refreshWorkflowData();
+    } else {
+      // Fallback if no refresh function provided
+      fetchWorkflowData();
+    }
   }, []);
 
   const fetchWorkflowData = async () => {

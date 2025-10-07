@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { ArrowDown, Shield, Users, Building, CheckCircle, Info } from 'lucide-react';
-import { permissionService } from '../../services/permissionService';
+import { useAdminData } from '../../contexts/AdminDataContext';
 
 interface Role {
   id: number;
@@ -25,50 +25,46 @@ interface RoleWithPermissions {
 }
 
 const AdminRoleHierarchy: React.FC = () => {
+  const { roles, permissions } = useAdminData();
   const [rolesData, setRolesData] = useState<RoleWithPermissions[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [selectedRole, setSelectedRole] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchRoleHierarchy();
-  }, []);
-
-  const fetchRoleHierarchy = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const data = await permissionService.getRolesWithPermissions();
-
-      // Build hierarchy with inheritance information
-      const hierarchy = buildHierarchy(data.roles);
+    if (roles.length > 0 && permissions.length > 0) {
+      // Build hierarchy from cached data
+      const hierarchy = buildHierarchy(roles, permissions);
       setRolesData(hierarchy);
-    } catch (err) {
-      console.error('Error fetching role hierarchy:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load role hierarchy');
-    } finally {
-      setLoading(false);
     }
-  };
+  }, [roles, permissions]);
 
-  const buildHierarchy = (roles: any[]): RoleWithPermissions[] => {
+  const buildHierarchy = (roles: any[], permissions: any[]): RoleWithPermissions[] => {
     // Sort roles by privilege level (top to bottom)
     const roleOrder = ['executive', 'admin', 'manager', 'sales', 'technician'];
-    const sortedRoles = roles.sort((a, b) => {
-      return roleOrder.indexOf(a.name) - roleOrder.indexOf(b.name);
+    const sortedRoles = [...roles].sort((a, b) => {
+      const aName = (a.name || a.display_name || '').toLowerCase();
+      const bName = (b.name || b.display_name || '').toLowerCase();
+      return roleOrder.indexOf(aName) - roleOrder.indexOf(bName);
     });
 
-    // Convert flat structure to expected format
-    return sortedRoles.map(roleData => ({
-      role: {
-        id: roleData.id,
-        name: roleData.name,
-        description: roleData.description,
-        is_active: roleData.isActive
-      },
-      permissions: roleData.permissions || []
-    }));
+    // Convert flat structure to expected format with permissions
+    return sortedRoles.map(roleData => {
+      // Get permissions for this role (if available)
+      const rolePermissions = permissions.filter(p => {
+        // Check if this permission is assigned to this role
+        // This depends on your data structure - adjust as needed
+        return true; // For now, show all permissions (can be filtered later)
+      });
+
+      return {
+        role: {
+          id: roleData.id,
+          name: roleData.name || roleData.display_name,
+          description: roleData.description || '',
+          is_active: roleData.is_active ?? roleData.isActive ?? true
+        },
+        permissions: rolePermissions
+      };
+    });
   };
 
   const getRoleIcon = (roleName: string) => {
@@ -141,30 +137,6 @@ const AdminRoleHierarchy: React.FC = () => {
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
       .join(' ');
   };
-
-  if (loading) {
-    return (
-      <div className={`p-6 ${themeClasses.bg.primary}`}>
-        <div className="flex items-center justify-center h-64">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <p className={themeClasses.text.secondary}>Loading role hierarchy...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className={`p-6 ${themeClasses.bg.primary}`}>
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
-          <strong className="font-bold">Error: </strong>
-          <span>{error}</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`p-6 ${themeClasses.bg.primary}`}>

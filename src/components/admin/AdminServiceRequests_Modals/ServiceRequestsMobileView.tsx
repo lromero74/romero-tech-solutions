@@ -51,24 +51,24 @@ const ServiceRequestsMobileView: React.FC<ServiceRequestsMobileViewProps> = ({
             </div>
             <span
               className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                request.status.toLowerCase() === 'cancelled'
+                (request.status || '').toLowerCase() === 'cancelled'
                   ? 'bg-gray-500 text-white'
-                  : request.status.toLowerCase() === 'submitted'
+                  : (request.status || '').toLowerCase() === 'submitted'
                   ? 'bg-blue-600 text-white'
-                  : request.status.toLowerCase() === 'acknowledged'
+                  : (request.status || '').toLowerCase() === 'acknowledged'
                   ? `bg-orange-500 ${isDark ? 'text-white' : 'text-black'}`
                   : themeClasses.text.primary
               }`}
               style={
-                request.status.toLowerCase() === 'cancelled' ||
-                request.status.toLowerCase() === 'submitted' ||
-                request.status.toLowerCase() === 'acknowledged'
+                (request.status || '').toLowerCase() === 'cancelled' ||
+                (request.status || '').toLowerCase() === 'submitted' ||
+                (request.status || '').toLowerCase() === 'acknowledged'
                   ? {}
-                  : { backgroundColor: `${request.status_color}20` }
+                  : { backgroundColor: `${request.status_color || '#ccc'}20` }
               }
             >
-              {getStatusIcon(request.status)}
-              <span className="ml-1">{request.status}</span>
+              {getStatusIcon(request.status || 'Unknown')}
+              <span className="ml-1">{request.status || 'Unknown'}</span>
             </span>
           </div>
 
