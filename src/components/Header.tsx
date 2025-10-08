@@ -145,36 +145,35 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
         ? 'bg-white/95 backdrop-blur-sm shadow-lg' 
         : 'bg-white shadow-md'
     }`}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-7xl mx-auto px-2 sm:px-3 lg:px-4">
         <div className="flex justify-between items-center py-4">
           {/* Logo */}
-          <div 
-            className="flex items-center space-x-3 cursor-pointer"
+          <div
+            className="flex items-center space-x-2 cursor-pointer"
             onClick={() => setCurrentPage('home')}
           >
             <LazyImage
               src="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png"
               alt="Romero Tech Solutions - Professional IT Support & Computer Repair serving San Diego County, CA"
-              className="h-10 w-10"
+              className="h-16 w-16"
               priority={true}
               loading="eager"
-              width={40}
-              height={40}
+              width={85}
+              height={85}
             />
             <div>
-              <span className="text-xl font-bold text-gray-900">{t('footer.company')}</span>
-              <p className="text-sm text-gray-600">{t('footer.tagline')}</p>
+              <span className="text-lg font-bold text-gray-900">{t('footer.company')}</span>
             </div>
           </div>
 
           {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-2 relative pb-1">
+          <nav className="hidden md:flex items-center space-x-1 relative pb-1">
             {navItems.map((item) => (
               <button
                 key={item.id}
                 ref={(el) => (navRefs.current[item.id] = el)}
                 onClick={() => handlePageChange(item.id)}
-                className={`text-sm font-medium py-2 px-4 rounded-lg hover:bg-gray-100 ${
+                className={`text-xl font-medium py-2 px-3 rounded-lg hover:bg-gray-100 ${
                   currentPage === item.id
                     ? 'text-blue-600'
                     : 'text-gray-700 hover:text-blue-600'
@@ -211,9 +210,9 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
           </nav>
 
           {/* Contact Info */}
-          <div className="hidden lg:flex items-center space-x-4">
+          <div className="hidden lg:flex items-center space-x-2">
             {/* Language Switcher */}
-            <div className="flex items-center space-x-1 mr-4">
+            <div className="flex items-center space-x-1 mr-2">
               <Globe className="h-4 w-4 text-gray-600" />
               <button
                 onClick={() => setLanguage('en')}
@@ -240,17 +239,17 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
             
             <a
               href="tel:+16199405550"
-              className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+              title={t('common.phone')}
             >
-              <Phone className="h-4 w-4" />
-              <span className="text-sm font-medium">{t('common.phone')}</span>
+              <Phone className="h-5 w-5" />
             </a>
             <a
               href="mailto:info@romerotechsolutions.com"
-              className="flex items-center space-x-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
+              className="flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
+              title={t('header.email')}
             >
-              <Mail className="h-4 w-4" />
-              <span className="text-sm font-medium">{t('header.email')}</span>
+              <Mail className="h-5 w-5" />
             </a>
           </div>
 
@@ -278,7 +277,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
                     handlePageChange(item.id);
                     setIsMenuOpen(false);
                   }}
-                  className={`text-sm font-medium transition-all duration-300 py-2 px-4 rounded-lg relative ${
+                  className={`text-xl font-medium transition-all duration-300 py-2 px-4 rounded-lg relative ${
                     currentPage === item.id
                       ? 'text-blue-600 bg-blue-50'
                       : 'text-gray-700 hover:text-blue-600 hover:bg-gray-100'

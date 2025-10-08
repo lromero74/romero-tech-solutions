@@ -505,5 +505,47 @@ export const esTranslations = {
   'registration.errors.verificationCodeIncomplete': 'Por favor ingrese el código completo de 6 dígitos',
   'registration.errors.verificationCodeInvalid': 'Código de verificación inválido. Por favor intente de nuevo.',
   'registration.errors.sendVerificationFailed': 'Fallo al enviar código de verificación. Por favor intente de nuevo.',
-  'registration.errors.createAccountFailed': 'Fallo al crear cuenta. Por favor intente de nuevo.'
+  'registration.errors.createAccountFailed': 'Fallo al crear cuenta. Por favor intente de nuevo.',
+
+  // SEO Metadata
+  'seo.home.title': 'Soporte de TI y Reparación de Computadoras Profesional | Escondido, CA | Romero Tech Solutions',
+  'seo.home.description': 'Reparación experta de computadoras, configuración de redes y soporte de TI en Escondido, CA. Más de 30 años de experiencia sirviendo hogares y empresas. Llame al (619) 940-5550 para soluciones tecnológicas rápidas y confiables.',
+  'seo.home.keywords': 'reparación de computadoras, soporte de TI, configuración de redes, Escondido CA, Condado de San Diego, TI empresarial, reparación de computadoras domésticas, soporte técnico',
+
+  'seo.services.title': 'Servicios de TI y Reparación de Computadoras | Configuración de Redes | Romero Tech Solutions',
+  'seo.services.description': 'Servicios integrales de TI que incluyen reparación de computadoras, configuración de redes, instalación de impresoras, eliminación de virus, recuperación de datos y optimización del sistema en el Condado de San Diego.',
+  'seo.services.keywords': 'servicios de TI, reparación de computadoras, configuración de redes, instalación de impresoras, eliminación de virus, recuperación de datos, optimización del sistema, Condado de San Diego',
+
+  'seo.pricing.title': 'Precios de Soporte de TI Asequibles | Tarifas Transparentes | Romero Tech Solutions',
+  'seo.pricing.description': 'Precios transparentes y asequibles para soporte profesional de TI. Horarios estándar y premium disponibles. Sirviendo hogares y empresas en el Condado de San Diego.',
+  'seo.pricing.keywords': 'precios de soporte de TI, costo de reparación de computadoras, soporte técnico asequible, tarifas por hora, Condado de San Diego',
+
+  'seo.about.title': 'Acerca de Nosotros | Más de 30 Años de Experiencia en TI | Romero Tech Solutions',
+  'seo.about.description': 'Conozca a Luis Romero: más de 30 años de experiencia en TI con antecedentes en seguridad cibernética de la Fuerza Aérea y el Ejército. De confianza para empresas Fortune 500 y negocios locales.',
+  'seo.about.keywords': 'experto en TI, técnico en computadoras, seguridad cibernética, experiencia militar, profesional de TI de San Diego',
+
+  'seo.contact.title': 'Contáctenos | Obtenga Soporte de TI Ahora | Romero Tech Solutions',
+  'seo.contact.description': 'Contacte a Romero Tech Solutions para soporte de TI rápido y confiable en el Condado de San Diego. Llame al (619) 940-5550 o envíe un correo a info@romerotechsolutions.com',
+  'seo.contact.keywords': 'contactar soporte de TI, reparación de computadoras cerca de mí, soporte técnico Escondido, ayuda de TI de emergencia',
+
+  'seo.og.siteName': 'Romero Tech Solutions',
+
+  // FAQ Content for Schema
+  'faq.q1': '¿Qué áreas cubren en el Condado de San Diego?',
+  'faq.a1': 'Servimos todo el Norte del Condado de San Diego, incluyendo Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon y Poway. Ofrecemos tanto visitas en sitio como soporte remoto según sus necesidades.',
+
+  'faq.q2': '¿Qué tan rápido pueden responder a problemas de TI de emergencia?',
+  'faq.a2': 'Para situaciones de emergencia, nos esforzamos por responder dentro de 2-4 horas durante el horario comercial. Ofrecemos horas de servicio premium y de emergencia, incluyendo noches y fines de semana. Llame al (619) 940-5550 para asistencia inmediata.',
+
+  'faq.q3': '¿Ofrecen soporte remoto o solo visitas en sitio?',
+  'faq.a3': 'Ofrecemos tanto solución de problemas remota como visitas de servicio en sitio. Muchos problemas se pueden resolver de forma remota, lo que le ahorra tiempo y dinero. Para problemas de hardware o problemas complejos de red, proporcionamos soporte en sitio.',
+
+  'faq.q4': '¿Con qué tipos de empresas trabajan?',
+  'faq.a4': 'Trabajamos con empresas de todos los tamaños, desde oficinas en casa hasta empresas Fortune 500. Con más de 30 años de experiencia, tenemos experiencia en sistemas empresariales, TI para pequeñas empresas y soporte técnico residencial.',
+
+  'faq.q5': '¿Proporcionan soporte en español?',
+  'faq.a5': '¡Sí! Proporcionamos soporte bilingüe completo tanto en inglés como en español. Nuestros técnicos hablan ambos idiomas con fluidez para servir mejor a nuestra diversa comunidad del Condado de San Diego.',
+
+  'faq.q6': '¿Cuáles son sus tarifas para soporte de TI?',
+  'faq.a6': 'Ofrecemos precios transparentes y competitivos con horarios estándar (Lun-Vie 8am-6pm) y horarios premium (noches y fines de semana). Visite nuestra página de precios o llámenos para una cotización detallada según sus necesidades específicas.'
 };

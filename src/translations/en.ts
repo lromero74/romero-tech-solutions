@@ -514,5 +514,47 @@ export const enTranslations = {
   'registration.errors.verificationCodeIncomplete': 'Please enter the complete 6-digit verification code',
   'registration.errors.verificationCodeInvalid': 'Invalid verification code. Please try again.',
   'registration.errors.sendVerificationFailed': 'Failed to send verification code. Please try again.',
-  'registration.errors.createAccountFailed': 'Failed to create account. Please try again.'
+  'registration.errors.createAccountFailed': 'Failed to create account. Please try again.',
+
+  // SEO Metadata
+  'seo.home.title': 'Professional IT Support & Computer Repair | Escondido, CA | Romero Tech Solutions',
+  'seo.home.description': 'Expert computer repair, network setup & IT support in Escondido, CA. 30+ years experience serving homes & businesses. Call (619) 940-5550 for fast, reliable tech solutions.',
+  'seo.home.keywords': 'computer repair, IT support, network setup, Escondido CA, San Diego County, business IT, home computer repair, tech support',
+
+  'seo.services.title': 'IT Services & Computer Repair | Network Setup | Romero Tech Solutions',
+  'seo.services.description': 'Comprehensive IT services including computer repair, network configuration, printer setup, virus removal, data recovery and system optimization in San Diego County.',
+  'seo.services.keywords': 'IT services, computer repair, network setup, printer installation, virus removal, data recovery, system optimization, San Diego County',
+
+  'seo.pricing.title': 'Affordable IT Support Pricing | Transparent Rates | Romero Tech Solutions',
+  'seo.pricing.description': 'Transparent, affordable pricing for professional IT support. Standard and premium hours available. Serving homes and businesses in San Diego County.',
+  'seo.pricing.keywords': 'IT support pricing, computer repair cost, affordable tech support, hourly rates, San Diego County',
+
+  'seo.about.title': 'About Us | 30+ Years IT Experience | Romero Tech Solutions',
+  'seo.about.description': 'Meet Luis Romero - 30+ years of IT expertise with Air Force and Army cyber security background. Trusted by Fortune 500 companies and local businesses.',
+  'seo.about.keywords': 'IT expert, computer technician, cyber security, military experience, San Diego IT professional',
+
+  'seo.contact.title': 'Contact Us | Get IT Support Now | Romero Tech Solutions',
+  'seo.contact.description': 'Contact Romero Tech Solutions for fast, reliable IT support in San Diego County. Call (619) 940-5550 or email info@romerotechsolutions.com',
+  'seo.contact.keywords': 'contact IT support, computer repair near me, tech support Escondido, emergency IT help',
+
+  'seo.og.siteName': 'Romero Tech Solutions',
+
+  // FAQ Content for Schema
+  'faq.q1': 'What areas do you serve in San Diego County?',
+  'faq.a1': 'We serve all of North San Diego County including Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, and Poway. We offer both on-site visits and remote support depending on your needs.',
+
+  'faq.q2': 'How quickly can you respond to emergency IT issues?',
+  'faq.a2': 'For emergency situations, we strive to respond within 2-4 hours during business hours. We offer premium and emergency service hours including evenings and weekends. Call (619) 940-5550 for immediate assistance.',
+
+  'faq.q3': 'Do you offer remote support or only on-site visits?',
+  'faq.a3': 'We offer both remote troubleshooting and on-site service visits. Many issues can be resolved remotely, which saves you time and money. For hardware issues or complex network problems, we provide on-site support.',
+
+  'faq.q4': 'What types of businesses do you work with?',
+  'faq.a4': 'We work with businesses of all sizes, from home offices to Fortune 500 companies. With over 30 years of experience, we have expertise in enterprise systems, small business IT, and residential tech support.',
+
+  'faq.q5': 'Do you provide support in Spanish?',
+  'faq.a5': 'Yes! We provide full bilingual support in both English and Spanish. Our technicians are fluent in both languages to better serve our diverse San Diego County community.',
+
+  'faq.q6': 'What are your rates for IT support?',
+  'faq.a6': 'We offer transparent, competitive pricing with standard hours (Mon-Fri 8am-6pm) and premium hours (evenings and weekends). Visit our pricing page or call us for a detailed quote based on your specific needs.'
 };

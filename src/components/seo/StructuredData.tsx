@@ -1,10 +1,12 @@
 import React from 'react';
+import { useLanguage } from '../../contexts/LanguageContext';
 
 interface StructuredDataProps {
   pageType?: 'home' | 'contact' | 'about' | 'services';
 }
 
 const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) => {
+  const { language, t } = useLanguage();
   const businessSchema = {
     "@context": "https://schema.org",
     "@type": "LocalBusiness",
@@ -159,7 +161,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
     "aggregateRating": {
       "@type": "AggregateRating",
       "ratingValue": "5.0",
-      "reviewCount": "1",
+      "reviewCount": "2",
       "bestRating": "5",
       "worstRating": "1"
     },
@@ -176,21 +178,42 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
           "bestRating": "5",
           "worstRating": "1"
         },
-        "reviewBody": "Romero Tech Solutions saved my business! When our network went down, they had us back online in 2 hours. Professional, fast, and reasonably priced.",
-        "datePublished": "2025-01-15"
+        "reviewBody": language === 'es'
+          ? "¡Romero Tech Solutions salvó mi negocio! Cuando nuestra red se cayó, nos pusieron en línea nuevamente en 2 horas. Profesional, rápido y con precios razonables."
+          : "Romero Tech Solutions saved my business! When our network went down, they had us back online in 2 hours. Professional, fast, and reasonably priced.",
+        "datePublished": "2025-01-15",
+        "inLanguage": language === 'es' ? 'es-US' : 'en-US'
+      },
+      {
+        "@type": "Review",
+        "author": {
+          "@type": "Person",
+          "name": "Carlos R."
+        },
+        "reviewRating": {
+          "@type": "Rating",
+          "ratingValue": "5",
+          "bestRating": "5",
+          "worstRating": "1"
+        },
+        "reviewBody": language === 'es'
+          ? "Excelente servicio bilingüe. Luis me ayudó a configurar mi red doméstica y explicó todo en español. Muy profesional y conocedor."
+          : "Excellent bilingual service. Luis helped me set up my home network and explained everything in Spanish. Very professional and knowledgeable.",
+        "datePublished": "2025-01-20",
+        "inLanguage": language === 'es' ? 'es-US' : 'en-US'
       }
     ],
     "logo": {
       "@type": "ImageObject",
       "url": "https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
-      "width": "40",
-      "height": "40"
+      "width": "1024",
+      "height": "1024"
     },
     "image": {
       "@type": "ImageObject",
       "url": "https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
-      "width": "40",
-      "height": "40"
+      "width": "1024",
+      "height": "1024"
     },
     "hasCredential": [
       {
@@ -276,6 +299,99 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
     "inLanguage": ["en-US", "es-US"]
   };
 
+  // FAQPage schema (bilingual based on current language)
+  const faqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "inLanguage": language === 'es' ? 'es-US' : 'en-US',
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": t('faq.q1' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a1' as any)
+        }
+      },
+      {
+        "@type": "Question",
+        "name": t('faq.q2' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a2' as any)
+        }
+      },
+      {
+        "@type": "Question",
+        "name": t('faq.q3' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a3' as any)
+        }
+      },
+      {
+        "@type": "Question",
+        "name": t('faq.q4' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a4' as any)
+        }
+      },
+      {
+        "@type": "Question",
+        "name": t('faq.q5' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a5' as any)
+        }
+      },
+      {
+        "@type": "Question",
+        "name": t('faq.q6' as any),
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": t('faq.a6' as any)
+        }
+      }
+    ]
+  };
+
+  // BreadcrumbList schema for navigation
+  const getBreadcrumbSchema = () => {
+    const breadcrumbItems = [
+      {
+        "@type": "ListItem",
+        "position": 1,
+        "name": language === 'es' ? 'Inicio' : 'Home',
+        "item": "https://romerotechsolutions.com/"
+      }
+    ];
+
+    // Add current page to breadcrumb if not home
+    if (pageType !== 'home') {
+      const pageNames = {
+        services: language === 'es' ? 'Servicios' : 'Services',
+        about: language === 'es' ? 'Acerca de' : 'About',
+        contact: language === 'es' ? 'Contacto' : 'Contact'
+      };
+
+      breadcrumbItems.push({
+        "@type": "ListItem",
+        "position": 2,
+        "name": pageNames[pageType as keyof typeof pageNames] || pageType,
+        "item": `https://romerotechsolutions.com/${pageType}`
+      });
+    }
+
+    return {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": breadcrumbItems
+    };
+  };
+
+  const breadcrumbSchema = getBreadcrumbSchema();
+
   return (
     <>
       <script
@@ -289,6 +405,14 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+      />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
       />
     </>
   );

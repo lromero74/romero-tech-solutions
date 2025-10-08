@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { LanguageProvider } from './contexts/LanguageContext';
+import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { EnhancedAuthProvider, useEnhancedAuth } from './contexts/EnhancedAuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { PermissionProvider } from './contexts/PermissionContext';
@@ -23,6 +23,7 @@ import ComingSoon from './pages/ComingSoon';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import { useVersionCheck } from './hooks/useVersionCheck';
+import { useSEO } from './hooks/useSEO';
 import './config/aws-config';
 // Development utility for clearing auth state
 import './utils/clearAuthState';
@@ -33,9 +34,13 @@ function AppContent() {
   );
 
   const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut } = useEnhancedAuth();
+  const { language, t } = useLanguage();
 
   // Automatically check for new versions and reload when deployed
   useVersionCheck();
+
+  // Manage SEO meta tags dynamically based on language and page
+  useSEO({ language, page: currentPage, t });
 
   // Get theme preference for loading states (before context is available)
   const getThemeClasses = () => {

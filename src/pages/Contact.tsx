@@ -136,8 +136,8 @@ const Contact: React.FC = () => {
         </div>
 
         {/* Main Content Container */}
-        <div className="relative z-10 w-full py-12 px-4 sm:px-6 lg:px-8">
-          <div className="max-w-7xl mx-auto space-y-16">
+        <div className="relative z-10 w-full py-12 px-3 sm:px-4 lg:px-6">
+          <div className="max-w-[1400px] mx-auto space-y-16">
 
             {/* Hero Section */}
             <div className="text-center">
