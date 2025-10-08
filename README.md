@@ -74,6 +74,34 @@ A comprehensive Managed Service Provider (MSP) platform for managing client rela
 
 ## 🚀 Quick Start
 
+### Option 1: Interactive Setup (Recommended)
+
+The easiest way to get started is using the interactive setup script:
+
+```bash
+git clone <your-repo-url>
+cd romero-tech-solutions
+./setup.sh
+```
+
+The script will guide you through:
+- Environment selection (development/production)
+- Database configuration
+- AWS service setup (Cognito, SES, Secrets Manager)
+- Domain configuration
+- Payment integration (Stripe)
+- SMS integration (Twilio - optional)
+- Push notifications (VAPID - optional)
+- Dependency installation
+- Database initialization
+- Initial admin user creation
+
+After completion, you'll have fully configured `.env` files and be ready to start development or deployment.
+
+### Option 2: Manual Setup
+
+If you prefer manual configuration or need more control:
+
 ### 1. Clone the Repository
 
 ```bash
