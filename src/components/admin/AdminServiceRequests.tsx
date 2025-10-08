@@ -313,7 +313,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
   useEffect(() => {
     if (!highlightUnacknowledged || serviceRequests.length === 0) return;
 
-    // Find unacknowledged service requests
+    // Find unacknowledged service requests at the moment bell was clicked
     const unackRequests = serviceRequests.filter(sr =>
       !sr.softDelete &&
       (sr.status?.toLowerCase() === 'pending' || sr.status?.toLowerCase() === 'submitted') &&
@@ -324,7 +324,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
 
     if (unackIds.length === 0) return;
 
-    console.log('🔔 Highlighting unacknowledged requests:', unackIds.length);
+    console.log('🔔 Highlighting unacknowledged requests:', unackIds.length, unackIds);
     setHighlightedRequestIds(unackIds);
 
     // Clear highlighting after 3 seconds
@@ -334,11 +334,13 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     }, 3000);
 
     // Acknowledge requests after 5 seconds to remove badge
+    // IMPORTANT: Capture the IDs at this moment, don't re-evaluate later
+    const idsToAcknowledge = [...unackIds];
     const acknowledgeTimer = setTimeout(async () => {
-      console.log('🔔 Auto-acknowledging requests to remove badge');
+      console.log('🔔 Auto-acknowledging requests to remove badge:', idsToAcknowledge);
       try {
         await Promise.all(
-          unackIds.map(async (requestId) => {
+          idsToAcknowledge.map(async (requestId) => {
             await apiService.put(`/admin/service-requests/${requestId}/acknowledge`);
           })
         );
@@ -352,7 +354,10 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
       clearTimeout(highlightTimer);
       clearTimeout(acknowledgeTimer);
     };
-  }, [highlightUnacknowledged, serviceRequests, user]);
+    // IMPORTANT: Only depend on highlightUnacknowledged, NOT serviceRequests
+    // This ensures the effect only runs when the bell is clicked, not when service requests update
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlightUnacknowledged]);
 
   // Fetch filter presets on mount (not cached yet)
   useEffect(() => {
