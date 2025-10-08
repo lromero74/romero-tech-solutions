@@ -43,11 +43,19 @@ interface PricingData {
 }
 
 // Helper to generate schedule from database slots
-const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string): string => {
+const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string, t: (key: string) => string): string => {
   const tierSlots = schedule.filter(slot => slot.tierName === tierName);
   if (tierSlots.length === 0) return '';
 
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const dayNames = [
+    t('common.days.sun'),
+    t('common.days.mon'),
+    t('common.days.tue'),
+    t('common.days.wed'),
+    t('common.days.thu'),
+    t('common.days.fri'),
+    t('common.days.sat')
+  ];
 
   // Convert each day's UTC range to local time
   interface LocalBlock {
@@ -345,8 +353,8 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
   const emergencyTier = pricingData?.tiers.find(tier => tier.name === 'Emergency');
 
   // Generate schedule descriptions for each tier
-  const standardSchedule = pricingData?.schedule ? generateScheduleFromSummary(pricingData.schedule, 'Standard') : '';
-  const premiumSchedule = pricingData?.schedule ? generateScheduleFromSummary(pricingData.schedule, 'Premium') : '';
+  const standardSchedule = pricingData?.schedule ? generateScheduleFromSummary(pricingData.schedule, 'Standard', t) : '';
+  const premiumSchedule = pricingData?.schedule ? generateScheduleFromSummary(pricingData.schedule, 'Premium', t) : '';
   // Emergency is just "all other times" - no need to show specific schedule
   const emergencySchedule = t('pricing.tiers.emergency.allOtherTimes');
 
@@ -490,7 +498,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
               {/* Disclaimer */}
               <div className="text-center mt-6">
                 <p className="text-sm text-blue-300/80">
-                  * Rates are subject to change. Rate tier categories are based on PST operating hours.
+                  {t('pricing.disclaimer')}
                 </p>
               </div>
             </div>
@@ -558,7 +566,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                 {/* Disclaimer */}
                 <div className="text-center mt-6">
                   <p className="text-sm text-blue-300/80">
-                    * Rates are subject to change. Rate tier categories are based on PST operating hours.
+                    {t('pricing.disclaimer')}
                   </p>
                 </div>
               </div>

@@ -148,6 +148,8 @@ export const esTranslations = {
   'pricing.policies.transparent.title': 'Sin Cargos Ocultos',
   'pricing.policies.transparent.description': 'Todos los costos se discuten por adelantado. Sin sorpresas en su factura.',
 
+  'pricing.disclaimer': '* Las tarifas están sujetas a cambios. Las categorías de niveles de tarifas se basan en el horario de operación PST.',
+
   'pricing.cta.title': '¿Listo para Comenzar?',
   'pricing.cta.subtitle': 'Contáctenos hoy para una consulta gratuita y experimente la diferencia del servicio de TI transparente y profesional.',
   'pricing.cta.signupButton': 'Regístrese Ahora',
@@ -400,6 +402,13 @@ export const esTranslations = {
   'common.phone': '(619) 940-5550',
   'common.email': 'info@romerotechsolutions.com',
   'common.loading': 'Cargando...',
+  'common.days.sun': 'Dom',
+  'common.days.mon': 'Lun',
+  'common.days.tue': 'Mar',
+  'common.days.wed': 'Mié',
+  'common.days.thu': 'Jue',
+  'common.days.fri': 'Vie',
+  'common.days.sat': 'Sáb',
   'common.yearsExperience': 'Años de Experiencia',
   'common.satisfactionRate': 'Tasa de Satisfacción',
   'common.emergencySupport': 'Soporte de Emergencia',
