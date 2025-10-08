@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight, LogIn } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
@@ -6,6 +6,14 @@ import StructuredData from '../components/seo/StructuredData';
 
 const Home: React.FC = () => {
   const { t } = useLanguage();
+
+  // Memoize boundaries to prevent infinite re-renders
+  const boundaries = useMemo(() => ({
+    left: 0,
+    top: 0,
+    right: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    bottom: typeof window !== 'undefined' ? window.innerHeight : 2000
+  }), []);
 
   return (
     <div className="min-h-screen">
@@ -42,12 +50,7 @@ const Home: React.FC = () => {
 
         {/* Particle Background */}
         <div className="absolute inset-0 w-full h-full">
-          <ParticleBackground boundaries={{
-            left: 0,
-            top: 0,
-            right: typeof window !== 'undefined' ? window.innerWidth : 1920,
-            bottom: typeof window !== 'undefined' ? Math.max(window.innerHeight, document.documentElement.scrollHeight) : 2000
-          }} />
+          <ParticleBackground boundaries={boundaries} />
         </div>
 
         {/* Main Content Container */}
