@@ -207,7 +207,7 @@ router.get('/service-requests', async (req, res) => {
     console.log('📊 [Service Requests] Total count:', totalCount);
 
     // Helper function to calculate cost with tier breakdown
-    const calculateCost = async (date, timeStart, timeEnd, businessId, clientId, durationMinutes = null) => {
+    const calculateCost = async (date, timeStart, timeEnd, businessId, clientId, createdAt, durationMinutes = null) => {
       if (!date || !timeStart || (!timeEnd && !durationMinutes)) {
         return null;
       }
@@ -225,17 +225,19 @@ router.get('/service-requests', async (req, res) => {
         const rateResult = await pool.query(rateQuery, [businessId]);
         const baseRate = rateResult.rows[0]?.base_hourly_rate || 75;
 
-        // Check if client has any completed (Closed) service requests
-        // First-hour comp should only apply to first COMPLETED service request, not cancelled ones
-        const completedRequestCheck = await pool.query(`
-          SELECT COUNT(*) as completed_count
+        // Check if this is the first non-cancelled service request for this client
+        // First-hour comp applies to the first service request that isn't cancelled
+        // If all previous requests were cancelled, a new request can still get the comp
+        const previousNonCancelledCheck = await pool.query(`
+          SELECT COUNT(*) as count
           FROM service_requests sr
           JOIN service_request_statuses srs ON sr.status_id = srs.id
           WHERE sr.client_id = $1
             AND sr.soft_delete = false
-            AND srs.name = 'Closed'
-        `, [clientId]);
-        const isFirstRequest = parseInt(completedRequestCheck.rows[0].completed_count) === 0;
+            AND sr.created_at < $2
+            AND srs.name != 'Cancelled'
+        `, [clientId, createdAt]);
+        const isFirstRequest = parseInt(previousNonCancelledCheck.rows[0].count) === 0;
 
         // Parse times
         const [startHour, startMin] = timeStart.split(':').map(Number);
@@ -266,9 +268,9 @@ router.get('/service-requests', async (req, res) => {
         const endHour = Math.floor(totalMinutes / 60) % 24;
         const endMin = totalMinutes % 60;
 
-        // Get day of week
-        const requestDate = new Date(date);
-        const dayOfWeek = requestDate.getDay();
+        // Get day of week (in UTC to match tier times)
+        const requestDate = new Date(date + 'T00:00:00Z');
+        const dayOfWeek = requestDate.getUTCDay();
 
         // Load rate tiers
         const tiersQuery = `
@@ -286,10 +288,13 @@ router.get('/service-requests', async (req, res) => {
           const matchingTier = rateTiers.find(tier =>
             timeString >= tier.time_start && timeString < tier.time_end
           );
-          return matchingTier ? {
+          const result = matchingTier ? {
             tierName: matchingTier.tier_name,
             multiplier: parseFloat(matchingTier.rate_multiplier)
           } : { tierName: 'Standard', multiplier: 1.0 };
+
+          console.log(`🔍 Tier lookup: ${timeString} (${hour}:${minute}) → ${result.tierName} @ ${result.multiplier}x`);
+          return result;
         };
 
         // Calculate cost by 30-minute increments
@@ -389,16 +394,24 @@ router.get('/service-requests', async (req, res) => {
           // Extract date in YYYY-MM-DD format
           costDate = startDateTime.toISOString().split('T')[0];
 
-          // Extract time in HH:MM:SS format
+          // Extract time in HH:MM:SS format (UTC - matches database tier times)
           const formatTime = (date) => {
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
             return `${hours}:${minutes}:${seconds}`;
           };
 
           costTimeStart = formatTime(startDateTime);
           costTimeEnd = formatTime(endDateTime);
+
+          console.log(`🕐 [SR-${row.request_number}] Calculating cost:`, {
+            utc_datetime: startDateTime.toISOString(),
+            utc_hours: startDateTime.getUTCHours(),
+            costTimeStart,
+            costTimeEnd,
+            costDate
+          });
         }
 
         const costInfo = await calculateCost(
@@ -407,6 +420,7 @@ router.get('/service-requests', async (req, res) => {
           costTimeEnd,
           row.business_id,
           row.client_id,
+          row.created_at,
           row.requested_duration_minutes // Pass duration to avoid recalculating
         );
 
@@ -535,20 +549,22 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     const clientId = srResult.rows[0].client_id;
     const baseRate = parseFloat(srResult.rows[0].base_hourly_rate) || 75.00;
 
-    // Check if this is the client's first COMPLETED service request
-    // Only count "Closed" status (not "Cancelled") that were created before this one
-    const completedRequestsQuery = `
+    // Check if this is the client's first non-cancelled service request
+    // First-hour comp applies to the first service request that isn't cancelled
+    // If all previous requests were cancelled, a new request can still get the comp
+    const previousNonCancelledQuery = `
       SELECT COUNT(*) as count
       FROM service_requests sr
       JOIN service_request_statuses srs ON sr.status_id = srs.id
       WHERE sr.client_id = $1
-        AND srs.name = 'Closed'
+        AND sr.soft_delete = false
+        AND srs.name != 'Cancelled'
         AND sr.created_at < (
           SELECT created_at FROM service_requests WHERE id = $2
         )
     `;
-    const completedResult = await pool.query(completedRequestsQuery, [clientId, id]);
-    const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
+    const previousResult = await pool.query(previousNonCancelledQuery, [clientId, id]);
+    const isFirstServiceRequest = parseInt(previousResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
     // Round start time DOWN to nearest 5 minutes, end time UP to nearest 30 minutes
@@ -1792,9 +1808,9 @@ const calculateCost = async (pool, date, timeStart, timeEnd, baseRate, isFirstRe
   const endMinutes = endHour * 60 + endMin;
   const durationHours = (endMinutes - startMinutes) / 60;
 
-  // Get day of week from date
-  const requestDate = new Date(date);
-  const dayOfWeek = requestDate.getDay();
+  // Get day of week from date (in UTC to match tier times)
+  const requestDate = new Date(date + 'T00:00:00Z');
+  const dayOfWeek = requestDate.getUTCDay();
 
   // Load rate tiers for this day
   const tiersQuery = `
@@ -2061,20 +2077,22 @@ router.put('/service-requests/:id/close', async (req, res) => {
     const businessId = srResult.rows[0].business_id;
     const clientId = srResult.rows[0].client_id;
 
-    // Check if this is the client's first COMPLETED service request
-    // Only count "Closed" status (not "Cancelled") that were created before this one
-    const completedRequestsQuery = `
+    // Check if this is the client's first non-cancelled service request
+    // First-hour comp applies to the first service request that isn't cancelled
+    // If all previous requests were cancelled, a new request can still get the comp
+    const previousNonCancelledQuery = `
       SELECT COUNT(*) as count
       FROM service_requests sr
       JOIN service_request_statuses srs ON sr.status_id = srs.id
       WHERE sr.client_id = $1
-        AND srs.name = 'Closed'
+        AND sr.soft_delete = false
+        AND srs.name != 'Cancelled'
         AND sr.created_at < (
           SELECT created_at FROM service_requests WHERE id = $2
         )
     `;
-    const completedResult = await pool.query(completedRequestsQuery, [clientId, id]);
-    const isFirstServiceRequest = parseInt(completedResult.rows[0].count) === 0;
+    const previousResult = await pool.query(previousNonCancelledQuery, [clientId, id]);
+    const isFirstServiceRequest = parseInt(previousResult.rows[0].count) === 0;
 
     // Get all time entries for this service request (including active ones)
     // Round start time DOWN to nearest 5 minutes, end time UP to nearest 30 minutes
@@ -2246,9 +2264,9 @@ router.put('/service-requests/:id/close', async (req, res) => {
       const endDateTime = new Date(startDateTime.getTime() + serviceRequest.requested_duration_minutes * 60000);
 
       const formatTime = (date) => {
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        const seconds = String(date.getSeconds()).padStart(2, '0');
+        const hours = String(date.getUTCHours()).padStart(2, '0');
+        const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+        const seconds = String(date.getUTCSeconds()).padStart(2, '0');
         return `${hours}:${minutes}:${seconds}`;
       };
 

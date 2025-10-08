@@ -489,18 +489,22 @@ router.get('/', async (req, res) => {
       console.error('Error fetching base hourly rate, using fallback:', error);
     }
 
-    // Check if client has any completed (Closed) service requests
-    // First-hour comp should only apply to first COMPLETED service request, not cancelled ones
-    const completedServiceRequestCheck = await pool.query(`
-      SELECT COUNT(*) as completed_count
-      FROM service_requests sr
-      JOIN service_request_statuses srs ON sr.status_id = srs.id
-      WHERE sr.client_id = $1
-        AND sr.soft_delete = false
-        AND srs.name = 'Closed'
-    `, [clientId]);
+    // Helper to check if a service request is the first non-cancelled one for this client
+    // First-hour comp applies to the first service request that isn't cancelled
+    // If all previous requests were cancelled, a new request can still get the comp
+    const isFirstNonCancelledRequest = async (requestId, requestCreatedAt) => {
+      const previousNonCancelledCheck = await pool.query(`
+        SELECT COUNT(*) as count
+        FROM service_requests sr
+        JOIN service_request_statuses srs ON sr.status_id = srs.id
+        WHERE sr.client_id = $1
+          AND sr.soft_delete = false
+          AND sr.created_at < $2
+          AND srs.name != 'Cancelled'
+      `, [clientId, requestCreatedAt]);
 
-    const isFirstServiceRequest = parseInt(completedServiceRequestCheck.rows[0].completed_count) === 0;
+      return parseInt(previousNonCancelledCheck.rows[0].count) === 0;
+    };
 
     // Helper function to calculate estimated cost with first-hour waiver for new clients
     const calculateCost = async (date, timeStart, timeEnd, baseRate, isFirstRequest, categoryName) => {
@@ -515,9 +519,9 @@ router.get('/', async (req, res) => {
       const endMinutes = endHour * 60 + endMin;
       const durationHours = (endMinutes - startMinutes) / 60;
 
-      // Get day of week from date
-      const requestDate = new Date(date);
-      const dayOfWeek = requestDate.getDay();
+      // Get day of week from date (in UTC to match tier times)
+      const requestDate = new Date(date + 'T00:00:00Z');
+      const dayOfWeek = requestDate.getUTCDay();
 
       // Load rate tiers for this day
       const tiersQuery = `
@@ -535,10 +539,13 @@ router.get('/', async (req, res) => {
         const matchingTier = rateTiers.find(tier =>
           timeString >= tier.time_start && timeString < tier.time_end
         );
-        return matchingTier ? {
+        const result = matchingTier ? {
           tierName: matchingTier.tier_name,
           multiplier: parseFloat(matchingTier.rate_multiplier)
         } : { tierName: 'Standard', multiplier: 1.0 };
+
+        console.log(`🔍 [CLIENT] Tier lookup: ${timeString} → ${result.tierName} @ ${result.multiplier}x`);
+        return result;
       };
 
       // Calculate cost by 30-minute increments
@@ -631,6 +638,9 @@ router.get('/', async (req, res) => {
     // Calculate costs for all service requests
     const serviceRequestsWithCosts = await Promise.all(
       result.rows.map(async (row) => {
+        // Check if this is the first non-cancelled request for comp eligibility
+        const isFirstRequest = await isFirstNonCancelledRequest(row.id, row.created_at);
+
         // Calculate cost using business-specific rate from rate category
         let costDate, costTimeStart, costTimeEnd;
 
@@ -642,16 +652,25 @@ router.get('/', async (req, res) => {
           // Extract date in YYYY-MM-DD format
           costDate = startDateTime.toISOString().split('T')[0];
 
-          // Extract time in HH:MM:SS format
+          // Extract time in HH:MM:SS format (UTC - matches database tier times)
           const formatTime = (date) => {
-            const hours = String(date.getHours()).padStart(2, '0');
-            const minutes = String(date.getMinutes()).padStart(2, '0');
-            const seconds = String(date.getSeconds()).padStart(2, '0');
+            const hours = String(date.getUTCHours()).padStart(2, '0');
+            const minutes = String(date.getUTCMinutes()).padStart(2, '0');
+            const seconds = String(date.getUTCSeconds()).padStart(2, '0');
             return `${hours}:${minutes}:${seconds}`;
           };
 
           costTimeStart = formatTime(startDateTime);
           costTimeEnd = formatTime(endDateTime);
+
+          console.log(`🕐 [CLIENT] SR cost calc:`, {
+            request_number: row.request_number,
+            utc_datetime: startDateTime.toISOString(),
+            utc_hours: startDateTime.getUTCHours(),
+            costTimeStart,
+            costTimeEnd,
+            isFirstRequest
+          });
         }
 
         const costInfo = costDate && costTimeStart && costTimeEnd ? await calculateCost(
@@ -659,7 +678,7 @@ router.get('/', async (req, res) => {
           costTimeStart,
           costTimeEnd,
           baseHourlyRate,
-          isFirstServiceRequest,
+          isFirstRequest,
           rateCategoryName
         ) : null;
 
