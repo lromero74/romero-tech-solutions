@@ -2381,6 +2381,67 @@ router.patch('/:id/reschedule', async (req, res) => {
       // Don't fail the request if WebSocket fails
     }
 
+    // Send push notification to employees
+    const sendReschedulePushNotification = async () => {
+      try {
+        console.log(`🔔 [Reschedule] Starting push notification process for ${updatedRequest.request_number}`);
+
+        // Get business name for notification
+        const businessQuery = await pool.query(
+          'SELECT business_name FROM businesses WHERE id = $1',
+          [businessId]
+        );
+        const businessName = businessQuery.rows[0]?.business_name || 'Unknown Business';
+
+        // Format datetime for notification
+        const dateObj = new Date(updatedRequest.requested_datetime);
+        const dateStr = dateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+
+        const notificationData = {
+          title: '📅 Service Request Rescheduled',
+          body: `${businessName} rescheduled ${updatedRequest.title || 'Service Request'} #${updatedRequest.request_number} to ${dateStr}`,
+          icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          vibrate: [200, 100, 200],
+          requireInteraction: false,
+          tag: `service-request-reschedule-${id}`,
+          renotify: true,
+          data: {
+            type: 'service_request_rescheduled',
+            serviceRequestId: id,
+            requestNumber: updatedRequest.request_number,
+            businessId: businessId,
+            businessName: businessName,
+            title: updatedRequest.title || 'Service Request',
+            requestedDatetime: updatedRequest.requested_datetime,
+            requestedDurationMinutes: updatedRequest.requested_duration_minutes,
+            timestamp: Date.now(),
+            url: `/admin/service-requests/${id}`
+          }
+        };
+
+        console.log(`🔔 [Reschedule] Calling sendNotificationToEmployees for ${updatedRequest.request_number}`);
+        const result = await sendNotificationToEmployees(
+          'service_request_updated',
+          notificationData,
+          'view.service_requests.enable'
+        );
+        console.log(`✅ [Reschedule] Push notification result for ${updatedRequest.request_number}:`, result);
+      } catch (notificationError) {
+        console.error(`⚠️ [Reschedule] Failed to send push notification for ${updatedRequest.request_number}:`, notificationError);
+        // Don't fail the request if notification fails
+      }
+    };
+
+    // Send push notification asynchronously
+    sendReschedulePushNotification();
+
     res.json({
       success: true,
       message: 'Service request rescheduled successfully',

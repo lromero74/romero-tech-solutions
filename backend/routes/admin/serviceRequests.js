@@ -10,6 +10,7 @@ import { websocketService } from '../../services/websocketService.js';
 import filterPresetService from '../../services/filterPresetService.js';
 import virusScanService from '../../services/virusScanService.js';
 import quotaManagementService from '../../services/quotaManagementService.js';
+import { sendNotificationToEmployees, sendNotificationToUser } from '../pushRoutes.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -3580,6 +3581,132 @@ router.patch('/service-requests/:id/reschedule', async (req, res) => {
       console.error('Failed to send WebSocket notification:', wsError);
       // Don't fail the request if WebSocket fails
     }
+
+    // Send push notification to employees
+    const sendReschedulePushNotification = async () => {
+      try {
+        console.log(`🔔 [Admin Reschedule] Starting push notification process for ${updatedRequest.request_number}`);
+
+        // Get service request details for notification
+        const detailsQuery = await pool.query(`
+          SELECT
+            sr.business_id,
+            b.business_name
+          FROM service_requests sr
+          LEFT JOIN businesses b ON sr.business_id = b.id
+          WHERE sr.id = $1
+        `, [id]);
+
+        const businessName = detailsQuery.rows[0]?.business_name || 'Unknown Business';
+
+        // Format datetime for notification
+        const dateObj = new Date(updatedRequest.requested_datetime);
+        const dateStr = dateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+
+        const notificationData = {
+          title: '📅 Service Request Rescheduled (Admin)',
+          body: `Admin rescheduled ${updatedRequest.title || 'Service Request'} #${updatedRequest.request_number} (${businessName}) to ${dateStr}`,
+          icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          vibrate: [200, 100, 200],
+          requireInteraction: false,
+          tag: `service-request-reschedule-${id}`,
+          renotify: true,
+          data: {
+            type: 'service_request_rescheduled',
+            serviceRequestId: id,
+            requestNumber: updatedRequest.request_number,
+            businessName: businessName,
+            title: updatedRequest.title || 'Service Request',
+            requestedDatetime: updatedRequest.requested_datetime,
+            requestedDurationMinutes: updatedRequest.requested_duration_minutes,
+            timestamp: Date.now(),
+            url: `/admin/service-requests/${id}`
+          }
+        };
+
+        console.log(`🔔 [Admin Reschedule] Calling sendNotificationToEmployees for ${updatedRequest.request_number}`);
+        const result = await sendNotificationToEmployees(
+          'service_request_updated',
+          notificationData,
+          'view.service_requests.enable'
+        );
+        console.log(`✅ [Admin Reschedule] Push notification result for ${updatedRequest.request_number}:`, result);
+      } catch (notificationError) {
+        console.error(`⚠️ [Admin Reschedule] Failed to send push notification for ${updatedRequest.request_number}:`, notificationError);
+        // Don't fail the request if notification fails
+      }
+    };
+
+    // Send push notification asynchronously
+    sendReschedulePushNotification();
+
+    // Also send push notification to the client
+    const sendClientPushNotification = async () => {
+      try {
+        console.log(`🔔 [Admin Reschedule] Starting client push notification for ${updatedRequest.request_number}`);
+
+        // Get client ID for this service request
+        const clientQuery = await pool.query(`
+          SELECT client_id, business_id
+          FROM service_requests
+          WHERE id = $1
+        `, [id]);
+
+        const clientId = clientQuery.rows[0]?.client_id;
+        if (!clientId) {
+          console.log(`⚠️ [Admin Reschedule] No client ID found for ${updatedRequest.request_number}`);
+          return;
+        }
+
+        // Format datetime for notification
+        const dateObj = new Date(updatedRequest.requested_datetime);
+        const dateStr = dateObj.toLocaleDateString('en-US', {
+          weekday: 'short',
+          month: 'short',
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit'
+        });
+
+        const clientNotificationData = {
+          title: '📅 Service Request Rescheduled',
+          body: `Your service request "${updatedRequest.title || 'Service Request'}" #${updatedRequest.request_number} has been rescheduled to ${dateStr}`,
+          icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+          vibrate: [200, 100, 200],
+          requireInteraction: false,
+          tag: `service-request-reschedule-client-${id}`,
+          renotify: true,
+          data: {
+            type: 'service_request_rescheduled',
+            serviceRequestId: id,
+            requestNumber: updatedRequest.request_number,
+            title: updatedRequest.title || 'Service Request',
+            requestedDatetime: updatedRequest.requested_datetime,
+            requestedDurationMinutes: updatedRequest.requested_duration_minutes,
+            timestamp: Date.now(),
+            url: `/service-requests/${id}`
+          }
+        };
+
+        console.log(`🔔 [Admin Reschedule] Calling sendNotificationToUser for client ${clientId}`);
+        const result = await sendNotificationToUser(clientId, clientNotificationData, false);
+        console.log(`✅ [Admin Reschedule] Client push notification result for ${updatedRequest.request_number}:`, result);
+      } catch (notificationError) {
+        console.error(`⚠️ [Admin Reschedule] Failed to send client push notification for ${updatedRequest.request_number}:`, notificationError);
+        // Don't fail the request if notification fails
+      }
+    };
+
+    // Send client push notification asynchronously
+    sendClientPushNotification();
 
     res.json({
       success: true,
