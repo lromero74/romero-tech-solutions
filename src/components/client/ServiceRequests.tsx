@@ -1176,6 +1176,9 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           }}
           onReschedule={handleConfirmReschedule}
           businessId={authUser?.businessId || ''}
+          isDarkMode={isDarkMode}
+          t={t}
+          language={language}
         />
       )}
 

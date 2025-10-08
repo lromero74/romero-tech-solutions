@@ -1249,6 +1249,9 @@ const ServiceScheduler: React.FC = () => {
           onTierPreferenceChange={setTierPreference}
           suggestedStartTime={suggestedStartTime}
           suggestedEndTime={suggestedEndTime}
+          isDarkMode={isDarkMode}
+          t={t}
+          language={language}
         />
       )}
     </div>

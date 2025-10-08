@@ -12,6 +12,7 @@ export interface ServiceRequest {
   priority: string;
   priority_color: string;
   service_type: string;
+  business_id?: string;
   business_name: string;
   is_individual: boolean;
   location_name: string;

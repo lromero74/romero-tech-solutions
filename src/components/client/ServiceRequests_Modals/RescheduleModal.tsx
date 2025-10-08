@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import { Sparkles, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useClientTheme } from '../../../contexts/ClientThemeContext';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 import { apiService } from '../../../services/apiService';
 import ResourceTimeSlotScheduler from '../ResourceTimeSlotScheduler';
 import { ServiceRequest } from './types';
@@ -33,16 +31,20 @@ interface RescheduleModalProps {
   onClose: () => void;
   onReschedule: (requestId: string, newDateTime: Date, durationMinutes: number, costBreakdown?: CostBreakdown) => Promise<void>;
   businessId: string;
+  isDarkMode?: boolean;
+  t?: (key: string, params?: any, fallback?: string) => string;
+  language?: string;
 }
 
 const RescheduleModal: React.FC<RescheduleModalProps> = ({
   serviceRequest,
   onClose,
   onReschedule,
-  businessId
+  businessId,
+  isDarkMode = false,
+  t = (key: string, params?: any, fallback?: string) => fallback || key,
+  language = 'en'
 }) => {
-  const { isDarkMode } = useClientTheme();
-  const { t, language } = useClientLanguage();
 
   const [showTimeSlotScheduler, setShowTimeSlotScheduler] = useState(false);
   const [currentDate, setCurrentDate] = useState(new Date());
@@ -390,6 +392,9 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
           onTierPreferenceChange={setTierPreference}
           suggestedStartTime={suggestedStartTime}
           suggestedEndTime={suggestedEndTime}
+          isDarkMode={isDarkMode}
+          t={t}
+          language={language}
         />
       )}
     </>

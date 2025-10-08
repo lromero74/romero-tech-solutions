@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useClientTheme } from '../../contexts/ClientThemeContext';
-import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { apiService } from '../../services/apiService';
 import { getUserTimezone, getTimezoneDisplayName } from '../../utils/timezoneUtils';
@@ -71,6 +69,9 @@ interface ResourceTimeSlotSchedulerProps {
   onTierPreferenceChange?: (preference: 'any' | 'standard' | 'premium' | 'emergency') => void;
   suggestedStartTime?: Date | null;
   suggestedEndTime?: Date | null;
+  isDarkMode?: boolean;
+  t?: (key: string, params?: any, fallback?: string) => string;
+  language?: string;
 }
 
 const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
@@ -84,10 +85,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   onDurationChange,
   onTierPreferenceChange,
   suggestedStartTime = null,
-  suggestedEndTime = null
+  suggestedEndTime = null,
+  isDarkMode = false,
+  t = (key: string, params?: any, fallback?: string) => fallback || key,
+  language = 'en'
 }) => {
-  const { isDarkMode } = useClientTheme();
-  const { t, language } = useClientLanguage();
 
   // Helper function to capitalize Spanish date strings
   const formatDateString = (date: Date, locale: string, options: Intl.DateTimeFormatOptions): string => {
