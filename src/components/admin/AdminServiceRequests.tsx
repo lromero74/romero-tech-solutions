@@ -57,6 +57,7 @@ interface AdminServiceRequestsProps {
   onRefresh?: () => Promise<void>;
   refreshTechnicians?: (force?: boolean) => Promise<void>;
   refreshServiceRequestStatuses?: (force?: boolean) => Promise<void>;
+  highlightUnacknowledged?: boolean;
 }
 
 const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
@@ -66,7 +67,8 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
   closureReasons: propsClosureReasons = [],
   loading: propsLoading = false,
   refreshTechnicians,
-  refreshServiceRequestStatuses
+  refreshServiceRequestStatuses,
+  highlightUnacknowledged = false
 }) => {
   const { isDark } = useTheme();
   const { user } = useEnhancedAuth();
@@ -152,6 +154,9 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
 
   // Presence tracking
   const [otherViewers, setOtherViewers] = useState<Array<{userId: string; userName: string; userType: string}>>([]);
+
+  // Highlighting unacknowledged requests
+  const [highlightedRequestIds, setHighlightedRequestIds] = useState<string[]>([]);
 
   // File upload with progress
   const {
@@ -303,6 +308,51 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     setServiceRequests(propsServiceRequests);
     setLoading(false);
   }, [propsServiceRequests]);
+
+  // Handle highlighting of unacknowledged requests when navigating from notification bell
+  useEffect(() => {
+    if (!highlightUnacknowledged || serviceRequests.length === 0) return;
+
+    // Find unacknowledged service requests
+    const unackRequests = serviceRequests.filter(sr =>
+      !sr.softDelete &&
+      (sr.status?.toLowerCase() === 'pending' || sr.status?.toLowerCase() === 'submitted') &&
+      !sr.acknowledgedByEmployeeId
+    );
+
+    const unackIds = unackRequests.map(sr => sr.id);
+
+    if (unackIds.length === 0) return;
+
+    console.log('🔔 Highlighting unacknowledged requests:', unackIds.length);
+    setHighlightedRequestIds(unackIds);
+
+    // Clear highlighting after 3 seconds
+    const highlightTimer = setTimeout(() => {
+      console.log('🔔 Clearing highlight animation');
+      setHighlightedRequestIds([]);
+    }, 3000);
+
+    // Acknowledge requests after 5 seconds to remove badge
+    const acknowledgeTimer = setTimeout(async () => {
+      console.log('🔔 Auto-acknowledging requests to remove badge');
+      try {
+        await Promise.all(
+          unackIds.map(async (requestId) => {
+            await apiService.put(`/admin/service-requests/${requestId}/acknowledge`);
+          })
+        );
+        console.log('✅ Successfully acknowledged requests, badge should disappear');
+      } catch (error) {
+        console.error('❌ Failed to auto-acknowledge requests:', error);
+      }
+    }, 5000);
+
+    return () => {
+      clearTimeout(highlightTimer);
+      clearTimeout(acknowledgeTimer);
+    };
+  }, [highlightUnacknowledged, serviceRequests, user]);
 
   // Fetch filter presets on mount (not cached yet)
   useEffect(() => {
@@ -1560,6 +1610,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
               formatDate={formatDate}
               formatTime={formatTime}
               getStatusIcon={getStatusIcon}
+              highlightedRequestIds={highlightedRequestIds}
             />
 
             {/* Mobile Card View */}
@@ -1574,6 +1625,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
               getMapUrl={getMapUrl}
               formatPhone={formatPhone}
               getStatusIcon={getStatusIcon}
+              highlightedRequestIds={highlightedRequestIds}
             />
 
             {/* Pagination */}

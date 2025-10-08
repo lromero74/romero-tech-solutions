@@ -14,6 +14,7 @@ interface ServiceRequestsMobileViewProps {
   getMapUrl: (locationDetails: ServiceRequest['locationDetails']) => string;
   formatPhone: (phone: string | null | undefined) => string;
   getStatusIcon: (status: string) => JSX.Element;
+  highlightedRequestIds?: string[];
 }
 
 const ServiceRequestsMobileView: React.FC<ServiceRequestsMobileViewProps> = ({
@@ -26,15 +27,20 @@ const ServiceRequestsMobileView: React.FC<ServiceRequestsMobileViewProps> = ({
   formatFullAddress,
   getMapUrl,
   formatPhone,
-  getStatusIcon
+  getStatusIcon,
+  highlightedRequestIds = []
 }) => {
   return (
     <div className="md:hidden space-y-4">
-      {requests.map((request) => (
+      {requests.map((request) => {
+        const isHighlighted = highlightedRequestIds.includes(request.id);
+        return (
         <div
           key={request.id}
           onClick={() => onViewRequest(request)}
-          className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-4 ${themeClasses.bg.hover} transition-colors cursor-pointer`}
+          className={`${themeClasses.bg.card} ${themeClasses.border.primary} border rounded-lg p-4 ${themeClasses.bg.hover} transition-colors cursor-pointer ${
+            isHighlighted ? 'ring-4 ring-blue-500 ring-opacity-75 animate-pulse' : ''
+          }`}
         >
           {/* Request Number and Status */}
           <div className="flex items-start justify-between mb-3">
@@ -163,7 +169,8 @@ const ServiceRequestsMobileView: React.FC<ServiceRequestsMobileViewProps> = ({
             )}
           </div>
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 };

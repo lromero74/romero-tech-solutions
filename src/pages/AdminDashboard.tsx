@@ -212,9 +212,19 @@ const AdminDashboardContent: React.FC = () => {
   const [showInactiveServiceLocations, setShowInactiveServiceLocations] = useState(true);
   const [showSoftDeletedServiceLocations, setShowSoftDeletedServiceLocations] = useState(false);
   const [showInactiveBusinesses, setShowInactiveBusinesses] = useState(true);
+
+  // State to trigger highlighting of unacknowledged service requests
+  const [highlightUnacknowledged, setHighlightUnacknowledged] = useState(false);
   const [showSoftDeletedBusinesses, setShowSoftDeletedBusinesses] = useState(false);
   const [showInactiveEmployees, setShowInactiveEmployees] = useState(true);
   const [showSoftDeletedEmployees, setShowSoftDeletedEmployees] = useState(false);
+
+  // Reset highlight flag when navigating away from service requests
+  useEffect(() => {
+    if (currentView !== 'service-requests') {
+      setHighlightUnacknowledged(false);
+    }
+  }, [currentView]);
 
   // Selected entities for modals
   const [selectedClient, setSelectedClient] = useState(null);
@@ -433,7 +443,10 @@ const AdminDashboardContent: React.FC = () => {
                     {/* Notification Bell Icon with Badge */}
                     <button
                       type="button"
-                      onClick={() => setCurrentView('service-requests')}
+                      onClick={() => {
+                        setCurrentView('service-requests');
+                        setHighlightUnacknowledged(true);
+                      }}
                       className="relative p-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                       aria-label="View notifications"
                     >
@@ -646,6 +659,7 @@ const AdminDashboardContent: React.FC = () => {
               externalShowSoftDeletedBusinesses={showSoftDeletedBusinesses}
               externalShowInactiveServiceLocations={showInactiveServiceLocations}
               externalShowSoftDeletedServiceLocations={showSoftDeletedServiceLocations}
+              highlightUnacknowledged={highlightUnacknowledged}
               setShowInactiveClients={setShowInactiveClients}
               setShowSoftDeletedClients={setShowSoftDeletedClients}
               setShowInactiveBusinesses={setShowInactiveBusinesses}

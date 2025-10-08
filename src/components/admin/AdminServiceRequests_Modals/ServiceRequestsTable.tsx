@@ -14,6 +14,7 @@ interface ServiceRequestsTableProps {
   formatDate: (isoString: string | null) => string;
   formatTime: (isoString: string | null) => string;
   getStatusIcon: (status: string) => JSX.Element;
+  highlightedRequestIds?: string[];
 }
 
 const ServiceRequestsTable: React.FC<ServiceRequestsTableProps> = ({
@@ -26,7 +27,8 @@ const ServiceRequestsTable: React.FC<ServiceRequestsTableProps> = ({
   onViewInvoice,
   formatDate,
   formatTime,
-  getStatusIcon
+  getStatusIcon,
+  highlightedRequestIds = []
 }) => {
   return (
     <div className="hidden md:block overflow-x-auto">
@@ -63,10 +65,14 @@ const ServiceRequestsTable: React.FC<ServiceRequestsTableProps> = ({
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-          {requests.map((request) => (
+          {requests.map((request) => {
+            const isHighlighted = highlightedRequestIds.includes(request.id);
+            return (
             <tr
               key={request.id}
-              className={`${themeClasses.bg.hover} transition-colors cursor-pointer`}
+              className={`${themeClasses.bg.hover} transition-colors cursor-pointer ${
+                isHighlighted ? 'ring-4 ring-blue-500 ring-opacity-75 animate-pulse' : ''
+              }`}
               onClick={() => onViewRequest(request)}
             >
               <td className="px-6 py-4 whitespace-nowrap">
@@ -161,7 +167,8 @@ const ServiceRequestsTable: React.FC<ServiceRequestsTableProps> = ({
                 </div>
               </td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </div>

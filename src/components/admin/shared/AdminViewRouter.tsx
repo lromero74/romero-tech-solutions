@@ -76,6 +76,8 @@ interface AdminViewRouterProps {
   setShowSoftDeletedEmployees?: (show: boolean) => void;
   // Modal handlers
   onOpenModal?: (modalName: string, entity?: unknown) => void;
+  // Service request highlighting
+  highlightUnacknowledged?: boolean;
 }
 
 export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
@@ -103,7 +105,8 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   setShowInactiveServiceLocations: externalSetShowInactiveServiceLocations,
   setShowSoftDeletedServiceLocations: externalSetShowSoftDeletedServiceLocations,
   setShowInactiveEmployees: externalSetShowInactiveEmployees,
-  setShowSoftDeletedEmployees: externalSetShowSoftDeletedEmployees
+  setShowSoftDeletedEmployees: externalSetShowSoftDeletedEmployees,
+  highlightUnacknowledged = false
 }) => {
   const {
     dashboardData,
@@ -1313,6 +1316,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             onRefresh={refreshAllData}
             refreshTechnicians={refreshTechnicians}
             refreshServiceRequestStatuses={refreshServiceRequestStatuses}
+            highlightUnacknowledged={highlightUnacknowledged}
           />
         );
 
