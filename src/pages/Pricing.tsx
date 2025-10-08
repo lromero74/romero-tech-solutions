@@ -283,16 +283,16 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string)
         let displayTimeRange = timeRange;
 
         if (sampleBlock && sampleBlock.startDay !== sampleBlock.endDay) {
-          // Time crosses to next day, annotate with "next day" indicator
+          // Time crosses to next day, annotate with "next day" indicator in superscript
           const [startTime, endTime] = timeRange.split('-');
 
           // For single day ranges, show the specific next day name
           // For multi-day ranges, just indicate it crosses to the next day
           if (range.startDay === range.endDay) {
             const nextDayName = dayNames[(sampleBlock.endDay) % 7];
-            displayTimeRange = `${startTime}-${endTime}(${nextDayName})`;
+            displayTimeRange = `${startTime}-${endTime}<sup>(${nextDayName})</sup>`;
           } else {
-            displayTimeRange = `${startTime}-${endTime}(next day)`;
+            displayTimeRange = `${startTime}-${endTime}<sup>(next day)</sup>`;
           }
         }
 
@@ -449,7 +449,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                       <div className="text-4xl font-bold text-green-300 mb-2">
                         ${defaultCategory.baseRate}/hr*
                       </div>
-                      <p className="text-sm text-green-200 mb-6">{standardSchedule || t('pricing.tiers.standard.time')}</p>
+                      <p className="text-sm text-green-200 mb-6" dangerouslySetInnerHTML={{ __html: standardSchedule || t('pricing.tiers.standard.time') }} />
                     </div>
                   </div>
                 )}
@@ -465,7 +465,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                       <div className="text-4xl font-bold text-yellow-300 mb-2">
                         ${(defaultCategory.baseRate * premiumTier.multiplier).toFixed(0)}/hr*
                       </div>
-                      <p className="text-sm text-yellow-200 mb-6">{premiumSchedule || t('pricing.tiers.premium.time')}</p>
+                      <p className="text-sm text-yellow-200 mb-6" dangerouslySetInnerHTML={{ __html: premiumSchedule || t('pricing.tiers.premium.time') }} />
                     </div>
                   </div>
                 )}
@@ -481,7 +481,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                       <div className="text-4xl font-bold text-red-300 mb-2">
                         ${(defaultCategory.baseRate * emergencyTier.multiplier).toFixed(0)}/hr*
                       </div>
-                      <p className="text-sm text-red-200 mb-6">{emergencySchedule || t('pricing.tiers.emergency.time')}</p>
+                      <p className="text-sm text-red-200 mb-6" dangerouslySetInnerHTML={{ __html: emergencySchedule || t('pricing.tiers.emergency.time') }} />
                     </div>
                   </div>
                 )}
@@ -517,7 +517,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                         <div className="text-4xl font-bold text-green-300 mb-2">
                           ${nonprofitCategory.baseRate}/hr*
                         </div>
-                        <p className="text-sm text-green-200 mb-6">{standardSchedule || t('pricing.tiers.standard.time')}</p>
+                        <p className="text-sm text-green-200 mb-6" dangerouslySetInnerHTML={{ __html: standardSchedule || t('pricing.tiers.standard.time') }} />
                       </div>
                     </div>
                   )}
@@ -533,7 +533,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                         <div className="text-4xl font-bold text-yellow-300 mb-2">
                           ${(nonprofitCategory.baseRate * premiumTier.multiplier).toFixed(0)}/hr*
                         </div>
-                        <p className="text-sm text-yellow-200 mb-6">{premiumSchedule || t('pricing.tiers.premium.time')}</p>
+                        <p className="text-sm text-yellow-200 mb-6" dangerouslySetInnerHTML={{ __html: premiumSchedule || t('pricing.tiers.premium.time') }} />
                       </div>
                     </div>
                   )}
@@ -549,7 +549,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                         <div className="text-4xl font-bold text-red-300 mb-2">
                           ${(nonprofitCategory.baseRate * emergencyTier.multiplier).toFixed(0)}/hr*
                         </div>
-                        <p className="text-sm text-red-200 mb-6">{emergencySchedule || t('pricing.tiers.emergency.time')}</p>
+                        <p className="text-sm text-red-200 mb-6" dangerouslySetInnerHTML={{ __html: emergencySchedule || t('pricing.tiers.emergency.time') }} />
                       </div>
                     </div>
                   )}
