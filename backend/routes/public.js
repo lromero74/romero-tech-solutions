@@ -197,4 +197,112 @@ router.get('/base-hourly-rate', async (req, res) => {
   }
 });
 
+// Public endpoint to get comprehensive pricing information (no auth required)
+// Needed for pricing page
+router.get('/pricing', async (req, res) => {
+  try {
+    // Get hourly rate categories
+    const categoriesResult = await query(`
+      SELECT
+        id,
+        category_name,
+        base_hourly_rate,
+        description,
+        is_default,
+        display_order
+      FROM hourly_rate_categories
+      WHERE is_active = true
+      ORDER BY display_order, category_name
+    `);
+
+    // Get rate tiers (Standard, Premium, Emergency)
+    const tiersResult = await query(`
+      SELECT DISTINCT
+        tier_name,
+        tier_level,
+        rate_multiplier,
+        color_code,
+        description
+      FROM service_hour_rate_tiers
+      WHERE is_active = true
+      ORDER BY tier_level
+    `);
+
+    // Get aggregated schedule - but preserve separate ranges within a day
+    const scheduleResult = await query(`
+      WITH consecutive_ranges AS (
+        SELECT
+          tier_name,
+          tier_level,
+          day_of_week,
+          time_start,
+          time_end,
+          rate_multiplier,
+          time_start - LAG(time_end) OVER (PARTITION BY tier_name, day_of_week ORDER BY time_start) as gap
+        FROM service_hour_rate_tiers
+        WHERE is_active = true
+      ),
+      range_groups AS (
+        SELECT
+          *,
+          SUM(CASE WHEN gap > interval '1 hour' OR gap IS NULL THEN 1 ELSE 0 END)
+            OVER (PARTITION BY tier_name, day_of_week ORDER BY time_start) as range_id
+        FROM consecutive_ranges
+      )
+      SELECT
+        tier_name,
+        tier_level,
+        day_of_week,
+        MIN(time_start) as time_start,
+        MAX(time_end) as time_end,
+        rate_multiplier
+      FROM range_groups
+      GROUP BY tier_name, tier_level, day_of_week, range_id, rate_multiplier
+      ORDER BY tier_level, day_of_week, time_start
+    `);
+
+    res.json({
+      success: true,
+      data: {
+        categories: categoriesResult.rows.map(cat => ({
+          id: cat.id,
+          name: cat.category_name,
+          baseRate: parseFloat(cat.base_hourly_rate),
+          description: cat.description,
+          isDefault: cat.is_default,
+          displayOrder: cat.display_order
+        })),
+        tiers: tiersResult.rows.map(tier => ({
+          name: tier.tier_name,
+          level: tier.tier_level,
+          multiplier: parseFloat(tier.rate_multiplier),
+          colorCode: tier.color_code,
+          description: tier.description
+        })),
+        schedule: scheduleResult.rows.map(slot => ({
+          tierName: slot.tier_name,
+          tierLevel: slot.tier_level,
+          dayOfWeek: slot.day_of_week,
+          timeStart: slot.time_start,
+          timeEnd: slot.time_end,
+          multiplier: parseFloat(slot.rate_multiplier)
+        })),
+        policies: {
+          minimumHours: 1,
+          roundingMinutes: 15,
+          newClientFirstHourFree: true
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error('Get pricing error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get pricing information',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;

@@ -2,6 +2,7 @@ export const enTranslations = {
   // Header
   'header.home': 'Home',
   'header.services': 'Services',
+  'header.pricing': 'Pricing',
   'header.about': 'About',
   'header.contact': 'Contact',
   'header.login': 'Login/SignUp',
@@ -16,8 +17,8 @@ export const enTranslations = {
   'home.hero.quoteButton': 'E-mail Us',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Years Experience',
-  'home.hero.stat2': 'Client',
-  'home.hero.stat2Label': 'Satisfaction Paramount',
+  'home.hero.stat2': 'Client Satisfaction',
+  'home.hero.stat2Label': 'Paramount',
   'home.hero.stat3': 'Emergency',
   'home.hero.stat3Label': 'Support Available',
 
@@ -59,7 +60,8 @@ export const enTranslations = {
   'home.about.stats.experience': 'Years Experience',
   'home.about.stats.clients': 'Client Satisfaction',
   'home.about.stats.support': 'Emergency Support',
-  'home.about.stats.satisfaction': 'Satisfaction Rate',
+  'home.about.stats.satisfaction': 'Transparent Pricing',
+  'home.about.stats.satisfactionLabel': 'Always',
   'home.about.cta': 'Learn More About Us',
   'home.about.badge.title': 'Trusted Experts',
   'home.about.badge.subtitle': 'Your Neighborhood Tech Heroes',
@@ -97,6 +99,58 @@ export const enTranslations = {
   'home.finalCta.sameDay': 'Same-Day Service Available',
   'home.finalCta.trusted': '30+ Years Trusted Experience',
   'home.finalCta.satisfaction': 'Client Satisfaction Guaranteed',
+
+  // Pricing Page
+  'pricing.hero.badge': 'Transparent Pricing',
+  'pricing.hero.title': 'Simple,',
+  'pricing.hero.titleHighlight': 'Honest Pricing',
+  'pricing.hero.subtitle': 'No hidden fees. No surprises. Just straightforward rates for exceptional service.',
+
+  'pricing.newClientOffer.title': 'First Hour Free for New Clients!',
+  'pricing.newClientOffer.description': 'Experience our expert service risk-free',
+
+  'pricing.tiers.title': 'Our Hourly Rates',
+  'pricing.tiers.subtitle': 'Flexible pricing based on when you need us most',
+
+  'pricing.standard.title': 'Standard Pricing',
+  'pricing.nonprofit.title': 'Non-Profit Pricing',
+  'pricing.nonprofit.subtitle': 'Special rates for qualified non-profit organizations',
+
+  'pricing.tiers.standard.title': 'Standard Hours',
+  'pricing.tiers.standard.time': 'Mon-Fri: 3pm-Midnight | Sat: Midnight-1am',
+  'pricing.tiers.standard.description': 'Our regular hourly rate for scheduled service during afternoon and evening hours',
+  'pricing.tiers.standard.feature1': 'Scheduled appointments',
+  'pricing.tiers.standard.feature2': 'Same-day service available',
+  'pricing.tiers.standard.feature3': 'All services included',
+
+  'pricing.tiers.premium.title': 'Premium Hours',
+  'pricing.tiers.premium.time': 'Sat: 1am-5am & 3pm-11pm | Sun: Midnight-5am',
+  'pricing.tiers.premium.description': 'Enhanced rate for weekend and early morning hours',
+  'pricing.tiers.premium.feature1': 'Flexible scheduling',
+  'pricing.tiers.premium.feature2': 'Weekend availability',
+  'pricing.tiers.premium.feature3': 'Minimal disruption',
+
+  'pricing.tiers.emergency.title': 'Emergency Hours',
+  'pricing.tiers.emergency.time': 'Mon-Fri: Midnight-3pm | Sat: 5am-3pm | Sun: 5am-Midnight',
+  'pricing.tiers.emergency.allOtherTimes': 'All other times',
+  'pricing.tiers.emergency.description': 'Priority service during business hours and critical situations',
+  'pricing.tiers.emergency.feature1': 'Immediate response',
+  'pricing.tiers.emergency.feature2': 'Critical issue priority',
+  'pricing.tiers.emergency.feature3': 'Available when you need us most',
+
+  'pricing.policies.title': 'Billing Policies',
+  'pricing.policies.minimum.title': 'Minimum Charge',
+  'pricing.policies.minimum.description': 'One hour minimum charge for all service calls',
+  'pricing.policies.rounding.title': 'Time Rounding',
+  'pricing.policies.rounding.description': 'Time is rounded up to the nearest 15-minute increment',
+  'pricing.policies.newClient.title': 'New Client Special',
+  'pricing.policies.newClient.description': 'First hour is completely free for new clients - no strings attached!',
+  'pricing.policies.transparent.title': 'No Hidden Fees',
+  'pricing.policies.transparent.description': 'All costs discussed upfront. No surprises on your invoice.',
+
+  'pricing.cta.title': 'Ready to Get Started?',
+  'pricing.cta.subtitle': 'Contact us today for a free consultation and experience the difference of transparent, professional IT service.',
+  'pricing.cta.signupButton': 'Sign Up Now',
 
   // About Page
   'about.hero.badge': 'Your Digital Guardians Since 1994',
@@ -345,6 +399,7 @@ export const enTranslations = {
   // Common
   'common.phone': '(619) 940-5550',
   'common.email': 'info@romerotechsolutions.com',
+  'common.loading': 'Loading...',
   'common.yearsExperience': 'Years Experience',
   'common.satisfactionRate': 'Satisfaction Rate',
   'common.emergencySupport': 'Emergency Support',

@@ -2,6 +2,7 @@ export const esTranslations = {
   // Header
   'header.home': 'Inicio',
   'header.services': 'Servicios',
+  'header.pricing': 'Precios',
   'header.about': 'Acerca de',
   'header.contact': 'Contacto',
   'header.login': 'Iniciar Sesión/Registrarse',
@@ -16,8 +17,8 @@ export const esTranslations = {
   'home.hero.quoteButton': 'Envíenos un Correo',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Años de Experiencia',
-  'home.hero.stat2': 'Satisfacción del',
-  'home.hero.stat2Label': 'Cliente Primordial',
+  'home.hero.stat2': 'Satisfacción del Cliente',
+  'home.hero.stat2Label': 'Primordial',
   'home.hero.stat3': 'Soporte de',
   'home.hero.stat3Label': 'Emergencia Disponible',
 
@@ -59,7 +60,8 @@ export const esTranslations = {
   'home.about.stats.experience': 'Años de Experiencia',
   'home.about.stats.clients': 'Satisfacción del Cliente',
   'home.about.stats.support': 'Soporte de Emergencia',
-  'home.about.stats.satisfaction': 'Tasa de Satisfacción',
+  'home.about.stats.satisfaction': 'Precios Transparentes',
+  'home.about.stats.satisfactionLabel': 'Siempre',
   'home.about.cta': 'Conozca Más Sobre Nosotros',
   'home.about.badge.title': 'Expertos de Confianza',
   'home.about.badge.subtitle': 'Sus Héroes Tecnológicos del Vecindario',
@@ -97,6 +99,58 @@ export const esTranslations = {
   'home.finalCta.sameDay': 'Servicio el Mismo Día Disponible',
   'home.finalCta.trusted': '30+ Años de Experiencia Confiable',
   'home.finalCta.satisfaction': 'Satisfacción del Cliente Garantizada',
+
+  // Pricing Page
+  'pricing.hero.badge': 'Precios Transparentes',
+  'pricing.hero.title': 'Precios Simples',
+  'pricing.hero.titleHighlight': 'y Honestos',
+  'pricing.hero.subtitle': 'Sin cargos ocultos. Sin sorpresas. Solo tarifas claras por servicio excepcional.',
+
+  'pricing.newClientOffer.title': '¡Primera Hora Gratis para Nuevos Clientes!',
+  'pricing.newClientOffer.description': 'Experimente nuestro servicio experto sin riesgo',
+
+  'pricing.tiers.title': 'Nuestras Tarifas por Hora',
+  'pricing.tiers.subtitle': 'Precios flexibles basados en cuándo nos necesita',
+
+  'pricing.standard.title': 'Precios Estándar',
+  'pricing.nonprofit.title': 'Precios para Organizaciones Sin Fines de Lucro',
+  'pricing.nonprofit.subtitle': 'Tarifas especiales para organizaciones sin fines de lucro calificadas',
+
+  'pricing.tiers.standard.title': 'Horario Estándar',
+  'pricing.tiers.standard.time': 'Lun-Vie: 3pm-Medianoche | Sáb: Medianoche-1am',
+  'pricing.tiers.standard.description': 'Nuestra tarifa regular por hora para servicio programado durante horas de tarde y noche',
+  'pricing.tiers.standard.feature1': 'Citas programadas',
+  'pricing.tiers.standard.feature2': 'Servicio el mismo día disponible',
+  'pricing.tiers.standard.feature3': 'Todos los servicios incluidos',
+
+  'pricing.tiers.premium.title': 'Horario Premium',
+  'pricing.tiers.premium.time': 'Sáb: 1am-5am y 3pm-11pm | Dom: Medianoche-5am',
+  'pricing.tiers.premium.description': 'Tarifa mejorada para fines de semana y horas tempranas de la mañana',
+  'pricing.tiers.premium.feature1': 'Programación flexible',
+  'pricing.tiers.premium.feature2': 'Disponibilidad en fin de semana',
+  'pricing.tiers.premium.feature3': 'Mínima interrupción',
+
+  'pricing.tiers.emergency.title': 'Horario de Emergencia',
+  'pricing.tiers.emergency.time': 'Lun-Vie: Medianoche-3pm | Sáb: 5am-3pm | Dom: 5am-Medianoche',
+  'pricing.tiers.emergency.allOtherTimes': 'Todos los demás horarios',
+  'pricing.tiers.emergency.description': 'Servicio prioritario durante horas de negocio y situaciones críticas',
+  'pricing.tiers.emergency.feature1': 'Respuesta inmediata',
+  'pricing.tiers.emergency.feature2': 'Prioridad para problemas críticos',
+  'pricing.tiers.emergency.feature3': 'Disponible cuando más nos necesita',
+
+  'pricing.policies.title': 'Políticas de Facturación',
+  'pricing.policies.minimum.title': 'Cargo Mínimo',
+  'pricing.policies.minimum.description': 'Cargo mínimo de una hora para todas las llamadas de servicio',
+  'pricing.policies.rounding.title': 'Redondeo de Tiempo',
+  'pricing.policies.rounding.description': 'El tiempo se redondea al siguiente incremento de 15 minutos',
+  'pricing.policies.newClient.title': 'Especial para Nuevos Clientes',
+  'pricing.policies.newClient.description': '¡La primera hora es completamente gratis para nuevos clientes - sin condiciones!',
+  'pricing.policies.transparent.title': 'Sin Cargos Ocultos',
+  'pricing.policies.transparent.description': 'Todos los costos se discuten por adelantado. Sin sorpresas en su factura.',
+
+  'pricing.cta.title': '¿Listo para Comenzar?',
+  'pricing.cta.subtitle': 'Contáctenos hoy para una consulta gratuita y experimente la diferencia del servicio de TI transparente y profesional.',
+  'pricing.cta.signupButton': 'Regístrese Ahora',
 
   // About Page
   'about.hero.badge': 'Sus Guardianes Digitales Desde 1994',
@@ -345,6 +399,7 @@ export const esTranslations = {
   // Common
   'common.phone': '(619) 940-5550',
   'common.email': 'info@romerotechsolutions.com',
+  'common.loading': 'Cargando...',
   'common.yearsExperience': 'Años de Experiencia',
   'common.satisfactionRate': 'Tasa de Satisfacción',
   'common.emergencySupport': 'Soporte de Emergencia',

@@ -133,6 +133,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
   const navItems = [
     { id: 'home', label: t('header.home') },
     { id: 'services', label: t('header.services') },
+    { id: 'pricing', label: t('header.pricing') },
     { id: 'about', label: t('header.about') },
     { id: 'contact', label: t('header.contact') },
     { id: 'clogin', label: t('header.login') },

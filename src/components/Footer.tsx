@@ -75,7 +75,7 @@ const Footer: React.FC = () => {
                   <Linkedin className="h-5 w-5 text-gray-300 group-hover:text-white" />
                 </a>
                 <a
-                  href="https://www.facebook.com/profile.php?id=61580095926247"
+                  href="https://www.facebook.com/romerotechsolutions"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="bg-gray-800 hover:bg-blue-500 p-2 rounded-lg transition-colors duration-200 group"

@@ -10,6 +10,9 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/services') {
     return 'services';
   }
+  if (path === '/pricing') {
+    return 'pricing';
+  }
   if (path === '/about') {
     return 'about';
   }

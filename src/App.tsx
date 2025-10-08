@@ -15,6 +15,7 @@ import { ClientLanguageProvider } from './contexts/ClientLanguageContext';
 import ClientLogin from './pages/ClientLogin';
 import Home from './pages/Home';
 import Services from './pages/Services';
+import Pricing from './pages/Pricing';
 import About from './pages/About';
 import Contact from './pages/Contact';
 import ConfirmEmail from './pages/ConfirmEmail';
@@ -205,6 +206,8 @@ function AppContent() {
         return <Home />;
       case 'services':
         return <Services />;
+      case 'pricing':
+        return <Pricing setCurrentPage={setCurrentPage} />;
       case 'about':
         return <About />;
       case 'contact':
