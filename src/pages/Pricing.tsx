@@ -276,7 +276,27 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string)
         const dayStr = range.startDay === range.endDay
           ? dayNames[range.startDay]
           : `${dayNames[range.startDay]}-${dayNames[range.endDay]}`;
-        formatted.push(`${dayStr}: ${timeRange}`);
+
+        // Check if this time range crosses into the next day
+        // Get a sample block from this range to check end day
+        const sampleBlock = blocks.find(b => b.startDay >= range.startDay && b.startDay <= range.endDay);
+        let displayTimeRange = timeRange;
+
+        if (sampleBlock && sampleBlock.startDay !== sampleBlock.endDay) {
+          // Time crosses to next day, annotate with "next day" indicator
+          const [startTime, endTime] = timeRange.split('-');
+
+          // For single day ranges, show the specific next day name
+          // For multi-day ranges, just indicate it crosses to the next day
+          if (range.startDay === range.endDay) {
+            const nextDayName = dayNames[(sampleBlock.endDay) % 7];
+            displayTimeRange = `${startTime}-${endTime}(${nextDayName})`;
+          } else {
+            displayTimeRange = `${startTime}-${endTime}(next day)`;
+          }
+        }
+
+        formatted.push(`${dayStr}: ${displayTimeRange}`);
       });
     });
   }
