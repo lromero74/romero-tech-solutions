@@ -348,7 +348,7 @@ router.get('/businesses/:businessId/files/:fileId/download',
         UPDATE t_client_files
         SET download_count = COALESCE(download_count, 0) + 1,
             last_downloaded_at = CURRENT_TIMESTAMP,
-            last_downloaded_by_employee_id = $2
+            last_downloaded_by_user_id = $2
         WHERE id = $1
       `;
 
@@ -410,7 +410,7 @@ router.delete('/businesses/:businessId/files/:fileId',
       const deleteQuery = `
         UPDATE t_client_files
         SET deleted_at = CURRENT_TIMESTAMP,
-            deleted_by_employee_id = $3,
+            deleted_by_user_id = $3,
             soft_delete = true,
             deletion_reason = 'Deleted by admin'
         WHERE id = $1 AND business_id = $2
