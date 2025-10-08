@@ -87,11 +87,16 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string)
 
     // Recalculate timestamps using a consistent reference week based on LOCAL day
     // This ensures blocks from the same local day use the same reference date
+    // IMPORTANT: Use local hours/minutes directly, not the converted date's hours
     const normalizedStart = new Date(2022, 6, 3 + localStartDay);
-    normalizedStart.setHours(startDate.getHours(), startDate.getMinutes(), 0, 0);
+    const startLocalHours = startDate.getHours();
+    const startLocalMinutes = startDate.getMinutes();
+    normalizedStart.setHours(startLocalHours, startLocalMinutes, 0, 0);
 
     const normalizedEnd = new Date(2022, 6, 3 + localEndDay);
-    normalizedEnd.setHours(endDate.getHours(), endDate.getMinutes(), 0, 0);
+    const endLocalHours = endDate.getHours();
+    const endLocalMinutes = endDate.getMinutes();
+    normalizedEnd.setHours(endLocalHours, endLocalMinutes, 0, 0);
 
     return {
       startTimestamp: normalizedStart.getTime(),
@@ -233,13 +238,46 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string)
     });
   });
 
-  // Format cross-day blocks
+  // Format cross-day blocks with intelligent grouping
   if (dayGroups[-1]) {
+    // Group cross-day blocks by their time range pattern
+    const crossDayGroups: { [key: string]: LocalBlock[] } = {};
+
     dayGroups[-1].forEach(block => {
-      const dayStr = block.startDay === block.endDay
-        ? dayNames[block.startDay]
-        : `${dayNames[block.startDay]}-${dayNames[block.endDay]}`;
-      formatted.push(`${dayStr}: ${block.startTime}-${block.endTime}`);
+      const key = `${block.startTime}-${block.endTime}`;
+      if (!crossDayGroups[key]) {
+        crossDayGroups[key] = [];
+      }
+      crossDayGroups[key].push(block);
+    });
+
+    // For each time range pattern, group consecutive start days
+    Object.entries(crossDayGroups).forEach(([timeRange, blocks]) => {
+      // Sort blocks by their start day
+      blocks.sort((a, b) => a.startDay - b.startDay);
+
+      // Group consecutive start days
+      const dayRanges: Array<{ startDay: number; endDay: number }> = [];
+      let currentRange = { startDay: blocks[0].startDay, endDay: blocks[0].startDay };
+
+      for (let i = 1; i < blocks.length; i++) {
+        // Check if this block's start day is consecutive to the current range
+        if (blocks[i].startDay === currentRange.endDay + 1) {
+          currentRange.endDay = blocks[i].startDay;
+        } else {
+          dayRanges.push({ ...currentRange });
+          currentRange = { startDay: blocks[i].startDay, endDay: blocks[i].startDay };
+        }
+      }
+      dayRanges.push(currentRange);
+
+      // Format each range
+      dayRanges.forEach(range => {
+        const dayStr = range.startDay === range.endDay
+          ? dayNames[range.startDay]
+          : `${dayNames[range.startDay]}-${dayNames[range.endDay]}`;
+        formatted.push(`${dayStr}: ${timeRange}`);
+      });
     });
   }
 
