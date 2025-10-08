@@ -20,6 +20,7 @@ class ClientRegistrationService {
         contactEmail,
         contactPhone,
         jobTitle = null,
+        timezonePreference = null,
         serviceAddresses,
         password
       } = registrationData;
@@ -92,6 +93,16 @@ class ClientRegistrationService {
           if (!addressesResult.rows[0].success) {
             throw new Error(`Failed to add service addresses: ${addressesResult.rows[0].message}`);
           }
+        }
+
+        // Update user timezone preference if provided
+        if (timezonePreference) {
+          await client.query(`
+            UPDATE users
+            SET timezone_preference = $1
+            WHERE id = $2
+          `, [timezonePreference, user_id]);
+          console.log(`✅ Set timezone preference for new user: ${timezonePreference}`);
         }
 
         return {

@@ -4,6 +4,7 @@ import { useClientTheme } from '../../contexts/ClientThemeContext';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { apiService } from '../../services/apiService';
+import { getUserTimezone, getTimezoneDisplayName } from '../../utils/timezoneUtils';
 
 interface TimeSlot {
   time: string;
@@ -149,7 +150,28 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     return false; // Default to 12-hour format
   };
 
+  // Get user's timezone preference from authUser or fetch from API
+  const getUserTimezonePreference = (): string => {
+    try {
+      const authUser = RoleBasedStorage.getItem('authUser');
+      if (authUser) {
+        const user = JSON.parse(authUser);
+        if (user.timezonePreference) {
+          console.log('🌍 Loaded timezone preference from authUser:', user.timezonePreference);
+          return user.timezonePreference;
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to load user timezone preference:', error);
+    }
+    // Fall back to browser's detected timezone
+    const browserTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    console.warn('⚠️ No timezone preference found in authUser, falling back to browser:', browserTimezone);
+    return browserTimezone;
+  };
+
   const [is24HourFormat, setIs24HourFormat] = useState<boolean>(getUserTimeFormatPreference());
+  const [userTimezone, setUserTimezone] = useState<string>(getUserTimezonePreference());
 
   const BUFFER_HOURS = 1;
 
@@ -164,18 +186,149 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     }
   };
 
+  // Helper function to create a Date from user timezone hour/minute
+  // User sees time in their timezone, but Date needs to be in browser's local timezone
+  // Example: User in Eastern clicks 11:00 AM → should create 8:00 AM Pacific (browser's timezone)
+  const createDateFromUserTime = (hour: number, minute: number): Date => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+
+    // Calculate the offset between user's timezone and browser's timezone
+    const referenceUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
+
+    // Get what 12:00 UTC looks like in user's timezone
+    const partsInUserTZ = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(referenceUTC);
+    const hourInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'hour')?.value || '0');
+    const minuteInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'minute')?.value || '0');
+
+    // Get what 12:00 UTC looks like in browser's timezone
+    const partsInBrowserTZ = new Intl.DateTimeFormat('en-US', {
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(referenceUTC);
+    const hourInBrowserTZ = parseInt(partsInBrowserTZ.find(p => p.type === 'hour')?.value || '0');
+    const minuteInBrowserTZ = parseInt(partsInBrowserTZ.find(p => p.type === 'minute')?.value || '0');
+
+    // Calculate offset: how many hours ahead/behind is browser timezone from user timezone
+    const offsetHours = hourInBrowserTZ - hourInUserTZ;
+    const offsetMinutes = minuteInBrowserTZ - minuteInUserTZ;
+
+    // Convert user time to browser time
+    let browserHour = hour + offsetHours;
+    let browserMinute = minute + offsetMinutes;
+
+    // Handle minute overflow/underflow
+    if (browserMinute < 0) {
+      browserMinute += 60;
+      browserHour -= 1;
+    } else if (browserMinute >= 60) {
+      browserMinute -= 60;
+      browserHour += 1;
+    }
+
+    // Create date in browser's local timezone
+    const date = new Date(year, month, day, browserHour, browserMinute, 0, 0);
+
+    console.log(`🔄 createDateFromUserTime(${hour}:${String(minute).padStart(2, '0')}):`, {
+      userTZ: userTimezone,
+      browserTZ: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      offsetHours,
+      offsetMinutes,
+      inputTime: `${hour}:${String(minute).padStart(2, '0')} (user TZ)`,
+      outputTime: `${browserHour}:${String(browserMinute).padStart(2, '0')} (browser TZ)`,
+      resultUTC: date.toISOString()
+    });
+
+    return date;
+  };
+
+  // Helper function to convert a Date back to user timezone hour/minute
+  // This is the inverse of createDateFromUserTime - takes a Date and returns user TZ hour/minute
+  const getHourMinuteInUserTimezone = (date: Date): { hour: number; minute: number } => {
+    // Format the date in user's timezone
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(date);
+
+    const hour = parseInt(parts.find(p => p.type === 'hour')?.value || '0');
+    const minute = parseInt(parts.find(p => p.type === 'minute')?.value || '0');
+
+    return { hour, minute };
+  };
+
   // Helper function to find rate tier for a given time
   const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
-    // Create a Date object for the selected time in local timezone
-    const localDate = new Date(selectedDate);
-    localDate.setHours(hour, minute, 0, 0);
+    // Convert from user's timezone to UTC
+    // Strategy: Calculate the UTC offset for the user's timezone on this date, then apply it
 
-    // Convert local time to UTC to match the database storage
-    const utcDate = new Date(localDate.toISOString());
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const day = selectedDate.getDate();
+
+    // Step 1: Calculate the offset between user's timezone and UTC for this specific date
+    // Create a reference UTC date (noon UTC on the selected day)
+    const referenceUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
+
+    // Format this UTC time as it appears in the user's timezone
+    const partsInUserTZ = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTimezone,
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(referenceUTC);
+
+    const hourInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'hour')?.value || '0');
+    const minuteInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'minute')?.value || '0');
+
+    // The offset in hours: (time shown in user TZ) - (UTC time)
+    // Example: If it's 12:00 UTC and user sees 08:00 EDT, offset = 8 - 12 = -4
+    const offsetHours = hourInUserTZ - 12;
+    const offsetMinutes = minuteInUserTZ;
+
+    // Step 2: Convert the input hour:minute from user's timezone to UTC
+    // UTC time = user time - offset
+    // Example: User sees 10:00 EDT, offset = -4, so UTC = 10 - (-4) = 14:00 ✓
+    let utcHour = hour - offsetHours;
+    let utcMinute = minute - offsetMinutes;
+
+    // Handle minute overflow/underflow
+    if (utcMinute < 0) {
+      utcMinute += 60;
+      utcHour -= 1;
+    } else if (utcMinute >= 60) {
+      utcMinute -= 60;
+      utcHour += 1;
+    }
+
+    // Create a proper date to handle day changes and get the correct day of week
+    const utcDate = new Date(Date.UTC(year, month, day, utcHour, utcMinute, 0));
     const utcDayOfWeek = utcDate.getUTCDay();
-    const utcHour = utcDate.getUTCHours();
-    const utcMinute = utcDate.getUTCMinutes();
+    utcHour = utcDate.getUTCHours();
+    utcMinute = utcDate.getUTCMinutes();
+
     const utcTimeString = `${String(utcHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}:00`;
+
+    // Debug logging to trace timezone conversion
+    if (hour === 8 && minute === 0) {
+      console.log(`🕐 Timezone Debug for ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:`,{
+        userTimezone: userTimezone,
+        inputTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} (user TZ)`,
+        utcOffset: `${offsetHours >= 0 ? '+' : ''}${offsetHours}:${String(Math.abs(offsetMinutes)).padStart(2, '0')}`,
+        utcTime: `${utcTimeString} (Day ${utcDayOfWeek})`,
+        calculation: `${hour}:${String(minute).padStart(2, '0')} - (${offsetHours}:${String(offsetMinutes).padStart(2, '0')}) = ${utcHour}:${String(utcMinute).padStart(2, '0')} UTC`
+      });
+    }
 
     // Find ALL matching tiers for this UTC day and time (handle overlapping ranges)
     const matchingTiers = rateTiers.filter(tier => {
@@ -185,7 +338,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       const adjustedTimeEnd = tier.timeEnd === '00:00:00' ? '24:00:00' : tier.timeEnd;
 
       // Compare UTC time strings (both are now in UTC)
-      return utcTimeString >= tier.timeStart && utcTimeString < adjustedTimeEnd;
+      const matches = utcTimeString >= tier.timeStart && utcTimeString < adjustedTimeEnd;
+
+      // Debug logging for 8am slot
+      if (hour === 8 && minute === 0 && matches) {
+        console.log(`  ✅ Matched tier: ${tier.tierName} (${tier.timeStart}-${tier.timeEnd} UTC, multiplier: ${tier.rateMultiplier}x)`);
+      }
+
+      return matches;
     });
 
     // If multiple tiers match (overlapping ranges), return the highest priority tier
@@ -210,9 +370,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     // Check each 30-minute slot in the selected range
     let currentTime = new Date(selectedStartTime);
     while (currentTime < selectedEndTime) {
+      // Convert to user timezone for rate tier lookup
+      const timeInUserTZ = getHourMinuteInUserTimezone(currentTime);
       const tier = findRateTierForTime(
-        currentTime.getHours(),
-        currentTime.getMinutes(),
+        timeInUserTZ.hour,
+        timeInUserTZ.minute,
         currentTime.getDay()  // Pass the current time's day, not just the start time's day
       );
 
@@ -258,9 +420,11 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     // Calculate cost for each 30-minute increment
     let currentTime = new Date(selectedStartTime);
     while (currentTime < selectedEndTime) {
+      // Convert to user timezone for rate tier lookup
+      const timeInUserTZ = getHourMinuteInUserTimezone(currentTime);
       const tier = findRateTierForTime(
-        currentTime.getHours(),
-        currentTime.getMinutes(),
+        timeInUserTZ.hour,
+        timeInUserTZ.minute,
         currentTime.getDay()  // Use the current time's day, not just the start time's day
       );
 
@@ -364,25 +528,28 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   };
 
   // Generate time slots for the day (30-minute intervals, 24 hours)
+  // IMPORTANT: Slots are generated in USER's timezone, not browser's timezone
   const timeSlots = useMemo(() => {
     const slots: TimeSlot[] = [];
     const currentTime = new Date();
     const minimumTime = new Date(currentTime.getTime() + (1 * 60 * 60 * 1000)); // 1 hour from now
     const dayOfWeek = selectedDate.getDay(); // 0 = Sunday, 6 = Saturday
 
-    // Generate slots for full 24 hours (0-23)
+    // Generate slots for full 24 hours (0-23) in USER's timezone
     for (let hour = 0; hour < 24; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
-        const slotTime = new Date(selectedDate);
-        slotTime.setHours(hour, minute, 0, 0);
+        // Convert from user timezone to browser timezone for the Date object
+        // This allows proper comparison with currentTime/minimumTime
+        const slotTime = createDateFromUserTime(hour, minute);
 
         const isPast = slotTime < minimumTime;
         const rateTier = findRateTierForTime(hour, minute, dayOfWeek);
 
+        // Store hour/minute as USER timezone values
         slots.push({
-          time: formatTime(hour, minute),
-          hour,
-          minute,
+          time: formatTime(hour, minute),  // Display in user timezone
+          hour,  // User timezone hour
+          minute,  // User timezone minute
           isAvailable: !isPast,
           isPast,
           isBlocked: false,
@@ -392,7 +559,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     }
 
     return slots;
-  }, [selectedDate, rateTiers, is24HourFormat]);
+  }, [selectedDate, rateTiers, is24HourFormat, userTimezone]);
 
   // Apply suggested times from auto-suggest
   useEffect(() => {
@@ -475,6 +642,26 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
           console.error('Failed to load base hourly rate, using default:', error);
         }
 
+        // Load user timezone preference from API if not in authUser
+        try {
+          const authUserStr = RoleBasedStorage.getItem('authUser');
+          if (authUserStr) {
+            const authUser = JSON.parse(authUserStr);
+            if (!authUser.timezonePreference) {
+              console.log('🌍 Timezone not in authUser, fetching from API...');
+              const profileResult = await apiService.get('/client/profile');
+              if (profileResult.success && profileResult.data.timezonePreference) {
+                authUser.timezonePreference = profileResult.data.timezonePreference;
+                RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
+                setUserTimezone(profileResult.data.timezonePreference);
+                console.log('✅ Loaded and saved timezone preference:', profileResult.data.timezonePreference);
+              }
+            }
+          }
+        } catch (error) {
+          console.error('Failed to load timezone preference:', error);
+        }
+
         // Check if client is a first-timer (for first hour comp)
         try {
           const firstTimerResult = await apiService.get<{ success: boolean; data: { isFirstTimer: boolean } }>(
@@ -494,6 +681,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         );
         if (tiersResult.success) {
           setRateTiers(tiersResult.data);
+          console.log(`📊 Loaded ${tiersResult.data.length} rate tiers from API (UTC times):`,
+            tiersResult.data.slice(0, 5).map(t => `${t.tierName} Day${t.dayOfWeek} ${t.timeStart}-${t.timeEnd} (${t.rateMultiplier}x)`)
+          );
         }
 
         // Load bookings
@@ -663,8 +853,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       return;
     }
 
-    const slotTime = new Date(selectedDate);
-    slotTime.setHours(slot.hour, slot.minute, 0, 0);
+    // Create date from user timezone hour/minute (converts to browser's local timezone)
+    const slotTime = createDateFromUserTime(slot.hour, slot.minute);
 
     // Check if appointment would go past midnight into next day
     const slotEnd = new Date(slotTime.getTime() + (selectedDuration * 60 * 60 * 1000));
@@ -1024,6 +1214,15 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                   day: 'numeric'
                 })}
               </p>
+              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400 space-y-0.5">
+                <p>
+                  <span className="font-medium">{t('scheduler.yourTimezone', undefined, 'Your timezone:')}</span>{' '}
+                  {getTimezoneDisplayName(getUserTimezone())}
+                </p>
+                <p className="text-blue-600 dark:text-blue-400">
+                  {t('scheduler.ratesBasedOnPacific', undefined, 'Rate colors shown are based on Romero Tech Solutions Pacific Time business hours')}
+                </p>
+              </div>
             </div>
             <button
               type="button"
@@ -1220,8 +1419,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
                       {/* Time slots */}
                       {timeSlots.map((slot, i) => {
-                        const slotTime = new Date(selectedDate);
-                        slotTime.setHours(slot.hour, slot.minute, 0, 0);
+                        // Convert slot's user timezone hour/minute to browser timezone Date
+                        const slotTime = createDateFromUserTime(slot.hour, slot.minute);
                         // Check the individual 30-minute slot (0.5 hours), not the selected duration
                         const blockCheck = checkIfSlotBlocked(slotTime, 0.5);
 
@@ -1297,11 +1496,16 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                       })}
 
                       {/* Selected time block with drag handles */}
-                      {selectedStartTime && selectedEndTime && (
+                      {selectedStartTime && selectedEndTime && (() => {
+                        // Convert Date objects back to user timezone for display
+                        const startInUserTZ = getHourMinuteInUserTimezone(selectedStartTime);
+                        const endInUserTZ = getHourMinuteInUserTimezone(selectedEndTime);
+
+                        return (
                         <div
                           className="absolute top-0 h-20 bg-blue-600/80 border-2 border-blue-700 rounded z-20"
                           style={{
-                            left: `${(selectedStartTime.getHours() * 2 + selectedStartTime.getMinutes() / 30) * 64}px`,
+                            left: `${(startInUserTZ.hour * 2 + startInUserTZ.minute / 30) * 64}px`,
                             width: `${((selectedEndTime.getTime() - selectedStartTime.getTime()) / (30 * 60 * 1000)) * 64}px`
                           }}
                         >
@@ -1314,9 +1518,9 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             title={t('scheduler.dragToMove', undefined, 'Drag to move appointment')}
                           >
                             <div className="text-center pointer-events-none">
-                              <div>{formatTime(selectedStartTime.getHours(), selectedStartTime.getMinutes())}</div>
+                              <div>{formatTime(startInUserTZ.hour, startInUserTZ.minute)}</div>
                               <div className="text-[10px]">{t('scheduler.to', undefined, 'to')}</div>
-                              <div>{formatTime(selectedEndTime.getHours(), selectedEndTime.getMinutes())}</div>
+                              <div>{formatTime(endInUserTZ.hour, endInUserTZ.minute)}</div>
                             </div>
                           </div>
 
@@ -1340,17 +1544,17 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                             <div className="text-white text-xs pointer-events-none">⟩</div>
                           </div>
                         </div>
-                      )}
+                        );
+                      })()}
 
                       {/* Existing bookings overlay */}
                       {existingBookings.map((booking, idx) => {
-                        const startHour = booking.startTime.getHours();
-                        const startMinute = booking.startTime.getMinutes();
-                        const endHour = booking.endTime.getHours();
-                        const endMinute = booking.endTime.getMinutes();
+                        // Convert booking times to user timezone for display
+                        const startInUserTZ = getHourMinuteInUserTimezone(booking.startTime);
+                        const endInUserTZ = getHourMinuteInUserTimezone(booking.endTime);
 
-                        const startSlotIndex = startHour * 2 + startMinute / 30;
-                        const endSlotIndex = endHour * 2 + endMinute / 30;
+                        const startSlotIndex = startInUserTZ.hour * 2 + startInUserTZ.minute / 30;
+                        const endSlotIndex = endInUserTZ.hour * 2 + endInUserTZ.minute / 30;
                         const width = (endSlotIndex - startSlotIndex) * 64;
 
                         return (

@@ -10,6 +10,7 @@ import {
 import { ServiceRequest } from './types';
 import { getStatusColor, getPriorityColor, canCancelRequest, formatDateTime, getLocale } from './utils';
 import { formatLongDate } from '../../../utils/dateFormatter';
+import { formatTimeOnly } from '../../../utils/timezoneUtils';
 
 interface ServiceRequestsListProps {
   requests: ServiceRequest[];
@@ -95,7 +96,7 @@ export const ServiceRequestsList: React.FC<ServiceRequestsListProps> = ({
                         {formatLongDate(new Date(request.requestedDatetime), t, language)}
                       </div>
                       <div className="text-sm text-blue-800 dark:text-blue-200">
-                        {new Date(request.requestedDatetime).toLocaleTimeString(getLocale(language), { hour: '2-digit', minute: '2-digit' })} - {new Date(new Date(request.requestedDatetime).getTime() + request.requestedDurationMinutes * 60000).toLocaleTimeString(getLocale(language), { hour: '2-digit', minute: '2-digit' })} ({(request.requestedDurationMinutes / 60).toFixed(1)}h)
+                        {formatTimeOnly(request.requestedDatetime)} - {formatTimeOnly(new Date(new Date(request.requestedDatetime).getTime() + request.requestedDurationMinutes * 60000))} ({(request.requestedDurationMinutes / 60).toFixed(1)}h)
                       </div>
                     </>
                   ) : (

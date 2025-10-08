@@ -9,7 +9,6 @@ import { useUrgencyLevels } from './ServiceScheduler/useUrgencyLevels';
 import { generateCalendar, navigateMonth, isToday, isSameMonth, getMonthTranslationKey, getMonthShortTranslationKey, getDayTranslationKey } from './ServiceScheduler/calendarUtils';
 import {
   generateTimeSlots,
-  isPremiumTime,
   calculateEndTime,
   getAvailableDurations,
   getAvailableTimeSlots,
@@ -34,8 +33,8 @@ const ServiceScheduler: React.FC = () => {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>(''); // UTC time for backend
   const [selectedEndTime, setSelectedEndTime] = useState<string>(''); // UTC time for backend
-  const [displayTime, setDisplayTime] = useState<string>(''); // PDT time for display
-  const [displayEndTime, setDisplayEndTime] = useState<string>(''); // PDT time for display
+  const [displayTime, setDisplayTime] = useState<string>(''); // User timezone for display
+  const [displayEndTime, setDisplayEndTime] = useState<string>(''); // User timezone for display
   const [selectedDuration, setSelectedDuration] = useState<number>(1); // minimum 1 hour
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [minDaysFromNow, setMinDaysFromNow] = useState<number>(0); // Minimum days from now for auto-suggest
@@ -475,45 +474,12 @@ const ServiceScheduler: React.FC = () => {
     return dateStart >= todayStart;
   };
 
-  // Time slots generation - hourly blocks for timeline interface
-  const generateTimeSlots = () => {
-    const slots = [];
-    // Extended hours: 6:00 AM - 10:00 PM (premium pricing after hours)
-    for (let hour = 6; hour <= 22; hour++) {
-      const timeString = `${hour.toString().padStart(2, '0')}:00`;
-      slots.push(timeString);
-    }
-    return slots;
-  };
-
-  // Check if time slot is premium pricing
-  const isPremiumTime = (timeSlot: string) => {
-    const [hour] = timeSlot.split(':').map(Number);
-    // Premium hours: before 8 AM or after 5 PM
-    return hour < 8 || hour >= 17;
-  };
-
-  // Calculate end time based on start time and duration
-  const calculateEndTime = (startTime: string, duration: number) => {
-    const [hour] = startTime.split(':').map(Number);
-    const endHour = hour + duration;
-    return `${endHour.toString().padStart(2, '0')}:00`;
-  };
-
   // Handle timeline selection
   const handleTimelineSelect = (startTime: string, duration: number) => {
     const endTime = calculateEndTime(startTime, duration);
     setSelectedTime(startTime);
     setSelectedEndTime(endTime);
     setSelectedDuration(duration);
-  };
-
-  // Get available durations for a start time
-  const getAvailableDurations = (startTime: string) => {
-    const [startHour] = startTime.split(':').map(Number);
-    const maxHour = 22; // 10 PM
-    const maxDuration = Math.min(8, maxHour - startHour); // Max 8 hours or until closing
-    return Array.from({ length: maxDuration }, (_, i) => i + 1);
   };
 
   // Filter time slots based on selected date
@@ -572,7 +538,7 @@ const ServiceScheduler: React.FC = () => {
 
     try {
       // Combine date + time into single UTC timestamp
-      // NOTE: selectedTime is already in UTC format (e.g., "19:00" for 12pm PDT)
+      // NOTE: selectedTime is already in UTC format (e.g., "19:00" for 12pm Pacific)
       const localDateTime = new Date(selectedDate);
       const [hours, minutes] = selectedTime.split(':').map(Number);
       localDateTime.setUTCHours(hours, minutes, 0, 0);
@@ -662,20 +628,25 @@ const ServiceScheduler: React.FC = () => {
       return `${hours}:${minutes}:${seconds}`;
     };
 
-    // Format time for display in Pacific timezone
-    const formatPDTTime = (date: Date): string => {
+    // Format time for display in user's timezone
+    const formatUserTime = (date: Date): string => {
+      // Get user timezone from storage
+      const authUser = JSON.parse(RoleBasedStorage.getItem('authUser') || '{}');
+      const userTimezone = authUser.timezonePreference || Intl.DateTimeFormat().resolvedOptions().timeZone;
+      const timeFormat = authUser.timeFormatPreference || '12h';
+
       return date.toLocaleTimeString('en-US', {
-        timeZone: 'America/Los_Angeles',
+        timeZone: userTimezone,
         hour: '2-digit',
         minute: '2-digit',
-        hour12: true
+        hour12: timeFormat === '12h'
       });
     };
 
     setSelectedTime(formatUTCTime(startTime));
     setSelectedEndTime(formatUTCTime(endTime));
-    setDisplayTime(formatPDTTime(startTime));
-    setDisplayEndTime(formatPDTTime(endTime));
+    setDisplayTime(formatUserTime(startTime));
+    setDisplayEndTime(formatUserTime(endTime));
 
     // Calculate duration in hours
     const durationMs = endTime.getTime() - startTime.getTime();

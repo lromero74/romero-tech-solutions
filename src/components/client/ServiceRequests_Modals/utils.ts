@@ -1,17 +1,21 @@
 import { ServiceRequest } from './types';
+import { getUserTimezone, getUserTimeFormat } from '../../../utils/timezoneUtils';
 
 /**
  * Format a timestamp to show both local time and UTC
  * @param timestamp - ISO timestamp string
  * @param locale - Locale string for formatting
- * @param timeFormat - '12h' or '24h' format preference (defaults to '12h')
+ * @param timeFormat - '12h' or '24h' format preference (defaults to user's preference)
  */
-export const formatTimestampWithUTC = (timestamp: string, locale?: string, timeFormat: '12h' | '24h' = '12h'): { local: string; utc: string } => {
+export const formatTimestampWithUTC = (timestamp: string, locale?: string, timeFormat?: '12h' | '24h'): { local: string; utc: string } => {
   const date = new Date(timestamp);
-  const use12Hour = timeFormat === '12h';
+  const userTimeFormat = timeFormat || getUserTimeFormat();
+  const userTimezone = getUserTimezone();
+  const use12Hour = userTimeFormat === '12h';
 
-  // Format local time
+  // Format in user's timezone
   const local = date.toLocaleString(locale, {
+    timeZone: userTimezone,
     year: 'numeric',
     month: 'numeric',
     day: 'numeric',
@@ -84,27 +88,31 @@ export const formatFileSize = (bytes: number) => {
 };
 
 /**
- * Format file timestamp (converts UTC to local timezone)
+ * Format file timestamp (converts UTC to user's timezone)
  */
 export const formatFileTimestamp = (timestamp: string, locale?: string) => {
   try {
     const dateObj = new Date(timestamp);
+    const userTimezone = getUserTimezone();
+    const userTimeFormat = getUserTimeFormat();
 
     if (isNaN(dateObj.getTime())) {
       return 'Invalid date';
     }
 
     const formattedDate = dateObj.toLocaleDateString('en-US', {
+      timeZone: userTimezone,
       year: 'numeric',
       month: '2-digit',
       day: '2-digit'
     });
 
     const formattedTime = dateObj.toLocaleTimeString('en-US', {
+      timeZone: userTimezone,
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: true
+      hour12: userTimeFormat === '12h'
     });
 
     return `${formattedDate} ${formattedTime}`;
@@ -165,7 +173,7 @@ export const getLocale = (language: string) => {
 };
 
 /**
- * Format date and time (converts UTC to local timezone)
+ * Format date and time (converts UTC to user's timezone)
  */
 export const formatDateTime = (
   datetime: string | null,
@@ -174,6 +182,9 @@ export const formatDateTime = (
   t?: any,
   locale?: string
 ) => {
+  const userTimezone = getUserTimezone();
+  const userTimeFormat = getUserTimeFormat();
+
   // If we have the new combined datetime field (UTC ISO string), use it
   if (datetime) {
     try {
@@ -181,8 +192,13 @@ export const formatDateTime = (
       if (isNaN(dateObj.getTime())) {
         return t?.('serviceRequests.notScheduled', undefined, 'Not scheduled') || 'Not scheduled';
       }
-      const formattedDate = dateObj.toLocaleDateString(locale);
-      const formattedTime = dateObj.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' });
+      const formattedDate = dateObj.toLocaleDateString(locale, { timeZone: userTimezone });
+      const formattedTime = dateObj.toLocaleTimeString(locale, {
+        timeZone: userTimezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: userTimeFormat === '12h'
+      });
       return `${formattedDate} ${t?.('serviceRequests.at', undefined, 'at') || 'at'} ${formattedTime}`;
     } catch (error) {
       console.error('formatDateTime error:', error);
@@ -192,7 +208,7 @@ export const formatDateTime = (
   // Fallback to old date/time fields for backward compatibility
   if (!fallbackDate) return t?.('serviceRequests.notScheduled', undefined, 'Not scheduled') || 'Not scheduled';
   const dateObj = new Date(fallbackDate);
-  const formattedDate = dateObj.toLocaleDateString(locale);
+  const formattedDate = dateObj.toLocaleDateString(locale, { timeZone: userTimezone });
   if (fallbackTime) {
     return `${formattedDate} ${t?.('serviceRequests.at', undefined, 'at') || 'at'} ${fallbackTime}`;
   }

@@ -14,6 +14,7 @@ import {
 import {
   CancellationModal,
   CloseConfirmationModal,
+  RescheduleModal,
   ServiceRequestDetailModal,
   ServiceRequestsFilters,
   ServiceRequestsList,
@@ -89,6 +90,8 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
   const [cancellationReason, setCancellationReason] = useState('');
   const [isCancelling, setIsCancelling] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [reschedulingRequest, setReschedulingRequest] = useState<ServiceRequest | null>(null);
 
   // Inline editing state
   const [editingTitle, setEditingTitle] = useState(false);
@@ -680,6 +683,43 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     setShowCancelModal(true);
   };
 
+  // Handle reschedule request click
+  const handleRescheduleRequest = (request: ServiceRequest) => {
+    setReschedulingRequest(request);
+    setShowRescheduleModal(true);
+  };
+
+  // Handle reschedule confirmation
+  const handleConfirmReschedule = async (requestId: string, newDateTime: Date, durationMinutes: number) => {
+    try {
+      const response = await apiService.patch(
+        `/client/service-requests/${requestId}/reschedule`,
+        {
+          requestedDatetime: newDateTime.toISOString(),
+          requestedDurationMinutes: durationMinutes
+        }
+      );
+
+      if (response.success) {
+        // Refresh service requests
+        await fetchServiceRequests(pagination.page);
+        // Close modal
+        setShowRescheduleModal(false);
+        setReschedulingRequest(null);
+        // Show success message
+        setSuccessMessage(t('serviceRequests.reschedule.success', {}, 'Service request rescheduled successfully'));
+        // Auto-hide success message after 5 seconds
+        setTimeout(() => setSuccessMessage(null), 5000);
+      } else {
+        throw new Error(response.message || 'Failed to reschedule');
+      }
+    } catch (error: any) {
+      console.error('Error rescheduling service request:', error);
+      alert(error.message || t('serviceRequests.reschedule.error', {}, 'Failed to reschedule service request'));
+      throw error;
+    }
+  };
+
   // Handle cancel confirmation
   const handleConfirmCancellation = async () => {
     if (!cancellingRequest) return;
@@ -1123,6 +1163,19 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           onNoteTextChange={setNewNoteText}
           onSubmitNote={submitNote}
           onCancelRequest={handleCancelRequest}
+          onReschedule={handleRescheduleRequest}
+        />
+      )}
+
+      {showRescheduleModal && reschedulingRequest && (
+        <RescheduleModal
+          serviceRequest={reschedulingRequest}
+          onClose={() => {
+            setShowRescheduleModal(false);
+            setReschedulingRequest(null);
+          }}
+          onReschedule={handleConfirmReschedule}
+          businessId={authUser?.businessId || ''}
         />
       )}
 

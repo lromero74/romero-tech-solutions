@@ -1,5 +1,6 @@
 export { default as CancellationModal } from './CancellationModal';
 export { default as CloseConfirmationModal } from './CloseConfirmationModal';
+export { default as RescheduleModal } from './RescheduleModal';
 export { default as ServiceRequestDetailModal } from './ServiceRequestDetailModal';
 export { default as ServiceRequestFilesSection } from './ServiceRequestFilesSection';
 export { default as ServiceRequestNotesSection } from './ServiceRequestNotesSection';

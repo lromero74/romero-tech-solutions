@@ -14,6 +14,7 @@ import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { usePermission } from '../../hooks/usePermission';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import apiService from '../../services/apiService';
+import { getUserTimezone, getUserTimeFormat, formatDateInUserTimezone, formatTimeOnly } from '../../utils/timezoneUtils';
 import { websocketService } from '../../services/websocketService';
 import { useFileUploadWithProgress } from '../../hooks/useFileUploadWithProgress';
 import {
@@ -39,6 +40,7 @@ import {
   ServiceRequestsTable,
   ServiceRequestsMobileView
 } from './AdminServiceRequests_Modals';
+import AdminRescheduleModal from './AdminServiceRequests_Modals/AdminRescheduleModal';
 
 interface AdminServiceRequestsProps {
   serviceRequests?: ServiceRequest[];
@@ -88,6 +90,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [showCloseModal, setShowCloseModal] = useState(false);
   const [showUncancelModal, setShowUncancelModal] = useState(false);
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('');
   const [selectedStatusId, setSelectedStatusId] = useState<string>('');
   const [statusNotes, setStatusNotes] = useState<string>('');
@@ -307,6 +310,33 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     // Refresh cached data on mount if needed
     if (refreshTechnicians) refreshTechnicians();
     if (refreshServiceRequestStatuses) refreshServiceRequestStatuses();
+
+    // Load employee timezone preference from API if not in authUser
+    const loadTimezonePreference = async () => {
+      try {
+        const authUserStr = RoleBasedStorage.getItem('authUser');
+        if (authUserStr) {
+          const authUser = JSON.parse(authUserStr);
+          if (!authUser.timezonePreference) {
+            console.log('🌍 Timezone not in authUser, fetching from employee profile API...');
+            const profileResult = await apiService.get('/employees/profile');
+            if (profileResult.success && profileResult.data.timezonePreference) {
+              authUser.timezonePreference = profileResult.data.timezonePreference;
+              RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
+              console.log('✅ Loaded and saved employee timezone preference:', profileResult.data.timezonePreference);
+            } else {
+              console.log('ℹ️ Employee has no timezone preference set, will use browser timezone');
+            }
+          } else {
+            console.log('✅ Employee timezone preference already loaded:', authUser.timezonePreference);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load employee timezone preference:', error);
+      }
+    };
+
+    loadTimezonePreference();
   }, []);
 
   // Listen for websocket note updates and file uploads
@@ -604,6 +634,34 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     } catch (err) {
       console.error('Error assigning technician:', err);
       setActionError(err instanceof Error ? err.message : 'Failed to assign technician');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // Handle reschedule
+  const handleReschedule = async (requestId: string, newDateTime: Date, durationMinutes: number) => {
+    try {
+      setActionLoading(true);
+      setActionError(null);
+
+      const response = await apiService.patch(`/admin/service-requests/${requestId}/reschedule`, {
+        requestedDatetime: newDateTime.toISOString(),
+        requestedDurationMinutes: durationMinutes
+      });
+
+      if (response.success) {
+        // Refresh service requests list
+        await fetchServiceRequests();
+        setShowRescheduleModal(false);
+        setSelectedRequest(null);
+      } else {
+        throw new Error(response.message || 'Failed to reschedule');
+      }
+    } catch (err) {
+      console.error('Error rescheduling service request:', err);
+      setActionError(err instanceof Error ? err.message : 'Failed to reschedule service request');
+      throw err;
     } finally {
       setActionLoading(false);
     }
@@ -1238,14 +1296,21 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
         console.error('formatDate: Invalid date for input:', isoString);
         return 'N/A';
       }
-      return date.toLocaleDateString();
+      // Use timezone utilities to format in employee's timezone preference
+      const userTimezone = getUserTimezone();
+      return date.toLocaleDateString('en-US', {
+        timeZone: userTimezone,
+        year: 'numeric',
+        month: 'numeric',
+        day: 'numeric'
+      });
     } catch (error) {
       console.error('formatDate error:', error, 'input:', isoString);
       return 'N/A';
     }
   };
 
-  // Format time from ISO 8601 UTC string to user's local time
+  // Format time from ISO 8601 UTC string to employee's timezone preference
   const formatTime = (isoString: string | null) => {
     if (!isoString) return '';
     try {
@@ -1254,14 +1319,15 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
         console.error('formatTime: Invalid datetime for:', isoString);
         return '';
       }
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      // Use timezone utilities to format in employee's timezone and format preference
+      return formatTimeOnly(date);
     } catch (error) {
       console.error('formatTime error:', error);
       return '';
     }
   };
 
-  // Format full date and time from ISO 8601 UTC string to user's local datetime
+  // Format full date and time from ISO 8601 UTC string to employee's timezone preference
   const formatDateTime = (isoString: string | null, options?: Intl.DateTimeFormatOptions) => {
     if (!isoString) return 'N/A';
     try {
@@ -1270,7 +1336,8 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
         console.error('formatDateTime: Invalid datetime for:', isoString);
         return 'N/A';
       }
-      return options ? date.toLocaleDateString('en-US', options) : date.toLocaleString();
+      // Use timezone utilities to format in employee's timezone preference
+      return formatDateInUserTimezone(date, options);
     } catch (error) {
       console.error('formatDateTime error:', error);
       return 'N/A';
@@ -1601,6 +1668,7 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
             setShowAssignModal(true);
             setActionError(null);
           }}
+          onReschedule={() => setShowRescheduleModal(true)}
           formatFullAddress={formatFullAddress}
           getMapUrl={getMapUrl}
           formatPhone={formatPhone}
@@ -1654,6 +1722,18 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
           setActionError(null);
         }}
       />
+
+      {/* Reschedule Modal */}
+      {showRescheduleModal && selectedRequest && (
+        <AdminRescheduleModal
+          serviceRequest={selectedRequest}
+          onClose={() => {
+            setShowRescheduleModal(false);
+            setSelectedRequest(null);
+          }}
+          onReschedule={handleReschedule}
+        />
+      )}
 
       {/* Complete/Close Request Modal */}
       <CompleteRequestModal

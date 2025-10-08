@@ -3478,4 +3478,122 @@ ${fileList}
   }
 });
 
+/**
+ * PATCH /api/admin/service-requests/:id/reschedule
+ * Reschedule a service request (admin can reschedule any request)
+ */
+router.patch('/service-requests/:id/reschedule', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { requestedDatetime, requestedDurationMinutes } = req.body;
+
+    console.log('📅 [Admin] Reschedule request:', { id, requestedDatetime, requestedDurationMinutes });
+
+    // Validate inputs
+    if (!requestedDatetime || !requestedDurationMinutes) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: requestedDatetime and requestedDurationMinutes'
+      });
+    }
+
+    const pool = await getPool();
+
+    // Verify the service request exists
+    const checkQuery = `
+      SELECT id, status_id, title, request_number, client_id
+      FROM service_requests
+      WHERE id = $1 AND soft_delete = false
+    `;
+    const checkResult = await pool.query(checkQuery, [id]);
+
+    if (checkResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Service request not found'
+      });
+    }
+
+    const serviceRequest = checkResult.rows[0];
+
+    // Check if request can be rescheduled (not closed or cancelled)
+    const statusQuery = `
+      SELECT name, is_final_status
+      FROM service_request_statuses
+      WHERE id = $1
+    `;
+    const statusResult = await pool.query(statusQuery, [serviceRequest.status_id]);
+
+    if (statusResult.rows.length === 0) {
+      return res.status(500).json({
+        success: false,
+        message: 'Invalid service request status'
+      });
+    }
+
+    const status = statusResult.rows[0];
+    if (status.is_final_status) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot reschedule a ${status.name} service request`
+      });
+    }
+
+    // Update the service request
+    const updateQuery = `
+      UPDATE service_requests
+      SET
+        requested_datetime = $1,
+        requested_duration_minutes = $2,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+      RETURNING
+        id,
+        request_number,
+        title,
+        requested_datetime,
+        requested_duration_minutes,
+        updated_at
+    `;
+
+    const updateResult = await pool.query(updateQuery, [
+      requestedDatetime,
+      requestedDurationMinutes,
+      id
+    ]);
+
+    const updatedRequest = updateResult.rows[0];
+
+    console.log('✅ [Admin] Service request rescheduled:', updatedRequest.request_number);
+
+    // Send WebSocket notification to client and technicians
+    try {
+      websocketService.notifyServiceRequestUpdate(id, {
+        type: 'rescheduled',
+        requestNumber: updatedRequest.request_number,
+        title: updatedRequest.title,
+        requestedDatetime: updatedRequest.requested_datetime,
+        requestedDurationMinutes: updatedRequest.requested_duration_minutes,
+        updatedAt: updatedRequest.updated_at
+      });
+    } catch (wsError) {
+      console.error('Failed to send WebSocket notification:', wsError);
+      // Don't fail the request if WebSocket fails
+    }
+
+    res.json({
+      success: true,
+      message: 'Service request rescheduled successfully',
+      data: updatedRequest
+    });
+
+  } catch (error) {
+    console.error('❌ [Admin] Error rescheduling service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to reschedule service request'
+    });
+  }
+});
+
 export default router;

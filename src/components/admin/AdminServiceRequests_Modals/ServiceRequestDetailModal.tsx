@@ -13,7 +13,8 @@ import {
   Mail,
   Phone,
   FileText,
-  AlertCircle
+  AlertCircle,
+  Calendar
 } from 'lucide-react';
 import { useTheme, themeClasses } from '../../../contexts/ThemeContext';
 import { ServiceRequest, ServiceRequestFile, ServiceRequestNote } from './types';
@@ -70,6 +71,7 @@ interface ServiceRequestDetailModalProps {
   onShowStatusModal: () => void;
   onAcknowledge: () => void;
   onShowAssignModal: () => void;
+  onReschedule: () => void;
   formatFullAddress: (locationDetails: ServiceRequest['locationDetails']) => string;
   getMapUrl: (locationDetails: ServiceRequest['locationDetails']) => string;
   formatPhone: (phone: string | null | undefined) => string;
@@ -129,6 +131,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
   onShowStatusModal,
   onAcknowledge,
   onShowAssignModal,
+  onReschedule,
   formatFullAddress,
   getMapUrl,
   formatPhone,
@@ -512,6 +515,17 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
               >
                 Change Status
               </button>
+
+              {selectedRequest.status !== 'Closed' && selectedRequest.status !== 'Cancelled' && (
+                <button
+                  onClick={onReschedule}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  <Calendar className="h-4 w-4 mr-2" />
+                  Reschedule
+                </button>
+              )}
             </div>
           </div>
 

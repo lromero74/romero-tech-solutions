@@ -6,6 +6,7 @@ import AlertModal from '../shared/AlertModal';
 import TrustedDeviceManagement from '../shared/TrustedDeviceManagement';
 import ClientPushNotificationManager from './ClientPushNotificationManager';
 import { apiService } from '../../services/apiService';
+import { detectUserTimezone, getGroupedTimezones, getTimezoneDisplayName } from '../../utils/timezoneUtils';
 import {
   User,
   Lock,
@@ -21,7 +22,8 @@ import {
   RefreshCw,
   Smartphone,
   Clock,
-  Bell
+  Bell,
+  Globe
 } from 'lucide-react';
 
 interface ContactInfo {
@@ -30,6 +32,7 @@ interface ContactInfo {
   email: string;
   phone: string;
   timeFormatPreference: '12h' | '24h';
+  timezonePreference: string;
 }
 
 interface MFASettings {
@@ -59,14 +62,16 @@ const ClientSettings: React.FC = () => {
     lastName: '',
     email: '',
     phone: '',
-    timeFormatPreference: '12h'
+    timeFormatPreference: '12h',
+    timezonePreference: detectUserTimezone()
   });
   const [originalContactInfo, setOriginalContactInfo] = useState<ContactInfo>({
     firstName: '',
     lastName: '',
     email: '',
     phone: '',
-    timeFormatPreference: '12h'
+    timeFormatPreference: '12h',
+    timezonePreference: detectUserTimezone()
   });
 
   // Password State
@@ -98,6 +103,7 @@ const ClientSettings: React.FC = () => {
   const [showMfaSetup, setShowMfaSetup] = useState(false);
   const [showBackupCodes, setShowBackupCodes] = useState(false);
   const [showSpamFolderAlert, setShowSpamFolderAlert] = useState(false);
+  const [detectedTimezone, setDetectedTimezone] = useState<string>('');
 
   const themeClasses = {
     container: isDarkMode
@@ -128,6 +134,9 @@ const ClientSettings: React.FC = () => {
 
   useEffect(() => {
     loadUserData();
+    // Detect and display user's current timezone
+    const detected = detectUserTimezone();
+    setDetectedTimezone(getTimezoneDisplayName(detected));
   }, []);
 
   useEffect(() => {
@@ -151,16 +160,22 @@ const ClientSettings: React.FC = () => {
         lastName: contactData.data.lastName || '',
         email: contactData.data.email || authUser.email || '',
         phone: formattedPhone,
-        timeFormatPreference: (contactData.data.timeFormatPreference || '12h') as '12h' | '24h'
+        timeFormatPreference: (contactData.data.timeFormatPreference || '12h') as '12h' | '24h',
+        timezonePreference: contactData.data.timezonePreference || detectUserTimezone()
       };
       setContactInfo(info);
       setOriginalContactInfo(info);
 
-      // Update authUser with latest timeFormatPreference to ensure it's in sync
-      if (contactData.data.timeFormatPreference && authUser) {
-        authUser.timeFormatPreference = contactData.data.timeFormatPreference;
+      // Update authUser with latest preferences to ensure it's in sync
+      if (authUser) {
+        if (contactData.data.timeFormatPreference) {
+          authUser.timeFormatPreference = contactData.data.timeFormatPreference;
+        }
+        if (contactData.data.timezonePreference) {
+          authUser.timezonePreference = contactData.data.timezonePreference;
+        }
         RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
-        console.log('📝 Synced authUser with profile timeFormatPreference:', contactData.data.timeFormatPreference);
+        console.log('📝 Synced authUser with profile preferences');
       }
 
       // Load MFA settings
@@ -284,13 +299,18 @@ const ClientSettings: React.FC = () => {
       const response = await apiService.put('/client/profile', contactInfo);
       setOriginalContactInfo(contactInfo);
 
-      // Update authUser in storage with new time format preference
+      // Update authUser in storage with new preferences
       try {
         const authUser = JSON.parse(RoleBasedStorage.getItem('authUser') || '{}');
-        if (authUser && response.data?.timeFormatPreference) {
-          authUser.timeFormatPreference = response.data.timeFormatPreference;
+        if (authUser) {
+          if (response.data?.timeFormatPreference) {
+            authUser.timeFormatPreference = response.data.timeFormatPreference;
+          }
+          if (response.data?.timezonePreference) {
+            authUser.timezonePreference = response.data.timezonePreference;
+          }
           RoleBasedStorage.setItem('authUser', JSON.stringify(authUser));
-          console.log('✅ Updated authUser with new time format preference:', response.data.timeFormatPreference);
+          console.log('✅ Updated authUser with new preferences');
         }
       } catch (storageError) {
         console.warn('Failed to update authUser storage:', storageError);
@@ -536,6 +556,46 @@ const ClientSettings: React.FC = () => {
                   <option value="12h">{t('settings.profile.timeFormat12h')}</option>
                   <option value="24h">{t('settings.profile.timeFormat24h')}</option>
                 </select>
+              </div>
+
+              <div className="md:col-span-2">
+                <label className={`block text-sm font-medium mb-2 ${themeClasses.text}`}>
+                  <Globe className="h-4 w-4 inline mr-1" />
+                  {t('settings.profile.timezone', undefined, 'Timezone')}
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    value={contactInfo.timezonePreference}
+                    onChange={(e) => setContactInfo(prev => ({ ...prev, timezonePreference: e.target.value }))}
+                    className={`flex-1 px-3 py-2 border rounded-md ${themeClasses.input}`}
+                  >
+                    {Object.entries(getGroupedTimezones()).map(([region, timezones]) => (
+                      <optgroup key={region} label={region}>
+                        {timezones.map((tz) => (
+                          <option key={tz.value} value={tz.value}>
+                            {tz.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const detected = detectUserTimezone();
+                      setContactInfo(prev => ({ ...prev, timezonePreference: detected }));
+                    }}
+                    className={`px-3 py-2 rounded-md text-sm whitespace-nowrap ${themeClasses.buttonSecondary}`}
+                    title={t('settings.profile.timezoneAuto', undefined, 'Auto-detect timezone')}
+                  >
+                    {t('settings.profile.timezoneAuto', undefined, 'Auto-detect')}
+                  </button>
+                </div>
+                {detectedTimezone && (
+                  <p className={`text-xs mt-1 ${themeClasses.textSecondary}`}>
+                    {t('settings.profile.timezoneDetected', { timezone: detectedTimezone }, 'Detected: {{timezone}}')}
+                  </p>
+                )}
               </div>
             </div>
 

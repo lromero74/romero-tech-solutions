@@ -23,6 +23,7 @@ const registrationSchema = Joi.object({
   contactEmail: Joi.string().email().required(),
   contactPhone: Joi.string().min(10).max(20).required(),
   jobTitle: Joi.string().max(100).allow('', null),
+  timezonePreference: Joi.string().max(255).allow('', null),  // Auto-detected timezone from browser
   serviceAddresses: Joi.array().items(
     Joi.object({
       label: Joi.string().min(1).max(100).required(),

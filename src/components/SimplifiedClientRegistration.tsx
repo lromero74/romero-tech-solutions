@@ -15,6 +15,7 @@ import {
 import { useLanguage } from '../contexts/LanguageContext';
 import { validateEmailDomain } from '../utils/domainValidation';
 import { apiService } from '../services/apiService';
+import { detectUserTimezone } from '../utils/timezoneUtils';
 
 interface SimplifiedClientRegistrationProps {
   onSuccess: (credentials?: { email: string; password: string }) => void;
@@ -494,6 +495,7 @@ const SimplifiedClientRegistration: React.FC<SimplifiedClientRegistrationProps> 
         cellPhone: getPhoneDigits(formData.cellPhone),
         businessName: finalBusinessName,
         isIndividual: formData.isIndividual,
+        timezonePreference: detectUserTimezone(), // Auto-detect user's timezone
         // Business address (will be stored as service location)
         streetAddress1: formData.streetAddress1,
         streetAddress2: formData.streetAddress2,

@@ -1,8 +1,9 @@
 import React from 'react';
-import { ExternalLink, Edit2, Check, X, RefreshCw, MapPin, User, Phone, Mail } from 'lucide-react';
+import { ExternalLink, Edit2, Check, X, RefreshCw, MapPin, User, Phone, Mail, Calendar } from 'lucide-react';
 import { ServiceRequest, ServiceRequestFile, ServiceRequestNote, ThemeClasses } from './types';
 import { getStatusColor, getPriorityColor, formatFullAddress, getMapUrl, formatPhone, canCancelRequest } from './utils';
 import { formatLongDate } from '../../../utils/dateFormatter';
+import { formatTimeOnly } from '../../../utils/timezoneUtils';
 import ServiceRequestFilesSection from './ServiceRequestFilesSection';
 import ServiceRequestNotesSection from './ServiceRequestNotesSection';
 import { FileUploadProgress } from '../../../hooks/useFileUploadWithProgress';
@@ -51,6 +52,7 @@ interface ServiceRequestDetailModalProps {
   onNoteTextChange: (text: string) => void;
   onSubmitNote: () => void;
   onCancelRequest: (request: ServiceRequest) => void;
+  onReschedule: (request: ServiceRequest) => void;
 }
 
 const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
@@ -96,7 +98,8 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
   onFileNameChange,
   onNoteTextChange,
   onSubmitNote,
-  onCancelRequest
+  onCancelRequest,
+  onReschedule
 }) => {
   const getLocale = () => language === 'es' ? 'es-ES' : 'en-US';
 
@@ -214,7 +217,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                         {formatLongDate(new Date(selectedRequest.requestedDatetime), t, language)}
                       </div>
                       <div className="text-base text-blue-800 dark:text-blue-200">
-                        {new Date(selectedRequest.requestedDatetime).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} - {new Date(new Date(selectedRequest.requestedDatetime).getTime() + selectedRequest.requestedDurationMinutes * 60000).toLocaleTimeString(getLocale(), { hour: '2-digit', minute: '2-digit' })} ({(selectedRequest.requestedDurationMinutes / 60).toFixed(1)}h)
+                        {formatTimeOnly(selectedRequest.requestedDatetime)} - {formatTimeOnly(new Date(new Date(selectedRequest.requestedDatetime).getTime() + selectedRequest.requestedDurationMinutes * 60000))} ({(selectedRequest.requestedDurationMinutes / 60).toFixed(1)}h)
                       </div>
                     </>
                   ) : (
@@ -461,11 +464,23 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
               <button
                 onClick={() => {
                   onClose();
+                  onReschedule(selectedRequest);
+                }}
+                className="w-full inline-flex justify-center items-center rounded-md border border-blue-300 dark:border-blue-700 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:w-auto sm:text-sm"
+              >
+                <Calendar className="h-4 w-4 mr-2" />
+                {t('serviceRequests.reschedule.button', undefined, 'Reschedule')}
+              </button>
+            )}
+            {canCancelRequest(selectedRequest) && (
+              <button
+                onClick={() => {
+                  onClose();
                   onCancelRequest(selectedRequest);
                 }}
                 className="w-full inline-flex justify-center rounded-md border border-red-300 dark:border-red-700 shadow-sm px-4 py-2 bg-white dark:bg-gray-800 text-base font-medium text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 sm:w-auto sm:text-sm"
               >
-                {t('serviceRequests.cancel', undefined, 'Cancel')}
+                {t('serviceRequests.cancel', undefined, 'Cancel Request')}
               </button>
             )}
           </div>

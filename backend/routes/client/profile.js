@@ -22,6 +22,7 @@ router.get('/', authenticateClient, async (req, res) => {
         email,
         phone,
         time_format_preference as "timeFormatPreference",
+        timezone_preference as "timezonePreference",
         created_at as "createdAt"
       FROM users
       WHERE id = $1 AND role = 'client' AND soft_delete = false
@@ -53,7 +54,7 @@ router.put('/', authenticateClient, async (req, res) => {
   try {
     const pool = await getPool();
     const clientId = req.user.clientId;
-    const { firstName, lastName, email, phone, timeFormatPreference } = req.body;
+    const { firstName, lastName, email, phone, timeFormatPreference, timezonePreference } = req.body;
 
     // Validate required fields
     if (!firstName || !lastName || !email) {
@@ -80,6 +81,17 @@ router.put('/', authenticateClient, async (req, res) => {
       });
     }
 
+    // Validate timezone preference if provided (basic IANA timezone format check)
+    if (timezonePreference && timezonePreference !== null) {
+      // Basic validation: should contain at least one forward slash (e.g., America/New_York)
+      if (typeof timezonePreference !== 'string' || !timezonePreference.includes('/')) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid timezone format. Must be a valid IANA timezone identifier (e.g., America/New_York)'
+        });
+      }
+    }
+
     // Check if email is already in use by another client
     const emailCheck = await pool.query(`
       SELECT id
@@ -103,10 +115,11 @@ router.put('/', authenticateClient, async (req, res) => {
         email = $3,
         phone = $4,
         time_format_preference = $5,
+        timezone_preference = $6,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $6 AND role = 'client' AND soft_delete = false
-      RETURNING first_name as "firstName", last_name as "lastName", email, phone, time_format_preference as "timeFormatPreference"
-    `, [firstName, lastName, email, phone, timeFormatPreference || '12h', clientId]);
+      WHERE id = $7 AND role = 'client' AND soft_delete = false
+      RETURNING first_name as "firstName", last_name as "lastName", email, phone, time_format_preference as "timeFormatPreference", timezone_preference as "timezonePreference"
+    `, [firstName, lastName, email, phone, timeFormatPreference || '12h', timezonePreference || null, clientId]);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
