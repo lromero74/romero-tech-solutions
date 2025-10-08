@@ -13,6 +13,7 @@ interface ServiceRequestFilesSectionProps {
   savingEdit: boolean;
   deletingFileId: string | null;
   apiBaseUrl: string;
+  businessId?: string;
   uploading?: boolean;
   fileUploads?: FileUploadProgress[];
   newlyUploadedFileIds?: string[];
@@ -33,6 +34,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
   savingEdit,
   deletingFileId,
   apiBaseUrl,
+  businessId,
   uploading = false,
   fileUploads = [],
   newlyUploadedFileIds = [],
@@ -257,11 +259,15 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                   </button>
                   <button
                     onClick={() => {
-                      window.open(`${apiBaseUrl}/admin/files/${file.id}/download`, '_blank');
+                      if (businessId) {
+                        window.open(`${apiBaseUrl}/admin/client-files/businesses/${businessId}/files/${file.id}/download`, '_blank');
+                      } else {
+                        console.error('Cannot download file: business ID not available');
+                      }
                     }}
                     className={`p-2 ${themeClasses.text.muted} hover:text-gray-600 dark:hover:text-gray-300`}
                     title="Download file"
-                    disabled={!!renamingFileId || !!deletingFileId}
+                    disabled={!!renamingFileId || !!deletingFileId || !businessId}
                   >
                     <Download className="h-4 w-4" />
                   </button>

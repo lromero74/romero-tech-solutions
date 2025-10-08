@@ -539,6 +539,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
             savingEdit={savingEdit}
             deletingFileId={deletingFileId}
             apiBaseUrl={apiBaseUrl}
+            businessId={selectedRequest.business_id}
             uploading={uploadingFiles}
             fileUploads={fileUploads}
             newlyUploadedFileIds={newlyUploadedFileIds}
