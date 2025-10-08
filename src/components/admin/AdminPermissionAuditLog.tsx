@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useTheme } from '../../contexts/ThemeContext';
+import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import {
@@ -38,7 +38,6 @@ interface Filters {
 }
 
 const AdminPermissionAuditLog: React.FC = () => {
-  const { themeClasses } = useTheme();
   const { checkPermission } = usePermission();
   const canView = checkPermission('view.permission_audit_log.enable');
 
