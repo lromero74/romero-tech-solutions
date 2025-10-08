@@ -300,7 +300,7 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string,
             const nextDayName = dayNames[(sampleBlock.endDay) % 7];
             displayTimeRange = `${startTime}-${endTime}<sup>(${nextDayName})</sup>`;
           } else {
-            displayTimeRange = `${startTime}-${endTime}<sup>(next day)</sup>`;
+            displayTimeRange = `${startTime}-${endTime}<sup>(${t('common.days.nextDay')})</sup>`;
           }
         }
 

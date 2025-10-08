@@ -409,6 +409,7 @@ export const esTranslations = {
   'common.days.thu': 'Jue',
   'common.days.fri': 'Vie',
   'common.days.sat': 'Sáb',
+  'common.days.nextDay': 'día siguiente',
   'common.yearsExperience': 'Años de Experiencia',
   'common.satisfactionRate': 'Tasa de Satisfacción',
   'common.emergencySupport': 'Soporte de Emergencia',

@@ -409,6 +409,7 @@ export const enTranslations = {
   'common.days.thu': 'Thu',
   'common.days.fri': 'Fri',
   'common.days.sat': 'Sat',
+  'common.days.nextDay': 'next day',
   'common.yearsExperience': 'Years Experience',
   'common.satisfactionRate': 'Satisfaction Rate',
   'common.emergencySupport': 'Emergency Support',
