@@ -258,11 +258,46 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                     <Edit2 className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => {
-                      if (businessId) {
-                        window.open(`${apiBaseUrl}/admin/client-files/businesses/${businessId}/files/${file.id}/download`, '_blank');
-                      } else {
+                    onClick={async () => {
+                      if (!businessId) {
                         console.error('Cannot download file: business ID not available');
+                        return;
+                      }
+
+                      try {
+                        const sessionToken = localStorage.getItem('sessionToken');
+                        const headers: HeadersInit = {
+                          'Accept': 'application/octet-stream'
+                        };
+                        if (sessionToken) {
+                          headers['Authorization'] = `Bearer ${sessionToken}`;
+                        }
+
+                        const response = await fetch(
+                          `${apiBaseUrl}/admin/client-files/businesses/${businessId}/files/${file.id}/download`,
+                          {
+                            method: 'GET',
+                            headers,
+                            credentials: 'include'
+                          }
+                        );
+
+                        if (!response.ok) {
+                          throw new Error('Failed to download file');
+                        }
+
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = file.original_filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                        document.body.removeChild(a);
+                      } catch (err) {
+                        console.error('Error downloading file:', err);
+                        alert('Failed to download file');
                       }
                     }}
                     className={`p-2 ${themeClasses.text.muted} hover:text-gray-600 dark:hover:text-gray-300`}
