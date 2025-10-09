@@ -242,6 +242,35 @@ export interface WorkflowStats {
   pendingActions: { pending_count: string; next_action_time: string | null };
 }
 
+export interface Testimonial {
+  id: string;
+  service_request_id: string;
+  client_id: string;
+  client_name: string;
+  total_score: number;
+  original_testimonial_text: string;
+  edited_testimonial_text: string | null;
+  was_edited: boolean;
+  is_approved: boolean;
+  allow_public_display: boolean;
+  display_name_preference: 'first' | 'last' | 'full' | 'anonymous';
+  approved_by_employee_id: string | null;
+  approved_by_name: string | null;
+  approved_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RatingQuestion {
+  id: string;
+  question_key: string;
+  question_text: string;
+  display_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 interface AdminDataContextType {
   // Data
   dashboardData: DashboardData | null;
@@ -267,6 +296,8 @@ interface AdminDataContextType {
   rateCategories: RateCategory[];
   workflowRules: WorkflowRule[];
   workflowStats: WorkflowStats | null;
+  testimonials: Testimonial[];
+  ratingQuestions: RatingQuestion[];
 
   // Loading and error states
   loading: boolean;
@@ -294,6 +325,8 @@ interface AdminDataContextType {
   refreshInvoices: (force?: boolean) => Promise<void>;
   refreshRateCategories: (force?: boolean) => Promise<void>;
   refreshWorkflowData: (force?: boolean) => Promise<void>;
+  refreshTestimonials: (force?: boolean) => Promise<void>;
+  refreshRatingQuestions: (force?: boolean) => Promise<void>;
 
   // Data setters (for optimistic updates)
   setEmployees: React.Dispatch<React.SetStateAction<Employee[]>>;
@@ -347,10 +380,14 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
   const [rateCategories, setRateCategories] = useState<RateCategory[]>([]);
   const [workflowRules, setWorkflowRules] = useState<WorkflowRule[]>([]);
   const [workflowStats, setWorkflowStats] = useState<WorkflowStats | null>(null);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
+  const [ratingQuestions, setRatingQuestions] = useState<RatingQuestion[]>([]);
 
   // Cache timestamps (5 minutes TTL)
   const quotaDataTimestampRef = useRef<number>(0);
   const clientFilesDataTimestampRef = useRef<number>(0);
+  const testimonialsTimestampRef = useRef<number>(0);
+  const ratingQuestionsTimestampRef = useRef<number>(0);
   const techniciansTimestampRef = useRef<number>(0);
   const statusesTimestampRef = useRef<number>(0);
   const invoicesTimestampRef = useRef<number>(0);
@@ -746,6 +783,60 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     } catch (err) {
       console.error('Error fetching workflow data:', err);
       setError('Failed to fetch workflow data');
+    }
+  };
+
+  const refreshTestimonials = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - testimonialsTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && testimonials.length > 0) {
+        console.log(`✅ Using cached testimonials (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh testimonials...');
+      const response = await apiService.get<{ testimonials: Testimonial[] }>('/admin/testimonials');
+
+      if (response.testimonials) {
+        setTestimonials(response.testimonials);
+      }
+
+      testimonialsTimestampRef.current = now;
+      console.log('✅ Testimonials refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching testimonials:', err);
+      setError('Failed to fetch testimonials');
+    }
+  };
+
+  const refreshRatingQuestions = async (force: boolean = false) => {
+    try {
+      const now = Date.now();
+      const cacheAge = now - ratingQuestionsTimestampRef.current;
+
+      // Return cached data if fresh and not forced
+      if (!force && cacheAge < CACHE_TTL && ratingQuestions.length > 0) {
+        console.log(`✅ Using cached rating questions (age: ${Math.round(cacheAge / 1000)}s)`);
+        return;
+      }
+
+      console.log('🔄 Fetching fresh rating questions...');
+      const response = await apiService.get<{ questions: RatingQuestion[] }>('/admin/rating-questions', {
+        params: { includeInactive: 'true' }
+      });
+
+      if (response.questions) {
+        setRatingQuestions(response.questions);
+      }
+
+      ratingQuestionsTimestampRef.current = now;
+      console.log('✅ Rating questions refreshed and cached');
+    } catch (err) {
+      console.error('Error fetching rating questions:', err);
+      setError('Failed to fetch rating questions');
     }
   };
 
@@ -1255,6 +1346,18 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
             console.log('🔄 Client file changed, force refreshing file data...');
             await refreshClientFilesData(true);
           }
+
+          // Handle testimonial changes
+          if (change.entityType === 'testimonial') {
+            console.log('🔄 Testimonial changed, force refreshing testimonials...');
+            await refreshTestimonials(true);
+          }
+
+          // Handle rating question changes
+          if (change.entityType === 'ratingQuestion') {
+            console.log('🔄 Rating question changed, force refreshing rating questions...');
+            await refreshRatingQuestions(true);
+          }
         });
 
         websocketService.onAuthenticationError((error) => {
@@ -1309,6 +1412,8 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     rateCategories,
     workflowRules,
     workflowStats,
+    testimonials,
+    ratingQuestions,
 
     // Loading and error states
     loading,
@@ -1336,6 +1441,8 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
     refreshInvoices,
     refreshRateCategories,
     refreshWorkflowData,
+    refreshTestimonials,
+    refreshRatingQuestions,
 
     // Data setters
     setEmployees,

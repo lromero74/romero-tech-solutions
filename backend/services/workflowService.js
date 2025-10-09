@@ -11,6 +11,8 @@ import {
   sendServiceRequestClosedClientEmail,
   sendServiceRequestClosedAdminEmail
 } from './workflowEmailService.js';
+import { sendServiceRequestRatingEmail } from './emailService.js';
+import crypto from 'crypto';
 
 /**
  * Get employees by roles for notifications
@@ -470,8 +472,11 @@ export async function handleServiceRequestClosed(serviceRequestId, employeeId, c
     // Get service request data
     const dataQuery = `
       SELECT
+        sr.id,
         sr.request_number,
         sr.title,
+        sr.completed_date,
+        u.id as client_id,
         u.email as client_email,
         u.first_name as client_first_name,
         cr.reason_name as close_reason
@@ -496,7 +501,44 @@ export async function handleServiceRequestClosed(serviceRequestId, employeeId, c
       }
     });
 
-    // 2. Send email to executives and admins
+    // 2. Create rating record and send rating request email
+    try {
+      // Generate unique rating token
+      const ratingToken = crypto.randomBytes(32).toString('hex');
+      const tokenExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
+
+      // Create rating record
+      await pool.query(`
+        INSERT INTO service_ratings (
+          service_request_id,
+          client_id,
+          rating_token,
+          token_expires_at
+        ) VALUES ($1, $2, $3, $4)
+        ON CONFLICT (service_request_id) DO NOTHING
+      `, [serviceRequestId, data.client_id, ratingToken, tokenExpiresAt]);
+
+      // Send rating request email
+      await sendServiceRequestRatingEmail({
+        serviceRequestData: {
+          requestNumber: data.request_number,
+          title: data.title,
+          completedDate: data.completed_date
+        },
+        client: {
+          email: data.client_email,
+          firstName: data.client_first_name
+        },
+        ratingToken
+      });
+
+      console.log(`📧 Rating request email sent to client ${data.client_email}`);
+    } catch (ratingError) {
+      // Don't fail the whole workflow if rating email fails
+      console.error('⚠️ Failed to send rating request (service request still closed):', ratingError);
+    }
+
+    // 3. Send email to executives and admins
     const admins = await getEmployeesByRoles(['executive', 'admin']);
     for (const admin of admins) {
       await sendServiceRequestClosedAdminEmail({

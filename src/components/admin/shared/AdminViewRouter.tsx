@@ -24,6 +24,8 @@ import AdminPricingSettings from '../AdminPricingSettings';
 import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
 import AdminRoleHierarchy from '../AdminRoleHierarchy';
 import FilterPresetManager from '../FilterPresetManager';
+import AdminTestimonials from '../AdminTestimonials';
+import AdminRatingQuestions from '../AdminRatingQuestions';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -44,7 +46,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1639,6 +1641,24 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             loading={loading}
             error={error}
             refreshClientFilesData={refreshClientFilesData}
+          />
+        );
+
+      case 'testimonials':
+        return (
+          <AdminTestimonials
+            loading={loading}
+            error={error}
+            onRefresh={refreshAllData}
+          />
+        );
+
+      case 'rating-questions':
+        return (
+          <AdminRatingQuestions
+            loading={loading}
+            error={error}
+            onRefresh={refreshAllData}
           />
         );
 

@@ -20,6 +20,7 @@ import About from './pages/About';
 import Contact from './pages/Contact';
 import ConfirmEmail from './pages/ConfirmEmail';
 import ComingSoon from './pages/ComingSoon';
+import ServiceRating from './pages/ServiceRating';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import { useVersionCheck } from './hooks/useVersionCheck';
@@ -112,6 +113,11 @@ function AppContent() {
     // Handle email confirmation page
     if (currentPage === 'confirm-email') {
       return <ConfirmEmail onSuccess={() => setCurrentPage('dashboard')} />;
+    }
+
+    // Handle service rating page (public - no auth required)
+    if (currentPage === 'rate') {
+      return <ServiceRating />;
     }
 
     // Handle coming soon page (displayed at /login)
@@ -232,8 +238,8 @@ function AppContent() {
     }
   };
 
-  // Don't show header/footer for role-specific dashboard pages, confirmation page, and client dashboard when authenticated or loading
-  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' ||
+  // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, and client dashboard when authenticated or loading
+  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
       (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isExecutive || isSales || isClient))))) {
     return renderPage();

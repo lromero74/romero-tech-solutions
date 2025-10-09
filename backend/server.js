@@ -35,6 +35,9 @@ import serviceRequestWorkflowRoutes from './routes/serviceRequestWorkflow.js';
 import employeeServiceRequestWorkflowRoutes from './routes/employee/serviceRequestWorkflow.js';
 import serviceTypesRoutes from './routes/serviceTypes.js';
 import pushRoutes from './routes/pushRoutes.js';
+import serviceRatingsRoutes from './routes/serviceRatings.js';
+import adminTestimonialsRoutes from './routes/admin/testimonials.js';
+import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -426,6 +429,9 @@ app.use('/api/employee/service-requests', generalLimiter, doubleCsrfProtection, 
 app.use('/api/push', generalLimiter, pushRoutes); // Push notification subscription management (auth handled per route)
 app.use('/api/auth', emailVerificationRoutes); // Email verification for client registration (no auth required)
 app.use('/api', emailValidationRoutes); // Email domain validation proxy (no auth required)
+app.use('/api/ratings', generalLimiter, serviceRatingsRoutes); // Public rating submission (token-based auth)
+app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminTestimonialsRoutes); // Admin testimonials management
+app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {

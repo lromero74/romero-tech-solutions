@@ -196,56 +196,78 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     const month = selectedDate.getMonth();
     const day = selectedDate.getDate();
 
-    // Calculate the offset between user's timezone and browser's timezone
-    const referenceUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
+    // Create a date string in the user's timezone and parse it to get UTC
+    // Format: "YYYY-MM-DD HH:mm" in user's timezone
+    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`;
 
-    // Get what 12:00 UTC looks like in user's timezone
-    const partsInUserTZ = new Intl.DateTimeFormat('en-US', {
+    // Use Intl.DateTimeFormat to find the UTC offset for this specific date/time in user's timezone
+    const referenceDate = new Date(dateStr);
+
+    // Format the date in user's timezone to get components
+    const formatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: userTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    });
+
+    // Get the UTC timestamp for this time in the user's timezone
+    // We do this by creating a formatter that outputs in UTC and comparing
+    const utcFormatter = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    });
+
+    // Create reference UTC time at noon
+    const refUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
+
+    // See what time this is in user's timezone
+    const userTZParts = new Intl.DateTimeFormat('en-US', {
       timeZone: userTimezone,
       hour: '2-digit',
       minute: '2-digit',
       hour12: false
-    }).formatToParts(referenceUTC);
-    const hourInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'hour')?.value || '0');
-    const minuteInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'minute')?.value || '0');
+    }).formatToParts(refUTC);
 
-    // Get what 12:00 UTC looks like in browser's timezone
-    const partsInBrowserTZ = new Intl.DateTimeFormat('en-US', {
-      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).formatToParts(referenceUTC);
-    const hourInBrowserTZ = parseInt(partsInBrowserTZ.find(p => p.type === 'hour')?.value || '0');
-    const minuteInBrowserTZ = parseInt(partsInBrowserTZ.find(p => p.type === 'minute')?.value || '0');
+    const userHour = parseInt(userTZParts.find(p => p.type === 'hour')?.value || '12');
+    const userMinute = parseInt(userTZParts.find(p => p.type === 'minute')?.value || '0');
 
-    // Calculate offset: how many hours ahead/behind is browser timezone from user timezone
-    const offsetHours = hourInBrowserTZ - hourInUserTZ;
-    const offsetMinutes = minuteInBrowserTZ - minuteInUserTZ;
+    // Calculate the offset in hours (how many hours to ADD to user time to get UTC)
+    // If it's 8am in user TZ when UTC is noon, offset is +4 (8 + 4 = 12)
+    const offsetHours = 12 - userHour;
+    const offsetMinutes = 0 - userMinute;
 
-    // Convert user time to browser time
-    let browserHour = hour + offsetHours;
-    let browserMinute = minute + offsetMinutes;
+    // Apply offset to user's time to get UTC time
+    let utcHour = hour + offsetHours;
+    let utcMinute = minute + offsetMinutes;
 
-    // Handle minute overflow/underflow
-    if (browserMinute < 0) {
-      browserMinute += 60;
-      browserHour -= 1;
-    } else if (browserMinute >= 60) {
-      browserMinute -= 60;
-      browserHour += 1;
+    // Handle overflow/underflow
+    if (utcMinute < 0) {
+      utcMinute += 60;
+      utcHour -= 1;
+    } else if (utcMinute >= 60) {
+      utcMinute -= 60;
+      utcHour += 1;
     }
 
-    // Create date in browser's local timezone
-    const date = new Date(year, month, day, browserHour, browserMinute, 0, 0);
+    // Create the date using UTC
+    const date = new Date(Date.UTC(year, month, day, utcHour, utcMinute, 0, 0));
 
     console.log(`🔄 createDateFromUserTime(${hour}:${String(minute).padStart(2, '0')}):`, {
       userTZ: userTimezone,
-      browserTZ: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      offsetHours,
-      offsetMinutes,
+      noonUTCInUserTZ: `${userHour}:${String(userMinute).padStart(2, '0')}`,
+      calculatedOffset: `${offsetHours}h ${offsetMinutes}m`,
       inputTime: `${hour}:${String(minute).padStart(2, '0')} (user TZ)`,
-      outputTime: `${browserHour}:${String(browserMinute).padStart(2, '0')} (browser TZ)`,
+      utcTime: `${utcHour}:${String(utcMinute).padStart(2, '0')} UTC`,
       resultUTC: date.toISOString()
     });
 
@@ -583,8 +605,8 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     setTimeout(() => {
       console.log('🎯 Attempting to scroll to suggested time with buffer...');
 
-      const hours = suggestedStartTime.getHours();
-      const minutes = suggestedStartTime.getMinutes();
+      // Get the suggested time in USER's timezone (not browser's timezone)
+      const timeInUserTZ = getHourMinuteInUserTimezone(suggestedStartTime);
 
       const container = document.getElementById('timeline-scroll');
       if (!container) {
@@ -596,19 +618,20 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
       // Calculate the start of the 1-hour buffer before the selected slot
       const bufferStartTime = new Date(suggestedStartTime.getTime() - (60 * 60 * 1000)); // 1 hour before
-      const bufferHours = bufferStartTime.getHours();
-      const bufferMinutes = bufferStartTime.getMinutes();
+      // Get buffer time in USER's timezone (not browser's timezone)
+      const bufferTimeInUserTZ = getHourMinuteInUserTimezone(bufferStartTime);
 
       // Calculate position for the buffer start (24-hour day starting at midnight)
-      const bufferSlotIndex = bufferHours * 2 + (bufferMinutes / 30);
+      const bufferSlotIndex = bufferTimeInUserTZ.hour * 2 + (bufferTimeInUserTZ.minute / 30);
       const bufferPosition = bufferSlotIndex * 64; // Each 30-min slot is 64px wide
 
       // Don't scroll before timeline start (midnight)
       const finalScrollPosition = Math.max(0, bufferPosition);
 
       console.log('🎯 Scrolling to buffer position:', {
-        suggestedTime: `${hours}:${String(minutes).padStart(2, '0')}`,
-        bufferTime: `${bufferHours}:${String(bufferMinutes).padStart(2, '0')}`,
+        userTimezone: userTimezone,
+        suggestedTime: `${timeInUserTZ.hour}:${String(timeInUserTZ.minute).padStart(2, '0')} (${userTimezone})`,
+        bufferTime: `${bufferTimeInUserTZ.hour}:${String(bufferTimeInUserTZ.minute).padStart(2, '0')} (${userTimezone})`,
         bufferSlotIndex,
         bufferPosition,
         finalScrollPosition
@@ -820,16 +843,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
       // Check 1-hour buffer before existing appointment (Rule 9)
       const oneHourBefore = new Date(booking.startTime.getTime() - (BUFFER_HOURS * 60 * 60 * 1000));
 
-      // Debug logging for 12:00-13:00 slots
-      if (slotTime.getHours() === 12 && slotTime.getMinutes() === 0) {
-        console.log('🔍 12:00 buffer check:', {
-          slotTime: slotTime.toISOString(),
-          slotEnd: slotEnd.toISOString(),
-          bookingStart: booking.startTime.toISOString(),
-          oneHourBefore: oneHourBefore.toISOString(),
-          slotEndMs: slotEnd.getTime(),
-          oneHourBeforeMs: oneHourBefore.getTime(),
-          bookingStartMs: booking.startTime.getTime(),
+      // Debug logging - show in user timezone for clarity
+      const slotInUserTZ = getHourMinuteInUserTimezone(slotTime);
+      const bookingStartInUserTZ = getHourMinuteInUserTimezone(booking.startTime);
+      const oneHourBeforeInUserTZ = getHourMinuteInUserTimezone(oneHourBefore);
+
+      if (slotInUserTZ.hour >= 7 && slotInUserTZ.hour <= 12 && slotInUserTZ.minute === 0) {
+        console.log(`🔍 Slot ${slotInUserTZ.hour}:${String(slotInUserTZ.minute).padStart(2, '0')} buffer check:`, {
+          slotTime: `${slotInUserTZ.hour}:${String(slotInUserTZ.minute).padStart(2, '0')} ${userTimezone}`,
+          slotTimeUTC: slotTime.toISOString(),
+          bookingStart: `${bookingStartInUserTZ.hour}:${String(bookingStartInUserTZ.minute).padStart(2, '0')} ${userTimezone}`,
+          bookingStartUTC: booking.startTime.toISOString(),
+          oneHourBefore: `${oneHourBeforeInUserTZ.hour}:${String(oneHourBeforeInUserTZ.minute).padStart(2, '0')} ${userTimezone}`,
+          oneHourBeforeUTC: oneHourBefore.toISOString(),
           slotEndAfterOneHourBefore: slotEnd > oneHourBefore,
           slotEndBeforeBookingStart: slotEnd <= booking.startTime,
           wouldBlock: slotEnd > oneHourBefore && slotEnd <= booking.startTime
@@ -957,19 +983,19 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
 
         // Scroll to show the suggested slot with 1-hour buffer context
         setTimeout(() => {
-          const hours = startTime.getHours();
-          const minutes = startTime.getMinutes();
+          // Get the suggested time in USER's timezone (not browser's timezone)
+          const timeInUserTZ = getHourMinuteInUserTimezone(startTime);
 
           const container = document.getElementById('timeline-scroll');
           if (!container) return;
 
           // Calculate the start of the 1-hour buffer before the selected slot
           const bufferStartTime = new Date(startTime.getTime() - (60 * 60 * 1000)); // 1 hour before
-          const bufferHours = bufferStartTime.getHours();
-          const bufferMinutes = bufferStartTime.getMinutes();
+          // Get buffer time in USER's timezone (not browser's timezone)
+          const bufferTimeInUserTZ = getHourMinuteInUserTimezone(bufferStartTime);
 
           // Calculate position for the buffer start (24-hour day starting at midnight)
-          const bufferSlotIndex = bufferHours * 2 + (bufferMinutes / 30);
+          const bufferSlotIndex = bufferTimeInUserTZ.hour * 2 + (bufferTimeInUserTZ.minute / 30);
           const bufferPosition = bufferSlotIndex * 64; // Each 30-min slot is 64px wide
 
           // Don't scroll before timeline start (midnight)

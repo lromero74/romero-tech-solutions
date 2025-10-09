@@ -2094,6 +2094,221 @@ Email: info@romerotechsolutions.com
       throw error;
     }
   }
+
+  /**
+   * Send rating request email to client when service request is completed
+   */
+  async sendServiceRequestRatingEmail({ serviceRequestData, client, ratingToken }) {
+    const ratingUrl = `${process.env.FRONTEND_URL || 'http://localhost:5173'}/rate/${ratingToken}`;
+    const subject = `📋 Rate Your Service - Request #${serviceRequestData.requestNumber}`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px;">
+          <h1 style="color: #1f2937; margin: 0 0 20px 0;">How Did We Do?</h1>
+
+          <p style="font-size: 16px;">Hello ${client.firstName},</p>
+
+          <p style="color: #4b5563;">
+            Thank you for choosing Romero Tech Solutions! We've completed your service request and would love to hear about your experience.
+          </p>
+
+          <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h2 style="color: #3b82f6; margin-top: 0;">Service Request #${serviceRequestData.requestNumber}</h2>
+            <p style="margin: 10px 0;"><strong>Title:</strong> ${serviceRequestData.title}</p>
+            <p style="margin: 10px 0;"><strong>Completed:</strong> ${new Date(serviceRequestData.completedDate).toLocaleDateString()}</p>
+          </div>
+
+          <div style="background-color: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <p style="margin: 0; color: #1e3a8a;">
+              Your feedback helps us improve our services and serves as a guide for other clients. It will only take a minute!
+            </p>
+          </div>
+
+          <div style="text-align: center; margin: 30px 0;">
+            <a href="${ratingUrl}"
+               style="background-color: #3b82f6; color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; font-size: 16px;">
+              Rate Your Service
+            </a>
+          </div>
+
+          <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
+            Or copy and paste this link: <a href="${ratingUrl}" style="color: #3b82f6;">${ratingUrl}</a>
+          </p>
+
+          ${this.getEmailFooter()}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+How Did We Do?
+
+Hello ${client.firstName},
+
+Thank you for choosing Romero Tech Solutions! We've completed your service request and would love to hear about your experience.
+
+Service Request #${serviceRequestData.requestNumber}
+Title: ${serviceRequestData.title}
+Completed: ${new Date(serviceRequestData.completedDate).toLocaleDateString()}
+
+Your feedback helps us improve our services and serves as a guide for other clients. It will only take a minute!
+
+Rate your service: ${ratingUrl}
+
+This is an automated notification from Romero Tech Solutions.
+Please do not reply to this email. For assistance, contact your administrator.
+
+© ${new Date().getFullYear()} Romero Tech Solutions. All rights reserved.
+    `;
+
+    try {
+      const result = await transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: client.email,
+        subject,
+        text,
+        html
+      });
+
+      console.log(`📧 Rating request sent to client ${client.email}`);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error(`❌ Error sending rating request to client:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Send testimonial approval notification to client
+   */
+  async sendTestimonialApprovedEmail({ client, testimonialData }) {
+    const subject = `✅ Your Testimonial Has Been Approved!`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #f3f4f6; padding: 20px; border-radius: 8px;">
+          <h1 style="color: #1f2937; margin: 0 0 20px 0;">Thank You for Your Testimonial!</h1>
+
+          <p style="font-size: 16px;">Hello ${client.firstName},</p>
+
+          <div style="background-color: #d1fae5; border-left: 4px solid #10b981; padding: 15px; margin: 20px 0; border-radius: 4px;">
+            <strong style="color: #065f46;">Great News!</strong>
+            <p style="margin: 10px 0 0 0; color: #047857;">
+              Your testimonial for service request #${testimonialData.requestNumber} has been approved and may be featured on our website.
+            </p>
+          </div>
+
+          <div style="background-color: white; padding: 20px; border-radius: 8px; margin: 20px 0;">
+            <h2 style="color: #3b82f6; margin-top: 0;">Approved Testimonial</h2>
+
+            ${testimonialData.wasEdited ? `
+              <div style="margin: 15px 0;">
+                <p style="color: #6b7280; margin-bottom: 10px;"><strong>Your Original Text:</strong></p>
+                <p style="background-color: #f3f4f6; padding: 12px; border-radius: 4px; font-style: italic; color: #4b5563;">
+                  "${testimonialData.originalText}"
+                </p>
+              </div>
+
+              <div style="margin: 15px 0;">
+                <p style="color: #10b981; margin-bottom: 10px;"><strong>Approved Version (edited for grammar/spelling):</strong></p>
+                <p style="background-color: #d1fae5; padding: 12px; border-radius: 4px; font-style: italic; color: #065f46;">
+                  "${testimonialData.editedText}"
+                </p>
+              </div>
+
+              <p style="color: #6b7280; font-size: 14px; margin-top: 15px;">
+                <em>Note: We made minor edits for grammar and spelling while preserving your original message and sentiment.</em>
+              </p>
+            ` : `
+              <div style="margin: 15px 0;">
+                <p style="background-color: #d1fae5; padding: 12px; border-radius: 4px; font-style: italic; color: #065f46;">
+                  "${testimonialData.originalText}"
+                </p>
+              </div>
+            `}
+          </div>
+
+          <p style="color: #4b5563;">
+            Thank you for taking the time to share your experience with Romero Tech Solutions. Your feedback helps us continue to provide excellent service!
+          </p>
+
+          ${this.getEmailFooter()}
+        </div>
+      </body>
+      </html>
+    `;
+
+    const text = `
+Thank You for Your Testimonial!
+
+Hello ${client.firstName},
+
+Great News! Your testimonial for service request #${testimonialData.requestNumber} has been approved and may be featured on our website.
+
+${testimonialData.wasEdited ? `
+Your Original Text:
+"${testimonialData.originalText}"
+
+Approved Version (edited for grammar/spelling):
+"${testimonialData.editedText}"
+
+Note: We made minor edits for grammar and spelling while preserving your original message and sentiment.
+` : `
+Approved Testimonial:
+"${testimonialData.originalText}"
+`}
+
+Thank you for taking the time to share your experience with Romero Tech Solutions. Your feedback helps us continue to provide excellent service!
+
+This is an automated notification from Romero Tech Solutions.
+Please do not reply to this email. For assistance, contact your administrator.
+
+© ${new Date().getFullYear()} Romero Tech Solutions. All rights reserved.
+    `;
+
+    try {
+      const result = await transporter.sendMail({
+        from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
+        to: client.email,
+        subject,
+        text,
+        html
+      });
+
+      console.log(`📧 Testimonial approval notification sent to ${client.email}`);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error(`❌ Error sending testimonial approval notification:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper to get email footer
+   */
+  getEmailFooter() {
+    return `
+      <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb; color: #6b7280; font-size: 12px;">
+        <p>This is an automated notification from Romero Tech Solutions.</p>
+        <p>Please do not reply to this email. For assistance, contact your administrator.</p>
+        <p>&copy; ${new Date().getFullYear()} Romero Tech Solutions. All rights reserved.</p>
+      </div>
+    `;
+  }
 }
 
 export const emailService = new EmailService();
@@ -2109,5 +2324,7 @@ export const sendNoteAdditionNotification = (params) => emailService.sendNoteAdd
 export const sendEmployeeNoteNotificationToClient = (params) => emailService.sendEmployeeNoteNotificationToClient(params);
 export const sendLateCancellationNotification = (params) => emailService.sendLateCancellationNotification(params);
 export const sendPasswordResetEmail = (toEmail, userName, resetCode, userType, isAccountLocked) => emailService.sendPasswordResetEmail(toEmail, userName, resetCode, userType, isAccountLocked);
+export const sendServiceRequestRatingEmail = (params) => emailService.sendServiceRequestRatingEmail(params);
+export const sendTestimonialApprovedEmail = (params) => emailService.sendTestimonialApprovedEmail(params);
 
 export default emailService;

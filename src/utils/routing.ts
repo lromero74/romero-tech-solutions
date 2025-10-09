@@ -7,6 +7,9 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/technician' || path.startsWith('/technician')) {
     return 'technician';
   }
+  if (path.startsWith('/rate/') || path === '/rate') {
+    return 'rate';
+  }
   if (path === '/services') {
     return 'services';
   }
@@ -57,6 +60,11 @@ export const getPathFromPage = (page: AppPage): string => {
 };
 
 export const updateUrlForPage = (page: AppPage): void => {
+  // Don't update URL for rate page as it contains a dynamic token parameter
+  if (page === 'rate') {
+    return;
+  }
+
   const currentPath = window.location.pathname;
   const expectedPath = getPathFromPage(page);
 
