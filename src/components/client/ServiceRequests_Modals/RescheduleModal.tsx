@@ -51,29 +51,54 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
   const [calendarView, setCalendarView] = useState<'year' | 'month' | 'week' | 'today'>('month');
 
   const [selectedDate, setSelectedDate] = useState<Date | null>(() => {
-    if (serviceRequest.requestedDatetime) {
-      return new Date(serviceRequest.requestedDatetime);
+    // Use scheduledDatetime for already scheduled appointments, fall back to requestedDatetime
+    const datetime = serviceRequest.scheduledDatetime || serviceRequest.requestedDatetime;
+    if (datetime) {
+      return new Date(datetime);
     }
     return null;
   });
 
   const [selectedDuration, setSelectedDuration] = useState(
-    serviceRequest.requestedDurationMinutes ? serviceRequest.requestedDurationMinutes / 60 : 1
+    serviceRequest.scheduledDurationMinutes
+      ? serviceRequest.scheduledDurationMinutes / 60
+      : serviceRequest.requestedDurationMinutes
+        ? serviceRequest.requestedDurationMinutes / 60
+        : 1
   );
 
   const [tierPreference, setTierPreference] = useState<'any' | 'standard' | 'premium' | 'emergency'>('standard');
   const [minDaysFromNow, setMinDaysFromNow] = useState<number>(0);
   const [isAutoSuggesting, setIsAutoSuggesting] = useState(false);
 
-  const [suggestedStartTime, setSuggestedStartTime] = useState<Date | null>(
-    serviceRequest.requestedDatetime ? new Date(serviceRequest.requestedDatetime) : null
-  );
+  // Use scheduledDatetime for already scheduled appointments, fall back to requestedDatetime
+  const [suggestedStartTime, setSuggestedStartTime] = useState<Date | null>(() => {
+    console.log('🔍 RescheduleModal - serviceRequest data:', {
+      id: serviceRequest.id,
+      requestNumber: serviceRequest.requestNumber,
+      scheduledDatetime: serviceRequest.scheduledDatetime,
+      requestedDatetime: serviceRequest.requestedDatetime,
+      scheduledDate: serviceRequest.scheduledDate,
+      scheduledTimeStart: serviceRequest.scheduledTimeStart,
+      scheduledTimeEnd: serviceRequest.scheduledTimeEnd,
+      scheduledDurationMinutes: serviceRequest.scheduledDurationMinutes,
+      requestedDurationMinutes: serviceRequest.requestedDurationMinutes,
+    });
 
-  const [suggestedEndTime, setSuggestedEndTime] = useState<Date | null>(
-    serviceRequest.requestedDatetime && serviceRequest.requestedDurationMinutes
-      ? new Date(new Date(serviceRequest.requestedDatetime).getTime() + serviceRequest.requestedDurationMinutes * 60000)
-      : null
-  );
+    const datetime = serviceRequest.scheduledDatetime || serviceRequest.requestedDatetime;
+    console.log('🔍 RescheduleModal - suggestedStartTime datetime:', datetime);
+    return datetime ? new Date(datetime) : null;
+  });
+
+  const [suggestedEndTime, setSuggestedEndTime] = useState<Date | null>(() => {
+    const datetime = serviceRequest.scheduledDatetime || serviceRequest.requestedDatetime;
+    const durationMinutes = serviceRequest.scheduledDurationMinutes || serviceRequest.requestedDurationMinutes;
+    console.log('🔍 RescheduleModal - suggestedEndTime:', { datetime, durationMinutes });
+    if (datetime && durationMinutes) {
+      return new Date(new Date(datetime).getTime() + durationMinutes * 60000);
+    }
+    return null;
+  });
 
   // Auto-suggest available slot
   const handleAutoSuggest = async () => {
@@ -130,8 +155,12 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
 
   const handleDateClick = (date: Date) => {
     setSelectedDate(date);
-    setSuggestedStartTime(null);
-    setSuggestedEndTime(null);
+    // Only reset suggested times if clicking a different date
+    // For rescheduling, preserve the existing appointment times when clicking the same date
+    if (selectedDate && date.toDateString() !== selectedDate.toDateString()) {
+      setSuggestedStartTime(null);
+      setSuggestedEndTime(null);
+    }
     setShowTimeSlotScheduler(true);
   };
 
@@ -379,24 +408,42 @@ const RescheduleModal: React.FC<RescheduleModalProps> = ({
       </div>
 
       {/* Time Slot Scheduler Modal (Child) */}
-      {showTimeSlotScheduler && (
-        <ResourceTimeSlotScheduler
-          selectedDate={selectedDate}
-          onSlotSelect={handleSlotSelect}
-          onDateChange={setSelectedDate}
-          onClose={() => setShowTimeSlotScheduler(false)}
-          businessId={businessId}
-          initialDuration={selectedDuration}
-          initialTierPreference={tierPreference}
-          onDurationChange={setSelectedDuration}
-          onTierPreferenceChange={setTierPreference}
-          suggestedStartTime={suggestedStartTime}
-          suggestedEndTime={suggestedEndTime}
-          isDarkMode={isDarkMode}
-          t={t}
-          language={language}
-        />
-      )}
+      {showTimeSlotScheduler && (() => {
+        console.log('🔍 RescheduleModal - Rendering ResourceTimeSlotScheduler with props:', {
+          suggestedStartTime,
+          suggestedEndTime,
+          initialSelectedStartTime: suggestedStartTime,
+          initialSelectedEndTime: suggestedEndTime,
+          excludeServiceRequestId: serviceRequest.id,
+          initialIsFirstTimer: serviceRequest.cost?.isFirstRequest,
+          initialBaseHourlyRate: serviceRequest.cost?.baseRate,
+          initialRateCategoryName: serviceRequest.cost?.rateCategoryName
+        });
+        return (
+          <ResourceTimeSlotScheduler
+            selectedDate={selectedDate}
+            onSlotSelect={handleSlotSelect}
+            onDateChange={setSelectedDate}
+            onClose={() => setShowTimeSlotScheduler(false)}
+            businessId={businessId}
+            initialDuration={selectedDuration}
+            initialTierPreference={tierPreference}
+            onDurationChange={setSelectedDuration}
+            onTierPreferenceChange={setTierPreference}
+            suggestedStartTime={suggestedStartTime}
+            suggestedEndTime={suggestedEndTime}
+            isDarkMode={isDarkMode}
+            t={t}
+            language={language}
+            excludeServiceRequestId={serviceRequest.id}
+            initialSelectedStartTime={suggestedStartTime}
+            initialSelectedEndTime={suggestedEndTime}
+            initialIsFirstTimer={serviceRequest.cost?.isFirstRequest}
+            initialBaseHourlyRate={serviceRequest.cost?.baseRate}
+            initialRateCategoryName={serviceRequest.cost?.rateCategoryName}
+          />
+        );
+      })()}
     </>
   );
 };

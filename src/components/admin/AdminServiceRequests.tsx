@@ -799,7 +799,12 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
       if (response.success) {
         // Refresh service requests list
         await fetchServiceRequests();
-        setSelectedRequest(null);
+
+        // Fetch updated service request details to refresh modal
+        const updatedResponse = await apiService.get(`/admin/service-requests/${selectedRequest.id}`);
+        if (updatedResponse.success && updatedResponse.serviceRequest) {
+          setSelectedRequest(updatedResponse.serviceRequest);
+        }
       } else {
         throw new Error(response.message || 'Failed to acknowledge service request');
       }

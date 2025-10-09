@@ -72,6 +72,12 @@ interface ResourceTimeSlotSchedulerProps {
   isDarkMode?: boolean;
   t?: (key: string, params?: any, fallback?: string) => string;
   language?: string;
+  excludeServiceRequestId?: string; // For rescheduling - exclude current SR from blocking
+  initialSelectedStartTime?: Date | null; // For rescheduling - show current appointment as selected
+  initialSelectedEndTime?: Date | null; // For rescheduling - show current appointment as selected
+  initialIsFirstTimer?: boolean; // For rescheduling - preserve first-timer discount status
+  initialBaseHourlyRate?: number; // For rescheduling - preserve client-specific base rate
+  initialRateCategoryName?: string; // For rescheduling - preserve rate category name
 }
 
 const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
@@ -87,6 +93,12 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   suggestedStartTime = null,
   suggestedEndTime = null,
   isDarkMode = false,
+  excludeServiceRequestId,
+  initialSelectedStartTime = null,
+  initialSelectedEndTime = null,
+  initialIsFirstTimer,
+  initialBaseHourlyRate,
+  initialRateCategoryName,
   t = (key: string, params?: any, fallback?: string) => fallback || key,
   language = 'en'
 }) => {
@@ -116,9 +128,18 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
   };
 
   const [existingBookings, setExistingBookings] = useState<ExistingBooking[]>([]);
-  const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(null);
-  const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(null);
+  const [selectedStartTime, setSelectedStartTime] = useState<Date | null>(initialSelectedStartTime);
+  const [selectedEndTime, setSelectedEndTime] = useState<Date | null>(initialSelectedEndTime);
   const [selectedDuration, setSelectedDuration] = useState<number>(initialDuration);
+
+  // Debug logging for initial selection
+  console.log('🔄 ResourceTimeSlotScheduler - Reschedule mode:', {
+    excludeServiceRequestId,
+    initialSelectedStartTime,
+    initialSelectedEndTime,
+    selectedStartTime,
+    selectedEndTime
+  });
   const [loading, setLoading] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<'move' | 'resize-start' | 'resize-end' | null>(null);
@@ -649,22 +670,31 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         setLoading(true);
 
         // Load business-specific base hourly rate
-        try {
-          const rateResponse = await fetch(
-            `${import.meta.env.VITE_API_BASE_URL}/public/base-hourly-rate?businessId=${businessId}`
-          );
-          if (rateResponse.ok) {
-            const rateData = await rateResponse.json();
-            if (rateData.success && rateData.data.baseHourlyRate) {
-              setBaseHourlyRate(rateData.data.baseHourlyRate);
-              if (rateData.data.rateCategoryName) {
-                setRateCategoryName(rateData.data.rateCategoryName);
-              }
-              console.log(`💰 Loaded base hourly rate for business: $${rateData.data.baseHourlyRate}/hr (${rateData.data.rateCategoryName || 'Standard'}) (source: ${rateData.data.source || 'unknown'})`);
-            }
+        // Use prop values if provided (for rescheduling), otherwise fetch from API
+        if (initialBaseHourlyRate !== undefined) {
+          setBaseHourlyRate(initialBaseHourlyRate);
+          if (initialRateCategoryName) {
+            setRateCategoryName(initialRateCategoryName);
           }
-        } catch (error) {
-          console.error('Failed to load base hourly rate, using default:', error);
+          console.log(`💰 Base hourly rate (from reschedule): $${initialBaseHourlyRate}/hr (${initialRateCategoryName || 'Standard'})`);
+        } else {
+          try {
+            const rateResponse = await fetch(
+              `${import.meta.env.VITE_API_BASE_URL}/public/base-hourly-rate?businessId=${businessId}`
+            );
+            if (rateResponse.ok) {
+              const rateData = await rateResponse.json();
+              if (rateData.success && rateData.data.baseHourlyRate) {
+                setBaseHourlyRate(rateData.data.baseHourlyRate);
+                if (rateData.data.rateCategoryName) {
+                  setRateCategoryName(rateData.data.rateCategoryName);
+                }
+                console.log(`💰 Loaded base hourly rate for business: $${rateData.data.baseHourlyRate}/hr (${rateData.data.rateCategoryName || 'Standard'}) (source: ${rateData.data.source || 'unknown'})`);
+              }
+            }
+          } catch (error) {
+            console.error('Failed to load base hourly rate, using default:', error);
+          }
         }
 
         // Load user timezone preference from API if not in authUser
@@ -688,16 +718,22 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         }
 
         // Check if client is a first-timer (for first hour comp)
-        try {
-          const firstTimerResult = await apiService.get<{ success: boolean; data: { isFirstTimer: boolean } }>(
-            '/client/is-first-timer'
-          );
-          if (firstTimerResult.success) {
-            setIsFirstTimer(firstTimerResult.data.isFirstTimer);
-            console.log(`🎁 First-timer status: ${firstTimerResult.data.isFirstTimer ? 'YES - First hour will be comped!' : 'No'}`);
+        // Use prop value if provided (for rescheduling), otherwise fetch from API
+        if (initialIsFirstTimer !== undefined) {
+          setIsFirstTimer(initialIsFirstTimer);
+          console.log(`🎁 First-timer status (from reschedule): ${initialIsFirstTimer ? 'YES - First hour will be comped!' : 'No'}`);
+        } else {
+          try {
+            const firstTimerResult = await apiService.get<{ success: boolean; data: { isFirstTimer: boolean } }>(
+              '/client/is-first-timer'
+            );
+            if (firstTimerResult.success) {
+              setIsFirstTimer(firstTimerResult.data.isFirstTimer);
+              console.log(`🎁 First-timer status: ${firstTimerResult.data.isFirstTimer ? 'YES - First hour will be comped!' : 'No'}`);
+            }
+          } catch (error) {
+            console.error('Failed to load first-timer status:', error);
           }
-        } catch (error) {
-          console.error('Failed to load first-timer status:', error);
         }
 
         // Load rate tiers
@@ -718,7 +754,7 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
         console.log('📅 Bookings API response:', bookingsResult);
         console.log('📅 Raw booking data:', JSON.stringify(bookingsResult.data, null, 2));
         if (bookingsResult.success) {
-          const bookings = bookingsResult.data.map((b: any) => {
+          let bookings = bookingsResult.data.map((b: any) => {
             console.log('📅 Processing booking:', b);
             return {
               ...b,
@@ -726,6 +762,14 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
               endTime: new Date(b.endTime)
             };
           });
+
+          // Filter out the current service request if rescheduling
+          if (excludeServiceRequestId) {
+            const beforeFilter = bookings.length;
+            bookings = bookings.filter((b: any) => b.id !== excludeServiceRequestId);
+            console.log(`🔄 Rescheduling: filtered out SR ${excludeServiceRequestId} (${beforeFilter} → ${bookings.length} bookings)`);
+          }
+
           console.log('📅 Processed bookings:', bookings);
           setExistingBookings(bookings);
         } else {
@@ -1529,12 +1573,24 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
                         const startInUserTZ = getHourMinuteInUserTimezone(selectedStartTime);
                         const endInUserTZ = getHourMinuteInUserTimezone(selectedEndTime);
 
+                        const leftPos = (startInUserTZ.hour * 2 + startInUserTZ.minute / 30) * 64;
+                        const width = ((selectedEndTime.getTime() - selectedStartTime.getTime()) / (30 * 60 * 1000)) * 64;
+
+                        console.log('🔵 Rendering selected block:', {
+                          selectedStartTime: selectedStartTime.toISOString(),
+                          selectedEndTime: selectedEndTime.toISOString(),
+                          startInUserTZ,
+                          endInUserTZ,
+                          leftPos,
+                          width
+                        });
+
                         return (
                         <div
                           className="absolute top-0 h-20 bg-blue-600/80 border-2 border-blue-700 rounded z-20"
                           style={{
-                            left: `${(startInUserTZ.hour * 2 + startInUserTZ.minute / 30) * 64}px`,
-                            width: `${((selectedEndTime.getTime() - selectedStartTime.getTime()) / (30 * 60 * 1000)) * 64}px`
+                            left: `${leftPos}px`,
+                            width: `${width}px`
                           }}
                         >
                           {/* Move handle - center area only, excludes edges */}
