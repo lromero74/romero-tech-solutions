@@ -1,7 +1,7 @@
 import React from 'react';
 import { ExternalLink, Edit2, Check, X, RefreshCw, MapPin, User, Phone, Mail, Calendar } from 'lucide-react';
 import { ServiceRequest, ServiceRequestFile, ServiceRequestNote, ThemeClasses } from './types';
-import { getStatusColor, getPriorityColor, formatFullAddress, getMapUrl, formatPhone, canCancelRequest } from './utils';
+import { getStatusColor, getPriorityColor, formatFullAddress, getMapUrl, formatPhone, canCancelRequest, canRescheduleRequest } from './utils';
 import { formatLongDate } from '../../../utils/dateFormatter';
 import { formatTimeOnly } from '../../../utils/timezoneUtils';
 import ServiceRequestFilesSection from './ServiceRequestFilesSection';
@@ -460,7 +460,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
             >
               {t('general.close', undefined, 'Close')}
             </button>
-            {canCancelRequest(selectedRequest) && (
+            {canRescheduleRequest(selectedRequest) && (
               <button
                 onClick={() => {
                   onClose();

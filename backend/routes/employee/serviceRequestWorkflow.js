@@ -41,13 +41,47 @@ router.post('/acknowledge/:token', authMiddleware, requirePermission('start.serv
     // Handle acknowledgment workflow
     await handleServiceRequestAcknowledged(validation.serviceRequestId, employeeId);
 
-    // Update service request assignment
+    // Update service request assignment and status
     const pool = await getPool();
-    await pool.query(`
-      UPDATE service_requests
-      SET assigned_technician_id = $1, updated_at = CURRENT_TIMESTAMP
-      WHERE id = $2
-    `, [employeeId, validation.serviceRequestId]);
+
+    // Get Acknowledged status ID
+    const statusQuery = await pool.query(`
+      SELECT id FROM service_request_statuses
+      WHERE name = 'Acknowledged' AND is_active = true
+      LIMIT 1
+    `);
+
+    if (statusQuery.rows.length > 0) {
+      await pool.query(`
+        UPDATE service_requests
+        SET assigned_technician_id = $1,
+            status_id = $2,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3
+      `, [employeeId, statusQuery.rows[0].id, validation.serviceRequestId]);
+    } else {
+      // Fallback if Acknowledged status not found
+      await pool.query(`
+        UPDATE service_requests
+        SET assigned_technician_id = $1, updated_at = CURRENT_TIMESTAMP
+        WHERE id = $2
+      `, [employeeId, validation.serviceRequestId]);
+    }
+
+    // Broadcast service request update via WebSocket
+    console.log('🔍 [ACKNOWLEDGE] Attempting to broadcast WebSocket update...');
+    const websocketService = req.app.get('websocketService');
+    console.log('🔍 [ACKNOWLEDGE] websocketService exists:', !!websocketService);
+    if (websocketService) {
+      console.log('🔍 [ACKNOWLEDGE] Calling broadcastServiceRequestUpdate for SR:', validation.serviceRequestId);
+      websocketService.broadcastServiceRequestUpdate(validation.serviceRequestId, 'updated', {
+        status: 'acknowledged',
+        assignedTechnician: employeeId
+      });
+      console.log('✅ [ACKNOWLEDGE] Broadcast completed');
+    } else {
+      console.log('❌ [ACKNOWLEDGE] websocketService not available on req.app!');
+    }
 
     res.json({
       success: true,
@@ -141,6 +175,14 @@ router.post('/start/:token', authMiddleware, requirePermission('start.service_re
         SET status_id = $1, updated_at = CURRENT_TIMESTAMP
         WHERE id = $2
       `, [statusQuery.rows[0].id, validation.serviceRequestId]);
+    }
+
+    // Broadcast service request update via WebSocket
+    const websocketService = req.app.get('websocketService');
+    if (websocketService) {
+      websocketService.broadcastServiceRequestUpdate(validation.serviceRequestId, 'updated', {
+        status: 'in_progress'
+      });
     }
 
     res.json({
@@ -262,6 +304,14 @@ router.post('/close/:token', authMiddleware, requirePermission('stop.service_req
       `Service request closed with reason ID: ${closeReasonId}`,
       employeeId
     ]);
+
+    // Broadcast service request update via WebSocket
+    const websocketService = req.app.get('websocketService');
+    if (websocketService) {
+      websocketService.broadcastServiceRequestUpdate(validation.serviceRequestId, 'updated', {
+        status: 'completed'
+      });
+    }
 
     res.json({
       success: true,

@@ -451,10 +451,26 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
           {/* Action Buttons */}
           <div className="mt-6 mb-6">
             <div className="flex flex-wrap gap-3">
-              {/* Time tracking toggle button - changes based on status */}
-              {selectedRequest.technician_name && selectedRequest.status.toLowerCase() !== 'completed' && (
+              {/* Acknowledge button - only show for Submitted status, must be done first */}
+              {selectedRequest.status.toLowerCase() === 'submitted' && (
+                <button
+                  onClick={onAcknowledge}
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+                >
+                  <CheckCircle className="h-4 w-4 mr-2" />
+                  Acknowledge
+                </button>
+              )}
+
+              {/* Time tracking toggle button - only show after acknowledgment */}
+              {selectedRequest.technician_name &&
+               selectedRequest.status.toLowerCase() !== 'submitted' &&
+               selectedRequest.status.toLowerCase() !== 'completed' &&
+               selectedRequest.status.toLowerCase() !== 'cancelled' &&
+               selectedRequest.status.toLowerCase() !== 'closed' && (
                 <>
-                  {selectedRequest.status === 'Started' ? (
+                  {selectedRequest.status === 'Started' || selectedRequest.status === 'In Progress' ? (
                     <button
                       onClick={() => onTimeTracking('stop')}
                       disabled={actionLoading}
@@ -485,19 +501,9 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                 </>
               )}
 
-              {/* Acknowledge button - only show for Submitted status */}
-              {selectedRequest.status.toLowerCase() === 'submitted' && (
-                <button
-                  onClick={onAcknowledge}
-                  disabled={actionLoading}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
-                >
-                  <CheckCircle className="h-4 w-4 mr-2" />
-                  Acknowledge
-                </button>
-              )}
-
-              {canCompleteRequest && (
+              {/* Complete Request button - only show when work has been started and not paused */}
+              {(selectedRequest.status === 'Started' || selectedRequest.status === 'In Progress') &&
+               canCompleteRequest && (
                 <button
                   onClick={onShowCompleteModal}
                   disabled={actionLoading}
@@ -516,7 +522,10 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                 Change Status
               </button>
 
-              {selectedRequest.status !== 'Closed' && selectedRequest.status !== 'Cancelled' && (
+              {selectedRequest.status !== 'Closed' &&
+               selectedRequest.status !== 'Cancelled' &&
+               selectedRequest.status !== 'In Progress' &&
+               !selectedRequest.status.toLowerCase().includes('progress') && (
                 <button
                   onClick={onReschedule}
                   disabled={actionLoading}

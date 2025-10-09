@@ -834,12 +834,19 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
     };
   }, []);
 
+  // Use ref to track selectedRequest to avoid recreating WebSocket listener
+  const selectedRequestRef = useRef(selectedRequest);
+  useEffect(() => {
+    selectedRequestRef.current = selectedRequest;
+  }, [selectedRequest]);
+
   // Listen for service request updates via WebSocket
   useEffect(() => {
     const handleEntityChange = async (change: any) => {
       // Only handle service request entity changes
       if (change.entityType === 'serviceRequest') {
         console.log('🔔 Client received service request update:', change);
+        console.log('📋 Current selectedRequest:', selectedRequestRef.current ? selectedRequestRef.current.id : 'none');
 
         try {
           const sessionToken = RoleBasedStorage.getItem('sessionToken');
@@ -862,6 +869,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
             const data = await response.json();
             if (data.success && data.data) {
               const updatedRequest = data.data;
+              console.log('📥 Fetched updated service request:', updatedRequest.requestNumber, 'Status:', updatedRequest.status);
 
               // Update cache: add or update the request in our local list
               setServiceRequests(prev => {
@@ -877,6 +885,17 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
                   console.log('✅ Added new service request to cache:', updatedRequest.requestNumber);
                   return [updatedRequest, ...prev];
                 }
+              });
+
+              // If this is the currently selected request in the detail modal, update it too
+              setSelectedRequest(prev => {
+                console.log('🔍 Checking if should update modal. prev:', prev?.id, 'updated:', updatedRequest.id);
+                if (prev && prev.id === updatedRequest.id) {
+                  console.log('🔄 Updating currently open detail modal with new data. Old status:', prev.status, 'New status:', updatedRequest.status);
+                  return updatedRequest;
+                }
+                console.log('⏭️ Not updating modal (different request or no modal open)');
+                return prev;
               });
             }
           } else {

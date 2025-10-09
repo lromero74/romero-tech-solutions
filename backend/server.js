@@ -571,6 +571,9 @@ const startServer = async () => {
     // Initialize WebSocket service
     websocketService.initialize(httpServer);
 
+    // Make WebSocket service available to routes via req.app
+    app.set('websocketService', websocketService);
+
     // Start workflow scheduler for service request automation
     workflowScheduler.start();
 

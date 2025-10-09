@@ -260,6 +260,29 @@ export const canCancelRequest = (request: ServiceRequest) => {
 };
 
 /**
+ * Check if a service request can be rescheduled
+ * Cannot reschedule once work has started (status "In Progress") or if already completed/cancelled
+ */
+export const canRescheduleRequest = (request: ServiceRequest) => {
+  const statusLower = request.status.toLowerCase();
+
+  // Cannot reschedule if work has started
+  if (statusLower.includes('in progress') || statusLower.includes('progress')) {
+    console.log(`Cannot reschedule ${request.requestNumber}: work already in progress`);
+    return false;
+  }
+
+  // Cannot reschedule if already in final status
+  if (statusLower.includes('completed') || statusLower.includes('cancelled')) {
+    console.log(`Cannot reschedule ${request.requestNumber}: status is ${request.status}`);
+    return false;
+  }
+
+  console.log(`✅ Can reschedule ${request.requestNumber}: status is ${request.status}`);
+  return true;
+};
+
+/**
  * Calculate hours until service request starts
  */
 export const getHoursUntilStart = (request: ServiceRequest) => {
