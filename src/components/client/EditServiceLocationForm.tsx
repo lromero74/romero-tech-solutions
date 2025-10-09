@@ -194,7 +194,7 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
           setTimeout(() => {
             const digits = newValue.replace(/\D/g, '');
             const formattedValue = formatPhoneNumber(digits);
-            let newCursorPos = Math.min(posToRemove, formattedValue.length);
+            const newCursorPos = Math.min(posToRemove, formattedValue.length);
             target.setSelectionRange(newCursorPos, newCursorPos);
           }, 0);
         }
@@ -213,7 +213,7 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
           setTimeout(() => {
             const digits = newValue.replace(/\D/g, '');
             const formattedValue = formatPhoneNumber(digits);
-            let newCursorPos = Math.min(cursorPos, formattedValue.length);
+            const newCursorPos = Math.min(cursorPos, formattedValue.length);
             target.setSelectionRange(newCursorPos, newCursorPos);
           }, 0);
         }

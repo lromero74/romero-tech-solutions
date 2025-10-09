@@ -138,7 +138,7 @@ const ServiceScheduler: React.FC = () => {
         setTimeout(() => {
           const digits = newValue.replace(/\D/g, '');
           const formattedValue = formatPhoneNumber(digits);
-          let newCursorPos = Math.min(posToRemove, formattedValue.length);
+          const newCursorPos = Math.min(posToRemove, formattedValue.length);
           target.setSelectionRange(newCursorPos, newCursorPos);
         }, 0);
       }
@@ -160,7 +160,7 @@ const ServiceScheduler: React.FC = () => {
         setTimeout(() => {
           const digits = newValue.replace(/\D/g, '');
           const formattedValue = formatPhoneNumber(digits);
-          let newCursorPos = Math.min(cursorPos, formattedValue.length);
+          const newCursorPos = Math.min(cursorPos, formattedValue.length);
           target.setSelectionRange(newCursorPos, newCursorPos);
         }, 0);
       }
@@ -516,7 +516,7 @@ const ServiceScheduler: React.FC = () => {
   const calculateDuration = (startTime: string, endTime: string): number => {
     const [startHour, startMin] = startTime.split(':').map(Number);
     const [endHour, endMin] = endTime.split(':').map(Number);
-    let startMinutes = startHour * 60 + startMin;
+    const startMinutes = startHour * 60 + startMin;
     let endMinutes = endHour * 60 + endMin;
 
     // Handle midnight crossover: if end <= start, add 24 hours
