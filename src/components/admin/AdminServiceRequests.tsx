@@ -512,19 +512,20 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     };
   }, [selectedRequest]);
 
-  // Handle ESC key to close the detail modal (only if no edits in progress)
+  // Handle ESC key to close the detail modal (only if no edits in progress and no other modals open)
   useEffect(() => {
     if (!selectedRequest) return;
 
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // Don't close detail modal if another modal is open on top of it
+      if (e.key === 'Escape' && !showCloseModal && !showAssignModal && !showStatusModal && !showUncancelModal && !showRescheduleModal) {
         handleCloseDetailModal();
       }
     };
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, [selectedRequest, editingTitle, editingDescription, savingEdit, newNoteText]);
+  }, [selectedRequest, editingTitle, editingDescription, savingEdit, newNoteText, showCloseModal, showAssignModal, showStatusModal, showUncancelModal, showRescheduleModal]);
 
   // Handle ESC key to close the Complete Service Request modal
   useEffect(() => {
