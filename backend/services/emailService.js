@@ -351,18 +351,35 @@ ${confirmationUrl}
   /**
    * Send password reset email with code
    */
-  async sendPasswordResetEmail(toEmail, userName, resetCode) {
+  async sendPasswordResetEmail(toEmail, userName, resetCode, userType = 'employee', isAccountLocked = false) {
     try {
-      console.log('🔐 Sending password reset email to:', toEmail);
+      console.log(`🔐 Sending password reset email to: ${toEmail}${isAccountLocked ? ' (ACCOUNT LOCKED)' : ''}`);
 
       // Get user's preferred language and email translations
       const userLanguage = await getUserLanguage(toEmail);
       const translations = await getEmailTranslations(userLanguage, 'email.passwordReset.%');
 
-      const subject = interpolateTranslation(
-        translations['email.passwordReset.subject'] || 'Password Reset - Romero Tech Solutions',
-        {}
-      );
+      const subject = isAccountLocked
+        ? 'Account Locked - Password Reset Required - Romero Tech Solutions'
+        : interpolateTranslation(
+            translations['email.passwordReset.subject'] || 'Password Reset - Romero Tech Solutions',
+            {}
+          );
+
+      const lockoutMessage = isAccountLocked ? `
+        <div style="background: #fee2e2; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0; border-radius: 4px;">
+          <p style="margin: 0; font-weight: bold; color: #991b1b;">🔒 Account Temporarily Locked</p>
+          <p style="margin: 10px 0 0 0; color: #991b1b;">
+            Your account has been temporarily locked due to multiple failed login attempts.
+            This is a security measure to protect your account. You can reset your password
+            now to unlock your account and regain access.
+          </p>
+        </div>
+      ` : '';
+
+      const introText = isAccountLocked
+        ? 'Your account has been temporarily locked due to multiple failed login attempts. To unlock your account and regain access, please reset your password using the code below:'
+        : 'We received a request to reset the password for your account. If you did not make this request, please ignore this email and your password will remain unchanged.';
 
       const html = `
         <!DOCTYPE html>
@@ -374,7 +391,7 @@ ${confirmationUrl}
             <style>
               body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
               .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+              .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, ${isAccountLocked ? '#dc2626, #b91c1c' : '#1e293b, #3b82f6'}); color: white; padding: 30px 20px; border-radius: 8px; }
               .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
               .tagline { font-size: 14px; opacity: 0.9; }
               .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
@@ -391,20 +408,19 @@ ${confirmationUrl}
                   <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
                 </div>
                 <div class="logo">Romero Tech Solutions</div>
-                <div class="tagline">Password Reset Request</div>
+                <div class="tagline">${isAccountLocked ? 'Account Locked - Password Reset Required' : 'Password Reset Request'}</div>
               </div>
 
               <div class="content">
                 <h2 style="color: #1e293b; margin-bottom: 15px;">Hello ${userName},</h2>
 
-                <p style="margin-bottom: 15px;">
-                  We received a request to reset the password for your account. If you did not make this request,
-                  please ignore this email and your password will remain unchanged.
-                </p>
+                ${lockoutMessage}
 
                 <p style="margin-bottom: 20px;">
-                  To reset your password, use the following 6-digit code in the password reset form:
+                  ${introText}
                 </p>
+
+                ${isAccountLocked ? '' : '<p style="margin-bottom: 20px;">To reset your password, use the following 6-digit code in the password reset form:</p>'}
 
                 <div class="reset-code">
                   <div style="margin-bottom: 10px; font-size: 14px;">Your Reset Code:</div>
@@ -414,14 +430,15 @@ ${confirmationUrl}
                 <div class="warning-box">
                   <p style="margin: 0; font-weight: bold; color: #92400e;">⚠️ Security Notice:</p>
                   <ul style="margin: 10px 0 0 0; color: #92400e;">
-                    <li>This code expires in 15 minutes</li>
+                    <li>This code expires in ${isAccountLocked ? '60' : '15'} minutes</li>
                     <li>This code can only be used once</li>
-                    <li>If you didn't request this, please ignore this email</li>
+                    ${isAccountLocked ? '<li>Resetting your password will unlock your account</li>' : ''}
+                    <li>If you didn't ${isAccountLocked ? 'make these login attempts' : 'request this'}, please contact us immediately</li>
                   </ul>
                 </div>
 
                 <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
-                  If you're having trouble or did not request this password reset, please contact us immediately at
+                  If you're having trouble or ${isAccountLocked ? 'did not make these login attempts' : 'did not request this password reset'}, please contact us immediately at
                   <strong>(619) 940-5550</strong> or <strong>info@romerotechsolutions.com</strong>
                 </p>
               </div>
@@ -2091,5 +2108,6 @@ export const sendServiceRequestCreationNotification = (params) => emailService.s
 export const sendNoteAdditionNotification = (params) => emailService.sendNoteAdditionNotification(params);
 export const sendEmployeeNoteNotificationToClient = (params) => emailService.sendEmployeeNoteNotificationToClient(params);
 export const sendLateCancellationNotification = (params) => emailService.sendLateCancellationNotification(params);
+export const sendPasswordResetEmail = (toEmail, userName, resetCode, userType, isAccountLocked) => emailService.sendPasswordResetEmail(toEmail, userName, resetCode, userType, isAccountLocked);
 
 export default emailService;

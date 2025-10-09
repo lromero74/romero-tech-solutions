@@ -312,10 +312,14 @@ export async function markResetTokenAsUsed(email, resetCode) {
  * @param {string} resetCode - The reset code to send
  * @returns {Promise<void>}
  */
-export async function sendPasswordResetEmail(email, firstName, resetCode) {
+export async function sendPasswordResetEmail(email, firstName, resetCode, userType = 'employee', isAccountLocked = false) {
   try {
-    await emailService.sendPasswordResetEmail(email, firstName || 'User', resetCode);
-    console.log(`🔐 Password reset code sent to ${email}: ${resetCode}`);
+    await emailService.sendPasswordResetEmail(email, firstName || 'User', resetCode, userType, isAccountLocked);
+    if (isAccountLocked) {
+      console.log(`🔒 Account lockout password reset email sent to ${email}: ${resetCode}`);
+    } else {
+      console.log(`🔐 Password reset code sent to ${email}: ${resetCode}`);
+    }
   } catch (error) {
     console.error('Failed to send password reset email:', error);
     // Don't throw here - we continue anyway as we've created the token

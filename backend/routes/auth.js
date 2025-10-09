@@ -47,6 +47,11 @@ import {
   recordFailedEmployeeLogin,
   getEmployeeLoginStats
 } from '../middleware/employeeLoginRateLimiter.js';
+import {
+  checkAccountLockStatus,
+  recordFailedLoginAttempt,
+  resetFailedLoginAttempts
+} from '../services/accountLockoutService.js';
 
 const router = express.Router();
 
@@ -599,6 +604,18 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
 
     const sanitizedEmail = validation.sanitized.email;
 
+    // SECURITY: Check if account is locked due to too many failed attempts
+    const lockStatus = await checkAccountLockStatus(sanitizedEmail, 'employee');
+    if (lockStatus.isLocked) {
+      console.log(`🔒 Login attempt for locked account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
+      return res.status(423).json({
+        success: false,
+        message: `Account temporarily locked due to multiple failed login attempts. Please try again in ${lockStatus.remainingMinutes} minutes or reset your password.`,
+        code: 'ACCOUNT_LOCKED',
+        remainingMinutes: lockStatus.remainingMinutes
+      });
+    }
+
     // Validate device fingerprint if provided
     if (deviceFingerprint) {
       const fingerprintValidation = validateDeviceFingerprint(deviceFingerprint);
@@ -656,14 +673,28 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       await recordFailedEmployeeLogin(clientIP, email, 'invalid_password');
+
+      // SECURITY: Record failed login attempt and check if account should be locked
+      const lockoutResult = await recordFailedLoginAttempt(sanitizedEmail, 'employee');
+      if (lockoutResult.accountLocked) {
+        return res.status(423).json({
+          success: false,
+          message: `Account locked due to ${lockoutResult.remainingAttempts + 5} failed login attempts. A password reset link has been sent to your email.`,
+          code: 'ACCOUNT_LOCKED',
+          lockoutMinutes: lockoutResult.lockoutMinutes
+        });
+      }
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid email or password',
+        remainingAttempts: lockoutResult.remainingAttempts > 0 ? lockoutResult.remainingAttempts : undefined
       });
     }
 
     // Clear successful login attempts (password was correct)
     clearEmployeeLoginAttempts(clientIP, email);
+    await resetFailedLoginAttempts(sanitizedEmail, 'employee');
 
     // Check if device is trusted (skip MFA if trusted)
     if (deviceFingerprint) {
@@ -892,6 +923,14 @@ router.post('/verify-admin-mfa', async (req, res) => {
 
     const user = userResult.rows[0];
 
+    // SECURITY: Invalidate all existing sessions before creating new one (session regeneration after MFA)
+    await query(`
+      UPDATE user_sessions
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND is_active = true
+    `, [user.id]);
+    console.log(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
+
     // Create a new session for the user
     const userAgent = req.get('User-Agent');
     const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
@@ -1012,6 +1051,14 @@ router.post('/verify-client-mfa', async (req, res) => {
     }
 
     const user = userResult.rows[0];
+
+    // SECURITY: Invalidate all existing sessions before creating new one (session regeneration after MFA)
+    await query(`
+      UPDATE user_sessions
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE user_id = $1 AND is_active = true
+    `, [user.id]);
+    console.log(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
 
     // Create a new session for the client
     const userAgent = req.get('User-Agent');
@@ -2149,6 +2196,18 @@ router.post('/client-login', async (req, res) => {
     // Use sanitized email for database queries
     const sanitizedEmail = validation.sanitized.email;
 
+    // SECURITY: Check if account is locked due to too many failed attempts
+    const lockStatus = await checkAccountLockStatus(sanitizedEmail, 'client');
+    if (lockStatus.isLocked) {
+      console.log(`🔒 Login attempt for locked client account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
+      return res.status(423).json({
+        success: false,
+        message: `Account temporarily locked due to multiple failed login attempts. Please try again in ${lockStatus.remainingMinutes} minutes or reset your password.`,
+        code: 'ACCOUNT_LOCKED',
+        remainingMinutes: lockStatus.remainingMinutes
+      });
+    }
+
     // SECURITY: Block all @romerotechsolutions.com emails from client login
     const emailDomain = sanitizedEmail.toLowerCase().split('@')[1];
     if (emailDomain === 'romerotechsolutions.com') {
@@ -2192,14 +2251,28 @@ router.post('/client-login', async (req, res) => {
     const isPasswordValid = await verifyPassword(password, user.password_hash);
     if (!isPasswordValid) {
       recordFailedAttempt(clientIP);
+
+      // SECURITY: Record failed login attempt and check if account should be locked
+      const lockoutResult = await recordFailedLoginAttempt(sanitizedEmail, 'client');
+      if (lockoutResult.accountLocked) {
+        return res.status(423).json({
+          success: false,
+          message: `Account locked due to multiple failed login attempts. A password reset link has been sent to your email.`,
+          code: 'ACCOUNT_LOCKED',
+          lockoutMinutes: lockoutResult.lockoutMinutes
+        });
+      }
+
       return res.status(401).json({
         success: false,
-        message: 'Invalid email or password'
+        message: 'Invalid email or password',
+        remainingAttempts: lockoutResult.remainingAttempts > 0 ? lockoutResult.remainingAttempts : undefined
       });
     }
 
     // Clear failed attempts on successful authentication
     clearFailedAttempts(clientIP);
+    await resetFailedLoginAttempts(sanitizedEmail, 'client');
 
     // Check if this client has MFA enabled
     if (user.mfa_enabled === true) {

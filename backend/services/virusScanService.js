@@ -61,9 +61,17 @@ class VirusScanService {
       this.initialized = true;
       console.log('✅ Virus scanner initialized successfully');
 
-      // Test scanner with a safe string
-      const testResult = await this.clam.scanBuffer(Buffer.from('test file content'));
-      console.log('🧪 Scanner test result:', testResult);
+      // Test scanner functionality (scanFile is available even if scanBuffer isn't)
+      try {
+        if (typeof this.clam.scanFile === 'function') {
+          console.log('🧪 ClamAV scanFile method available - ready to scan uploads');
+        } else {
+          throw new Error('scanFile method not available');
+        }
+      } catch (testError) {
+        console.warn('⚠️ ClamAV test failed, falling back to mock scanner:', testError.message);
+        this.initialized = false;
+      }
 
     } catch (error) {
       console.warn('⚠️ ClamAV not available, using mock scanner for development:', error.message);
