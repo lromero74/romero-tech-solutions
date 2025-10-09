@@ -1429,6 +1429,21 @@ router.put('/service-requests/:id/assign', async (req, res) => {
       ]);
     }
 
+    // Broadcast service request update via WebSocket
+    console.log('🔍 [ASSIGN] Attempting to broadcast WebSocket update...');
+    const websocketService = req.app.get('websocketService');
+    console.log('🔍 [ASSIGN] websocketService exists:', !!websocketService);
+    if (websocketService) {
+      console.log('🔍 [ASSIGN] Calling broadcastServiceRequestUpdate for SR:', id);
+      websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+        action: 'assigned',
+        assignedTechnicianId: technicianId
+      });
+      console.log('✅ [ASSIGN] Broadcast completed');
+    } else {
+      console.log('❌ [ASSIGN] websocketService not available on req.app!');
+    }
+
     res.json({
       success: true,
       message: assumeOwnership ? 'Ownership assumed successfully' : 'Service request assigned successfully',
@@ -1493,6 +1508,68 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
         success: false,
         message: 'Service request not found'
       });
+    }
+
+    // Get previous status name for the note
+    const prevStatusQuery = await pool.query(`
+      SELECT s.name as old_status
+      FROM service_requests sr
+      LEFT JOIN service_request_statuses s ON s.id = sr.status_id
+      WHERE sr.id = $1
+    `, [id]);
+    const oldStatus = prevStatusQuery.rows[0]?.old_status || 'Submitted';
+
+    // Add a note documenting the status change with timestamps
+    const employeeName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
+    const acknowledgedAt = result.rows[0].acknowledged_at;
+    const localTime = new Date(acknowledgedAt).toLocaleString('en-US');
+    const utcTime = new Date(acknowledgedAt).toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+    const noteText = `Status changed from "${oldStatus}" to "Acknowledged" by ${employeeName}\nLocal Time: ${localTime}\nUTC: ${utcTime}`;
+
+    const noteResult = await pool.query(`
+      INSERT INTO service_request_notes (
+        service_request_id,
+        note_text,
+        note_type,
+        created_by_type,
+        created_by_id,
+        created_by_name,
+        is_visible_to_client
+      ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+      RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
+    `, [
+      id,
+      noteText,
+      employeeId,
+      employeeName
+    ]);
+
+    const newNote = noteResult.rows[0];
+
+    // Broadcast service request update via WebSocket with note data
+    console.log('🔍 [ADMIN-ACKNOWLEDGE] Attempting to broadcast WebSocket update...');
+    const websocketService = req.app.get('websocketService');
+    console.log('🔍 [ADMIN-ACKNOWLEDGE] websocketService exists:', !!websocketService);
+    if (websocketService) {
+      console.log('🔍 [ADMIN-ACKNOWLEDGE] Calling broadcastServiceRequestUpdate for SR:', id);
+      websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+        status: 'acknowledged',
+        assignedTechnician: employeeId,
+        noteAdded: true,
+        note: {
+          id: newNote.id,
+          note_text: newNote.note_text,
+          note_type: newNote.note_type,
+          created_by_type: newNote.created_by_type,
+          created_by_name: newNote.created_by_name,
+          created_at: newNote.created_at,
+          is_visible_to_client: newNote.is_visible_to_client
+        }
+      });
+      console.log('✅ [ADMIN-ACKNOWLEDGE] Broadcast completed');
+    } else {
+      console.log('❌ [ADMIN-ACKNOWLEDGE] websocketService not available on req.app!');
     }
 
     res.json({
@@ -1594,13 +1671,17 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
         WHERE id = $2
       `, [startedStatusId, id]);
 
-      // Add a note documenting the state change
+      // Add a note documenting the state change with timestamps
       const employeeName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
-      const noteText = isResuming
-        ? `Work resumed by ${employeeName}`
-        : `Work started by ${employeeName}`;
+      const now = new Date();
+      const localTime = now.toLocaleString('en-US');
+      const utcTime = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
 
-      await pool.query(`
+      const noteText = isResuming
+        ? `Status changed from "Paused" to "Started" by ${employeeName}\nLocal Time: ${localTime}\nUTC: ${utcTime}`
+        : `Status changed from "${currentStatus}" to "Started" by ${employeeName}\nLocal Time: ${localTime}\nUTC: ${utcTime}`;
+
+      const noteResult = await pool.query(`
         INSERT INTO service_request_notes (
           service_request_id,
           note_text,
@@ -1610,12 +1691,40 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
           created_by_name,
           is_visible_to_client
         ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+        RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
       `, [
         id,
         noteText,
         employeeId,
         employeeName
       ]);
+
+      const newNote = noteResult.rows[0];
+
+      // Broadcast service request update via WebSocket with note data
+      console.log('🔍 [TIME-ENTRY-START] Attempting to broadcast WebSocket update...');
+      const websocketService = req.app.get('websocketService');
+      console.log('🔍 [TIME-ENTRY-START] websocketService exists:', !!websocketService);
+      if (websocketService) {
+        console.log('🔍 [TIME-ENTRY-START] Calling broadcastServiceRequestUpdate for SR:', id);
+        websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+          action: 'time_entry_started',
+          statusId: startedStatusId,
+          noteAdded: true,
+          note: {
+            id: newNote.id,
+            note_text: newNote.note_text,
+            note_type: newNote.note_type,
+            created_by_type: newNote.created_by_type,
+            created_by_name: newNote.created_by_name,
+            created_at: newNote.created_at,
+            is_visible_to_client: newNote.is_visible_to_client
+          }
+        });
+        console.log('✅ [TIME-ENTRY-START] Broadcast completed');
+      } else {
+        console.log('❌ [TIME-ENTRY-START] websocketService not available on req.app!');
+      }
 
       res.json({
         success: true,
@@ -1680,10 +1789,16 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
       `;
       const sumResult = await pool.query(sumQuery, [pausedStatusId, id]);
 
-      // Add a note documenting the pause action
+      // Add a note documenting the pause action with timestamps
       const employeeName = `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || req.user.email;
       const durationHours = (result.rows[0].duration_minutes / 60).toFixed(2);
-      await pool.query(`
+      const now = new Date();
+      const localTime = now.toLocaleString('en-US');
+      const utcTime = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+      const noteText = `Status changed from "Started" to "Paused" by ${employeeName} (Session: ${durationHours} hours)\nLocal Time: ${localTime}\nUTC: ${utcTime}`;
+
+      const noteResult = await pool.query(`
         INSERT INTO service_request_notes (
           service_request_id,
           note_text,
@@ -1693,12 +1808,40 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
           created_by_name,
           is_visible_to_client
         ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+        RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
       `, [
         id,
-        `Work paused by ${employeeName} (Session: ${durationHours} hours)`,
+        noteText,
         employeeId,
         employeeName
       ]);
+
+      const newNote = noteResult.rows[0];
+
+      // Broadcast service request update via WebSocket with note data
+      console.log('🔍 [TIME-ENTRY-STOP] Attempting to broadcast WebSocket update...');
+      const websocketServiceStop = req.app.get('websocketService');
+      console.log('🔍 [TIME-ENTRY-STOP] websocketService exists:', !!websocketServiceStop);
+      if (websocketServiceStop) {
+        console.log('🔍 [TIME-ENTRY-STOP] Calling broadcastServiceRequestUpdate for SR:', id);
+        websocketServiceStop.broadcastServiceRequestUpdate(id, 'updated', {
+          action: 'time_entry_stopped',
+          statusId: pausedStatusId,
+          noteAdded: true,
+          note: {
+            id: newNote.id,
+            note_text: newNote.note_text,
+            note_type: newNote.note_type,
+            created_by_type: newNote.created_by_type,
+            created_by_name: newNote.created_by_name,
+            created_at: newNote.created_at,
+            is_visible_to_client: newNote.is_visible_to_client
+          }
+        });
+        console.log('✅ [TIME-ENTRY-STOP] Broadcast completed');
+      } else {
+        console.log('❌ [TIME-ENTRY-STOP] websocketService not available on req.app!');
+      }
 
       res.json({
         success: true,
@@ -1776,6 +1919,20 @@ router.put('/service-requests/:id/status', async (req, res) => {
 
       // Note: req.user.id should be available from auth middleware
       await pool.query(historyQuery, [id, req.user?.id || null, notes]);
+    }
+
+    // Broadcast service request update via WebSocket
+    console.log('🔍 [STATUS-UPDATE] Attempting to broadcast WebSocket update...');
+    const websocketService = req.app.get('websocketService');
+    console.log('🔍 [STATUS-UPDATE] websocketService exists:', !!websocketService);
+    if (websocketService) {
+      console.log('🔍 [STATUS-UPDATE] Calling broadcastServiceRequestUpdate for SR:', id);
+      websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+        statusId: statusId
+      });
+      console.log('✅ [STATUS-UPDATE] Broadcast completed');
+    } else {
+      console.log('❌ [STATUS-UPDATE] websocketService not available on req.app!');
     }
 
     res.json({
@@ -2406,13 +2563,24 @@ router.put('/service-requests/:id/close', async (req, res) => {
     });
 
     // Broadcast service request status change to all admins/employees
-    websocketService.broadcastServiceRequestUpdate(id, 'updated', {
-      statusChanged: true,
-      newStatus: 'Closed',
-      closed: true,
-      invoiceGenerated: true,
-      invoiceId: createdInvoice.id
-    });
+    console.log('🔍 [CLOSE] Attempting to broadcast WebSocket update...');
+    const websocketService = req.app.get('websocketService');
+    console.log('🔍 [CLOSE] websocketService exists:', !!websocketService);
+    if (websocketService) {
+      console.log('🔍 [CLOSE] Calling broadcastServiceRequestUpdate for SR:', id);
+      websocketService.broadcastServiceRequestUpdate(id, 'updated', {
+        action: 'closed',
+        statusChanged: true,
+        newStatus: 'Closed',
+        closed: true,
+        invoiceGenerated: true,
+        invoiceId: createdInvoice.id,
+        statusId: completedStatusId
+      });
+      console.log('✅ [CLOSE] Broadcast completed');
+    } else {
+      console.log('❌ [CLOSE] websocketService not available on req.app!');
+    }
 
     res.json({
       success: true,
