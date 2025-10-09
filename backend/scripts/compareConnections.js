@@ -11,12 +11,12 @@ async function compareConnections() {
   // Test 1: Direct Client connection (what works)
   console.log('📝 Test 1: Direct Client Connection');
   const clientConfig = {
-    host: '34.228.181.68',
-    port: 5432,
-    database: 'romerotechsolutions',
-    user: 'postgres',
-    password: 'ao1VKrmlD?e.(cg$<e-C2B*#]Uyg',
-    ssl: false,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 10000,
   };
 
@@ -80,15 +80,15 @@ async function compareConnections() {
 
   console.log('');
 
-  // Test 3: Pool with hardcoded values (like direct client)
-  console.log('📝 Test 3: Pool with Hardcoded Values');
+  // Test 3: Pool with environment variables (same as Test 1)
+  console.log('📝 Test 3: Pool with Environment Variables');
   const poolHardcoded = new Pool({
-    host: '34.228.181.68',
-    port: 5432,
-    database: 'romerotechsolutions',
-    user: 'postgres',
-    password: 'ao1VKrmlD?e.(cg$<e-C2B*#]Uyg',
-    ssl: false,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 10000,

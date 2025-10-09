@@ -7,12 +7,12 @@ const { Client } = pg;
 
 async function createUsersTable() {
   const client = new Client({
-    host: '34.228.181.68',
-    port: 5432,
-    database: 'romerotechsolutions',
-    user: 'postgres',
-    password: 'ao1VKrmlD?e.(cg$<e-C2B*#]Uyg',
-    ssl: false,
+    host: process.env.DB_HOST,
+    port: parseInt(process.env.DB_PORT || '5432'),
+    database: process.env.DB_NAME,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
     connectionTimeoutMillis: 10000,
   });
 

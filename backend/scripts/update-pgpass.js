@@ -14,10 +14,10 @@ dotenv.config();
  */
 
 const PGPASS_FORMAT = {
-  host: '34.228.181.68',
-  port: '5432',
+  host: process.env.DB_HOST,
+  port: process.env.DB_PORT || '5432',
   database: '*',  // * means all databases
-  username: 'postgres'
+  username: process.env.DB_USER || 'postgres'
 };
 
 async function updatePgPassFile() {

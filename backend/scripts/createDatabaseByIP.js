@@ -6,9 +6,9 @@ dotenv.config();
 const { Client } = pg;
 
 async function createDatabase() {
-  // Connect using IP address directly
+  // Connect using database host from environment
   const client = new Client({
-    host: '34.228.181.68', // Using IP instead of hostname
+    host: process.env.DB_HOST,
     port: parseInt(process.env.DB_PORT || '5432'),
     database: 'postgres', // Connect to default database first
     user: process.env.DB_USER,

@@ -6,10 +6,22 @@
 echo "📱 Updating Production VAPID Keys for Push Notifications"
 echo "=========================================================="
 
-# VAPID keys (generated with: npx web-push generate-vapid-keys)
-VAPID_PUBLIC_KEY="BFC_fY801d4N8P58IPlWxWQQIeaxPqFwKLxk2JRo4dBRuuNncHKXLZ5IYO5__XgzEeOmR8XeeRMw5UyVbdFt9Vo"
-VAPID_PRIVATE_KEY="8zFrMeVFuMhKcxJQd_p_jia1wZuMkCkMM5pCr-7QnYM"
-VAPID_SUBJECT="mailto:info@romerotechsolutions.com"
+# Load VAPID keys from local .env file
+# If keys are not in environment, try to load from backend/.env
+if [ -z "$VAPID_PUBLIC_KEY" ] || [ -z "$VAPID_PRIVATE_KEY" ]; then
+    if [ -f "backend/.env" ]; then
+        echo "Loading VAPID keys from backend/.env file..."
+        export $(grep -E "^VAPID_" backend/.env | xargs)
+    else
+        echo "❌ ERROR: VAPID keys not found in environment or backend/.env file"
+        echo "Please set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT environment variables"
+        echo "Or ensure backend/.env file exists with these variables"
+        exit 1
+    fi
+fi
+
+# Default subject if not set
+VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:info@romerotechsolutions.com}"
 
 # Add VAPID keys to production .env file if not already present
 echo ""

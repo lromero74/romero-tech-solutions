@@ -16,9 +16,16 @@ const router = express.Router();
 
 // Configure web-push with VAPID keys
 // Generate these with: npx web-push generate-vapid-keys
-const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || 'BFC_fY801d4N8P58IPlWxWQQIeaxPqFwKLxk2JRo4dBRuuNncHKXLZ5IYO5__XgzEeOmR8XeeRMw5UyVbdFt9Vo';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '8zFrMeVFuMhKcxJQd_p_jia1wZuMkCkMM5pCr-7QnYM';
+// IMPORTANT: VAPID keys MUST be set in environment variables (.env file)
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY;
 const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:info@romerotechsolutions.com';
+
+if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) {
+  console.error('❌ VAPID keys are not configured. Push notifications will not work.');
+  console.error('   Please set VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY in your .env file');
+  console.error('   Generate keys with: npx web-push generate-vapid-keys');
+}
 
 webpush.setVapidDetails(
   VAPID_SUBJECT,
