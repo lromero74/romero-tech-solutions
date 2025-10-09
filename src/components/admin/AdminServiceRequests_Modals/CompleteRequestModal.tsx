@@ -60,6 +60,10 @@ const CompleteRequestModal: React.FC<CompleteRequestModalProps> = ({
 }) => {
   if (!show || !selectedRequest) return null;
 
+  // Check if selected closure reason is "Complete" - only show billing for completed requests
+  const selectedReason = closureReasons.find(r => r.id === selectedClosureReasonId);
+  const isCompleteReason = selectedReason?.reason?.toLowerCase() === 'complete';
+
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
       <div className={`${themeClasses.bg.card} rounded-lg max-w-2xl w-full max-h-[90vh] overflow-hidden flex flex-col`}>
@@ -126,7 +130,7 @@ const CompleteRequestModal: React.FC<CompleteRequestModalProps> = ({
                 </p>
               )}
             </div>
-            {timeBreakdown && (
+            {timeBreakdown && isCompleteReason && (
               <div className={`mt-3 p-3 rounded-lg ${themeClasses.bg.secondary} border ${themeClasses.border}`}>
                 {/* Total Time Calculation */}
                 <div className={`mb-3 pb-3 border-b ${themeClasses.border}`}>

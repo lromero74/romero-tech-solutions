@@ -9,7 +9,13 @@ router.get('/', async (req, res) => {
   try {
     const pool = await getPool();
     const result = await pool.query(`
-      SELECT id, reason_name, reason_description, is_active, created_at, updated_at
+      SELECT
+        id,
+        reason_name AS reason,
+        reason_description AS description,
+        is_active,
+        created_at,
+        updated_at
       FROM service_request_closure_reasons
       ORDER BY reason_name ASC
     `);

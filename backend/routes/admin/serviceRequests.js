@@ -1536,7 +1536,7 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
         created_by_id,
         created_by_name,
         is_visible_to_client
-      ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+      ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, true)
       RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
     `, [
       id,
@@ -1690,7 +1690,7 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
           created_by_id,
           created_by_name,
           is_visible_to_client
-        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, true)
         RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
       `, [
         id,
@@ -1807,7 +1807,7 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
           created_by_id,
           created_by_name,
           is_visible_to_client
-        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, false)
+        ) VALUES ($1, $2, 'status_change', 'employee', $3, $4, true)
         RETURNING id, note_text, note_type, created_by_type, created_by_name, created_at, is_visible_to_client
       `, [
         id,
@@ -2189,6 +2189,20 @@ router.put('/service-requests/:id/close', async (req, res) => {
       `Request closed with reason ID ${closureReasonId}. Resolution: ${resolutionSummary.substring(0, 100)}...`
     ]);
 
+    // Check if closure reason is "Complete" - only generate invoice for completed requests
+    const closureReasonQuery = await pool.query(`
+      SELECT reason_name
+      FROM service_request_closure_reasons
+      WHERE id = $1
+    `, [closureReasonId]);
+
+    const closureReasonName = closureReasonQuery.rows[0]?.reason_name || '';
+    const isCompleted = closureReasonName.toLowerCase() === 'complete';
+
+    let createdInvoice = null;
+
+    // Only generate invoice if the request was completed successfully
+    if (isCompleted) {
     // Generate invoice
     // Get service request details with business info and rate
     const srDetailsQuery = `
@@ -2561,6 +2575,7 @@ router.put('/service-requests/:id/close', async (req, res) => {
       totalAmount: totalAmount,
       type: 'new_invoice'
     });
+    } // End of invoice generation (only for completed requests)
 
     // Broadcast service request status change to all admins/employees
     console.log('🔍 [CLOSE] Attempting to broadcast WebSocket update...');
@@ -2573,9 +2588,10 @@ router.put('/service-requests/:id/close', async (req, res) => {
         statusChanged: true,
         newStatus: 'Closed',
         closed: true,
-        invoiceGenerated: true,
-        invoiceId: createdInvoice.id,
-        statusId: completedStatusId
+        invoiceGenerated: createdInvoice !== null,
+        invoiceId: createdInvoice?.id,
+        statusId: completedStatusId,
+        closureReason: closureReasonName
       });
       console.log('✅ [CLOSE] Broadcast completed');
     } else {
@@ -2584,13 +2600,15 @@ router.put('/service-requests/:id/close', async (req, res) => {
 
     res.json({
       success: true,
-      message: 'Service request closed successfully and invoice generated',
+      message: createdInvoice
+        ? 'Service request closed successfully and invoice generated'
+        : `Service request closed successfully (${closureReasonName})`,
       data: {
         ...result.rows[0],
-        invoice: {
+        invoice: createdInvoice ? {
           id: createdInvoice.id,
           invoiceNumber: createdInvoice.invoice_number
-        }
+        } : null
       }
     });
 
