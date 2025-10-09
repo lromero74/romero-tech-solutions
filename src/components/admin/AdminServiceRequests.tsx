@@ -303,8 +303,6 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
 
   // Sync service requests from props (always sync, even if empty)
   useEffect(() => {
-    console.log('🔄 AdminServiceRequests: Props changed! Syncing service requests from props:', propsServiceRequests.length);
-    console.log('🔄 AdminServiceRequests: First 3 request numbers:', propsServiceRequests.slice(0, 3).map(r => r.request_number));
     setServiceRequests(propsServiceRequests);
     setLoading(false);
   }, [propsServiceRequests]);
@@ -399,29 +397,22 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
     const handleEntityChange = (change: any) => {
       // If a service request was updated with a note added, and it's the currently selected request
       if (change.entityType === 'serviceRequest' && change.noteAdded && selectedRequest && change.entityId === selectedRequest.id) {
-        console.log('📝 Note added to current service request, inserting new note...');
         // Instead of reloading all notes, directly insert the new note at the top
         if (change.note) {
-          console.log('🔍 Admin Debug - Websocket received note.id:', change.note.id);
-          console.log('🔍 Admin Debug - lastSubmittedNoteIdRef.current:', lastSubmittedNoteIdRef.current);
-
           // Check if note already exists in the array
           setRequestNotes(prev => {
             const noteExists = prev.some(n => n.id === change.note.id);
             if (noteExists) {
-              console.log('📝 Skipping duplicate note - already exists in array');
               return prev;
             }
 
             // Skip if this is the note we just submitted (already added optimistically)
             if (change.note.id === lastSubmittedNoteIdRef.current) {
-              console.log('📝 Skipping duplicate note (we just submitted this one)');
               lastSubmittedNoteIdRef.current = null; // Clear the flag
               setLastSubmittedNoteId(null); // Clear state too
               return prev;
             }
 
-            console.log('🔍 Admin Debug - Adding note from websocket to array of length:', prev.length);
             // Trigger blue halo effect for the newly received note
             setNewlyReceivedNoteId(change.note.id);
             return [change.note, ...prev];
@@ -999,22 +990,16 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
       );
 
       if (response.success) {
-        console.log('🔍 Admin Debug - Submitted note ID:', response.data.note.id);
-        console.log('🔍 Admin Debug - Full response.data.note:', JSON.stringify(response.data.note));
         // Track this note ID immediately in ref (synchronous) AND state
         lastSubmittedNoteIdRef.current = response.data.note.id;
         setLastSubmittedNoteId(response.data.note.id);
-        console.log('🔍 Admin Debug - Set lastSubmittedNoteIdRef.current to:', lastSubmittedNoteIdRef.current);
         // Add the new note to the list (optimistic update) - but check for duplicates first
-        console.log('🔍 Admin Debug - About to add note optimistically');
         setRequestNotes(prev => {
           // Check if note already exists (websocket may have added it already)
           const noteExists = prev.some(n => n.id === response.data.note.id);
           if (noteExists) {
-            console.log('📝 Skipping optimistic update - note already exists in array (websocket was faster)');
             return prev;
           }
-          console.log('🔍 Admin Debug - Adding note optimistically to prev array of length:', prev.length);
           return [response.data.note, ...prev];
         });
         setNewNoteText('');
@@ -1429,17 +1414,10 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
   // Filter requests locally to match the filter state
   // When using cached data from props, we need to apply filters client-side
   const filteredRequests = React.useMemo(() => {
-    console.log('🔍 FILTER: Starting filter computation...');
-    console.log('🔍 FILTER: Input serviceRequests count:', serviceRequests.length);
-    console.log('🔍 FILTER: Current filter state:', filters);
-
     let filtered = serviceRequests;
 
     // Filter by status
     if (filters.status && filters.status !== 'all') {
-      console.log('🔍 FILTER: Applying status filter:', filters.status);
-      const beforeCount = filtered.length;
-
       if (filters.status === '*Open') {
         // Show only non-final statuses (not Completed, Cancelled, or Closed)
         filtered = filtered.filter(req => {
@@ -1447,14 +1425,12 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
           const statusLower = statusName.toLowerCase();
           return !['completed', 'cancelled', 'closed'].includes(statusLower);
         });
-        console.log(`🔍 FILTER: *Open filter - ${beforeCount} → ${filtered.length}`);
       } else {
         // Filter by specific status
         filtered = filtered.filter(req => {
           const statusName = req.status || '';
           return statusName.toLowerCase() === filters.status.toLowerCase();
         });
-        console.log(`🔍 FILTER: Specific status filter - ${beforeCount} → ${filtered.length}`);
       }
     }
 
@@ -1499,17 +1475,8 @@ const AdminServiceRequests: React.FC<AdminServiceRequestsProps> = ({
       filtered = filtered.filter(req => req.assigned_to_employee_id === filters.technician);
     }
 
-    console.log('🔍 FILTER: Final filtered count:', filtered.length);
-    console.log('🔍 FILTER: First 3 filtered request numbers:', filtered.slice(0, 3).map(r => r.request_number));
-
     return filtered;
   }, [serviceRequests, filters]);
-
-  // Debug: Log when filteredRequests changes
-  React.useEffect(() => {
-    console.log('🔔 RENDER: filteredRequests array changed, count:', filteredRequests.length);
-    console.log('🔔 RENDER: First 3 filtered request numbers:', filteredRequests.slice(0, 3).map(r => r.request_number));
-  }, [filteredRequests]);
 
   // Get unique clients for filter dropdown
   const uniqueClients = React.useMemo(() => {
