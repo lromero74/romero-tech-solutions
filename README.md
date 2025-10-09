@@ -79,7 +79,7 @@ A comprehensive Managed Service Provider (MSP) platform for managing client rela
 The easiest way to get started is using the interactive setup script:
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/lromero74/romero-tech-solutions.git
 cd romero-tech-solutions
 ./setup.sh
 ```
@@ -105,7 +105,7 @@ If you prefer manual configuration or need more control:
 ### 1. Clone the Repository
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/lromero74/romero-tech-solutions.git
 cd romero-tech-solutions
 ```
 
