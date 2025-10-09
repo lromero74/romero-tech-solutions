@@ -516,7 +516,13 @@ router.get('/', async (req, res) => {
 
       // Calculate duration in hours
       const startMinutes = startHour * 60 + startMin;
-      const endMinutes = endHour * 60 + endMin;
+      let endMinutes = endHour * 60 + endMin;
+
+      // Handle midnight crossing (e.g., 22:00 to 00:00)
+      if (endMinutes < startMinutes) {
+        endMinutes += 24 * 60; // Add 24 hours worth of minutes
+      }
+
       const durationHours = (endMinutes - startMinutes) / 60;
 
       // Get day of week from date (in UTC to match tier times)
