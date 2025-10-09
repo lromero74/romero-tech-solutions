@@ -547,7 +547,7 @@ This project is proprietary software. All rights reserved.
 
 For issues or questions:
 - Open a GitHub issue
-- Contact: support@yourdomain.com
+- Contact: support@romerotechsolutions.com
 
 ## 🔄 Version Check & Auto-Reload
 
