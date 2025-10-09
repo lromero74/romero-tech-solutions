@@ -69,18 +69,12 @@ router.post('/acknowledge/:token', authMiddleware, requirePermission('start.serv
     }
 
     // Broadcast service request update via WebSocket
-    console.log('🔍 [ACKNOWLEDGE] Attempting to broadcast WebSocket update...');
     const websocketService = req.app.get('websocketService');
-    console.log('🔍 [ACKNOWLEDGE] websocketService exists:', !!websocketService);
     if (websocketService) {
-      console.log('🔍 [ACKNOWLEDGE] Calling broadcastServiceRequestUpdate for SR:', validation.serviceRequestId);
       websocketService.broadcastServiceRequestUpdate(validation.serviceRequestId, 'updated', {
         status: 'acknowledged',
         assignedTechnician: employeeId
       });
-      console.log('✅ [ACKNOWLEDGE] Broadcast completed');
-    } else {
-      console.log('❌ [ACKNOWLEDGE] websocketService not available on req.app!');
     }
 
     res.json({

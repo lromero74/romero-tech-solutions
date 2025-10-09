@@ -268,17 +268,14 @@ export const canRescheduleRequest = (request: ServiceRequest) => {
 
   // Cannot reschedule if work has started
   if (statusLower.includes('in progress') || statusLower.includes('progress')) {
-    console.log(`Cannot reschedule ${request.requestNumber}: work already in progress`);
     return false;
   }
 
   // Cannot reschedule if already in final status
   if (statusLower.includes('completed') || statusLower.includes('cancelled')) {
-    console.log(`Cannot reschedule ${request.requestNumber}: status is ${request.status}`);
     return false;
   }
 
-  console.log(`✅ Can reschedule ${request.requestNumber}: status is ${request.status}`);
   return true;
 };
 

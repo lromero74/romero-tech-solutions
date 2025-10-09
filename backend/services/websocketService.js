@@ -137,8 +137,7 @@ class WebSocketService {
           socket.userEmail = user.email;
           socket.userRole = 'client';
 
-          console.log(`🔐 Client authenticated: ${user.email} (${user.id}) (socket: ${socket.id})`);
-          console.log(`📋 Client sockets map now contains ${this.clientSockets.size} client(s):`, Array.from(this.clientSockets.entries()));
+          console.log(`🔐 Client authenticated: ${user.email} (${user.id})`);
           socket.emit('client-authenticated', {
             message: 'Successfully authenticated',
             userId: user.id,
@@ -369,8 +368,6 @@ class WebSocketService {
   }
 
   async broadcastServiceRequestUpdate(serviceRequestId, action = 'updated', additionalData = {}) {
-    console.log(`📡 broadcastServiceRequestUpdate called for SR ${serviceRequestId}, action: ${action}`);
-
     // Broadcast to all admins/employees
     this.broadcastEntityUpdate('serviceRequest', serviceRequestId, action, additionalData);
 
@@ -381,20 +378,12 @@ class WebSocketService {
         [serviceRequestId]
       );
 
-      console.log(`🔍 Query result for SR ${serviceRequestId}:`, result.rows);
-
       if (result.rows.length > 0 && result.rows[0].client_id) {
         const clientId = result.rows[0].client_id;
-        console.log(`👤 Found client_id: ${clientId}`);
-
         const clientSocketId = this.clientSockets.get(clientId);
-        console.log(`🔌 Client socket ID from map: ${clientSocketId}`);
-        console.log(`📋 All client sockets in map:`, Array.from(this.clientSockets.entries()));
 
         if (clientSocketId) {
           const socket = this.io.sockets.sockets.get(clientSocketId);
-          console.log(`🔌 Socket object found: ${!!socket}`);
-
           if (socket) {
             socket.emit('entity-data-changed', {
               entityType: 'serviceRequest',
@@ -403,15 +392,8 @@ class WebSocketService {
               timestamp: new Date().toISOString(),
               ...additionalData
             });
-            console.log(`✅ Broadcasted service request ${action} to client ${clientId} via socket ${clientSocketId}`);
-          } else {
-            console.log(`⚠️ Socket ${clientSocketId} not found in active sockets`);
           }
-        } else {
-          console.log(`⚠️ No socket found for client ${clientId} - client not connected`);
         }
-      } else {
-        console.log(`⚠️ No client_id found for service request ${serviceRequestId}`);
       }
     } catch (error) {
       console.error('❌ Error broadcasting to client:', error);
