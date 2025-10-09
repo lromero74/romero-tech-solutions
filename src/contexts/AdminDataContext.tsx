@@ -926,7 +926,9 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         invoicesResult,
         rateCategoriesResult,
         workflowRulesResult,
-        workflowStatsResult
+        workflowStatsResult,
+        testimonialsResult,
+        ratingQuestionsResult
       ] = await Promise.all([
         safeFetch(() => adminService.getDashboardData(), { employees: 0, businesses: 0, services: 0, clients: 0, serviceRequests: 0 }),
         safeFetch(() => adminService.getEmployeesWithLoginStatus(), { employees: [] }),
@@ -945,7 +947,9 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
         safeFetch(() => apiService.get('/admin/invoices'), { data: { invoices: [] } }),
         safeFetch(() => apiService.get('/admin/hourly-rate-categories'), { data: [] }),
         safeFetch(() => apiService.get('/admin/workflow-configuration/rules'), { data: { rules: [] } }),
-        safeFetch(() => apiService.get('/admin/workflow-configuration/stats'), { data: null })
+        safeFetch(() => apiService.get('/admin/workflow-configuration/stats'), { data: null }),
+        safeFetch(() => apiService.get('/admin/testimonials', { params: { includeInactive: 'true' } }), { testimonials: [] }),
+        safeFetch(() => apiService.get('/admin/rating-questions', { params: { includeInactive: 'true' } }), { questions: [] })
       ]);
 
       // Set the data
@@ -1002,6 +1006,14 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
       }
       if (workflowRulesResult.data?.rules || workflowStatsResult.data) {
         workflowDataTimestampRef.current = Date.now();
+      }
+      if (testimonialsResult.testimonials) {
+        setTestimonials(testimonialsResult.testimonials);
+        testimonialsTimestampRef.current = Date.now();
+      }
+      if (ratingQuestionsResult.questions) {
+        setRatingQuestions(ratingQuestionsResult.questions);
+        ratingQuestionsTimestampRef.current = Date.now();
       }
 
     } catch (err) {
