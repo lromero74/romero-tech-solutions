@@ -12,7 +12,7 @@ import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
 import { useModalManager, useServiceLocationFilters, useClientFilters, useBusinessFilters } from '../hooks/admin';
 
-type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity' | 'filter-presets' | 'testimonials' | 'rating-questions';
+type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity' | 'filter-presets' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details';
 
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();
@@ -645,6 +645,7 @@ const AdminDashboardContent: React.FC = () => {
             <main className="flex-1 overflow-x-hidden overflow-y-auto px-4 sm:pr-6 mt-2">
             <AdminViewRouter
               currentView={currentView}
+              onViewChange={handleViewChange}
               onLocationCountClick={handleLocationCountClick}
               onClientCountClick={handleClientCountClick}
               onBusinessNameClick={handleBusinessNameClick}
