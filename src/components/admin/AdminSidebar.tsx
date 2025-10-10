@@ -24,12 +24,13 @@ import {
   HardDrive,
   FolderOpen,
   MessageSquare,
-  HelpCircle
+  HelpCircle,
+  Monitor
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -83,6 +84,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       items: [
         { id: 'services', label: 'Service Types', icon: Settings, permission: 'view.services.enable' },
         { id: 'service-requests', label: 'Service Requests', icon: ClipboardList, permission: 'view.service_requests.enable' },
+        { id: 'agents', label: 'Monitoring Agents', icon: Monitor, permission: 'view.agents.enable' },
         { id: 'workflow-configuration', label: 'Workflow Configuration', icon: Workflow, permission: 'view.workflow_configuration.enable' },
         { id: 'closure-reasons', label: 'Closure Reasons', icon: XCircle, permission: 'view.closure_reasons.enable' },
         { id: 'testimonials', label: 'Testimonials', icon: MessageSquare, permission: 'view.testimonials.enable' },

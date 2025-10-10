@@ -26,6 +26,9 @@ import AdminRoleHierarchy from '../AdminRoleHierarchy';
 import FilterPresetManager from '../FilterPresetManager';
 import AdminTestimonials from '../AdminTestimonials';
 import AdminRatingQuestions from '../AdminRatingQuestions';
+import AgentDashboard from '../AgentDashboard';
+import AgentDetails from '../AgentDetails';
+import AgentRegistrationModal from '../AgentRegistrationModal';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -46,10 +49,11 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
+  onViewChange?: (view: AdminView) => void;
   onLocationCountClick?: (businessName: string) => void;
   onClientCountClick?: (businessName: string) => void;
   onBusinessNameClick?: (businessName: string) => void;
@@ -84,6 +88,7 @@ interface AdminViewRouterProps {
 
 export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   currentView,
+  onViewChange,
   onLocationCountClick,
   onClientCountClick,
   onBusinessNameClick,
@@ -283,6 +288,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Service Location filter toggles state
   const [showInactiveServiceLocations, setShowInactiveServiceLocations] = useState(true);
   const [showSoftDeletedServiceLocations, setShowSoftDeletedServiceLocations] = useState(false);
+
+  // Agent state
+  const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
+  const [showAgentRegistrationModal, setShowAgentRegistrationModal] = useState(false);
 
   // Use external state/setters if provided, otherwise use internal state
   const currentShowInactiveClients = externalShowInactiveClients !== undefined ? externalShowInactiveClients : showInactiveClients;
@@ -1662,6 +1671,38 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           />
         );
 
+      case 'agents':
+        return (
+          <AgentDashboard
+            onViewAgentDetails={(agentId) => {
+              setSelectedAgentId(agentId);
+              onViewChange?.('agent-details');
+            }}
+            onCreateRegistrationToken={() => setShowAgentRegistrationModal(true)}
+          />
+        );
+
+      case 'agent-details':
+        return selectedAgentId ? (
+          <AgentDetails
+            agentId={selectedAgentId}
+            onBack={() => {
+              setSelectedAgentId(null);
+              onViewChange?.('agents');
+            }}
+            onSendCommand={(agentId) => {
+              // Handle command modal - could be implemented as separate modal
+              console.log('Send command to agent:', agentId);
+            }}
+          />
+        ) : (
+          <div className="flex items-center justify-center h-64">
+            <div className="text-gray-500 dark:text-gray-400">
+              No agent selected
+            </div>
+          </div>
+        );
+
       default:
         return (
           <div className="flex items-center justify-center h-64">
@@ -1763,6 +1804,14 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         cancelButtonText="Cancel"
         confirmButtonColor={confirmationDialog.confirmButtonColor || "red"}
         iconType={confirmationDialog.iconType || "warning"}
+      />
+
+      {/* Agent Registration Modal */}
+      <AgentRegistrationModal
+        isOpen={showAgentRegistrationModal}
+        onClose={() => setShowAgentRegistrationModal(false)}
+        businesses={businesses}
+        serviceLocations={serviceLocations}
       />
     </>
   );
