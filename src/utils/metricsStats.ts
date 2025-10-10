@@ -304,7 +304,8 @@ export function prepareChartData(
     // Check if zone changed from previous point
     if (prev && prev.zoneColor !== current.zoneColor) {
       // Add a transition point with both zones populated
-      const transitionPoint = { ...current };
+      // BUT: Don't mark transition point as anomaly (it's a duplicate for line continuity)
+      const transitionPoint = { ...current, isAnomaly: false, anomalySeverity: undefined };
       if (prev.valueGreen !== null) transitionPoint.valueGreen = current.value;
       if (prev.valueYellow !== null) transitionPoint.valueYellow = current.value;
       if (prev.valueOrange !== null) transitionPoint.valueOrange = current.value;
@@ -350,8 +351,15 @@ export function detectAnomalies(
 ): Anomaly[] {
   const anomalies: Anomaly[] = [];
 
-  data.forEach(point => {
-    const deviationsFromMean = Math.abs(point.value - stats.mean) / stats.stdDev;
+  data.forEach((point, index) => {
+    // Use local moving average and rolling std dev if available (for Bollinger Bands)
+    const meanAtPoint = stats.movingAverages ? stats.movingAverages[index] : stats.mean;
+    let stdDevAtPoint = stats.stdDev;
+    if (stats.rollingStdDevs && stats.rollingStdDevs[index] !== undefined) {
+      stdDevAtPoint = stats.rollingStdDevs[index];
+    }
+
+    const deviationsFromMean = Math.abs(point.value - meanAtPoint) / stdDevAtPoint;
 
     if (deviationsFromMean > 2) {
       let severity: 'minor' | 'moderate' | 'severe';
