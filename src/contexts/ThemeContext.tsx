@@ -118,6 +118,11 @@ export const themeClasses = {
   // Input specific styles
   input: 'bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400',
 
+  // Default border (non-input specific)
+  default: {
+    border: 'border-gray-300 dark:border-gray-600'
+  },
+
   // Button styles
   button: {
     primary: 'bg-blue-600 dark:bg-blue-600 hover:bg-blue-700 dark:hover:bg-blue-500 text-white',
