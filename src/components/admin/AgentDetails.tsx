@@ -464,7 +464,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   <Cpu className={`w-4 h-4 ${themeClasses.text.muted}`} />
                   <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>CPU Usage:</span>
                 </div>
-                <span className={`text-lg font-bold ${getMetricColor(latestMetrics.cpu_percent)}`}>
+                <span className={`${latestMetrics.cpu_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.cpu_percent)}`}>
                   {latestMetrics.cpu_percent.toFixed(1)}%
                 </span>
               </div>
@@ -487,7 +487,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   <Activity className={`w-4 h-4 ${themeClasses.text.muted}`} />
                   <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Memory Usage:</span>
                 </div>
-                <span className={`text-lg font-bold ${getMetricColor(latestMetrics.memory_percent)}`}>
+                <span className={`${latestMetrics.memory_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.memory_percent)}`}>
                   {latestMetrics.memory_percent.toFixed(1)}%
                 </span>
               </div>
@@ -510,7 +510,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   <HardDrive className={`w-4 h-4 ${themeClasses.text.muted}`} />
                   <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Disk Usage:</span>
                 </div>
-                <span className={`text-lg font-bold ${getMetricColor(latestMetrics.disk_percent)}`}>
+                <span className={`${latestMetrics.disk_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.disk_percent)}`}>
                   {latestMetrics.disk_percent.toFixed(1)}%
                 </span>
               </div>
@@ -1889,12 +1889,12 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <div className="mb-6">
               <div className="flex items-center justify-between mb-2">
                 <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Packet Loss</span>
-                <span className={`text-lg font-bold ${
+                <span className={`${Number(latestMetrics.packet_loss_percent) >= 5 ? 'text-lg' : 'text-sm'} font-bold ${
                   latestMetrics.packet_loss_percent === 0 ? 'text-green-600' :
                   latestMetrics.packet_loss_percent < 5 ? 'text-yellow-600' :
                   'text-red-600'
                 }`}>
-                  {latestMetrics.packet_loss_percent.toFixed(1)}%
+                  {Number(latestMetrics.packet_loss_percent).toFixed(1)}%
                 </span>
               </div>
               <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
@@ -1982,7 +1982,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     {!latestMetrics.internet_connected && 'No internet connectivity. '}
                     {!latestMetrics.gateway_reachable && 'Gateway unreachable. '}
                     {!latestMetrics.dns_working && 'DNS not working. '}
-                    {latestMetrics.packet_loss_percent && latestMetrics.packet_loss_percent > 10 && `High packet loss (${latestMetrics.packet_loss_percent.toFixed(1)}%). `}
+                    {latestMetrics.packet_loss_percent && Number(latestMetrics.packet_loss_percent) > 10 && `High packet loss (${Number(latestMetrics.packet_loss_percent).toFixed(1)}%). `}
                     {latestMetrics.avg_latency_ms && latestMetrics.avg_latency_ms > 200 && `High latency (${latestMetrics.avg_latency_ms}ms). `}
                     Check network configuration and connectivity.
                   </p>
