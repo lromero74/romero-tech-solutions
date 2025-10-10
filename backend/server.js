@@ -38,6 +38,7 @@ import pushRoutes from './routes/pushRoutes.js';
 import serviceRatingsRoutes from './routes/serviceRatings.js';
 import adminTestimonialsRoutes from './routes/admin/testimonials.js';
 import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
+import agentRoutes from './routes/agents.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -50,6 +51,9 @@ import { websocketService } from './services/websocketService.js';
 
 // Import workflow scheduler
 import { workflowScheduler } from './services/workflowScheduler.js';
+
+// Import agent monitoring service
+import { startAgentMonitoring, stopAgentMonitoring } from './services/agentMonitoringService.js';
 
 // Import environment-aware logger
 import { loggers as log } from './utils/logger.js';
@@ -349,7 +353,7 @@ if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'));
 }
 
-// Health check endpoint
+// Health check endpoints
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'ok',
@@ -357,6 +361,48 @@ app.get('/health', (req, res) => {
     service: 'Romero Tech Solutions API',
     version: '1.0.0'
   });
+});
+
+// API Health check endpoint (comprehensive)
+app.get('/api/health', async (req, res) => {
+  try {
+    const dbConnected = await testConnection();
+    const uptime = process.uptime();
+    const memoryUsage = process.memoryUsage();
+
+    const health = {
+      status: dbConnected ? 'healthy' : 'degraded',
+      timestamp: new Date().toISOString(),
+      service: 'Romero Tech Solutions API',
+      version: '1.0.0',
+      uptime: {
+        seconds: Math.floor(uptime),
+        formatted: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${Math.floor(uptime % 60)}s`
+      },
+      database: {
+        connected: dbConnected,
+        status: dbConnected ? 'ok' : 'error'
+      },
+      memory: {
+        heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+        heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+        rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`
+      },
+      environment: process.env.NODE_ENV || 'development',
+      nodeVersion: process.version
+    };
+
+    // Return 503 if database is not connected
+    const statusCode = dbConnected ? 200 : 503;
+    res.status(statusCode).json(health);
+  } catch (error) {
+    res.status(503).json({
+      status: 'error',
+      timestamp: new Date().toISOString(),
+      service: 'Romero Tech Solutions API',
+      error: error.message
+    });
+  }
 });
 
 // Database health check
@@ -432,6 +478,7 @@ app.use('/api', emailValidationRoutes); // Email domain validation proxy (no aut
 app.use('/api/ratings', generalLimiter, serviceRatingsRoutes); // Public rating submission (token-based auth)
 app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminTestimonialsRoutes); // Admin testimonials management
 app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
+app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {
@@ -577,6 +624,9 @@ const startServer = async () => {
     // Start workflow scheduler for service request automation
     workflowScheduler.start();
 
+    // Start agent heartbeat monitoring
+    startAgentMonitoring();
+
     // Start the server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
@@ -585,6 +635,7 @@ const startServer = async () => {
       console.log(`🌐 Environment: ${process.env.NODE_ENV || 'development'}`);
       console.log(`🔒 CORS origins: ${process.env.CORS_ORIGINS || 'http://localhost:5173'}`);
       console.log(`🔌 WebSocket service: ENABLED`);
+      console.log(`📡 Agent monitoring: ENABLED`);
 
       // Start session cleanup process
       startSessionCleanup();
@@ -600,12 +651,14 @@ const startServer = async () => {
 process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   stopSessionCleanup();
+  stopAgentMonitoring();
   process.exit(0);
 });
 
 process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   stopSessionCleanup();
+  stopAgentMonitoring();
   process.exit(0);
 });
 
