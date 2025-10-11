@@ -76,6 +76,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const chartRef = useRef<any>(null);
   const hasInitializedZoom = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
+  const isInitialMount = useRef<boolean>(true);
 
   // Validate and normalize data (especially for percentages)
   const validatedData = useMemo(() => {
@@ -131,6 +132,42 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return prepareChartData(validatedData, stats, anomalies);
   }, [validatedData, stats, anomalies]);
 
+  // Calculate initial zoom domain based on selectedTimeWindow (must be before yAxisDomain that uses it)
+  const calculateInitialZoomDomain = useMemo(() => {
+    if (!selectedTimeWindow || !chartData || chartData.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - selectedTimeWindow * 60 * 60 * 1000);
+
+    // Find the index of the first data point within the time window
+    let startIndex = 0;
+    for (let i = chartData.length - 1; i >= 0; i--) {
+      const dataTime = new Date(chartData[i].timestamp);
+      if (dataTime >= cutoffTime) {
+        startIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    // End index is the last data point
+    const endIndex = chartData.length - 1;
+
+    // Only set zoom if we have a valid range
+    if (startIndex < endIndex) {
+      return { startIndex, endIndex };
+    }
+
+    return null;
+  }, [chartData, selectedTimeWindow]);
+
+  // Get the active domain (for both display and calculations)
+  const activeDomain = useMemo(() => {
+    return animatedZoomDomain || zoomDomain || calculateInitialZoomDomain;
+  }, [animatedZoomDomain, zoomDomain, calculateInitialZoomDomain]);
+
   // Calculate Y-axis domain with dynamic scaling and buffer
   const yAxisDomain = useMemo(() => {
     if (!chartData || chartData.length === 0) {
@@ -142,26 +179,33 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Determine visible time range from the zoom domain
-    const activeDomain = animatedZoomDomain || zoomDomain;
+    // Get visible data based on active domain
     let visibleData: typeof chartData;
 
     if (activeDomain) {
-      // Get the timestamp range that will be displayed
-      const startTime = new Date(chartData[activeDomain.startIndex].timestamp).getTime();
-      const endTime = new Date(chartData[activeDomain.endIndex].timestamp).getTime();
+      // Validate domain indices are within bounds
+      const validStartIndex = Math.max(0, Math.min(activeDomain.startIndex, chartData.length - 1));
+      const validEndIndex = Math.max(0, Math.min(activeDomain.endIndex, chartData.length - 1));
 
-      // Filter to data points within the visible time range (with no artificial padding)
-      // Recharts will handle rendering appropriately, we just need to capture all visible values
-      visibleData = chartData.filter(point => {
-        const pointTime = new Date(point.timestamp).getTime();
-        return pointTime >= startTime && pointTime <= endTime;
-      });
+      if (validStartIndex >= chartData.length || validEndIndex >= chartData.length) {
+        // Indices out of bounds, use all data
+        visibleData = chartData;
+      } else {
+        // Get the timestamp range that will be displayed
+        const startTime = new Date(chartData[validStartIndex].timestamp).getTime();
+        const endTime = new Date(chartData[validEndIndex].timestamp).getTime();
+
+        // Filter to data points within the visible time range
+        visibleData = chartData.filter(point => {
+          const pointTime = new Date(point.timestamp).getTime();
+          return pointTime >= startTime && pointTime <= endTime;
+        });
+      }
     } else {
       visibleData = chartData;
     }
 
-    if (visibleData.length === 0) {
+    if (!visibleData || visibleData.length === 0) {
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
@@ -205,43 +249,61 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       min = Math.max(0, min - buffer);
       max = Math.min(100, max + buffer);
 
+      // Ensure minimum range of 5% to prevent duplicate tick keys in Recharts
+      const finalRange = max - min;
+      if (finalRange < 5) {
+        const center = (min + max) / 2;
+        min = Math.max(0, center - 2.5);
+        max = Math.min(100, center + 2.5);
+      }
+
       return [min, max];
     }
 
     // For non-percentage metrics, apply buffer based on visible range
-    return [Math.max(0, min - buffer), max + buffer];
-  }, [chartData, animatedZoomDomain, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
+    const minWithBuffer = Math.max(0, min - buffer);
+    const maxWithBuffer = max + buffer;
 
-  // Calculate initial zoom domain based on selectedTimeWindow
-  const calculateInitialZoomDomain = useMemo(() => {
-    if (!selectedTimeWindow || !chartData || chartData.length === 0) {
-      return null;
+    // Ensure minimum range to prevent duplicate tick keys
+    const finalRange = maxWithBuffer - minWithBuffer;
+    const minRange = Math.max(5, maxWithBuffer * 0.1); // At least 5 or 10% of max value
+    if (finalRange < minRange) {
+      const center = (minWithBuffer + maxWithBuffer) / 2;
+      return [Math.max(0, center - minRange / 2), center + minRange / 2];
     }
 
-    const now = new Date();
-    const cutoffTime = new Date(now.getTime() - selectedTimeWindow * 60 * 60 * 1000);
+    return [minWithBuffer, maxWithBuffer];
+  }, [chartData, activeDomain, unit, autoFitYAxis]);
 
-    // Find the index of the first data point within the time window
-    let startIndex = 0;
-    for (let i = chartData.length - 1; i >= 0; i--) {
-      const dataTime = new Date(chartData[i].timestamp);
-      if (dataTime >= cutoffTime) {
-        startIndex = i;
-      } else {
-        break;
+  // Calculate minimum decimal places needed for Y-axis so no two ticks appear identical
+  const yAxisDecimalPlaces = useMemo(() => {
+    if (!Array.isArray(yAxisDomain) || yAxisDomain.length !== 2) return 0;
+
+    const [min, max] = yAxisDomain;
+    if (typeof min !== 'number' || typeof max !== 'number') return 0;
+
+    // Estimate tick values (Recharts typically generates 5-7 evenly spaced ticks)
+    const tickCount = 6;
+    const step = (max - min) / (tickCount - 1);
+    const estimatedTicks: number[] = [];
+    for (let i = 0; i < tickCount; i++) {
+      estimatedTicks.push(min + (step * i));
+    }
+
+    // Try different decimal precisions (0 to 3) and find minimum that makes all ticks unique
+    for (let decimals = 0; decimals <= 3; decimals++) {
+      const formattedTicks = estimatedTicks.map(tick => tick.toFixed(decimals));
+      const uniqueTicks = new Set(formattedTicks);
+
+      // If all formatted values are unique, this precision is sufficient
+      if (uniqueTicks.size === formattedTicks.length) {
+        return decimals;
       }
     }
 
-    // End index is the last data point
-    const endIndex = chartData.length - 1;
-
-    // Only set zoom if we have a valid range
-    if (startIndex < endIndex) {
-      return { startIndex, endIndex };
-    }
-
-    return null;
-  }, [chartData, selectedTimeWindow]);
+    // Fallback to 3 decimals if we couldn't find a good precision
+    return 3;
+  }, [yAxisDomain]);
 
   // Smooth animation effect for zoom domain changes
   useEffect(() => {
@@ -300,15 +362,37 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   // Initialize zoom domain on first render or when selectedTimeWindow changes
   useEffect(() => {
-    // Reset initialization flag when selectedTimeWindow changes
+    // Reset initialization flags when selectedTimeWindow changes
     hasInitializedZoom.current = false;
+    isInitialMount.current = true;
   }, [selectedTimeWindow]);
+
+  // Reset zoom domain when chartData length changes significantly (e.g., switching averaging modes)
+  useEffect(() => {
+    if (!zoomDomain || !chartData || chartData.length === 0) return;
+
+    // Check if current zoom domain is out of bounds
+    if (zoomDomain.endIndex >= chartData.length) {
+      // Recalculate zoom domain to fit new data length
+      if (calculateInitialZoomDomain) {
+        setZoomDomain(calculateInitialZoomDomain);
+      } else {
+        setZoomDomain(null);
+      }
+    }
+  }, [chartData.length, calculateInitialZoomDomain]);
 
   useEffect(() => {
     // Only apply initial zoom once, or when initialZoomWindowHours changes
     if (!hasInitializedZoom.current && calculateInitialZoomDomain) {
       setZoomDomain(calculateInitialZoomDomain);
-      hasInitializedZoom.current = true;
+
+      // Delay enabling brush interactions until after the state update and render complete
+      // This prevents the brush from overriding during the initial render cycle
+      setTimeout(() => {
+        hasInitializedZoom.current = true;
+        isInitialMount.current = false;
+      }, 100);
     }
   }, [calculateInitialZoomDomain]);
 
@@ -355,6 +439,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   };
 
   const handleBrushChange = (domain: any) => {
+    // Ignore brush changes during initial mount to prevent overriding calculated initial zoom
+    if (isInitialMount.current || !hasInitializedZoom.current) {
+      return;
+    }
+
     if (domain && domain.startIndex !== undefined && domain.endIndex !== undefined) {
       setZoomDomain({ startIndex: domain.startIndex, endIndex: domain.endIndex });
     }
@@ -422,11 +511,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   // Calculate zoom percentage for display
   const zoomPercentage = useMemo(() => {
-    const activeDomain = animatedZoomDomain || zoomDomain;
     if (!activeDomain || !chartData || chartData.length === 0) return 100;
     const visibleRange = activeDomain.endIndex - activeDomain.startIndex + 1;
     return Math.round((visibleRange / chartData.length) * 100);
-  }, [animatedZoomDomain, zoomDomain, chartData]);
+  }, [activeDomain, chartData]);
 
   // Auto-follow latest data when the right handle is at the rightmost position
   const prevDataLengthRef = useRef<number>(0);
@@ -758,14 +846,15 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             tickFormatter={(value) => format(new Date(value), 'HH:mm')}
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
             stroke={isDark ? '#4b5563' : '#d1d5db'}
-            domain={animatedZoomDomain ? [
-              chartData[animatedZoomDomain.startIndex]?.timestamp,
-              chartData[animatedZoomDomain.endIndex]?.timestamp
-            ] : undefined}
-            allowDataOverflow={animatedZoomDomain ? true : false}
+            domain={activeDomain && chartData.length > 0 ? [
+              chartData[Math.min(activeDomain.startIndex, chartData.length - 1)]?.timestamp,
+              chartData[Math.min(activeDomain.endIndex, chartData.length - 1)]?.timestamp
+            ] : ['auto', 'auto']}
+            allowDataOverflow={!!activeDomain}
           />
           <YAxis
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
+            tickCount={5}
             tickFormatter={(value) => {
               // Ensure we're formatting numbers as percentages or values, not timestamps
               if (typeof value === 'number' && isFinite(value)) {
@@ -773,7 +862,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 if (value > 1000000) {
                   return '';
                 }
-                return unit === '%' ? `${value.toFixed(0)}${unit}` : value.toFixed(1);
+                if (unit === '%') {
+                  // Use calculated decimal precision to ensure unique tick labels
+                  return `${value.toFixed(yAxisDecimalPlaces)}${unit}`;
+                }
+                return value.toFixed(yAxisDecimalPlaces);
               }
               return '';
             }}
@@ -1069,8 +1162,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             fill={isDark ? '#1f2937' : '#f3f4f6'}
             tickFormatter={(value) => format(new Date(value), 'HH:mm')}
             onChange={handleBrushChange}
-            startIndex={animatedZoomDomain?.startIndex ?? undefined}
-            endIndex={animatedZoomDomain?.endIndex ?? undefined}
+            startIndex={activeDomain ? Math.min(activeDomain.startIndex, chartData.length - 1) : undefined}
+            endIndex={activeDomain ? Math.min(activeDomain.endIndex, chartData.length - 1) : undefined}
           />
         </ComposedChart>
       </ResponsiveContainer>
