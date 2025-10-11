@@ -15,7 +15,7 @@ import {
   Brush,
 } from 'recharts';
 import { format } from 'date-fns';
-import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Expand } from 'lucide-react';
 import {
   calculateStats,
   prepareChartData,
@@ -36,6 +36,7 @@ interface MetricsChartProps {
   showStdDev?: boolean;
   showRateOfChange?: boolean;
   height?: number;
+  initialZoomWindowHours?: number; // Initial zoom window in hours (defaults to showing all data)
 }
 
 const MetricsChart: React.FC<MetricsChartProps> = ({
@@ -47,6 +48,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   showStdDev = true,
   showRateOfChange = true,
   height = 300,
+  initialZoomWindowHours,
 }) => {
   const { isDark } = useTheme();
 
@@ -55,32 +57,47 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const [windowSize, setWindowSize] = useState<number>(20);
   const [bandMode, setBandMode] = useState<BandMode>('dynamic');
 
+  // State for Y-axis autofitting (default to enabled)
+  const [autoFitYAxis, setAutoFitYAxis] = useState<boolean>(true);
+
   // Zoom and pan state
   const [zoomDomain, setZoomDomain] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const chartRef = useRef<any>(null);
+  const hasInitializedZoom = useRef<boolean>(false);
 
   // Validate and normalize data (especially for percentages)
   const validatedData = useMemo(() => {
     if (!data || data.length === 0) return [];
 
-    return data.map(point => {
+    const validPoints: MetricDataPoint[] = [];
+
+    data.forEach((point, index) => {
       let value = point.value;
+
+      // Debug: Log first few data points to understand the data
+      if (index < 3) {
+        console.log(`[MetricsChart] ${title} data point ${index}:`, { timestamp: point.timestamp, value: point.value, unit });
+      }
 
       // For percentage metrics, ensure values are in 0-100 range
       if (unit === '%') {
-        // If value is suspiciously large (like a timestamp), default to 0
+        // Filter out invalid values (timestamps, negative numbers, etc.)
         if (value > 100 || value < 0 || !isFinite(value)) {
-          console.warn(`Invalid percentage value detected: ${value}, defaulting to 0`);
-          value = 0;
+          console.warn(`[MetricsChart] ${title}: Invalid percentage value detected: ${value}, skipping this data point`);
+          return; // Skip this data point entirely
         }
       }
 
-      return {
+      // Only add valid data points
+      validPoints.push({
         timestamp: point.timestamp,
         value: value
-      };
+      });
     });
-  }, [data, unit]);
+
+    console.log(`[MetricsChart] ${title}: Validated ${validPoints.length} out of ${data.length} data points`);
+    return validPoints;
+  }, [data, unit, title]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -100,14 +117,125 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return prepareChartData(validatedData, stats, anomalies);
   }, [validatedData, stats, anomalies]);
 
-  // Calculate Y-axis domain
+  // Calculate Y-axis domain with dynamic scaling and buffer
   const yAxisDomain = useMemo(() => {
-    if (unit === '%') {
-      return [0, 100];
+    if (!chartData || chartData.length === 0) {
+      return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
-    // For non-percentage metrics, use auto with some padding
-    return ['auto', 'auto'];
-  }, [unit]);
+
+    // If autofit is disabled, use fixed domain
+    if (!autoFitYAxis) {
+      return unit === '%' ? [0, 100] : ['auto', 'auto'];
+    }
+
+    // Determine the visible data range
+    const visibleData = zoomDomain
+      ? chartData.slice(zoomDomain.startIndex, zoomDomain.endIndex + 1)
+      : chartData;
+
+    if (visibleData.length === 0) {
+      return unit === '%' ? [0, 100] : ['auto', 'auto'];
+    }
+
+    // Find min and max values across all relevant data keys
+    let min = Infinity;
+    let max = -Infinity;
+
+    visibleData.forEach((point) => {
+      // Check value
+      if (point.value != null && isFinite(point.value)) {
+        min = Math.min(min, point.value);
+        max = Math.max(max, point.value);
+      }
+      // Check standard deviation bands if they exist
+      if (showStdDev) {
+        if (point.stdDev3Lower != null && isFinite(point.stdDev3Lower)) {
+          min = Math.min(min, point.stdDev3Lower);
+        }
+        if (point.stdDev3Upper != null && isFinite(point.stdDev3Upper)) {
+          max = Math.max(max, point.stdDev3Upper);
+        }
+      }
+    });
+
+    // If we couldn't find valid values, use defaults
+    if (!isFinite(min) || !isFinite(max)) {
+      return unit === '%' ? [0, 100] : ['auto', 'auto'];
+    }
+
+    // Debug: Log calculated domain
+    console.log(`[MetricsChart] ${title} Y-axis domain calculation:`, { min, max, unit, autoFitYAxis });
+
+    // For percentage metrics, clamp to 0-100 range but allow dynamic scaling within that
+    if (unit === '%') {
+      min = Math.max(0, min);
+      max = Math.min(100, max);
+
+      // If range is very small (e.g., 95-100%), add buffer
+      const range = max - min;
+      if (range < 10) {
+        const buffer = Math.max(2, range * 0.15); // 15% buffer or minimum 2%
+        min = Math.max(0, min - buffer);
+        max = Math.min(100, max + buffer);
+      }
+
+      console.log(`[MetricsChart] ${title} Final Y-axis domain:`, [min, max]);
+      return [min, max];
+    }
+
+    // For non-percentage metrics, add buffer space
+    const range = max - min;
+    const buffer = range > 0 ? range * 0.1 : 1; // 10% buffer or minimum 1 unit
+
+    const finalDomain = [Math.max(0, min - buffer), max + buffer];
+    console.log(`[MetricsChart] ${title} Final Y-axis domain:`, finalDomain);
+    return finalDomain;
+  }, [chartData, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
+
+  // Calculate initial zoom domain based on initialZoomWindowHours
+  const calculateInitialZoomDomain = useMemo(() => {
+    if (!initialZoomWindowHours || !chartData || chartData.length === 0) {
+      return null;
+    }
+
+    const now = new Date();
+    const cutoffTime = new Date(now.getTime() - initialZoomWindowHours * 60 * 60 * 1000);
+
+    // Find the index of the first data point within the time window
+    let startIndex = 0;
+    for (let i = chartData.length - 1; i >= 0; i--) {
+      const dataTime = new Date(chartData[i].timestamp);
+      if (dataTime >= cutoffTime) {
+        startIndex = i;
+      } else {
+        break;
+      }
+    }
+
+    // End index is the last data point
+    const endIndex = chartData.length - 1;
+
+    // Only set zoom if we have a valid range
+    if (startIndex < endIndex) {
+      return { startIndex, endIndex };
+    }
+
+    return null;
+  }, [chartData, initialZoomWindowHours]);
+
+  // Initialize zoom domain on first render or when initialZoomWindowHours changes
+  useEffect(() => {
+    // Reset initialization flag when initialZoomWindowHours changes
+    hasInitializedZoom.current = false;
+  }, [initialZoomWindowHours]);
+
+  useEffect(() => {
+    // Only apply initial zoom once, or when initialZoomWindowHours changes
+    if (!hasInitializedZoom.current && calculateInitialZoomDomain) {
+      setZoomDomain(calculateInitialZoomDomain);
+      hasInitializedZoom.current = true;
+    }
+  }, [calculateInitialZoomDomain]);
 
   // Zoom handlers
   const handleZoomIn = () => {
@@ -164,7 +292,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return Math.round((visibleRange / chartData.length) * 100);
   }, [zoomDomain, chartData]);
 
-  // Auto-follow latest data when fully zoomed out
+  // Auto-follow latest data when the right handle is at the rightmost position
   const prevDataLengthRef = useRef<number>(0);
 
   useEffect(() => {
@@ -172,22 +300,25 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
     // Only act when new data arrives (length increases)
     const dataLengthIncreased = chartData.length > prevDataLengthRef.current;
+    const prevDataLength = prevDataLengthRef.current;
     prevDataLengthRef.current = chartData.length;
 
     if (!dataLengthIncreased) return;
 
-    // If we have a zoom domain, check if it represents "full zoom"
+    // If we have a zoom domain, check if the right handle is at the end
     if (zoomDomain) {
-      const isFullRange =
-        zoomDomain.startIndex === 0 &&
-        zoomDomain.endIndex >= chartData.length - 2; // Within 1-2 points of end (allow for rounding)
+      const isAtEnd = zoomDomain.endIndex >= prevDataLength - 2; // Within 1-2 points of previous end
 
-      // If currently showing full range, reset to null to enable auto-follow
-      if (isFullRange) {
-        setZoomDomain(null);
+      if (isAtEnd) {
+        // Shift the zoom window forward to follow new data
+        const zoomRange = zoomDomain.endIndex - zoomDomain.startIndex;
+        const newEndIndex = chartData.length - 1;
+        const newStartIndex = Math.max(0, newEndIndex - zoomRange);
+
+        setZoomDomain({ startIndex: newStartIndex, endIndex: newEndIndex });
       }
     }
-    // If zoomDomain is null, we're already in auto-follow mode (no action needed)
+    // If zoomDomain is null, we're in fully zoomed out mode (no action needed)
   }, [chartData.length, zoomDomain]); // Monitor data length and zoom state
 
   if (!data || data.length === 0) {
@@ -225,6 +356,19 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
           )}
         </div>
         <div className="flex items-center gap-3">
+          {/* Y-axis autofit toggle */}
+          <button
+            onClick={() => setAutoFitYAxis(!autoFitYAxis)}
+            className={`p-1.5 rounded-lg border transition-colors ${
+              autoFitYAxis
+                ? 'bg-blue-100 dark:bg-blue-900/30 border-blue-300 dark:border-blue-700 text-blue-700 dark:text-blue-400'
+                : 'bg-gray-100 dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400'
+            } hover:bg-blue-50 dark:hover:bg-blue-900/20`}
+            title={autoFitYAxis ? 'Y-axis autofit enabled' : 'Y-axis autofit disabled'}
+          >
+            <Expand className="w-4 h-4" />
+          </button>
+
           {/* Zoom controls */}
           <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
             <button
@@ -367,6 +511,17 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
           />
           <YAxis
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
+            tickFormatter={(value) => {
+              // Ensure we're formatting numbers as percentages or values, not timestamps
+              if (typeof value === 'number' && isFinite(value)) {
+                // If it looks like a timestamp (very large number), don't display it
+                if (value > 1000000) {
+                  return '';
+                }
+                return unit === '%' ? `${value.toFixed(0)}${unit}` : value.toFixed(1);
+              }
+              return '';
+            }}
             label={{
               value: unit,
               angle: -90,
@@ -594,6 +749,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
           {/* Brush for panning and zooming */}
           <Brush
+            key={`brush-${initialZoomWindowHours || 'default'}`}
             dataKey="timestamp"
             height={30}
             stroke={isDark ? '#6b7280' : '#9ca3af'}
