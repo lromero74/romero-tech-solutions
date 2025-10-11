@@ -336,7 +336,7 @@ export function formatRateOfChange(rate: number, unit: string): string {
 }
 
 /**
- * Detect anomalies (values outside 3 standard deviations)
+ * Detect anomalies (values with z-score of ±3 or higher)
  */
 export interface Anomaly {
   timestamp: string;
@@ -361,11 +361,12 @@ export function detectAnomalies(
 
     const deviationsFromMean = Math.abs(point.value - meanAtPoint) / stdDevAtPoint;
 
-    if (deviationsFromMean > 2) {
+    // Only flag as anomalous if z-score is ±3 or higher
+    if (deviationsFromMean >= 3) {
       let severity: 'minor' | 'moderate' | 'severe';
-      if (deviationsFromMean > 3) {
+      if (deviationsFromMean >= 4) {
         severity = 'severe';
-      } else if (deviationsFromMean > 2.5) {
+      } else if (deviationsFromMean >= 3.5) {
         severity = 'moderate';
       } else {
         severity = 'minor';

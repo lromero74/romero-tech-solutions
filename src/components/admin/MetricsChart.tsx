@@ -54,7 +54,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const { isDark } = useTheme();
 
   // State for chart display type
-  type ChartDisplayType = 'line' | 'candlestick';
+  type ChartDisplayType = 'line' | 'candlestick' | 'heiken-ashi';
   const [chartDisplayType, setChartDisplayType] = useState<ChartDisplayType>('line');
 
   // State for candlestick period (in minutes)
@@ -217,6 +217,51 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return buckets;
   }, [chartData, candlestickPeriod]);
 
+  // Calculate Heiken Ashi candles from regular candlestick data
+  const heikenAshiData = useMemo(() => {
+    if (!candlestickData || candlestickData.length === 0) return [];
+
+    const haCandles: any[] = [];
+    let prevHAOpen = candlestickData[0].open;
+    let prevHAClose = candlestickData[0].close;
+
+    candlestickData.forEach((candle, index) => {
+      // Heiken Ashi calculations
+      const haClose = (candle.open + candle.high + candle.low + candle.close) / 4;
+      const haOpen = index === 0 ? candle.open : (prevHAOpen + prevHAClose) / 2;
+      const haHigh = Math.max(candle.high, haOpen, haClose);
+      const haLow = Math.min(candle.low, haOpen, haClose);
+
+      haCandles.push({
+        timestamp: candle.timestamp,
+        open: haOpen,
+        high: haHigh,
+        low: haLow,
+        close: haClose,
+        mean: candle.mean,
+        isAnomaly: candle.isAnomaly,
+        anomalySeverity: candle.anomalySeverity,
+        isGreen: haClose >= haOpen,
+        value: haClose, // Use HA close as representative value
+        periodMinutes: candle.periodMinutes,
+        dataPointCount: candle.dataPointCount,
+        // Include standard deviation bands
+        stdDev1Upper: candle.stdDev1Upper,
+        stdDev1Lower: candle.stdDev1Lower,
+        stdDev2Upper: candle.stdDev2Upper,
+        stdDev2Lower: candle.stdDev2Lower,
+        stdDev3Upper: candle.stdDev3Upper,
+        stdDev3Lower: candle.stdDev3Lower,
+      });
+
+      // Update previous values for next iteration
+      prevHAOpen = haOpen;
+      prevHAClose = haClose;
+    });
+
+    return haCandles;
+  }, [candlestickData]);
+
   // Calculate initial zoom domain based on selected time window
   const initialZoomDomainRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
   const lastSelectedTimeWindowRef = useRef<number>(selectedTimeWindow);
@@ -273,7 +318,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   // Calculate Y-axis domain with dynamic scaling and buffer
   const yAxisDomain = useMemo(() => {
     // Choose data source based on display type
-    const activeData = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+    const activeData =
+      chartDisplayType === 'candlestick' ? candlestickData :
+      chartDisplayType === 'heiken-ashi' ? heikenAshiData :
+      chartData;
 
     if (!activeData || activeData.length === 0) {
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
@@ -306,20 +354,23 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
           return pointTime >= startTime && pointTime <= endTime;
         });
 
-        // For candlestick mode, also include one candlestick before and after
-        // to ensure edge candlesticks that might be partially visible are included
-        if (chartDisplayType === 'candlestick' && candlestickData.length > 0 && visibleData.length > 0) {
-          const firstVisibleIndex = candlestickData.findIndex(c => c.timestamp === visibleData[0].timestamp);
-          const lastVisibleIndex = candlestickData.findIndex(c => c.timestamp === visibleData[visibleData.length - 1].timestamp);
+        // For candlestick/heiken-ashi mode, also include one candle before and after
+        // to ensure edge candles that might be partially visible are included
+        if ((chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') && visibleData.length > 0) {
+          const candleData = chartDisplayType === 'heiken-ashi' ? heikenAshiData : candlestickData;
+          if (candleData.length > 0) {
+            const firstVisibleIndex = candleData.findIndex(c => c.timestamp === visibleData[0].timestamp);
+            const lastVisibleIndex = candleData.findIndex(c => c.timestamp === visibleData[visibleData.length - 1].timestamp);
 
-          // Include previous candlestick if it exists
-          if (firstVisibleIndex > 0) {
-            visibleData = [candlestickData[firstVisibleIndex - 1], ...visibleData];
-          }
+            // Include previous candlestick if it exists
+            if (firstVisibleIndex > 0) {
+              visibleData = [candleData[firstVisibleIndex - 1], ...visibleData];
+            }
 
-          // Include next candlestick if it exists
-          if (lastVisibleIndex >= 0 && lastVisibleIndex < candlestickData.length - 1) {
-            visibleData = [...visibleData, candlestickData[lastVisibleIndex + 1]];
+            // Include next candlestick if it exists
+            if (lastVisibleIndex >= 0 && lastVisibleIndex < candleData.length - 1) {
+              visibleData = [...visibleData, candleData[lastVisibleIndex + 1]];
+            }
           }
         }
       }
@@ -337,8 +388,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     let max = -Infinity;
 
     visibleData.forEach((point) => {
-      if (chartDisplayType === 'candlestick') {
-        // For candlesticks, use high/low values
+      if (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') {
+        // For candlesticks/heiken-ashi, use high/low values
         const values = [
           point.high,
           point.low,
@@ -411,7 +462,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     }
 
     return [finalMin, yMax];
-  }, [chartData, candlestickData, chartDisplayType, activeDomain, unit, autoFitYAxis]);
+  }, [chartData, candlestickData, heikenAshiData, chartDisplayType, activeDomain, unit, autoFitYAxis]);
 
   // Calculate minimum decimal places needed for Y-axis so no two ticks appear identical
   const yAxisDecimalPlaces = useMemo(() => {
@@ -447,7 +498,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const visibleDataRange = useMemo(() => {
     if (!activeDomain || !chartData || chartData.length === 0) return null;
 
-    const activeData = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+    const activeData =
+      chartDisplayType === 'candlestick' ? candlestickData :
+      chartDisplayType === 'heiken-ashi' ? heikenAshiData :
+      chartData;
     if (!activeData || activeData.length === 0) return null;
 
     // Get the timestamp range that will be displayed
@@ -474,7 +528,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     let max = -Infinity;
 
     visibleData.forEach((point) => {
-      if (chartDisplayType === 'candlestick') {
+      if (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') {
         min = Math.min(min, point.low);
         max = Math.max(max, point.high);
       } else {
@@ -486,7 +540,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     if (!isFinite(min) || !isFinite(max)) return null;
 
     return { min, max };
-  }, [activeDomain, chartData, candlestickData, chartDisplayType]);
+  }, [activeDomain, chartData, candlestickData, heikenAshiData, chartDisplayType]);
 
   // Smooth animation effect disabled - use immediate updates for better brush control
   useEffect(() => {
@@ -561,14 +615,51 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       let startIndex = domain.startIndex;
       let endIndex = domain.endIndex;
 
-      // If we're in candlestick mode, convert indices from candlestick space to chartData space
+      // If we're in candlestick/heiken-ashi mode, convert indices from candle space to chartData space
       if (chartDisplayType === 'candlestick' && candlestickData.length > 0 && chartData.length > 0) {
         const ratio = chartData.length / candlestickData.length;
+        startIndex = Math.max(0, Math.floor(domain.startIndex * ratio));
+        endIndex = Math.min(chartData.length - 1, Math.ceil(domain.endIndex * ratio));
+      } else if (chartDisplayType === 'heiken-ashi' && heikenAshiData.length > 0 && chartData.length > 0) {
+        const ratio = chartData.length / heikenAshiData.length;
         startIndex = Math.max(0, Math.floor(domain.startIndex * ratio));
         endIndex = Math.min(chartData.length - 1, Math.ceil(domain.endIndex * ratio));
       }
 
       setZoomDomain({ startIndex, endIndex });
+
+      // Calculate the time range and update the Window dropdown to closest match
+      if (chartData && chartData.length > 0 && startIndex < chartData.length && endIndex < chartData.length) {
+        const startTime = new Date(chartData[startIndex].timestamp).getTime();
+        const endTime = new Date(chartData[endIndex].timestamp).getTime();
+        const durationMs = endTime - startTime;
+        const durationHours = durationMs / (1000 * 60 * 60);
+
+        // Available time window options in hours
+        const timeWindowOptions = [1, 4, 12, 24, 48, 168];
+
+        // Find closest match
+        let closestWindow = timeWindowOptions[0];
+        let minDiff = Math.abs(durationHours - closestWindow);
+
+        for (const option of timeWindowOptions) {
+          const diff = Math.abs(durationHours - option);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestWindow = option;
+          }
+        }
+
+        // Update the time window dropdown if it changed
+        if (closestWindow !== selectedTimeWindow) {
+          timeWindowChangedByBrushRef.current = true;
+          setSelectedTimeWindow(closestWindow);
+          // Reset the flag after a short delay
+          setTimeout(() => {
+            timeWindowChangedByBrushRef.current = false;
+          }, 50);
+        }
+      }
     }
   };
 
@@ -643,6 +734,9 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const prevDataLengthRef = useRef<number>(0);
   const zoomDomainRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
 
+  // Track if time window change came from brush adjustment (to prevent circular updates)
+  const timeWindowChangedByBrushRef = useRef<boolean>(false);
+
   // Keep ref in sync with state
   useEffect(() => {
     zoomDomainRef.current = zoomDomain;
@@ -683,7 +777,13 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   }, [chartDisplayType]);
 
   // When selectedTimeWindow changes, apply the new zoom window
+  // (unless the change came from brush adjustment)
   useEffect(() => {
+    // Skip if the time window change came from brush adjustment
+    if (timeWindowChangedByBrushRef.current) {
+      return;
+    }
+
     if (hasInitializedZoom.current && calculateInitialZoomDomain) {
       setZoomDomain(calculateInitialZoomDomain);
     }
@@ -785,10 +885,21 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             >
               <BarChart2 className="w-4 h-4" />
             </button>
+            <button
+              onClick={() => setChartDisplayType('heiken-ashi')}
+              className={`px-2 py-1.5 rounded-lg transition-colors text-xs font-medium ${
+                chartDisplayType === 'heiken-ashi'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              title="Heiken Ashi chart (smoothed candlesticks)"
+            >
+              HA
+            </button>
           </div>
 
-          {/* Candlestick period selector (shown only in candlestick mode) */}
-          {chartDisplayType === 'candlestick' && (
+          {/* Candlestick period selector (shown for candlestick and heiken-ashi modes) */}
+          {(chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') && (
             <div className="flex items-center gap-2">
               <label className={`text-xs ${themeClasses.text.secondary} font-medium`}>
                 Period:
@@ -1029,7 +1140,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       {/* Chart */}
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart
-          data={chartDisplayType === 'candlestick' ? candlestickData : chartData}
+          data={
+            chartDisplayType === 'candlestick' ? candlestickData :
+            chartDisplayType === 'heiken-ashi' ? heikenAshiData :
+            chartData
+          }
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
           ref={chartRef}
         >
@@ -1083,12 +1198,18 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
               if (active && payload && payload.length) {
                 const data = payload[0].payload;
 
-                if (chartDisplayType === 'candlestick') {
+                if (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') {
+                  const chartTypeName = chartDisplayType === 'heiken-ashi' ? 'Heiken Ashi' : 'Candlestick';
                   return (
                     <div className={`${themeClasses.bg.card} p-3 border ${themeClasses.border.default} rounded shadow-lg`}>
                       <p className={`text-xs ${themeClasses.text.tertiary} mb-1`}>
                         {format(new Date(data.timestamp), 'MMM d, HH:mm')}
                       </p>
+                      {chartDisplayType === 'heiken-ashi' && (
+                        <p className={`text-xs ${themeClasses.text.tertiary} italic mb-2`}>
+                          {chartTypeName}
+                        </p>
+                      )}
                       <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
                         <p className={`text-xs ${themeClasses.text.secondary}`}>Open:</p>
                         <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.open.toFixed(1)}{unit}</p>
@@ -1413,8 +1534,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             </>
           )}
 
-          {/* Candlestick chart rendering */}
-          {chartDisplayType === 'candlestick' && (
+          {/* Candlestick/Heiken-Ashi chart rendering */}
+          {(chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') && (
             <>
               {/* Mean line */}
               <Line
@@ -1429,8 +1550,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 isAnimationActive={false}
               />
 
-              {/* Candlesticks rendered using custom rendering */}
-              {candlestickData.map((candle, index) => {
+              {/* Candlesticks/Heiken-Ashi rendered using custom rendering */}
+              {(chartDisplayType === 'heiken-ashi' ? heikenAshiData : candlestickData).map((candle, index) => {
                 // Calculate Y positions based on the domain
                 const [minDomain, maxDomain] = yAxisDomain as [number, number];
                 const chartHeight = height - 50; // Approximate chart height (height - margins)
@@ -1552,7 +1673,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                     </g>
                   );
                 }}
-                name="Candlesticks"
+                name={chartDisplayType === 'heiken-ashi' ? 'Heiken Ashi' : 'Candlesticks'}
               />
             </>
           )}
@@ -1560,7 +1681,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
           {/* Brush for panning and zooming */}
           {(() => {
             // Determine the active data array being displayed
-            const activeDataArray = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+            const activeDataArray =
+              chartDisplayType === 'candlestick' ? candlestickData :
+              chartDisplayType === 'heiken-ashi' ? heikenAshiData :
+              chartData;
 
             // Don't render Brush if there's insufficient data
             if (!activeDataArray || activeDataArray.length < 2) {
@@ -1577,6 +1701,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 const ratio = candlestickData.length / chartData.length;
                 brushStartIndex = Math.max(0, Math.floor(activeDomain.startIndex * ratio));
                 brushEndIndex = Math.min(candlestickData.length - 1, Math.ceil(activeDomain.endIndex * ratio));
+              } else if (chartDisplayType === 'heiken-ashi' && chartData.length > 0 && heikenAshiData.length > 0) {
+                const ratio = heikenAshiData.length / chartData.length;
+                brushStartIndex = Math.max(0, Math.floor(activeDomain.startIndex * ratio));
+                brushEndIndex = Math.min(heikenAshiData.length - 1, Math.ceil(activeDomain.endIndex * ratio));
               } else if (chartDisplayType === 'line') {
                 // Line mode - use indices directly
                 brushStartIndex = Math.max(0, Math.min(activeDomain.startIndex, activeDataArray.length - 1));
@@ -1591,6 +1719,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 brushStartIndex = undefined;
                 brushEndIndex = undefined;
               }
+            } else {
+              // No zoom domain - show full data range (reset zoom state)
+              brushStartIndex = 0;
+              brushEndIndex = activeDataArray.length - 1;
             }
 
             return (
