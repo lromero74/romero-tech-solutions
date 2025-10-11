@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye } from 'lucide-react';
+import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
+import { websocketService } from '../../services/websocketService';
 
 interface AgentDashboardProps {
   onViewAgentDetails?: (agentId: string) => void;
@@ -21,6 +22,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('device_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{
+    show: boolean;
+    agentId?: string;
+    agentName?: string;
+  }>({ show: false });
 
   // Permission checks
   const { checkPermission } = usePermission();
@@ -69,6 +76,129 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   useEffect(() => {
     loadAgents();
   }, [loadAgents]);
+
+  // Toggle agent monitoring (enable/disable)
+  const handleToggleMonitoring = async (agent: AgentDevice) => {
+    if (!canManageAgents) {
+      setPermissionDenied({
+        show: true,
+        action: 'Manage Agent',
+        requiredPermission: 'manage.agents.enable',
+        message: 'You do not have permission to disable/enable agents'
+      });
+      return;
+    }
+
+    try {
+      setActionInProgress(agent.id);
+      const newStatus = !agent.monitoring_enabled;
+
+      const response = await agentService.updateAgent(agent.id, {
+        monitoring_enabled: newStatus
+      });
+
+      if (response.success) {
+        // Update local state
+        setAgents(prevAgents =>
+          prevAgents.map(a =>
+            a.id === agent.id ? { ...a, monitoring_enabled: newStatus } : a
+          )
+        );
+      } else {
+        setError(response.message || 'Failed to update agent');
+      }
+    } catch (err) {
+      console.error('Error toggling agent monitoring:', err);
+      setError(err instanceof Error ? err.message : 'Failed to update agent');
+    } finally {
+      setActionInProgress(null);
+    }
+  };
+
+  // Delete agent
+  const handleDeleteAgent = async () => {
+    if (!canManageAgents) {
+      setPermissionDenied({
+        show: true,
+        action: 'Delete Agent',
+        requiredPermission: 'manage.agents.enable',
+        message: 'You do not have permission to delete agents'
+      });
+      return;
+    }
+
+    if (!confirmDelete.agentId) return;
+
+    try {
+      setActionInProgress(confirmDelete.agentId);
+      const response = await agentService.deleteAgent(confirmDelete.agentId);
+
+      if (response.success) {
+        // Remove from local state
+        setAgents(prevAgents => prevAgents.filter(a => a.id !== confirmDelete.agentId));
+        setConfirmDelete({ show: false });
+      } else {
+        setError(response.message || 'Failed to delete agent');
+      }
+    } catch (err) {
+      console.error('Error deleting agent:', err);
+      setError(err instanceof Error ? err.message : 'Failed to delete agent');
+    } finally {
+      setActionInProgress(null);
+      setConfirmDelete({ show: false });
+    }
+  };
+
+  // WebSocket real-time updates for agent status and metrics
+  useEffect(() => {
+    if (!canViewAgents) return;
+
+    console.log('🔌 Setting up WebSocket listeners for agent updates');
+
+    // Listen for agent status updates
+    const unsubscribeStatus = websocketService.onAgentStatusChange((update) => {
+      console.log(`🤖 Agent status update received: ${update.agentId} = ${update.status}`);
+
+      setAgents((prevAgents) => {
+        return prevAgents.map((agent) => {
+          if (agent.id === update.agentId) {
+            return {
+              ...agent,
+              status: update.status,
+              last_heartbeat: update.lastHeartbeat,
+            };
+          }
+          return agent;
+        });
+      });
+    });
+
+    // Listen for agent metrics updates
+    const unsubscribeMetrics = websocketService.onAgentMetricsChange((update) => {
+      console.log(`📊 Agent metrics update received: ${update.agentId}`);
+
+      setAgents((prevAgents) => {
+        return prevAgents.map((agent) => {
+          if (agent.id === update.agentId) {
+            // Update agent with new metrics data
+            return {
+              ...agent,
+              // Metrics are updated but we don't display them in the list view
+              // The AgentDetails component will handle detailed metrics display
+            };
+          }
+          return agent;
+        });
+      });
+    });
+
+    // Cleanup
+    return () => {
+      console.log('🧹 Cleaning up WebSocket listeners for agent updates');
+      unsubscribeStatus();
+      unsubscribeMetrics();
+    };
+  }, [canViewAgents]);
 
   // Get device icon based on type
   const getDeviceIcon = (deviceType: string) => {
@@ -479,13 +609,39 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium`}>
-                        <button
-                          onClick={() => onViewAgentDetails?.(agent.id)}
-                          className="text-blue-600 hover:text-blue-900 dark:text-blue-400"
-                          title="View agent details"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => onViewAgentDetails?.(agent.id)}
+                            className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+                            title="View agent details"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          {canManageAgents && (
+                            <>
+                              <button
+                                onClick={() => handleToggleMonitoring(agent)}
+                                disabled={actionInProgress === agent.id}
+                                className={`${
+                                  agent.monitoring_enabled
+                                    ? 'text-yellow-600 hover:text-yellow-800 dark:text-yellow-400 dark:hover:text-yellow-300'
+                                    : 'text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-300'
+                                } disabled:opacity-50 disabled:cursor-not-allowed`}
+                                title={agent.monitoring_enabled ? 'Disable monitoring' : 'Enable monitoring'}
+                              >
+                                <Power className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setConfirmDelete({ show: true, agentId: agent.id, agentName: agent.device_name })}
+                                disabled={actionInProgress === agent.id}
+                                className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Delete agent"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -541,7 +697,34 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   </div>
                 </div>
 
-                <div className="flex justify-end pt-3 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex gap-2">
+                    {canManageAgents && (
+                      <>
+                        <button
+                          onClick={() => handleToggleMonitoring(agent)}
+                          disabled={actionInProgress === agent.id}
+                          className={`inline-flex items-center px-3 py-2 text-sm font-medium ${
+                            agent.monitoring_enabled
+                              ? 'text-yellow-600 hover:text-yellow-800 dark:text-yellow-400'
+                              : 'text-green-600 hover:text-green-800 dark:text-green-400'
+                          } disabled:opacity-50 disabled:cursor-not-allowed`}
+                          title={agent.monitoring_enabled ? 'Disable' : 'Enable'}
+                        >
+                          <Power className="w-4 h-4 mr-1" />
+                          {agent.monitoring_enabled ? 'Disable' : 'Enable'}
+                        </button>
+                        <button
+                          onClick={() => setConfirmDelete({ show: true, agentId: agent.id, agentName: agent.device_name })}
+                          disabled={actionInProgress === agent.id}
+                          className="inline-flex items-center px-3 py-2 text-sm font-medium text-red-600 hover:text-red-800 dark:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          <Trash2 className="w-4 h-4 mr-1" />
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </div>
                   <button
                     onClick={() => onViewAgentDetails?.(agent.id)}
                     className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400"
@@ -561,6 +744,44 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               <p className={`${themeClasses.text.secondary}`}>No agents found matching your filters.</p>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${themeClasses.bg.card} rounded-lg p-6 max-w-md w-full mx-4 ${themeClasses.shadow.xl}`}>
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <AlertTriangle className="h-6 w-6 text-red-600" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Delete Agent
+                </h3>
+                <p className={`mt-2 text-sm ${themeClasses.text.secondary}`}>
+                  Are you sure you want to delete <strong>{confirmDelete.agentName}</strong>?
+                  This action cannot be undone. All agent data, metrics history, and alerts will be permanently deleted.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmDelete({ show: false })}
+                disabled={actionInProgress === confirmDelete.agentId}
+                className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md text-sm font-medium ${themeClasses.text.primary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAgent}
+                disabled={actionInProgress === confirmDelete.agentId}
+                className="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionInProgress === confirmDelete.agentId ? 'Deleting...' : 'Delete Agent'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -132,87 +132,48 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       let currentUser = null;
 
       if (storedSessionToken) {
+        // PERFORMANCE FIX: Trust the localStorage session and let heartbeat mechanism validate it
+        // This eliminates the excessive /auth/validate-session calls on every page load/render
+        // The session heartbeat (every 2 minutes) will detect invalid sessions and trigger logout
         try {
-          // Validate session with backend using ONLY the HttpOnly cookie (not Authorization header)
-          // This ensures we're validating the actual session cookie, not stale localStorage data
-          const sessionResponse = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/validate-session`, {
-            method: 'GET',
-            credentials: 'include', // Send cookies
-            headers: {
-              'Content-Type': 'application/json',
-            }
-          });
+          // Get current user from localStorage/Cognito
+          currentUser = await authService.getCurrentAuthUser();
 
-          if (sessionResponse.ok) {
-            // Session is valid, get current user
-            currentUser = await authService.getCurrentAuthUser();
+          // PERFORMANCE OPTIMIZATION: Skip MFA check for existing sessions
+          // MFA verification should only be required during initial login, not page refreshes
+          const mfaVerified = RoleBasedStorage.getItem('mfaVerified');
+          const storedTimestamp = RoleBasedStorage.getItem('authTimestamp');
 
-            // PERFORMANCE OPTIMIZATION: Skip MFA check for existing sessions
-            // MFA verification should only be required during initial login, not page refreshes
-            const mfaVerified = RoleBasedStorage.getItem('mfaVerified');
-            const storedTimestamp = RoleBasedStorage.getItem('authTimestamp');
+          if (currentUser && !mfaVerified && await requiresMfa(currentUser)) {
+            // Only check MFA for sessions that haven't been verified yet
+            if (storedTimestamp) {
+              const timeSinceAuth = Date.now() - parseInt(storedTimestamp);
+              const maxAge = 24 * 60 * 60 * 1000; // 24 hours
 
-            if (currentUser && !mfaVerified && await requiresMfa(currentUser)) {
-              // Only check MFA for sessions that haven't been verified yet
-              if (storedTimestamp) {
-                const timeSinceAuth = Date.now() - parseInt(storedTimestamp);
-                const maxAge = 24 * 60 * 60 * 1000; // 24 hours
-
-                // If the stored session is old, force re-authentication with MFA
-                if (timeSinceAuth > maxAge) {
-                  console.log('🔒 User session too old, forcing re-authentication with MFA');
-                  RoleBasedStorage.removeItem('sessionToken');
-                  setSessionToken(null);
-                  RoleBasedStorage.removeItem('user');
-                  RoleBasedStorage.removeItem('authUser');
-                  RoleBasedStorage.removeItem('authTimestamp');
-                  RoleBasedStorage.removeItem('mfaVerified');
-                  currentUser = null;
-                }
-              }
-            } else if (currentUser && mfaVerified) {
-              console.log('⚡ Skipping MFA check - already verified in this session');
-            }
-          } else {
-            // Session is invalid, clear it
-            RoleBasedStorage.removeItem('sessionToken');
-            setSessionToken(null);
-            RoleBasedStorage.removeItem('user');
-            RoleBasedStorage.removeItem('authUser');
-            RoleBasedStorage.removeItem('authTimestamp');
-          }
-        } catch (error) {
-          console.warn('EnhancedAuthContext: Backend session validation failed:', error);
-          // SECURITY: For users with MFA enabled, don't fall back to localStorage restoration
-          // Force them to go through proper login with MFA
-          const storedUser = RoleBasedStorage.getItem('authUser');
-          if (storedUser) {
-            try {
-              const parsedUser = JSON.parse(storedUser);
-              if (parsedUser && await requiresMfa(parsedUser)) {
-                console.log('🔒 User with MFA detected with failed backend validation, forcing re-login with MFA');
+              // If the stored session is old, force re-authentication with MFA
+              if (timeSinceAuth > maxAge) {
+                console.log('🔒 User session too old, forcing re-authentication with MFA');
                 RoleBasedStorage.removeItem('sessionToken');
                 setSessionToken(null);
                 RoleBasedStorage.removeItem('user');
                 RoleBasedStorage.removeItem('authUser');
                 RoleBasedStorage.removeItem('authTimestamp');
+                RoleBasedStorage.removeItem('mfaVerified');
                 currentUser = null;
-              } else {
-                // Users without MFA can fall back to Cognito validation
-                currentUser = await authService.getCurrentAuthUser();
               }
-            } catch {
-              // If we can't parse the stored user, clear everything and force re-login
-              RoleBasedStorage.removeItem('sessionToken');
-              setSessionToken(null);
-              RoleBasedStorage.removeItem('user');
-              RoleBasedStorage.removeItem('authUser');
-              RoleBasedStorage.removeItem('authTimestamp');
-              currentUser = null;
             }
-          } else {
-            currentUser = null;
+          } else if (currentUser && mfaVerified) {
+            console.log('⚡ Skipping MFA check - already verified in this session');
           }
+        } catch (error) {
+          console.warn('EnhancedAuthContext: Failed to get current user:', error);
+          // Clear invalid session data
+          RoleBasedStorage.removeItem('sessionToken');
+          setSessionToken(null);
+          RoleBasedStorage.removeItem('user');
+          RoleBasedStorage.removeItem('authUser');
+          RoleBasedStorage.removeItem('authTimestamp');
+          currentUser = null;
         }
       } else {
         // No session token - check if there's a stored user with MFA that should be forced to re-authenticate

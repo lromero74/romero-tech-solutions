@@ -7,7 +7,7 @@ const isDevelopment = process.env.NODE_ENV === 'development';
 // General API rate limiting
 export const generalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 5000 : 100, // dev: 5000 requests, production: 100 requests
+  max: isDevelopment ? 5000 : 2000, // dev: 5000 requests, production: 2000 requests (increased for agents + normal use)
   message: {
     success: false,
     message: 'Too many requests from this IP, please try again later.',
@@ -20,7 +20,7 @@ export const generalLimiter = rateLimit({
 // Admin API rate limiting
 export const adminLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: isDevelopment ? 10000 : 1000, // dev: 10000 requests (React StrictMode causes double renders), production: 1000 requests
+  max: isDevelopment ? 10000 : 5000, // dev: 10000 requests (React StrictMode causes double renders), production: 5000 requests (increased for dashboard data loading)
   message: {
     success: false,
     message: 'Too many admin requests from this IP, please try again later.',

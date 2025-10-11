@@ -22,6 +22,9 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/contact') {
     return 'contact';
   }
+  if (path === '/download') {
+    return 'download';
+  }
   if (path === '/login') {
     return 'coming-soon';
   }

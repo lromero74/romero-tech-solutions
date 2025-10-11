@@ -5,6 +5,7 @@ export const enTranslations = {
   'header.pricing': 'Pricing',
   'header.about': 'About',
   'header.contact': 'Contact',
+  'header.download': 'Download',
   'header.login': 'Login/SignUp',
   'header.email': 'Email',
 

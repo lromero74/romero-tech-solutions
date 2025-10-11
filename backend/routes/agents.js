@@ -204,6 +204,122 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
 });
 
 /**
+ * Agent Status Update Endpoint
+ * POST /api/agents/:agent_id/status
+ *
+ * Allows agent to report status changes (stopping, error, etc.)
+ */
+router.post('/:agent_id/status', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { status, timestamp, reason } = req.body;
+
+    if (!status) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required field: status',
+        code: 'MISSING_STATUS'
+      });
+    }
+
+    // Validate status value
+    const validStatuses = ['online', 'offline', 'stopping', 'error', 'maintenance'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}`,
+        code: 'INVALID_STATUS'
+      });
+    }
+
+    // Update agent status
+    await query(
+      `UPDATE agent_devices
+       SET status = $1,
+           last_status_change = NOW(),
+           updated_at = NOW()
+       WHERE id = $2`,
+      [status, agent_id]
+    );
+
+    // Log the status change
+    console.log(`📊 Agent ${agent_id} status changed to: ${status}${reason ? ` (reason: ${reason})` : ''}`);
+
+    res.json({
+      success: true,
+      message: 'Status updated',
+      data: {
+        status,
+        updated_at: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent status update error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Status update failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Agent Uninstall Notification Endpoint
+ * POST /api/agents/:agent_id/uninstall
+ *
+ * Agent notifies backend before uninstalling
+ */
+router.post('/:agent_id/uninstall', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { timestamp, keepData } = req.body;
+
+    // Update agent record - mark as decommissioned
+    await query(
+      `UPDATE agent_devices
+       SET status = 'offline',
+           decommissioned_at = NOW(),
+           decommission_reason = 'user_uninstall',
+           is_active = false,
+           monitoring_enabled = false,
+           updated_at = NOW()
+       WHERE id = $1`,
+      [agent_id]
+    );
+
+    // Get agent details for logging
+    const agentResult = await query(
+      `SELECT device_name, device_type, business_id FROM agent_devices WHERE id = $1`,
+      [agent_id]
+    );
+
+    if (agentResult.rows.length > 0) {
+      const agent = agentResult.rows[0];
+      console.log(`🗑️  Agent uninstalled: ${agent.device_name} (${agent.device_type}) - Business: ${agent.business_id}`);
+      console.log(`   Keep data: ${keepData ? 'Yes' : 'No'}`);
+    }
+
+    res.json({
+      success: true,
+      message: 'Agent marked for decommission',
+      data: {
+        decommissionDate: new Date().toISOString(),
+        message: 'Thank you for using Romero Tech Solutions'
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent uninstall notification error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Uninstall notification failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
  * Agent Metrics Upload Endpoint
  * POST /api/agents/:agent_id/metrics
  *

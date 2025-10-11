@@ -5,6 +5,7 @@ export const esTranslations = {
   'header.pricing': 'Precios',
   'header.about': 'Acerca de',
   'header.contact': 'Contacto',
+  'header.download': 'Descargar',
   'header.login': 'Iniciar Sesión/Registrarse',
   'header.email': 'Correo',
 

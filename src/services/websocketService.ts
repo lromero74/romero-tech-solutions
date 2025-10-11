@@ -47,11 +47,26 @@ interface ServiceRequestViewersUpdate {
   viewers: ServiceRequestViewer[];
 }
 
+interface AgentStatusUpdate {
+  agentId: string;
+  status: 'online' | 'offline' | 'warning';
+  lastHeartbeat: string;
+  deviceName: string;
+}
+
+interface AgentMetricsUpdate {
+  agentId: string;
+  metrics: any; // Full metrics object
+  timestamp: string;
+}
+
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
 type EmployeeLoginCallback = (change: EmployeeLoginChange) => void;
 type AuthErrorCallback = (error: { message: string }) => void;
 type EntityDataChangedCallback = (change: EntityDataChanged) => void;
 type ServiceRequestViewersCallback = (update: ServiceRequestViewersUpdate) => void;
+type AgentStatusCallback = (update: AgentStatusUpdate) => void;
+type AgentMetricsCallback = (update: AgentMetricsUpdate) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -68,6 +83,8 @@ class WebSocketService {
   private onAuthError: AuthErrorCallback | null = null;
   private onEntityDataChangedCallbacks: EntityDataChangedCallback[] = []; // Changed to array for multiple listeners
   private onServiceRequestViewers: ServiceRequestViewersCallback | null = null;
+  private onAgentStatusCallbacks: AgentStatusCallback[] = [];
+  private onAgentMetricsCallbacks: AgentMetricsCallback[] = [];
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -191,6 +208,28 @@ class WebSocketService {
           }
         });
 
+        this.socket.on('agent-status-update', (update: AgentStatusUpdate) => {
+          console.log(`🤖 Agent status update: ${update.agentId} = ${update.status}`);
+          this.onAgentStatusCallbacks.forEach(callback => {
+            try {
+              callback(update);
+            } catch (error) {
+              console.error('❌ Error in agent status callback:', error);
+            }
+          });
+        });
+
+        this.socket.on('agent-metrics-update', (update: AgentMetricsUpdate) => {
+          console.log(`📊 Agent metrics update: ${update.agentId}`);
+          this.onAgentMetricsCallbacks.forEach(callback => {
+            try {
+              callback(update);
+            } catch (error) {
+              console.error('❌ Error in agent metrics callback:', error);
+            }
+          });
+        });
+
         this.socket.on('error', (error) => {
           console.error('❌ WebSocket error:', error);
         });
@@ -262,6 +301,34 @@ class WebSocketService {
 
   onServiceRequestViewersChange(callback: ServiceRequestViewersCallback): void {
     this.onServiceRequestViewers = callback;
+  }
+
+  onAgentStatusChange(callback: AgentStatusCallback): () => void {
+    console.log('📝 Registering onAgentStatusChange callback');
+    this.onAgentStatusCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onAgentStatusCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onAgentStatusCallbacks.splice(index, 1);
+        console.log('🗑️ Unregistered onAgentStatusChange callback');
+      }
+    };
+  }
+
+  onAgentMetricsChange(callback: AgentMetricsCallback): () => void {
+    console.log('📝 Registering onAgentMetricsChange callback');
+    this.onAgentMetricsCallbacks.push(callback);
+
+    // Return unsubscribe function
+    return () => {
+      const index = this.onAgentMetricsCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onAgentMetricsCallbacks.splice(index, 1);
+        console.log('🗑️ Unregistered onAgentMetricsChange callback');
+      }
+    };
   }
 
   // Service request viewing events

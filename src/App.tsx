@@ -18,6 +18,7 @@ import Services from './pages/Services';
 import Pricing from './pages/Pricing';
 import About from './pages/About';
 import Contact from './pages/Contact';
+import Download from './pages/Download';
 import ConfirmEmail from './pages/ConfirmEmail';
 import ComingSoon from './pages/ComingSoon';
 import ServiceRating from './pages/ServiceRating';
@@ -223,6 +224,8 @@ function AppContent() {
         return <About />;
       case 'contact':
         return <Contact />;
+      case 'download':
+        return <Download />;
       case 'coming-soon':
         return <ComingSoon />;
       case 'clogin':

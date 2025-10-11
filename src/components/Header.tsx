@@ -136,6 +136,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
     { id: 'pricing', label: t('header.pricing') },
     { id: 'about', label: t('header.about') },
     { id: 'contact', label: t('header.contact') },
+    // { id: 'download', label: t('header.download') }, // Hidden for now - route still accessible at /downloads
     { id: 'clogin', label: t('header.login') },
   ];
 

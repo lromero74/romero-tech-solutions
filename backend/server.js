@@ -39,6 +39,7 @@ import serviceRatingsRoutes from './routes/serviceRatings.js';
 import adminTestimonialsRoutes from './routes/admin/testimonials.js';
 import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
 import agentRoutes from './routes/agents.js';
+import agentDownloadRoutes from './routes/agentDownloads.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -479,6 +480,7 @@ app.use('/api/ratings', generalLimiter, serviceRatingsRoutes); // Public rating 
 app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminTestimonialsRoutes); // Admin testimonials management
 app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
+app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {

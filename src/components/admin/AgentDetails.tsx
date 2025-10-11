@@ -950,42 +950,55 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             Service & Process Monitoring
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
-            {/* Services Monitored */}
-            <div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Services Monitored:</span>
-                <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
-                  {latestMetrics.services_monitored}
-                </span>
-              </div>
-            </div>
+            {(() => {
+              // Calculate critical failed services count from services_data if available
+              const criticalFailedCount = latestMetrics.services_data && Array.isArray(latestMetrics.services_data)
+                ? latestMetrics.services_data.filter(s =>
+                    s.severity === 'critical' && (s.status === 'failed' || s.status === 'stopped')
+                  ).length
+                : latestMetrics.services_failed || 0;
 
-            {/* Services Running */}
-            <div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Running:</span>
-                <span className={`text-lg font-bold text-green-600`}>
-                  {latestMetrics.services_running}
-                </span>
-              </div>
-            </div>
+              return (
+                <>
+                  {/* Services Monitored */}
+                  <div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Services Monitored:</span>
+                      <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
+                        {latestMetrics.services_monitored}
+                      </span>
+                    </div>
+                  </div>
 
-            {/* Services Failed */}
-            <div>
-              <div className="flex items-baseline gap-2 mb-2">
-                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Failed/Stopped:</span>
-                <span className={`text-lg font-bold ${
-                  latestMetrics.services_failed > 0 ? 'text-red-600' : 'text-green-600'
-                }`}>
-                  {latestMetrics.services_failed}
-                </span>
-              </div>
-              {latestMetrics.services_failed > 0 && (
-                <p className={`text-xs text-red-600`}>
-                  {latestMetrics.services_failed} service{latestMetrics.services_failed !== 1 ? 's' : ''} require attention
-                </p>
-              )}
-            </div>
+                  {/* Services Running */}
+                  <div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Running:</span>
+                      <span className={`text-lg font-bold text-green-600`}>
+                        {latestMetrics.services_running}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Services Failed (Critical Only) */}
+                  <div>
+                    <div className="flex items-baseline gap-2 mb-2">
+                      <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Failed/Stopped:</span>
+                      <span className={`text-lg font-bold ${
+                        criticalFailedCount > 0 ? 'text-red-600' : 'text-green-600'
+                      }`}>
+                        {criticalFailedCount}
+                      </span>
+                    </div>
+                    {criticalFailedCount > 0 && (
+                      <p className={`text-xs text-red-600`}>
+                        {criticalFailedCount} service{criticalFailedCount !== 1 ? 's' : ''} require attention
+                      </p>
+                    )}
+                  </div>
+                </>
+              );
+            })()}
           </div>
 
           {/* Service List */}
@@ -994,16 +1007,22 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>
                 Service Status
               </h4>
-              {latestMetrics.services_data.map((service, index) => (
+              {latestMetrics.services_data.map((service, index) => {
+                // Determine styling based on severity (context-aware)
+                const getSeverityStyle = () => {
+                  if (service.severity === 'critical' && (service.status === 'failed' || service.status === 'stopped')) {
+                    return 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800';
+                  } else if (service.severity === 'warning' && (service.status === 'failed' || service.status === 'stopped')) {
+                    return 'border-yellow-300 bg-yellow-50 dark:bg-yellow-900/10 dark:border-yellow-800';
+                  } else {
+                    return `${themeClasses.border.primary} ${themeClasses.bg.hover}`;
+                  }
+                };
+
+                return (
                 <div
                   key={index}
-                  className={`p-3 rounded-lg border ${
-                    service.status === 'failed' || service.status === 'stopped'
-                      ? 'border-red-300 bg-red-50 dark:bg-red-900/10 dark:border-red-800'
-                      : service.status === 'running'
-                      ? `${themeClasses.border.primary} ${themeClasses.bg.hover}`
-                      : `${themeClasses.border.primary} ${themeClasses.bg.hover}`
-                  }`}
+                  className={`p-3 rounded-lg border ${getSeverityStyle()}`}
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center flex-1">
@@ -1058,26 +1077,36 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
-          {/* Warning for failed services */}
-          {latestMetrics.services_failed > 0 && (
-            <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <div className="flex items-start">
-                <AlertTriangle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
-                <div className="flex-1">
-                  <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                    {latestMetrics.services_failed} critical service{latestMetrics.services_failed !== 1 ? 's are' : ' is'} not running
-                  </p>
-                  <p className="text-xs mt-1 text-red-700 dark:text-red-300">
-                    Review failed services and restart them to ensure system stability
-                  </p>
+          {/* Warning for failed services - Only show for critical severity */}
+          {(() => {
+            // Count only critical severity services that are stopped/failed
+            const criticalFailedCount = latestMetrics.services_data
+              ? latestMetrics.services_data.filter(s =>
+                  s.severity === 'critical' && (s.status === 'failed' || s.status === 'stopped')
+                ).length
+              : latestMetrics.services_failed || 0;
+
+            return criticalFailedCount > 0 && (
+              <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="flex items-start">
+                  <AlertTriangle className="w-5 h-5 text-red-600 mr-2 flex-shrink-0 mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200">
+                      {criticalFailedCount} critical service{criticalFailedCount !== 1 ? 's are' : ' is'} not running
+                    </p>
+                    <p className="text-xs mt-1 text-red-700 dark:text-red-300">
+                      Review failed services and restart them to ensure system stability
+                    </p>
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
         </div>
       )}
 
