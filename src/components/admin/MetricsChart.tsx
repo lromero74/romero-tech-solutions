@@ -15,7 +15,7 @@ import {
   Brush,
 } from 'recharts';
 import { format } from 'date-fns';
-import { ZoomIn, ZoomOut, Maximize2, Expand } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Expand, ChevronLeft, ChevronRight, Filter, Clock } from 'lucide-react';
 import {
   calculateStats,
   prepareChartData,
@@ -37,6 +37,7 @@ interface MetricsChartProps {
   showRateOfChange?: boolean;
   height?: number;
   initialZoomWindowHours?: number; // Initial zoom window in hours (defaults to showing all data)
+  onJumpToNow?: () => void; // Callback to notify parent when "Jump to Now" is clicked
 }
 
 const MetricsChart: React.FC<MetricsChartProps> = ({
@@ -59,6 +60,15 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   // State for Y-axis autofitting (default to enabled)
   const [autoFitYAxis, setAutoFitYAxis] = useState<boolean>(true);
+
+  // State for time window selection (local to each chart)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(initialZoomWindowHours || 4);
+
+  // Anomaly navigation state
+  const [anomalyNavigationExpanded, setAnomalyNavigationExpanded] = useState<boolean>(false);
+  const [anomalySeverityFilter, setAnomalySeverityFilter] = useState<'all' | 'severe'>('all');
+  const [currentAnomalyIndex, setCurrentAnomalyIndex] = useState<number>(0);
+  const [highlightedAnomalyTimestamp, setHighlightedAnomalyTimestamp] = useState<string | null>(null);
 
   // Zoom and pan state
   const [zoomDomain, setZoomDomain] = useState<{ startIndex: number; endIndex: number } | null>(null);
@@ -110,6 +120,14 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     if (!stats) return [];
     return detectAnomalies(validatedData, stats);
   }, [validatedData, stats]);
+
+  // Filter anomalies based on severity filter
+  const filteredAnomalies = useMemo(() => {
+    if (anomalySeverityFilter === 'severe') {
+      return anomalies.filter(a => a.severity === 'severe');
+    }
+    return anomalies;
+  }, [anomalies, anomalySeverityFilter]);
 
   // Prepare chart data with statistical overlays
   const chartData = useMemo(() => {
@@ -192,14 +210,14 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return finalDomain;
   }, [chartData, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
 
-  // Calculate initial zoom domain based on initialZoomWindowHours
+  // Calculate initial zoom domain based on selectedTimeWindow
   const calculateInitialZoomDomain = useMemo(() => {
-    if (!initialZoomWindowHours || !chartData || chartData.length === 0) {
+    if (!selectedTimeWindow || !chartData || chartData.length === 0) {
       return null;
     }
 
     const now = new Date();
-    const cutoffTime = new Date(now.getTime() - initialZoomWindowHours * 60 * 60 * 1000);
+    const cutoffTime = new Date(now.getTime() - selectedTimeWindow * 60 * 60 * 1000);
 
     // Find the index of the first data point within the time window
     let startIndex = 0;
@@ -221,13 +239,13 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     }
 
     return null;
-  }, [chartData, initialZoomWindowHours]);
+  }, [chartData, selectedTimeWindow]);
 
-  // Initialize zoom domain on first render or when initialZoomWindowHours changes
+  // Initialize zoom domain on first render or when selectedTimeWindow changes
   useEffect(() => {
-    // Reset initialization flag when initialZoomWindowHours changes
+    // Reset initialization flag when selectedTimeWindow changes
     hasInitializedZoom.current = false;
-  }, [initialZoomWindowHours]);
+  }, [selectedTimeWindow]);
 
   useEffect(() => {
     // Only apply initial zoom once, or when initialZoomWindowHours changes
@@ -282,6 +300,66 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const handleBrushChange = (domain: any) => {
     if (domain && domain.startIndex !== undefined && domain.endIndex !== undefined) {
       setZoomDomain({ startIndex: domain.startIndex, endIndex: domain.endIndex });
+    }
+  };
+
+  // Jump to Now handler - resets zoom to show the most recent data window
+  const handleJumpToNow = () => {
+    if (!chartData || chartData.length === 0) return;
+
+    // Reset to the initial zoom domain (most recent time window)
+    if (calculateInitialZoomDomain) {
+      setZoomDomain(calculateInitialZoomDomain);
+    } else {
+      // If no initial zoom window is defined, show all data
+      setZoomDomain(null);
+    }
+  };
+
+  // Anomaly navigation handlers
+  const navigateToAnomaly = (index: number) => {
+    if (!filteredAnomalies || filteredAnomalies.length === 0 || !chartData) return;
+
+    const anomaly = filteredAnomalies[index];
+    if (!anomaly) return;
+
+    // Find the chart data index for this anomaly timestamp
+    const dataIndex = chartData.findIndex(d => d.timestamp === anomaly.timestamp);
+    if (dataIndex === -1) return;
+
+    // Center the view on this anomaly with a reasonable window (50 data points)
+    const windowSize = Math.min(50, chartData.length);
+    const halfWindow = Math.floor(windowSize / 2);
+    const newStart = Math.max(0, dataIndex - halfWindow);
+    const newEnd = Math.min(chartData.length - 1, dataIndex + halfWindow);
+
+    setZoomDomain({ startIndex: newStart, endIndex: newEnd });
+    setCurrentAnomalyIndex(index);
+
+    // Highlight this anomaly with a blue halo for 2 seconds
+    setHighlightedAnomalyTimestamp(anomaly.timestamp);
+    setTimeout(() => {
+      setHighlightedAnomalyTimestamp(null);
+    }, 2000);
+  };
+
+  const handlePreviousAnomaly = () => {
+    if (filteredAnomalies.length === 0 || currentAnomalyIndex === 0) return;
+    const newIndex = currentAnomalyIndex - 1;
+    navigateToAnomaly(newIndex);
+  };
+
+  const handleNextAnomaly = () => {
+    if (filteredAnomalies.length === 0 || currentAnomalyIndex >= filteredAnomalies.length - 1) return;
+    const newIndex = currentAnomalyIndex + 1;
+    navigateToAnomaly(newIndex);
+  };
+
+  const handleToggleAnomalyNavigation = () => {
+    setAnomalyNavigationExpanded(!anomalyNavigationExpanded);
+    // If expanding and there are anomalies, navigate to the first one
+    if (!anomalyNavigationExpanded && filteredAnomalies.length > 0) {
+      navigateToAnomaly(0);
     }
   };
 
@@ -340,21 +418,43 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       {/* Header with stats and zoom controls */}
       <div className="flex justify-between items-start mb-4">
-        <div>
-          <h4 className={`text-md font-semibold ${themeClasses.text.primary}`}>{title}</h4>
-          {showRateOfChange && (
-            <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
-              {formatRateOfChange(stats.rateOfChange, unit)} •{' '}
-              <span className={
-                stats.trend === 'increasing' ? 'text-orange-600' :
-                stats.trend === 'decreasing' ? 'text-blue-600' :
-                'text-green-600'
-              }>
-                {stats.trend}
-              </span>
-            </p>
-          )}
+        <div className="flex items-center gap-4">
+          <div>
+            <h4 className={`text-md font-semibold ${themeClasses.text.primary}`}>{title}</h4>
+            {showRateOfChange && (
+              <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+                {formatRateOfChange(stats.rateOfChange, unit)} •{' '}
+                <span className={
+                  stats.trend === 'increasing' ? 'text-orange-600' :
+                  stats.trend === 'decreasing' ? 'text-blue-600' :
+                  'text-green-600'
+                }>
+                  {stats.trend}
+                </span>
+              </p>
+            )}
+          </div>
+
+          {/* Time Window Selector */}
+          <div className="flex items-center gap-2">
+            <label className={`text-xs ${themeClasses.text.secondary} font-medium`}>
+              Window:
+            </label>
+            <select
+              value={selectedTimeWindow}
+              onChange={(e) => setSelectedTimeWindow(Number(e.target.value))}
+              className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+            >
+              <option value={1}>1 Hour</option>
+              <option value={4}>4 Hours</option>
+              <option value={12}>12 Hours</option>
+              <option value={24}>24 Hours</option>
+              <option value={48}>2 Days</option>
+              <option value={168}>7 Days</option>
+            </select>
+          </div>
         </div>
+
         <div className="flex items-center gap-3">
           {/* Y-axis autofit toggle */}
           <button
@@ -474,15 +574,114 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             </div>
           </>
         )}
+
+        {/* Jump to Now button - always shown */}
+        <div className="ml-auto">
+          <button
+            onClick={handleJumpToNow}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+            title="Jump to most recent data"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Jump to Now
+          </button>
+        </div>
       </div>
 
-      {/* Anomaly Warning */}
+      {/* Anomaly Warning and Navigation */}
       {anomalies.length > 0 && (
-        <div className="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-          <p className="text-sm text-yellow-900 dark:text-yellow-100">
-            ⚠️ {anomalies.length} anomal{anomalies.length === 1 ? 'y' : 'ies'} detected
-            ({anomalies.filter(a => a.severity === 'severe').length} severe)
-          </p>
+        <div className="mb-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg overflow-hidden">
+          {/* Clickable header */}
+          <button
+            onClick={handleToggleAnomalyNavigation}
+            className="w-full p-3 text-left hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors"
+          >
+            <p className="text-sm text-yellow-900 dark:text-yellow-100 flex items-center justify-between">
+              <span>
+                ⚠️ {anomalies.length} anomal{anomalies.length === 1 ? 'y' : 'ies'} detected
+                ({anomalies.filter(a => a.severity === 'severe').length} severe)
+              </span>
+              <span className="text-xs opacity-70">
+                {anomalyNavigationExpanded ? 'Click to hide controls' : 'Click to navigate'}
+              </span>
+            </p>
+          </button>
+
+          {/* Navigation controls (expanded state) */}
+          {anomalyNavigationExpanded && (
+            <div className="px-3 pb-3 border-t border-yellow-200 dark:border-yellow-800 pt-3 flex items-center gap-3 flex-wrap">
+              {/* Severity filter */}
+              <div className="flex items-center gap-2">
+                <Filter className="w-4 h-4 text-yellow-700 dark:text-yellow-300" />
+                <select
+                  value={anomalySeverityFilter}
+                  onChange={(e) => {
+                    setAnomalySeverityFilter(e.target.value as 'all' | 'severe');
+                    setCurrentAnomalyIndex(0);
+                    // Navigate to first anomaly of new filter
+                    if (e.target.value === 'severe' && anomalies.filter(a => a.severity === 'severe').length > 0) {
+                      setTimeout(() => navigateToAnomaly(0), 0);
+                    } else if (e.target.value === 'all' && anomalies.length > 0) {
+                      setTimeout(() => navigateToAnomaly(0), 0);
+                    }
+                  }}
+                  className="text-xs px-2 py-1 rounded border border-yellow-300 dark:border-yellow-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                >
+                  <option value="all">All anomalies</option>
+                  <option value="severe">Severe only</option>
+                </select>
+              </div>
+
+              {/* Navigation buttons */}
+              <div className="flex items-center gap-1 border border-yellow-300 dark:border-yellow-700 rounded-lg p-1 bg-white dark:bg-gray-800">
+                <button
+                  onClick={handlePreviousAnomaly}
+                  disabled={filteredAnomalies.length === 0 || currentAnomalyIndex === 0}
+                  className={`p-1 rounded hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors ${
+                    filteredAnomalies.length === 0 || currentAnomalyIndex === 0 ? 'opacity-40 cursor-not-allowed' : ''
+                  }`}
+                  title={currentAnomalyIndex === 0 ? 'At first anomaly' : 'Previous anomaly'}
+                >
+                  <ChevronLeft className="w-4 h-4 text-yellow-700 dark:text-yellow-300" />
+                </button>
+                <span className="text-xs text-yellow-900 dark:text-yellow-100 px-2 min-w-[4rem] text-center">
+                  {filteredAnomalies.length > 0 ? `${currentAnomalyIndex + 1} of ${filteredAnomalies.length}` : 'None'}
+                </span>
+                <button
+                  onClick={handleNextAnomaly}
+                  disabled={filteredAnomalies.length === 0 || currentAnomalyIndex >= filteredAnomalies.length - 1}
+                  className={`p-1 rounded hover:bg-yellow-100 dark:hover:bg-yellow-900/30 transition-colors ${
+                    filteredAnomalies.length === 0 || currentAnomalyIndex >= filteredAnomalies.length - 1 ? 'opacity-40 cursor-not-allowed' : ''
+                  }`}
+                  title={currentAnomalyIndex >= filteredAnomalies.length - 1 ? 'At last anomaly' : 'Next anomaly'}
+                >
+                  <ChevronRight className="w-4 h-4 text-yellow-700 dark:text-yellow-300" />
+                </button>
+              </div>
+
+              {/* Current anomaly info */}
+              {filteredAnomalies.length > 0 && filteredAnomalies[currentAnomalyIndex] && (
+                <div className="text-xs text-yellow-900 dark:text-yellow-100 flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded font-medium ${
+                    filteredAnomalies[currentAnomalyIndex].severity === 'severe' ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200' :
+                    filteredAnomalies[currentAnomalyIndex].severity === 'moderate' ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-800 dark:text-orange-200' :
+                    'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+                  }`}>
+                    {filteredAnomalies[currentAnomalyIndex].severity}
+                  </span>
+                  <span>
+                    {format(new Date(filteredAnomalies[currentAnomalyIndex].timestamp), 'MMM d, HH:mm')}
+                  </span>
+                  <span>
+                    {filteredAnomalies[currentAnomalyIndex].value.toFixed(1)}{unit}
+                  </span>
+                  <span className="opacity-70">
+                    ({filteredAnomalies[currentAnomalyIndex].deviationsFromMean.toFixed(1)}σ)
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -720,14 +919,64 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
               };
               const color = severityColors[payload.anomalySeverity as keyof typeof severityColors] || '#dc2626';
 
+              // Check if this is the highlighted anomaly
+              const isHighlighted = highlightedAnomalyTimestamp === payload.timestamp;
+
               return (
                 <g>
+                  {/* Blue halo (pulsing animation) - only for highlighted anomaly */}
+                  {isHighlighted && (
+                    <>
+                      {/* Outer halo */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={20}
+                        fill="none"
+                        stroke="#3b82f6"
+                        strokeWidth={2}
+                        opacity={0.6}
+                      >
+                        <animate
+                          attributeName="r"
+                          from="15"
+                          to="25"
+                          dur="1s"
+                          repeatCount="2"
+                        />
+                        <animate
+                          attributeName="opacity"
+                          from="0.6"
+                          to="0"
+                          dur="1s"
+                          repeatCount="2"
+                        />
+                      </circle>
+                      {/* Inner halo */}
+                      <circle
+                        cx={cx}
+                        cy={cy}
+                        r={15}
+                        fill="#3b82f6"
+                        opacity={0.2}
+                      >
+                        <animate
+                          attributeName="r"
+                          from="10"
+                          to="15"
+                          dur="0.5s"
+                          repeatCount="4"
+                        />
+                      </circle>
+                    </>
+                  )}
+
                   {/* Warning triangle */}
                   <polygon
                     points={`${cx},${cy - 8} ${cx - 7},${cy + 4} ${cx + 7},${cy + 4}`}
                     fill={color}
-                    stroke="white"
-                    strokeWidth={1.5}
+                    stroke={isHighlighted ? '#3b82f6' : 'white'}
+                    strokeWidth={isHighlighted ? 2.5 : 1.5}
                     opacity={0.9}
                   />
                   {/* Exclamation mark */}
@@ -749,7 +998,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
           {/* Brush for panning and zooming */}
           <Brush
-            key={`brush-${initialZoomWindowHours || 'default'}`}
+            key={`brush-${selectedTimeWindow}`}
             dataKey="timestamp"
             height={30}
             stroke={isDark ? '#6b7280' : '#9ca3af'}

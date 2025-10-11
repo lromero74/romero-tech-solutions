@@ -32,7 +32,6 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands'>('overview');
-  const [metricsZoomWindow, setMetricsZoomWindow] = useState<number>(4); // Default zoom: 4 hours
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
 
   // Permission checks
@@ -379,23 +378,6 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     }
   };
 
-  // Format time window label
-  const getTimeWindowLabel = (hours: number): string => {
-    if (hours < 24) return `Last ${hours} Hours`;
-    if (hours === 24) return 'Last 24 Hours';
-    const days = hours / 24;
-    return `Last ${days} Days`;
-  };
-
-  // Time window options
-  const timeWindowOptions = [
-    { value: 1, label: 'Last 1 Hour' },
-    { value: 4, label: 'Last 4 Hours' },
-    { value: 12, label: 'Last 12 Hours' },
-    { value: 24, label: 'Last 24 Hours' },
-    { value: 48, label: 'Last 2 Days' },
-    { value: 168, label: 'Last 7 Days' },
-  ];
 
   // Handle acknowledge alert
   const handleAcknowledgeAlert = async (alertId: string) => {
@@ -617,28 +599,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       {/* Metrics History Charts */}
       {metricsHistory.length > 0 && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
-              <TrendingUp className="w-6 h-6 mr-2" />
-              Metrics Trends ({getTimeWindowLabel(metricsZoomWindow)})
-            </h3>
-            <div className="flex items-center gap-3">
-              <label className={`text-sm ${themeClasses.text.secondary}`}>
-                Time Window:
-              </label>
-              <select
-                value={metricsZoomWindow}
-                onChange={(e) => setMetricsZoomWindow(Number(e.target.value))}
-                className={`px-3 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.bg.card} ${themeClasses.text.primary} text-sm focus:outline-none focus:ring-2 focus:ring-purple-500`}
-              >
-                {timeWindowOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
+            <TrendingUp className="w-6 h-6 mr-2" />
+            Metrics Trends
+          </h3>
 
           {/* CPU Usage Chart */}
           <MetricsChart
@@ -650,7 +614,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="CPU"
             unit="%"
             color="#3b82f6"
-            initialZoomWindowHours={metricsZoomWindow}
+            initialZoomWindowHours={4}
           />
 
           {/* Memory Usage Chart */}
@@ -663,7 +627,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="Memory"
             unit="%"
             color="#8b5cf6"
-            initialZoomWindowHours={metricsZoomWindow}
+            initialZoomWindowHours={4}
           />
 
           {/* Disk Usage Chart */}
@@ -676,7 +640,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="Disk"
             unit="%"
             color="#f59e0b"
-            initialZoomWindowHours={metricsZoomWindow}
+            initialZoomWindowHours={4}
           />
         </div>
       )}
