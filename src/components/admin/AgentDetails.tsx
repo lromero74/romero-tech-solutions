@@ -9,7 +9,7 @@ import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand } from '../../services/agentService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
-import MetricsChart from './MetricsChart';
+import MetricsChartECharts from './MetricsChartECharts';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
 import { websocketService } from '../../services/websocketService';
 
@@ -605,7 +605,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           </h3>
 
           {/* CPU Usage Chart */}
-          <MetricsChart
+          <MetricsChartECharts
             data={metricsHistory.map(m => ({
               timestamp: m.collected_at,
               value: m.cpu_percent
@@ -614,11 +614,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="CPU"
             unit="%"
             color="#3b82f6"
-            initialZoomWindowHours={4}
           />
 
           {/* Memory Usage Chart */}
-          <MetricsChart
+          <MetricsChartECharts
             data={metricsHistory.map(m => ({
               timestamp: m.collected_at,
               value: m.memory_percent
@@ -627,11 +626,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="Memory"
             unit="%"
             color="#8b5cf6"
-            initialZoomWindowHours={4}
           />
 
           {/* Disk Usage Chart */}
-          <MetricsChart
+          <MetricsChartECharts
             data={metricsHistory.map(m => ({
               timestamp: m.collected_at,
               value: m.disk_percent
@@ -640,7 +638,6 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             dataKey="Disk"
             unit="%"
             color="#f59e0b"
-            initialZoomWindowHours={4}
           />
         </div>
       )}
