@@ -15,7 +15,7 @@ import {
   Brush,
 } from 'recharts';
 import { format } from 'date-fns';
-import { ZoomIn, ZoomOut, Maximize2, Expand, ChevronLeft, ChevronRight, Filter, Clock } from 'lucide-react';
+import { ZoomIn, ZoomOut, Maximize2, Expand, ChevronLeft, ChevronRight, Filter, Clock, BarChart2, LineChart as LineChartIcon } from 'lucide-react';
 import {
   calculateStats,
   prepareChartData,
@@ -53,6 +53,14 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 }) => {
   const { isDark } = useTheme();
 
+  // State for chart display type
+  type ChartDisplayType = 'line' | 'candlestick';
+  const [chartDisplayType, setChartDisplayType] = useState<ChartDisplayType>('line');
+
+  // State for candlestick period (in minutes)
+  // Default to 30 minutes (6 data points per candle with 5-minute polling)
+  const [candlestickPeriod, setCandlestickPeriod] = useState<number>(30);
+
   // State for averaging mode and window size (default to moving average with 20-point window and dynamic Bollinger Bands)
   const [averagingMode, setAveragingMode] = useState<AveragingMode>('moving');
   const [windowSize, setWindowSize] = useState<number>(20);
@@ -61,8 +69,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   // State for Y-axis autofitting (default to enabled)
   const [autoFitYAxis, setAutoFitYAxis] = useState<boolean>(true);
 
-  // State for time window selection (local to each chart)
-  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(initialZoomWindowHours || 4);
+  // State for time window selection (default to 4 hours)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(4);
 
   // Anomaly navigation state
   const [anomalyNavigationExpanded, setAnomalyNavigationExpanded] = useState<boolean>(false);
@@ -77,6 +85,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const hasInitializedZoom = useRef<boolean>(false);
   const animationFrameRef = useRef<number | null>(null);
   const isInitialMount = useRef<boolean>(true);
+  const prevChartDisplayType = useRef<ChartDisplayType>('line');
 
   // Validate and normalize data (especially for percentages)
   const validatedData = useMemo(() => {
@@ -132,9 +141,99 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return prepareChartData(validatedData, stats, anomalies);
   }, [validatedData, stats, anomalies]);
 
-  // Calculate initial zoom domain based on selectedTimeWindow (must be before yAxisDomain that uses it)
+  // Aggregate data into candlesticks (OHLC) for candlestick display using time-based periods
+  const candlestickData = useMemo(() => {
+    if (!chartData || chartData.length === 0) return [];
+
+    // Convert candlestick period to milliseconds
+    const periodMs = candlestickPeriod * 60 * 1000;
+
+    // Group data points into time-based buckets
+    const bucketMap = new Map<number, typeof chartData>();
+
+    chartData.forEach(point => {
+      const pointTime = new Date(point.timestamp).getTime();
+      // Round down to nearest period boundary
+      const bucketStart = Math.floor(pointTime / periodMs) * periodMs;
+
+      if (!bucketMap.has(bucketStart)) {
+        bucketMap.set(bucketStart, []);
+      }
+      bucketMap.get(bucketStart)!.push(point);
+    });
+
+    // Convert buckets to OHLC candlesticks
+    const buckets: any[] = [];
+    const sortedBucketStarts = Array.from(bucketMap.keys()).sort((a, b) => a - b);
+
+    sortedBucketStarts.forEach(bucketStart => {
+      const bucketData = bucketMap.get(bucketStart)!;
+      if (bucketData.length === 0) return;
+
+      const values = bucketData.map(d => d.value);
+
+      const open = values[0];
+      const close = values[values.length - 1];
+      const high = Math.max(...values);
+      const low = Math.min(...values);
+      const timestamp = new Date(bucketStart).toISOString(); // Use bucket start time
+      const mean = bucketData[bucketData.length - 1].mean; // Use last mean value in bucket
+
+      // Check if any data point in this bucket is an anomaly
+      const hasAnomaly = bucketData.some(d => d.isAnomaly);
+      const anomalySeverity = hasAnomaly
+        ? bucketData.find(d => d.isAnomaly)?.anomalySeverity
+        : undefined;
+
+      // Get standard deviation values from the last data point in the bucket
+      const lastPoint = bucketData[bucketData.length - 1];
+
+      buckets.push({
+        timestamp,
+        open,
+        high,
+        low,
+        close,
+        mean,
+        isAnomaly: hasAnomaly,
+        anomalySeverity,
+        // Determine candlestick color based on open/close
+        isGreen: close >= open,
+        // Keep close as representative value
+        value: close,
+        // Store period info for debugging
+        periodMinutes: candlestickPeriod,
+        dataPointCount: bucketData.length,
+        // Include standard deviation bands for overlay
+        stdDev1Upper: lastPoint.stdDev1Upper,
+        stdDev1Lower: lastPoint.stdDev1Lower,
+        stdDev2Upper: lastPoint.stdDev2Upper,
+        stdDev2Lower: lastPoint.stdDev2Lower,
+        stdDev3Upper: lastPoint.stdDev3Upper,
+        stdDev3Lower: lastPoint.stdDev3Lower,
+      });
+    });
+
+    return buckets;
+  }, [chartData, candlestickPeriod]);
+
+  // Calculate initial zoom domain based on selected time window
+  const initialZoomDomainRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
+  const lastSelectedTimeWindowRef = useRef<number>(selectedTimeWindow);
+
   const calculateInitialZoomDomain = useMemo(() => {
-    if (!selectedTimeWindow || !chartData || chartData.length === 0) {
+    // If time window changed, clear the cache
+    if (lastSelectedTimeWindowRef.current !== selectedTimeWindow) {
+      initialZoomDomainRef.current = null;
+      lastSelectedTimeWindowRef.current = selectedTimeWindow;
+    }
+
+    // If we already calculated it for this window, return the cached value
+    if (initialZoomDomainRef.current !== null) {
+      return initialZoomDomainRef.current;
+    }
+
+    if (!chartData || chartData.length < 2) {
       return null;
     }
 
@@ -155,22 +254,28 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     // End index is the last data point
     const endIndex = chartData.length - 1;
 
-    // Only set zoom if we have a valid range
-    if (startIndex < endIndex) {
-      return { startIndex, endIndex };
+    // Only set zoom if we have a valid range (at least 2 points difference)
+    if (startIndex < endIndex && (endIndex - startIndex) >= 1) {
+      const domain = { startIndex, endIndex };
+      initialZoomDomainRef.current = domain; // Cache it
+      return domain;
     }
 
     return null;
   }, [chartData, selectedTimeWindow]);
 
   // Get the active domain (for both display and calculations)
+  // Once user has manually set zoom, NEVER fall back to calculateInitialZoomDomain
   const activeDomain = useMemo(() => {
-    return animatedZoomDomain || zoomDomain || calculateInitialZoomDomain;
-  }, [animatedZoomDomain, zoomDomain, calculateInitialZoomDomain]);
+    return animatedZoomDomain || zoomDomain;
+  }, [animatedZoomDomain, zoomDomain]);
 
   // Calculate Y-axis domain with dynamic scaling and buffer
   const yAxisDomain = useMemo(() => {
-    if (!chartData || chartData.length === 0) {
+    // Choose data source based on display type
+    const activeData = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+
+    if (!activeData || activeData.length === 0) {
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
@@ -180,29 +285,46 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     }
 
     // Get visible data based on active domain
-    let visibleData: typeof chartData;
+    let visibleData: typeof activeData;
 
     if (activeDomain) {
-      // Validate domain indices are within bounds
+      // Validate domain indices are within bounds (use chartData for bounds since zoom is based on it)
       const validStartIndex = Math.max(0, Math.min(activeDomain.startIndex, chartData.length - 1));
       const validEndIndex = Math.max(0, Math.min(activeDomain.endIndex, chartData.length - 1));
 
       if (validStartIndex >= chartData.length || validEndIndex >= chartData.length) {
         // Indices out of bounds, use all data
-        visibleData = chartData;
+        visibleData = activeData;
       } else {
-        // Get the timestamp range that will be displayed
+        // Get the timestamp range that will be displayed on X-axis
         const startTime = new Date(chartData[validStartIndex].timestamp).getTime();
         const endTime = new Date(chartData[validEndIndex].timestamp).getTime();
 
-        // Filter to data points within the visible time range
-        visibleData = chartData.filter(point => {
+        // Filter data to visible time range
+        visibleData = activeData.filter(point => {
           const pointTime = new Date(point.timestamp).getTime();
           return pointTime >= startTime && pointTime <= endTime;
         });
+
+        // For candlestick mode, also include one candlestick before and after
+        // to ensure edge candlesticks that might be partially visible are included
+        if (chartDisplayType === 'candlestick' && candlestickData.length > 0 && visibleData.length > 0) {
+          const firstVisibleIndex = candlestickData.findIndex(c => c.timestamp === visibleData[0].timestamp);
+          const lastVisibleIndex = candlestickData.findIndex(c => c.timestamp === visibleData[visibleData.length - 1].timestamp);
+
+          // Include previous candlestick if it exists
+          if (firstVisibleIndex > 0) {
+            visibleData = [candlestickData[firstVisibleIndex - 1], ...visibleData];
+          }
+
+          // Include next candlestick if it exists
+          if (lastVisibleIndex >= 0 && lastVisibleIndex < candlestickData.length - 1) {
+            visibleData = [...visibleData, candlestickData[lastVisibleIndex + 1]];
+          }
+        }
       }
     } else {
-      visibleData = chartData;
+      visibleData = activeData;
     }
 
     if (!visibleData || visibleData.length === 0) {
@@ -215,22 +337,38 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     let max = -Infinity;
 
     visibleData.forEach((point) => {
-      // Check all zone values (the chart displays these, not just point.value)
-      const values = [
-        point.value,
-        point.valueGreen,
-        point.valueYellow,
-        point.valueOrange,
-        point.valueRed,
-        point.mean
-      ];
+      if (chartDisplayType === 'candlestick') {
+        // For candlesticks, use high/low values
+        const values = [
+          point.high,
+          point.low,
+          point.mean
+        ];
 
-      values.forEach(val => {
-        if (val != null && isFinite(val)) {
-          min = Math.min(min, val);
-          max = Math.max(max, val);
-        }
-      });
+        values.forEach(val => {
+          if (val != null && isFinite(val)) {
+            min = Math.min(min, val);
+            max = Math.max(max, val);
+          }
+        });
+      } else {
+        // For line charts, check all zone values (the chart displays these, not just point.value)
+        const values = [
+          point.value,
+          point.valueGreen,
+          point.valueYellow,
+          point.valueOrange,
+          point.valueRed,
+          point.mean
+        ];
+
+        values.forEach(val => {
+          if (val != null && isFinite(val)) {
+            min = Math.min(min, val);
+            max = Math.max(max, val);
+          }
+        });
+      }
     });
 
     // If we couldn't find valid values, use defaults
@@ -238,42 +376,42 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Calculate buffer as percentage of visible data range
-    const dataRange = max - min;
-    const bufferPercent = 0.05; // 5% of the visible data range
-    const buffer = dataRange * bufferPercent;
+    // Calculate Y-axis domain using the formulas:
+    // yMin = visibleLow - ((visibleHigh - visibleLow) * 0.05)
+    // yMax = visibleHigh + ((visibleHigh - visibleLow) * 0.05)
+    const visibleRange = max - min;
+    const buffer = visibleRange * 0.05;
+    const yMin = min - buffer;
+    const yMax = max + buffer;
 
     // For percentage metrics, clamp to 0-100 range
     if (unit === '%') {
-      // Apply buffer based on visible range, then clamp to 0-100
-      min = Math.max(0, min - buffer);
-      max = Math.min(100, max + buffer);
+      const clampedMin = Math.max(0, yMin);
+      const clampedMax = Math.min(100, yMax);
 
       // Ensure minimum range of 5% to prevent duplicate tick keys in Recharts
-      const finalRange = max - min;
+      const finalRange = clampedMax - clampedMin;
       if (finalRange < 5) {
-        const center = (min + max) / 2;
-        min = Math.max(0, center - 2.5);
-        max = Math.min(100, center + 2.5);
+        const center = (clampedMin + clampedMax) / 2;
+        return [Math.max(0, center - 2.5), Math.min(100, center + 2.5)];
       }
 
-      return [min, max];
+      return [clampedMin, clampedMax];
     }
 
-    // For non-percentage metrics, apply buffer based on visible range
-    const minWithBuffer = Math.max(0, min - buffer);
-    const maxWithBuffer = max + buffer;
+    // For non-percentage metrics, ensure minimum is non-negative
+    const finalMin = Math.max(0, yMin);
 
     // Ensure minimum range to prevent duplicate tick keys
-    const finalRange = maxWithBuffer - minWithBuffer;
-    const minRange = Math.max(5, maxWithBuffer * 0.1); // At least 5 or 10% of max value
+    const finalRange = yMax - finalMin;
+    const minRange = Math.max(5, yMax * 0.1); // At least 5 or 10% of max value
     if (finalRange < minRange) {
-      const center = (minWithBuffer + maxWithBuffer) / 2;
+      const center = (finalMin + yMax) / 2;
       return [Math.max(0, center - minRange / 2), center + minRange / 2];
     }
 
-    return [minWithBuffer, maxWithBuffer];
-  }, [chartData, activeDomain, unit, autoFitYAxis]);
+    return [finalMin, yMax];
+  }, [chartData, candlestickData, chartDisplayType, activeDomain, unit, autoFitYAxis]);
 
   // Calculate minimum decimal places needed for Y-axis so no two ticks appear identical
   const yAxisDecimalPlaces = useMemo(() => {
@@ -305,96 +443,71 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return 3;
   }, [yAxisDomain]);
 
-  // Smooth animation effect for zoom domain changes
-  useEffect(() => {
-    if (!zoomDomain) {
-      setAnimatedZoomDomain(null);
-      return;
+  // Calculate visible data range high and low for reference lines
+  const visibleDataRange = useMemo(() => {
+    if (!activeDomain || !chartData || chartData.length === 0) return null;
+
+    const activeData = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+    if (!activeData || activeData.length === 0) return null;
+
+    // Get the timestamp range that will be displayed
+    const validStartIndex = Math.max(0, Math.min(activeDomain.startIndex, chartData.length - 1));
+    const validEndIndex = Math.max(0, Math.min(activeDomain.endIndex, chartData.length - 1));
+
+    if (validStartIndex >= chartData.length || validEndIndex >= chartData.length) {
+      return null;
     }
 
-    // If this is the first zoom or no previous animated domain, set immediately
-    if (!animatedZoomDomain) {
-      setAnimatedZoomDomain(zoomDomain);
-      return;
-    }
+    const startTime = new Date(chartData[validStartIndex].timestamp).getTime();
+    const endTime = new Date(chartData[validEndIndex].timestamp).getTime();
 
-    // Animate from current position to new position
-    const startDomain = animatedZoomDomain;
-    const endDomain = zoomDomain;
-    const duration = 500; // 500ms animation
-    const startTime = performance.now();
+    // Filter data to visible time range
+    const visibleData = activeData.filter(point => {
+      const pointTime = new Date(point.timestamp).getTime();
+      return pointTime >= startTime && pointTime <= endTime;
+    });
 
-    const animate = (currentTime: number) => {
-      const elapsed = currentTime - startTime;
-      const progress = Math.min(elapsed / duration, 1);
+    if (visibleData.length === 0) return null;
 
-      // Easing function (ease-out cubic)
-      const eased = 1 - Math.pow(1 - progress, 3);
+    // Find min and max from visible data
+    let min = Infinity;
+    let max = -Infinity;
 
-      // Interpolate between start and end
-      const interpolatedDomain = {
-        startIndex: Math.round(startDomain.startIndex + (endDomain.startIndex - startDomain.startIndex) * eased),
-        endIndex: Math.round(startDomain.endIndex + (endDomain.endIndex - startDomain.endIndex) * eased),
-      };
-
-      setAnimatedZoomDomain(interpolatedDomain);
-
-      if (progress < 1) {
-        animationFrameRef.current = requestAnimationFrame(animate);
+    visibleData.forEach((point) => {
+      if (chartDisplayType === 'candlestick') {
+        min = Math.min(min, point.low);
+        max = Math.max(max, point.high);
       } else {
-        setAnimatedZoomDomain(endDomain);
+        min = Math.min(min, point.value);
+        max = Math.max(max, point.value);
       }
-    };
+    });
 
-    // Cancel any existing animation
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
-    }
+    if (!isFinite(min) || !isFinite(max)) return null;
 
-    animationFrameRef.current = requestAnimationFrame(animate);
+    return { min, max };
+  }, [activeDomain, chartData, candlestickData, chartDisplayType]);
 
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
-      }
-    };
+  // Smooth animation effect disabled - use immediate updates for better brush control
+  useEffect(() => {
+    // Directly set animated domain to match zoom domain (no interpolation)
+    setAnimatedZoomDomain(zoomDomain);
   }, [zoomDomain]);
 
-  // Initialize zoom domain on first render or when selectedTimeWindow changes
+  // Initialize zoom domain only on first mount - no automatic adjustments
   useEffect(() => {
-    // Reset initialization flags when selectedTimeWindow changes
-    hasInitializedZoom.current = false;
-    isInitialMount.current = true;
-  }, [selectedTimeWindow]);
-
-  // Reset zoom domain when chartData length changes significantly (e.g., switching averaging modes)
-  useEffect(() => {
-    if (!zoomDomain || !chartData || chartData.length === 0) return;
-
-    // Check if current zoom domain is out of bounds
-    if (zoomDomain.endIndex >= chartData.length) {
-      // Recalculate zoom domain to fit new data length
-      if (calculateInitialZoomDomain) {
-        setZoomDomain(calculateInitialZoomDomain);
-      } else {
-        setZoomDomain(null);
-      }
-    }
-  }, [chartData.length, calculateInitialZoomDomain]);
-
-  useEffect(() => {
-    // Only apply initial zoom once, or when initialZoomWindowHours changes
+    // Only run once on initial mount
     if (!hasInitializedZoom.current && calculateInitialZoomDomain) {
       setZoomDomain(calculateInitialZoomDomain);
 
-      // Delay enabling brush interactions until after the state update and render complete
-      // This prevents the brush from overriding during the initial render cycle
+      // Mark as initialized after a delay
       setTimeout(() => {
         hasInitializedZoom.current = true;
         isInitialMount.current = false;
       }, 100);
     }
-  }, [calculateInitialZoomDomain]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Empty dependency array - only run once on mount
 
   // Zoom handlers
   const handleZoomIn = () => {
@@ -445,7 +558,17 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     }
 
     if (domain && domain.startIndex !== undefined && domain.endIndex !== undefined) {
-      setZoomDomain({ startIndex: domain.startIndex, endIndex: domain.endIndex });
+      let startIndex = domain.startIndex;
+      let endIndex = domain.endIndex;
+
+      // If we're in candlestick mode, convert indices from candlestick space to chartData space
+      if (chartDisplayType === 'candlestick' && candlestickData.length > 0 && chartData.length > 0) {
+        const ratio = chartData.length / candlestickData.length;
+        startIndex = Math.max(0, Math.floor(domain.startIndex * ratio));
+        endIndex = Math.min(chartData.length - 1, Math.ceil(domain.endIndex * ratio));
+      }
+
+      setZoomDomain({ startIndex, endIndex });
     }
   };
 
@@ -516,8 +639,14 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return Math.round((visibleRange / chartData.length) * 100);
   }, [activeDomain, chartData]);
 
-  // Auto-follow latest data when the right handle is at the rightmost position
+  // Smart auto-follow: only follow when right brush is at the most recent data
   const prevDataLengthRef = useRef<number>(0);
+  const zoomDomainRef = useRef<{ startIndex: number; endIndex: number } | null>(null);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    zoomDomainRef.current = zoomDomain;
+  }, [zoomDomain]);
 
   useEffect(() => {
     if (!chartData || chartData.length === 0) return;
@@ -530,20 +659,35 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     if (!dataLengthIncreased) return;
 
     // If we have a zoom domain, check if the right handle is at the end
-    if (zoomDomain) {
-      const isAtEnd = zoomDomain.endIndex >= prevDataLength - 2; // Within 1-2 points of previous end
+    const currentZoomDomain = zoomDomainRef.current;
+    if (currentZoomDomain) {
+      const isAtEnd = currentZoomDomain.endIndex >= prevDataLength - 2; // Within 1-2 points of previous end
 
       if (isAtEnd) {
         // Shift the zoom window forward to follow new data
-        const zoomRange = zoomDomain.endIndex - zoomDomain.startIndex;
+        const zoomRange = currentZoomDomain.endIndex - currentZoomDomain.startIndex;
         const newEndIndex = chartData.length - 1;
         const newStartIndex = Math.max(0, newEndIndex - zoomRange);
 
         setZoomDomain({ startIndex: newStartIndex, endIndex: newEndIndex });
       }
+      // If right brush is not at end, keep brushes locked (don't update zoomDomain)
     }
     // If zoomDomain is null, we're in fully zoomed out mode (no action needed)
-  }, [chartData.length, zoomDomain]); // Monitor data length and zoom state
+  }, [chartData.length]); // Only monitor data length - not zoomDomain!
+
+  // Auto-zoom disabled - keep X interval the same when switching between line and candlestick
+  useEffect(() => {
+    // Just track the current display type
+    prevChartDisplayType.current = chartDisplayType;
+  }, [chartDisplayType]);
+
+  // When selectedTimeWindow changes, apply the new zoom window
+  useEffect(() => {
+    if (hasInitializedZoom.current && calculateInitialZoomDomain) {
+      setZoomDomain(calculateInitialZoomDomain);
+    }
+  }, [selectedTimeWindow, calculateInitialZoomDomain]);
 
   if (!data || data.length === 0) {
     return (
@@ -588,7 +732,12 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             </label>
             <select
               value={selectedTimeWindow}
-              onChange={(e) => setSelectedTimeWindow(Number(e.target.value))}
+              onChange={(e) => {
+                const newWindow = Number(e.target.value);
+                setSelectedTimeWindow(newWindow);
+                // Reset zoom domain cache when window changes
+                initialZoomDomainRef.current = null;
+              }}
               className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
             >
               <option value={1}>1 Hour</option>
@@ -612,6 +761,54 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {/* Chart display type toggle */}
+          <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
+            <button
+              onClick={() => setChartDisplayType('line')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                chartDisplayType === 'line'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              title="Line chart"
+            >
+              <LineChartIcon className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setChartDisplayType('candlestick')}
+              className={`p-1.5 rounded-lg transition-colors ${
+                chartDisplayType === 'candlestick'
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400'
+                  : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+              title="Candlestick chart"
+            >
+              <BarChart2 className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Candlestick period selector (shown only in candlestick mode) */}
+          {chartDisplayType === 'candlestick' && (
+            <div className="flex items-center gap-2">
+              <label className={`text-xs ${themeClasses.text.secondary} font-medium`}>
+                Period:
+              </label>
+              <select
+                value={candlestickPeriod}
+                onChange={(e) => setCandlestickPeriod(Number(e.target.value))}
+                className="text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400"
+                title="Agent polls every 5 minutes"
+              >
+                <option value={15}>15 min (≈3 pts)</option>
+                <option value={30}>30 min (≈6 pts)</option>
+                <option value={60}>1 hour (≈12 pts)</option>
+                <option value={240}>4 hours (≈48 pts)</option>
+                <option value={720}>12 hours (≈144 pts)</option>
+                <option value={1440}>24 hours (≈288 pts)</option>
+              </select>
+            </div>
+          )}
+
           {/* Y-axis autofit toggle */}
           <button
             onClick={() => setAutoFitYAxis(!autoFitYAxis)}
@@ -832,7 +1029,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       {/* Chart */}
       <ResponsiveContainer width="100%" height={height}>
         <ComposedChart
-          data={chartData}
+          data={chartDisplayType === 'candlestick' ? candlestickData : chartData}
           margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
           ref={chartRef}
         >
@@ -885,6 +1082,34 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             content={({ active, payload }) => {
               if (active && payload && payload.length) {
                 const data = payload[0].payload;
+
+                if (chartDisplayType === 'candlestick') {
+                  return (
+                    <div className={`${themeClasses.bg.card} p-3 border ${themeClasses.border.default} rounded shadow-lg`}>
+                      <p className={`text-xs ${themeClasses.text.tertiary} mb-1`}>
+                        {format(new Date(data.timestamp), 'MMM d, HH:mm')}
+                      </p>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mt-2">
+                        <p className={`text-xs ${themeClasses.text.secondary}`}>Open:</p>
+                        <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.open.toFixed(1)}{unit}</p>
+                        <p className={`text-xs ${themeClasses.text.secondary}`}>High:</p>
+                        <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.high.toFixed(1)}{unit}</p>
+                        <p className={`text-xs ${themeClasses.text.secondary}`}>Low:</p>
+                        <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.low.toFixed(1)}{unit}</p>
+                        <p className={`text-xs ${themeClasses.text.secondary}`}>Close:</p>
+                        <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.close.toFixed(1)}{unit}</p>
+                        <p className={`text-xs ${themeClasses.text.secondary}`}>Mean:</p>
+                        <p className={`text-xs font-semibold ${themeClasses.text.primary}`}>{data.mean.toFixed(1)}{unit}</p>
+                      </div>
+                      {data.isAnomaly && (
+                        <p className={`text-xs text-orange-600 dark:text-orange-400 mt-2`}>
+                          ⚠️ Anomaly detected
+                        </p>
+                      )}
+                    </div>
+                  );
+                }
+
                 return (
                   <div className={`${themeClasses.bg.card} p-3 border ${themeClasses.border.default} rounded shadow-lg`}>
                     <p className={`text-xs ${themeClasses.text.tertiary} mb-1`}>
@@ -913,7 +1138,37 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             iconType="line"
           />
 
-          {/* Standard Deviation Lines (if enabled) */}
+          {/* View range reference lines */}
+          {visibleDataRange && (
+            <>
+              <ReferenceLine
+                y={visibleDataRange.max}
+                stroke={isDark ? '#60a5fa' : '#3b82f6'}
+                strokeDasharray="3 3"
+                strokeWidth={1.5}
+                label={{
+                  value: `High: ${visibleDataRange.max.toFixed(yAxisDecimalPlaces)}${unit}`,
+                  position: 'right',
+                  fill: isDark ? '#60a5fa' : '#3b82f6',
+                  fontSize: 11
+                }}
+              />
+              <ReferenceLine
+                y={visibleDataRange.min}
+                stroke={isDark ? '#60a5fa' : '#3b82f6'}
+                strokeDasharray="3 3"
+                strokeWidth={1.5}
+                label={{
+                  value: `Low: ${visibleDataRange.min.toFixed(yAxisDecimalPlaces)}${unit}`,
+                  position: 'right',
+                  fill: isDark ? '#60a5fa' : '#3b82f6',
+                  fontSize: 11
+                }}
+              />
+            </>
+          )}
+
+          {/* Standard Deviation Lines (if enabled) - shown in both line and candlestick modes */}
           {showStdDev && (
             <>
               {/* +3σ line (red) */}
@@ -992,6 +1247,9 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
               />
             </>
           )}
+
+          {chartDisplayType === 'line' && (
+            <>
 
           {/* Mean line (or moving average line) */}
           <Line
@@ -1152,19 +1410,203 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             }}
             name="Anomalies"
           />
+            </>
+          )}
+
+          {/* Candlestick chart rendering */}
+          {chartDisplayType === 'candlestick' && (
+            <>
+              {/* Mean line */}
+              <Line
+                type="monotone"
+                dataKey="mean"
+                stroke="#10b981"
+                strokeWidth={2}
+                strokeDasharray="5 5"
+                dot={false}
+                activeDot={false}
+                name="Mean"
+                isAnimationActive={false}
+              />
+
+              {/* Candlesticks rendered using custom rendering */}
+              {candlestickData.map((candle, index) => {
+                // Calculate Y positions based on the domain
+                const [minDomain, maxDomain] = yAxisDomain as [number, number];
+                const chartHeight = height - 50; // Approximate chart height (height - margins)
+
+                // Scale function to convert values to Y coordinates
+                const valueToY = (value: number) => {
+                  const percentage = (value - minDomain) / (maxDomain - minDomain);
+                  return chartHeight * (1 - percentage);
+                };
+
+                const openY = valueToY(candle.open);
+                const closeY = valueToY(candle.close);
+                const highY = valueToY(candle.high);
+                const lowY = valueToY(candle.low);
+
+                const candleWidth = 8;
+                const wickWidth = 2;
+
+                // Determine color based on price movement
+                const fillColor = candle.isGreen
+                  ? (isDark ? '#22c55e' : '#16a34a')  // Green for bullish
+                  : (isDark ? '#ef4444' : '#dc2626'); // Red for bearish
+
+                const strokeColor = candle.isGreen
+                  ? (isDark ? '#16a34a' : '#15803d')
+                  : (isDark ? '#dc2626' : '#b91c1c');
+
+                // Anomaly border if this period contains an anomaly
+                const hasAnomalyBorder = candle.isAnomaly;
+                const anomalyBorderColor = '#f59e0b';
+
+                return (
+                  <g key={`candle-${index}-${candle.timestamp}`}>
+                    {/* This is a placeholder - actual rendering handled by Scatter below */}
+                  </g>
+                );
+              })}
+
+              {/* Use Scatter with simpler shape that doesn't need yAxis scale */}
+              <Scatter
+                dataKey="high"
+                fill="none"
+                isAnimationActive={false}
+                shape={(props: any) => {
+                  const { cx, payload, height: chartContainerHeight } = props;
+                  if (!payload) return null;
+
+                  // Use the percentage-based approach
+                  const [minDomain, maxDomain] = yAxisDomain as [number, number];
+                  const range = maxDomain - minDomain;
+
+                  // Calculate Y positions as percentages of the chart height
+                  const openPercent = (payload.open - minDomain) / range;
+                  const closePercent = (payload.close - minDomain) / range;
+                  const highPercent = (payload.high - minDomain) / range;
+                  const lowPercent = (payload.low - minDomain) / range;
+
+                  // Chart rendering area (approximate based on height prop)
+                  const renderHeight = height - 100; // Approximate usable height
+                  const topMargin = 30; // Top margin
+
+                  // Convert percentages to Y coordinates (inverted because SVG Y increases downward)
+                  const openY = topMargin + renderHeight * (1 - openPercent);
+                  const closeY = topMargin + renderHeight * (1 - closePercent);
+                  const highY = topMargin + renderHeight * (1 - highPercent);
+                  const lowY = topMargin + renderHeight * (1 - lowPercent);
+
+                  const candleWidth = 8;
+                  const wickWidth = 2;
+
+                  // Determine color based on price movement
+                  const fillColor = payload.isGreen
+                    ? (isDark ? '#22c55e' : '#16a34a')  // Green for bullish
+                    : (isDark ? '#ef4444' : '#dc2626'); // Red for bearish
+
+                  const strokeColor = payload.isGreen
+                    ? (isDark ? '#16a34a' : '#15803d')
+                    : (isDark ? '#dc2626' : '#b91c1c');
+
+                  // Anomaly border if this period contains an anomaly
+                  const hasAnomalyBorder = payload.isAnomaly;
+                  const anomalyBorderColor = '#f59e0b';
+
+                  return (
+                    <g>
+                      {/* High-low wick */}
+                      <line
+                        x1={cx}
+                        y1={highY}
+                        x2={cx}
+                        y2={lowY}
+                        stroke={strokeColor}
+                        strokeWidth={wickWidth}
+                      />
+
+                      {/* Open-close body */}
+                      <rect
+                        x={cx - candleWidth / 2}
+                        y={Math.min(openY, closeY)}
+                        width={candleWidth}
+                        height={Math.max(Math.abs(closeY - openY), 1)} // Minimum height of 1 for doji
+                        fill={fillColor}
+                        stroke={hasAnomalyBorder ? anomalyBorderColor : strokeColor}
+                        strokeWidth={hasAnomalyBorder ? 2.5 : 1}
+                        opacity={0.9}
+                      />
+
+                      {/* Anomaly indicator */}
+                      {hasAnomalyBorder && (
+                        <circle
+                          cx={cx}
+                          cy={highY - 5}
+                          r={3}
+                          fill={anomalyBorderColor}
+                          stroke="white"
+                          strokeWidth={1}
+                        />
+                      )}
+                    </g>
+                  );
+                }}
+                name="Candlesticks"
+              />
+            </>
+          )}
 
           {/* Brush for panning and zooming */}
-          <Brush
-            key={`brush-${selectedTimeWindow}`}
-            dataKey="timestamp"
-            height={30}
-            stroke={isDark ? '#6b7280' : '#9ca3af'}
-            fill={isDark ? '#1f2937' : '#f3f4f6'}
-            tickFormatter={(value) => format(new Date(value), 'HH:mm')}
-            onChange={handleBrushChange}
-            startIndex={activeDomain ? Math.min(activeDomain.startIndex, chartData.length - 1) : undefined}
-            endIndex={activeDomain ? Math.min(activeDomain.endIndex, chartData.length - 1) : undefined}
-          />
+          {(() => {
+            // Determine the active data array being displayed
+            const activeDataArray = chartDisplayType === 'candlestick' ? candlestickData : chartData;
+
+            // Don't render Brush if there's insufficient data
+            if (!activeDataArray || activeDataArray.length < 2) {
+              return null;
+            }
+
+            // Calculate brush indices based on the active data array
+            let brushStartIndex: number | undefined = undefined;
+            let brushEndIndex: number | undefined = undefined;
+
+            if (activeDomain && activeDataArray.length > 0) {
+              // In candlestick mode, we need to scale indices proportionally
+              if (chartDisplayType === 'candlestick' && chartData.length > 0 && candlestickData.length > 0) {
+                const ratio = candlestickData.length / chartData.length;
+                brushStartIndex = Math.max(0, Math.floor(activeDomain.startIndex * ratio));
+                brushEndIndex = Math.min(candlestickData.length - 1, Math.ceil(activeDomain.endIndex * ratio));
+              } else if (chartDisplayType === 'line') {
+                // Line mode - use indices directly
+                brushStartIndex = Math.max(0, Math.min(activeDomain.startIndex, activeDataArray.length - 1));
+                brushEndIndex = Math.max(0, Math.min(activeDomain.endIndex, activeDataArray.length - 1));
+              }
+
+              // Validate indices - if either is NaN or invalid, clear both
+              if (!Number.isFinite(brushStartIndex) || !Number.isFinite(brushEndIndex) ||
+                  brushStartIndex < 0 || brushEndIndex < 0 ||
+                  brushStartIndex >= activeDataArray.length || brushEndIndex >= activeDataArray.length ||
+                  brushStartIndex >= brushEndIndex) {
+                brushStartIndex = undefined;
+                brushEndIndex = undefined;
+              }
+            }
+
+            return (
+              <Brush
+                key={`brush-${chartDisplayType}-${selectedTimeWindow}`}
+                dataKey="timestamp"
+                height={30}
+                stroke={isDark ? '#6b7280' : '#9ca3af'}
+                fill={isDark ? '#1f2937' : '#f3f4f6'}
+                tickFormatter={(value) => format(new Date(value), 'HH:mm')}
+                onChange={handleBrushChange}
+                startIndex={brushStartIndex}
+                endIndex={brushEndIndex}
+              />
+            );
+          })()}
         </ComposedChart>
       </ResponsiveContainer>
 
