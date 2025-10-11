@@ -542,10 +542,68 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return { min, max };
   }, [activeDomain, chartData, candlestickData, heikenAshiData, chartDisplayType]);
 
-  // Smooth animation effect disabled - use immediate updates for better brush control
+  // Smooth animation for zoom domain changes
   useEffect(() => {
-    // Directly set animated domain to match zoom domain (no interpolation)
-    setAnimatedZoomDomain(zoomDomain);
+    // Cancel any ongoing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    // If no zoom domain or no previous animated domain, set immediately
+    if (!zoomDomain || !animatedZoomDomain) {
+      setAnimatedZoomDomain(zoomDomain);
+      return;
+    }
+
+    // Calculate the difference to determine if we should animate
+    const startDiff = Math.abs(zoomDomain.startIndex - animatedZoomDomain.startIndex);
+    const endDiff = Math.abs(zoomDomain.endIndex - animatedZoomDomain.endIndex);
+
+    // If change is very small (less than 2 indices), set immediately to avoid jitter
+    if (startDiff < 2 && endDiff < 2) {
+      setAnimatedZoomDomain(zoomDomain);
+      return;
+    }
+
+    // Smooth animation using requestAnimationFrame (for button-triggered zooms)
+    const startTime = performance.now();
+    const duration = 200; // 200ms animation duration
+    const startDomain = { ...animatedZoomDomain };
+    const targetDomain = { ...zoomDomain };
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function: easeOutCubic for smooth deceleration
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+
+      // Interpolate between start and target
+      const newStartIndex = startDomain.startIndex + (targetDomain.startIndex - startDomain.startIndex) * easedProgress;
+      const newEndIndex = startDomain.endIndex + (targetDomain.endIndex - startDomain.endIndex) * easedProgress;
+
+      setAnimatedZoomDomain({
+        startIndex: Math.round(newStartIndex),
+        endIndex: Math.round(newEndIndex),
+      });
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        animationFrameRef.current = null;
+      }
+    };
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    // Cleanup function to cancel animation on unmount or when dependencies change
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+    };
   }, [zoomDomain]);
 
   // Initialize zoom domain only on first mount - no automatic adjustments
@@ -562,6 +620,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // Empty dependency array - only run once on mount
+
 
   // Zoom handlers
   const handleZoomIn = () => {
@@ -626,7 +685,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
         endIndex = Math.min(chartData.length - 1, Math.ceil(domain.endIndex * ratio));
       }
 
-      setZoomDomain({ startIndex, endIndex });
+      const newDomain = { startIndex, endIndex };
+
+      // Update zoom domain immediately
+      setZoomDomain(newDomain);
 
       // Calculate the time range and update the Window dropdown to closest match
       if (chartData && chartData.length > 0 && startIndex < chartData.length && endIndex < chartData.length) {
@@ -1139,15 +1201,15 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart
-          data={
-            chartDisplayType === 'candlestick' ? candlestickData :
-            chartDisplayType === 'heiken-ashi' ? heikenAshiData :
-            chartData
-          }
-          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-          ref={chartRef}
-        >
+          <ComposedChart
+            data={
+              chartDisplayType === 'candlestick' ? candlestickData :
+              chartDisplayType === 'heiken-ashi' ? heikenAshiData :
+              chartData
+            }
+            margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+            ref={chartRef}
+          >
           <CartesianGrid
             strokeDasharray="3 3"
             stroke={isDark ? '#4b5563' : '#d1d5db'}
