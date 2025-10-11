@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const CURRENT_VERSION = '1.84.0';
+const CURRENT_VERSION = '1.85.0';
 const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 interface VersionInfo {
@@ -54,20 +54,24 @@ export function useVersionCheck() {
           console.log(
             `🔄 New version available: ${versionInfo.version} (current: ${CURRENT_VERSION})`
           );
+          console.log('ℹ️  Auto-reload disabled - please manually refresh to get the latest version');
 
-          // Only prompt after first check to avoid disrupting initial page load
-          if (hasCheckedRef.current) {
-            const shouldReload = window.confirm(
-              'A new version of the application is available. Click OK to reload and get the latest updates.'
-            );
-            if (shouldReload) {
-              sessionStorage.setItem('versionCheckReloadTime', now.toString());
-              window.location.reload();
-            }
-          } else {
-            // On first check, just log - don't reload to avoid refresh loops
-            console.log('Version mismatch detected on initial check - will prompt on next check');
-          }
+          // AUTO-RELOAD DISABLED: Was causing refresh loops in production
+          // Users can manually refresh when they see the console message
+
+          // // Only prompt after first check to avoid disrupting initial page load
+          // if (hasCheckedRef.current) {
+          //   const shouldReload = window.confirm(
+          //     'A new version of the application is available. Click OK to reload and get the latest updates.'
+          //   );
+          //   if (shouldReload) {
+          //     sessionStorage.setItem('versionCheckReloadTime', now.toString());
+          //     window.location.reload();
+          //   }
+          // } else {
+          //   // On first check, just log - don't reload to avoid refresh loops
+          //   console.log('Version mismatch detected on initial check - will prompt on next check');
+          // }
         } else {
           console.log(`✅ Version check: Already on latest (${CURRENT_VERSION})`);
         }
