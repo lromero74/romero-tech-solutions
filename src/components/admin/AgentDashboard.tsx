@@ -30,7 +30,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   }>({ show: false });
 
   // Permission checks
-  const { checkPermission } = usePermission();
+  const { checkPermission, loading: permissionsLoading } = usePermission();
   const canViewAgents = checkPermission('view.agents.enable');
   const canManageAgents = checkPermission('manage.agents.enable');
   const canCreateTokens = checkPermission('create.agent_tokens.enable');
@@ -45,6 +45,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
   // Load agents
   const loadAgents = useCallback(async () => {
+    // Don't check permissions while they're still loading
+    if (permissionsLoading) {
+      return;
+    }
+
     if (!canViewAgents) {
       setPermissionDenied({
         show: true,
@@ -71,7 +76,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [canViewAgents]);
+  }, [canViewAgents, permissionsLoading]);
 
   useEffect(() => {
     loadAgents();
@@ -360,6 +365,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     warning: agents.filter(a => a.status === 'warning').length,
     critical: agents.filter(a => a.status === 'critical').length,
   };
+
+  // Show loading state while permissions are loading
+  if (permissionsLoading) {
+    return (
+      <div className="space-y-6">
+        <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Monitoring</h1>
+        <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
+          <Activity className={`w-8 h-8 mx-auto mb-4 animate-spin ${themeClasses.text.muted}`} />
+          <p className={`${themeClasses.text.secondary}`}>Loading permissions...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!canViewAgents) {
     return (
