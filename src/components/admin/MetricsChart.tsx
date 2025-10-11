@@ -72,8 +72,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   // Zoom and pan state
   const [zoomDomain, setZoomDomain] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  const [animatedZoomDomain, setAnimatedZoomDomain] = useState<{ startIndex: number; endIndex: number } | null>(null);
   const chartRef = useRef<any>(null);
   const hasInitializedZoom = useRef<boolean>(false);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Validate and normalize data (especially for percentages)
   const validatedData = useMemo(() => {
@@ -146,9 +148,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Determine the visible data range
-    const visibleData = zoomDomain
-      ? chartData.slice(zoomDomain.startIndex, zoomDomain.endIndex + 1)
+    // Determine the visible data range (use animated domain for smooth transitions)
+    const activeDomain = animatedZoomDomain || zoomDomain;
+    const visibleData = activeDomain
+      ? chartData.slice(activeDomain.startIndex, activeDomain.endIndex + 1)
       : chartData;
 
     if (visibleData.length === 0) {
@@ -207,7 +210,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     const finalDomain = [Math.max(0, min - buffer), max + buffer];
     console.log(`[MetricsChart] ${title} Final Y-axis domain:`, finalDomain);
     return finalDomain;
-  }, [chartData, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
+  }, [chartData, animatedZoomDomain, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
 
   // Calculate initial zoom domain based on selectedTimeWindow
   const calculateInitialZoomDomain = useMemo(() => {
@@ -239,6 +242,61 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
     return null;
   }, [chartData, selectedTimeWindow]);
+
+  // Smooth animation effect for zoom domain changes
+  useEffect(() => {
+    if (!zoomDomain) {
+      setAnimatedZoomDomain(null);
+      return;
+    }
+
+    // If this is the first zoom or no previous animated domain, set immediately
+    if (!animatedZoomDomain) {
+      setAnimatedZoomDomain(zoomDomain);
+      return;
+    }
+
+    // Animate from current position to new position
+    const startDomain = animatedZoomDomain;
+    const endDomain = zoomDomain;
+    const duration = 500; // 500ms animation
+    const startTime = performance.now();
+
+    const animate = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Easing function (ease-out cubic)
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      // Interpolate between start and end
+      const interpolatedDomain = {
+        startIndex: Math.round(startDomain.startIndex + (endDomain.startIndex - startDomain.startIndex) * eased),
+        endIndex: Math.round(startDomain.endIndex + (endDomain.endIndex - startDomain.endIndex) * eased),
+      };
+
+      setAnimatedZoomDomain(interpolatedDomain);
+
+      if (progress < 1) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      } else {
+        setAnimatedZoomDomain(endDomain);
+      }
+    };
+
+    // Cancel any existing animation
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+
+    animationFrameRef.current = requestAnimationFrame(animate);
+
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [zoomDomain]);
 
   // Initialize zoom domain on first render or when selectedTimeWindow changes
   useEffect(() => {
@@ -364,10 +422,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   // Calculate zoom percentage for display
   const zoomPercentage = useMemo(() => {
-    if (!zoomDomain || !chartData || chartData.length === 0) return 100;
-    const visibleRange = zoomDomain.endIndex - zoomDomain.startIndex + 1;
+    const activeDomain = animatedZoomDomain || zoomDomain;
+    if (!activeDomain || !chartData || chartData.length === 0) return 100;
+    const visibleRange = activeDomain.endIndex - activeDomain.startIndex + 1;
     return Math.round((visibleRange / chartData.length) * 100);
-  }, [zoomDomain, chartData]);
+  }, [animatedZoomDomain, zoomDomain, chartData]);
 
   // Auto-follow latest data when the right handle is at the rightmost position
   const prevDataLengthRef = useRef<number>(0);
@@ -699,11 +758,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             tickFormatter={(value) => format(new Date(value), 'HH:mm')}
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
             stroke={isDark ? '#4b5563' : '#d1d5db'}
-            domain={zoomDomain ? [
-              chartData[zoomDomain.startIndex]?.timestamp,
-              chartData[zoomDomain.endIndex]?.timestamp
+            domain={animatedZoomDomain ? [
+              chartData[animatedZoomDomain.startIndex]?.timestamp,
+              chartData[animatedZoomDomain.endIndex]?.timestamp
             ] : undefined}
-            allowDataOverflow={zoomDomain ? true : false}
+            allowDataOverflow={animatedZoomDomain ? true : false}
           />
           <YAxis
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
@@ -1002,8 +1061,8 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             fill={isDark ? '#1f2937' : '#f3f4f6'}
             tickFormatter={(value) => format(new Date(value), 'HH:mm')}
             onChange={handleBrushChange}
-            startIndex={zoomDomain?.startIndex ?? undefined}
-            endIndex={zoomDomain?.endIndex ?? undefined}
+            startIndex={animatedZoomDomain?.startIndex ?? undefined}
+            endIndex={animatedZoomDomain?.endIndex ?? undefined}
           />
         </ComposedChart>
       </ResponsiveContainer>
