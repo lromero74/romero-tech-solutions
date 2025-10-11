@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const CURRENT_VERSION = '1.85.0';
+const CURRENT_VERSION = '1.86.0';
 const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 interface VersionInfo {
@@ -13,9 +13,24 @@ interface VersionInfo {
  * Automatically checks for new app versions and reloads the page
  * when a new version is deployed. This ensures users always see
  * the latest content without manual cache clearing.
+ *
+ * Works in conjunction with service worker to handle updates properly:
+ * 1. Detects version mismatch
+ * 2. Updates service worker if available
+ * 3. Performs controlled reload
  */
 export function useVersionCheck() {
   const hasCheckedRef = useRef(false);
+  const swRegistrationRef = useRef<ServiceWorkerRegistration | null>(null);
+
+  // Get service worker registration on mount
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.ready.then((registration) => {
+        swRegistrationRef.current = registration;
+      });
+    }
+  }, []);
 
   useEffect(() => {
     // Only run in production
@@ -54,24 +69,32 @@ export function useVersionCheck() {
           console.log(
             `🔄 New version available: ${versionInfo.version} (current: ${CURRENT_VERSION})`
           );
-          console.log('ℹ️  Auto-reload disabled - please manually refresh to get the latest version');
 
-          // AUTO-RELOAD DISABLED: Was causing refresh loops in production
-          // Users can manually refresh when they see the console message
+          // Only prompt after first check to avoid disrupting initial page load
+          if (hasCheckedRef.current) {
+            // If service worker is available, update it first
+            if (swRegistrationRef.current) {
+              console.log('SW: Updating service worker before reload...');
+              await swRegistrationRef.current.update();
 
-          // // Only prompt after first check to avoid disrupting initial page load
-          // if (hasCheckedRef.current) {
-          //   const shouldReload = window.confirm(
-          //     'A new version of the application is available. Click OK to reload and get the latest updates.'
-          //   );
-          //   if (shouldReload) {
-          //     sessionStorage.setItem('versionCheckReloadTime', now.toString());
-          //     window.location.reload();
-          //   }
-          // } else {
-          //   // On first check, just log - don't reload to avoid refresh loops
-          //   console.log('Version mismatch detected on initial check - will prompt on next check');
-          // }
+              // If there's a waiting service worker, activate it immediately
+              if (swRegistrationRef.current.waiting) {
+                swRegistrationRef.current.waiting.postMessage({ type: 'SKIP_WAITING' });
+              }
+            }
+
+            const shouldReload = window.confirm(
+              'A new version of the application is available. Click OK to reload and get the latest updates.'
+            );
+
+            if (shouldReload) {
+              sessionStorage.setItem('versionCheckReloadTime', now.toString());
+              window.location.reload();
+            }
+          } else {
+            // On first check, just log - don't reload to avoid refresh loops
+            console.log('Version mismatch detected on initial check - will prompt on next check');
+          }
         } else {
           console.log(`✅ Version check: Already on latest (${CURRENT_VERSION})`);
         }

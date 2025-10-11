@@ -1,6 +1,6 @@
-const CACHE_NAME = 'romero-tech-v1.3.1';
-const STATIC_CACHE_NAME = 'romero-tech-static-v1.3.1';
-const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.3.1';
+const CACHE_NAME = 'romero-tech-v1.86.0';
+const STATIC_CACHE_NAME = 'romero-tech-static-v1.86.0';
+const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.86.0';
 
 // Resources to cache immediately
 const STATIC_ASSETS = [
@@ -87,7 +87,12 @@ async function handleRequest(request) {
       return await fetch(request);
     }
 
-    // Static assets - Cache First strategy
+    // JavaScript and CSS - Network First to prevent serving stale code
+    if (isAppCodeAsset(url.pathname)) {
+      return await networkFirst(request, DYNAMIC_CACHE_NAME);
+    }
+
+    // Static assets (images, fonts, etc.) - Cache First strategy
     if (isStaticAsset(url.pathname)) {
       return await cacheFirst(request, STATIC_CACHE_NAME);
     }
@@ -182,9 +187,15 @@ function isSecurityEndpoint(pathname) {
   return securityEndpoints.some(endpoint => pathname.includes(endpoint));
 }
 
+function isAppCodeAsset(pathname) {
+  // JS and CSS files that contain app code - use Network First
+  return pathname.match(/\.(js|css)$/);
+}
+
 function isStaticAsset(pathname) {
+  // Images, fonts, and other static assets - use Cache First
   return STATIC_ASSETS.includes(pathname) ||
-         pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|css|js|woff|woff2)$/);
+         pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|woff|woff2)$/);
 }
 
 function shouldCache(request) {
