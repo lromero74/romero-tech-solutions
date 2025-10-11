@@ -25,7 +25,16 @@ export interface AgentDevice {
   created_by: string | null;
   agent_token?: string; // Only returned on registration
   business_name?: string; // Joined from businesses table
+  is_individual?: boolean; // From businesses table
+  individual_first_name?: string; // From users table JOIN (for individuals only)
+  individual_last_name?: string; // From users table JOIN (for individuals only)
   location_name?: string; // Joined from service_locations table
+  location_street?: string; // Joined from service_locations table
+  location_street2?: string; // Joined from service_locations table
+  location_city?: string; // Joined from service_locations table
+  location_state?: string; // Joined from service_locations table
+  location_zip?: string; // Joined from service_locations table
+  location_country?: string; // Joined from service_locations table
 }
 
 export interface DiskHealth {
@@ -398,17 +407,26 @@ class AgentService {
   }
 
   /**
-   * Update agent settings (e.g., enable/disable monitoring)
+   * Update agent settings (e.g., enable/disable monitoring, change location, update name, device type)
    */
   async updateAgent(
     agentId: string,
     data: {
       device_name?: string;
+      device_type?: string;
       monitoring_enabled?: boolean;
       is_active?: boolean;
+      service_location_id?: string;
     }
   ): Promise<ApiResponse<{ message: string }>> {
     return apiService.patch(`/agents/${agentId}`, data);
+  }
+
+  /**
+   * Regenerate agent token (invalidates old token)
+   */
+  async regenerateToken(agentId: string): Promise<ApiResponse<{ token: string; message: string }>> {
+    return apiService.post(`/agents/${agentId}/regenerate-token`);
   }
 
   /**

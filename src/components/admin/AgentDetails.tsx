@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity,
   RefreshCw, ArrowLeft, Terminal, Bell, Clock, CheckCircle, XCircle,
-  Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info
+  Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info, MapPin
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -11,6 +11,7 @@ import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand } from
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChart from './MetricsChart';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
+import { websocketService } from '../../services/websocketService';
 
 interface AgentDetailsProps {
   agentId: string;
@@ -121,6 +122,117 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   useEffect(() => {
     loadAgentDetails();
   }, [loadAgentDetails]);
+
+  // WebSocket listener for real-time metrics updates
+  useEffect(() => {
+    // Only set up WebSocket if we have an agent ID
+    if (!agentId) return;
+
+    console.log(`🔌 Setting up WebSocket listener for agent ${agentId}`);
+
+    // Register callback for agent metrics updates
+    const unsubscribe = websocketService.onAgentMetricsChange((update) => {
+      console.log(`📊 Received metrics update via WebSocket:`, update);
+
+      // Only update if this is for our current agent
+      if (update.agentId === agentId) {
+        console.log(`✅ Metrics update is for current agent, updating state`);
+
+        // Update latest metrics with the new data
+        const newMetrics: AgentMetric = {
+          id: '', // Not needed for display
+          agent_device_id: agentId,
+          cpu_percent: Number(update.metrics.cpu_percent) || 0,
+          memory_percent: Number(update.metrics.memory_percent) || 0,
+          disk_percent: Number(update.metrics.disk_percent) || 0,
+          memory_used_gb: update.metrics.memory_used_gb ? Number(update.metrics.memory_used_gb) : undefined,
+          disk_used_gb: update.metrics.disk_used_gb ? Number(update.metrics.disk_used_gb) : undefined,
+          network_rx_bytes: update.metrics.network_rx_bytes ? Number(update.metrics.network_rx_bytes) : null,
+          network_tx_bytes: update.metrics.network_tx_bytes ? Number(update.metrics.network_tx_bytes) : null,
+          collected_at: update.timestamp,
+          // Include all other metric fields
+          patches_available: update.metrics.patches_available || 0,
+          security_patches_available: update.metrics.security_patches_available || 0,
+          patches_require_reboot: update.metrics.patches_require_reboot || false,
+          eol_status: update.metrics.eol_status || null,
+          eol_date: update.metrics.eol_date || null,
+          security_eol_date: update.metrics.security_eol_date || null,
+          days_until_eol: update.metrics.days_until_eol || null,
+          days_until_sec_eol: update.metrics.days_until_sec_eol || null,
+          eol_message: update.metrics.eol_message || null,
+          disk_health_status: update.metrics.disk_health_status || null,
+          disk_health_data: update.metrics.disk_health_data || null,
+          disk_failures_predicted: update.metrics.disk_failures_predicted || 0,
+          disk_temperature_max: update.metrics.disk_temperature_max || null,
+          disk_reallocated_sectors_total: update.metrics.disk_reallocated_sectors_total || 0,
+          system_uptime_seconds: update.metrics.system_uptime_seconds || null,
+          last_boot_time: update.metrics.last_boot_time || null,
+          unexpected_reboot: update.metrics.unexpected_reboot || false,
+          services_monitored: update.metrics.services_monitored || 0,
+          services_running: update.metrics.services_running || 0,
+          services_failed: update.metrics.services_failed || 0,
+          services_data: update.metrics.services_data || null,
+          network_devices_monitored: update.metrics.network_devices_monitored || 0,
+          network_devices_online: update.metrics.network_devices_online || 0,
+          network_devices_offline: update.metrics.network_devices_offline || 0,
+          network_devices_data: update.metrics.network_devices_data || null,
+          backups_detected: update.metrics.backups_detected || 0,
+          backups_running: update.metrics.backups_running || 0,
+          backups_with_issues: update.metrics.backups_with_issues || 0,
+          backup_data: update.metrics.backup_data || null,
+          antivirus_installed: update.metrics.antivirus_installed || false,
+          antivirus_enabled: update.metrics.antivirus_enabled || false,
+          antivirus_up_to_date: update.metrics.antivirus_up_to_date || false,
+          firewall_enabled: update.metrics.firewall_enabled || false,
+          security_products_count: update.metrics.security_products_count || 0,
+          security_issues_count: update.metrics.security_issues_count || 0,
+          security_data: update.metrics.security_data || null,
+          failed_login_attempts: update.metrics.failed_login_attempts || 0,
+          failed_login_last_24h: update.metrics.failed_login_last_24h || 0,
+          unique_attacking_ips: update.metrics.unique_attacking_ips || 0,
+          failed_login_data: update.metrics.failed_login_data || null,
+          internet_connected: update.metrics.internet_connected !== undefined ? update.metrics.internet_connected : true,
+          gateway_reachable: update.metrics.gateway_reachable !== undefined ? update.metrics.gateway_reachable : true,
+          dns_working: update.metrics.dns_working !== undefined ? update.metrics.dns_working : true,
+          avg_latency_ms: update.metrics.avg_latency_ms || null,
+          packet_loss_percent: update.metrics.packet_loss_percent || null,
+          connectivity_issues_count: update.metrics.connectivity_issues_count || 0,
+          connectivity_data: update.metrics.connectivity_data || null,
+          cpu_temperature_c: update.metrics.cpu_temperature_c || null,
+          gpu_temperature_c: update.metrics.gpu_temperature_c || null,
+          motherboard_temperature_c: update.metrics.motherboard_temperature_c || null,
+          highest_temperature_c: update.metrics.highest_temperature_c || 0,
+          temperature_critical_count: update.metrics.temperature_critical_count || 0,
+          fan_count: update.metrics.fan_count || 0,
+          fan_speeds_rpm: update.metrics.fan_speeds_rpm || null,
+          fan_failure_count: update.metrics.fan_failure_count || 0,
+          sensor_data: update.metrics.sensor_data || null,
+          critical_events_count: update.metrics.critical_events_count || 0,
+          error_events_count: update.metrics.error_events_count || 0,
+          warning_events_count: update.metrics.warning_events_count || 0,
+          last_critical_event: update.metrics.last_critical_event || null,
+          last_critical_event_message: update.metrics.last_critical_event_message || null,
+          package_managers_outdated: update.metrics.package_managers_outdated || 0,
+          homebrew_outdated: update.metrics.homebrew_outdated || 0,
+          npm_outdated: update.metrics.npm_outdated || 0,
+          pip_outdated: update.metrics.pip_outdated || 0,
+          outdated_packages_data: update.metrics.outdated_packages_data || null,
+          raw_metrics: update.metrics.raw_metrics || null,
+        };
+
+        setLatestMetrics(newMetrics);
+
+        // Also append to metrics history for charts
+        setMetricsHistory(prev => [...prev, newMetrics]);
+      }
+    });
+
+    // Cleanup on unmount or when agentId changes
+    return () => {
+      console.log(`🧹 Cleaning up WebSocket listener for agent ${agentId}`);
+      unsubscribe();
+    };
+  }, [agentId]);
 
   // Get device icon
   const getDeviceIcon = (deviceType: string) => {
@@ -434,9 +546,39 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           </div>
           <div>
             <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Service Location</p>
-            <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
-              {agent.location_name || 'N/A'}
-            </p>
+            {agent.location_street && agent.location_city ? (
+              <button
+                onClick={() => {
+                  const streetFull = `${agent.location_street}${agent.location_street2 ? ' ' + agent.location_street2 : ''}`;
+                  const fullAddress = `${streetFull}, ${agent.location_city}, ${agent.location_state} ${agent.location_zip}${agent.location_country && agent.location_country !== 'USA' ? ', ' + agent.location_country : ''}`;
+                  const encodedAddress = encodeURIComponent(fullAddress);
+                  const mapsUrl = `https://maps.google.com/maps?q=${encodedAddress}`;
+                  window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+                }}
+                className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left group`}
+                title="Click to open in maps"
+              >
+                <div className="flex items-start">
+                  <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 mt-0.5 flex-shrink-0 transition-colors`} />
+                  <div>
+                    <div className="font-medium group-hover:text-blue-600 transition-colors">
+                      {agent.location_name || 'Location'}
+                    </div>
+                    <div className="group-hover:text-blue-600 transition-colors">
+                      {agent.location_street}
+                      {agent.location_street2 && ` ${agent.location_street2}`}
+                    </div>
+                    <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 transition-colors`}>
+                      {agent.location_city}, {agent.location_state} {agent.location_zip}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            ) : (
+              <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                {agent.location_name || 'N/A'}
+              </p>
+            )}
           </div>
           <div>
             <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Last Seen</p>

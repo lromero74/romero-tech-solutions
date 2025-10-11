@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
   LineChart,
   Line,
@@ -12,8 +12,10 @@ import {
   Area,
   ComposedChart,
   Scatter,
+  Brush,
 } from 'recharts';
 import { format } from 'date-fns';
+import { ZoomIn, ZoomOut, Maximize2 } from 'lucide-react';
 import {
   calculateStats,
   prepareChartData,
@@ -52,6 +54,10 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
   const [averagingMode, setAveragingMode] = useState<AveragingMode>('moving');
   const [windowSize, setWindowSize] = useState<number>(20);
   const [bandMode, setBandMode] = useState<BandMode>('dynamic');
+
+  // Zoom and pan state
+  const [zoomDomain, setZoomDomain] = useState<{ startIndex: number; endIndex: number } | null>(null);
+  const chartRef = useRef<any>(null);
 
   // Validate and normalize data (especially for percentages)
   const validatedData = useMemo(() => {
@@ -103,6 +109,87 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     return ['auto', 'auto'];
   }, [unit]);
 
+  // Zoom handlers
+  const handleZoomIn = () => {
+    if (!chartData || chartData.length === 0) return;
+
+    const currentStart = zoomDomain?.startIndex ?? 0;
+    const currentEnd = zoomDomain?.endIndex ?? chartData.length - 1;
+    const currentRange = currentEnd - currentStart;
+
+    // Zoom in by 25% (reduce range by 25%)
+    const newRange = Math.max(10, Math.floor(currentRange * 0.75)); // Minimum 10 points
+    const center = Math.floor((currentStart + currentEnd) / 2);
+    const newStart = Math.max(0, center - Math.floor(newRange / 2));
+    const newEnd = Math.min(chartData.length - 1, newStart + newRange);
+
+    setZoomDomain({ startIndex: newStart, endIndex: newEnd });
+  };
+
+  const handleZoomOut = () => {
+    if (!chartData || chartData.length === 0) return;
+
+    const currentStart = zoomDomain?.startIndex ?? 0;
+    const currentEnd = zoomDomain?.endIndex ?? chartData.length - 1;
+    const currentRange = currentEnd - currentStart;
+
+    // Zoom out by 33% (increase range by 33%)
+    const newRange = Math.min(chartData.length - 1, Math.floor(currentRange * 1.33));
+    const center = Math.floor((currentStart + currentEnd) / 2);
+    const newStart = Math.max(0, center - Math.floor(newRange / 2));
+    const newEnd = Math.min(chartData.length - 1, newStart + newRange);
+
+    // If we're at full range, reset zoom
+    if (newStart === 0 && newEnd === chartData.length - 1) {
+      setZoomDomain(null);
+    } else {
+      setZoomDomain({ startIndex: newStart, endIndex: newEnd });
+    }
+  };
+
+  const handleResetZoom = () => {
+    setZoomDomain(null);
+  };
+
+  const handleBrushChange = (domain: any) => {
+    if (domain && domain.startIndex !== undefined && domain.endIndex !== undefined) {
+      setZoomDomain({ startIndex: domain.startIndex, endIndex: domain.endIndex });
+    }
+  };
+
+  // Calculate zoom percentage for display
+  const zoomPercentage = useMemo(() => {
+    if (!zoomDomain || !chartData || chartData.length === 0) return 100;
+    const visibleRange = zoomDomain.endIndex - zoomDomain.startIndex + 1;
+    return Math.round((visibleRange / chartData.length) * 100);
+  }, [zoomDomain, chartData]);
+
+  // Auto-follow latest data when fully zoomed out
+  const prevDataLengthRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (!chartData || chartData.length === 0) return;
+
+    // Only act when new data arrives (length increases)
+    const dataLengthIncreased = chartData.length > prevDataLengthRef.current;
+    prevDataLengthRef.current = chartData.length;
+
+    if (!dataLengthIncreased) return;
+
+    // If we have a zoom domain, check if it represents "full zoom"
+    if (zoomDomain) {
+      const isFullRange =
+        zoomDomain.startIndex === 0 &&
+        zoomDomain.endIndex >= chartData.length - 2; // Within 1-2 points of end (allow for rounding)
+
+      // If currently showing full range, reset to null to enable auto-follow
+      if (isFullRange) {
+        setZoomDomain(null);
+      }
+    }
+    // If zoomDomain is null, we're already in auto-follow mode (no action needed)
+  }, [chartData.length, zoomDomain]); // Monitor data length and zoom state
+
   if (!data || data.length === 0) {
     return (
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
@@ -120,7 +207,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
-      {/* Header with stats */}
+      {/* Header with stats and zoom controls */}
       <div className="flex justify-between items-start mb-4">
         <div>
           <h4 className={`text-md font-semibold ${themeClasses.text.primary}`}>{title}</h4>
@@ -137,12 +224,51 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             </p>
           )}
         </div>
-        <div className="text-right">
-          <div className={`text-sm ${themeClasses.text.secondary}`}>
-            <span className="font-medium">Avg:</span> {stats.mean.toFixed(1)}{unit}
+        <div className="flex items-center gap-3">
+          {/* Zoom controls */}
+          <div className="flex items-center gap-1 border border-gray-300 dark:border-gray-600 rounded-lg p-1">
+            <button
+              onClick={handleZoomIn}
+              disabled={zoomPercentage <= 10}
+              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                zoomPercentage <= 10 ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
+              title="Zoom In"
+            >
+              <ZoomIn className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+            <button
+              onClick={handleZoomOut}
+              disabled={!zoomDomain}
+              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                !zoomDomain ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
+              title="Zoom Out"
+            >
+              <ZoomOut className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+            <button
+              onClick={handleResetZoom}
+              disabled={!zoomDomain}
+              className={`p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${
+                !zoomDomain ? 'opacity-40 cursor-not-allowed' : ''
+              }`}
+              title="Reset Zoom"
+            >
+              <Maximize2 className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+            </button>
+            <div className={`text-xs ${themeClasses.text.tertiary} px-2 border-l border-gray-300 dark:border-gray-600`}>
+              {zoomPercentage}%
+            </div>
           </div>
-          <div className={`text-xs ${themeClasses.text.tertiary} mt-1`}>
-            σ: {stats.stdDev.toFixed(1)}{unit}
+          {/* Stats */}
+          <div className="text-right">
+            <div className={`text-sm ${themeClasses.text.secondary}`}>
+              <span className="font-medium">Avg:</span> {stats.mean.toFixed(1)}{unit}
+            </div>
+            <div className={`text-xs ${themeClasses.text.tertiary} mt-1`}>
+              σ: {stats.stdDev.toFixed(1)}{unit}
+            </div>
           </div>
         </div>
       </div>
@@ -218,7 +344,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
       {/* Chart */}
       <ResponsiveContainer width="100%" height={height}>
-        <ComposedChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+        <ComposedChart
+          data={chartData}
+          margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+          ref={chartRef}
+        >
           <CartesianGrid
             strokeDasharray="3 3"
             stroke={isDark ? '#4b5563' : '#d1d5db'}
@@ -229,6 +359,11 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             tickFormatter={(value) => format(new Date(value), 'HH:mm')}
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
             stroke={isDark ? '#4b5563' : '#d1d5db'}
+            domain={zoomDomain ? [
+              chartData[zoomDomain.startIndex]?.timestamp,
+              chartData[zoomDomain.endIndex]?.timestamp
+            ] : undefined}
+            allowDataOverflow={zoomDomain ? true : false}
           />
           <YAxis
             tick={{ fontSize: 12, fill: isDark ? '#9ca3af' : '#6b7280' }}
@@ -241,6 +376,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             }}
             stroke={isDark ? '#4b5563' : '#d1d5db'}
             domain={yAxisDomain as [number, number] | ['auto', 'auto']}
+            allowDataOverflow={unit === '%'}
           />
           <Tooltip
             content={({ active, payload }) => {
@@ -285,6 +421,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.4}
                 dot={false}
+                activeDot={false}
                 name="+3σ"
               />
               {/* -3σ line (red) */}
@@ -295,6 +432,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.4}
                 dot={false}
+                activeDot={false}
                 name="-3σ"
               />
 
@@ -306,6 +444,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.5}
                 dot={false}
+                activeDot={false}
                 name="+2σ"
               />
               {/* -2σ line (orange) */}
@@ -316,6 +455,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.5}
                 dot={false}
+                activeDot={false}
                 name="-2σ"
               />
 
@@ -327,6 +467,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.6}
                 dot={false}
+                activeDot={false}
                 name="+1σ"
               />
               {/* -1σ line (yellow) */}
@@ -337,6 +478,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 strokeWidth={0.8}
                 strokeOpacity={0.6}
                 dot={false}
+                activeDot={false}
                 name="-1σ"
               />
             </>
@@ -350,6 +492,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             strokeWidth={2}
             strokeDasharray="5 5"
             dot={false}
+            activeDot={false}
             name={averagingMode === 'moving' ? `Moving Avg (${windowSize}pts)` : 'Mean'}
           />
 
@@ -361,6 +504,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             stroke="#10b981"
             strokeWidth={2.5}
             dot={false}
+            activeDot={false}
             connectNulls={false}
             name={`${dataKey} (Normal)`}
             isAnimationActive={false}
@@ -373,6 +517,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             stroke="#eab308"
             strokeWidth={2.5}
             dot={false}
+            activeDot={false}
             connectNulls={false}
             name={`${dataKey} (Warning)`}
             isAnimationActive={false}
@@ -385,6 +530,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             stroke="#f97316"
             strokeWidth={2.5}
             dot={false}
+            activeDot={false}
             connectNulls={false}
             name={`${dataKey} (Elevated)`}
             isAnimationActive={false}
@@ -397,6 +543,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             stroke="#ef4444"
             strokeWidth={2.5}
             dot={false}
+            activeDot={false}
             connectNulls={false}
             name={`${dataKey} (Critical)`}
             isAnimationActive={false}
@@ -443,6 +590,18 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
               );
             }}
             name="Anomalies"
+          />
+
+          {/* Brush for panning and zooming */}
+          <Brush
+            dataKey="timestamp"
+            height={30}
+            stroke={isDark ? '#6b7280' : '#9ca3af'}
+            fill={isDark ? '#1f2937' : '#f3f4f6'}
+            tickFormatter={(value) => format(new Date(value), 'HH:mm')}
+            onChange={handleBrushChange}
+            startIndex={zoomDomain?.startIndex ?? undefined}
+            endIndex={zoomDomain?.endIndex ?? undefined}
           />
         </ComposedChart>
       </ResponsiveContainer>

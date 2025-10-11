@@ -2,17 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Copy, Check, AlertCircle, Clock, Building, MapPin, Key } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { agentService, RegistrationToken } from '../../services/agentService';
-
-interface Business {
-  id: string;
-  businessName: string;  // Match AdminDataContext Business interface
-}
-
-interface ServiceLocation {
-  id: string;
-  location_name: string;
-  business_id: string;
-}
+import { Business, ServiceLocation } from '../../contexts/AdminDataContext';
 
 interface AgentRegistrationModalProps {
   isOpen: boolean;
@@ -189,7 +179,7 @@ const AgentRegistrationModal: React.FC<AgentRegistrationModalProps> = ({
                     <option value="">No specific location</option>
                     {filteredLocations.map((location) => (
                       <option key={location.id} value={location.id}>
-                        {location.location_name}
+                        {location.location_name || location.address_label || 'Unnamed Location'}
                       </option>
                     ))}
                   </select>
@@ -289,7 +279,10 @@ const AgentRegistrationModal: React.FC<AgentRegistrationModalProps> = ({
                     <div>
                       <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Service Location</p>
                       <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                        {serviceLocations.find(l => l.id === generatedToken.service_location_id)?.location_name || 'Unknown'}
+                        {(() => {
+                          const location = serviceLocations.find(l => l.id === generatedToken.service_location_id);
+                          return location?.location_name || location?.address_label || 'Unknown';
+                        })()}
                       </p>
                     </div>
                   )}

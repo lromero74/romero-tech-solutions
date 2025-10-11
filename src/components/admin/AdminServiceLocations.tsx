@@ -24,6 +24,7 @@ interface ServiceLocation {
   location_name?: string;
   location_type: string;
   street: string;
+  street_address_2?: string;
   city: string;
   state: string;
   zip_code: string;
@@ -515,7 +516,8 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
                   <td className={`px-2 py-3 border-r ${themeClasses.border.primary}`}>
                     <button
                       onClick={() => {
-                        const fullAddress = `${location.street}, ${location.city}, ${location.state} ${location.zip_code}${location.country && location.country !== 'USA' ? ', ' + location.country : ''}`;
+                        const streetFull = `${location.street}${location.street_address_2 ? ' ' + location.street_address_2 : ''}`;
+                        const fullAddress = `${streetFull}, ${location.city}, ${location.state} ${location.zip_code}${location.country && location.country !== 'USA' ? ', ' + location.country : ''}`;
                         const encodedAddress = encodeURIComponent(fullAddress);
                         const mapsUrl = `https://maps.google.com/maps?q=${encodedAddress}`;
                         window.open(mapsUrl, '_blank', 'noopener,noreferrer');
@@ -525,11 +527,13 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
                     >
                       <div className="flex items-center">
                         <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 transition-colors`} />
-                        <div className="group-hover:text-blue-600 transition-colors">
-                          <div>{location.street}</div>
-                          <div>{location.city}, {location.state} {location.zip_code}</div>
-                          {location.country !== 'USA' && <div>{location.country}</div>}
-                        </div>
+                        <span className="group-hover:text-blue-600 transition-colors">
+                          {location.street}
+                          {location.street_address_2 && ` ${location.street_address_2}`}
+                        </span>
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 mt-1 transition-colors`}>
+                        {location.city}, {location.state} {location.zip_code}
                       </div>
                     </button>
                   </td>
@@ -694,20 +698,23 @@ const AdminServiceLocations: React.FC<AdminServiceLocationsProps> = ({
                 <span className={`text-xs ${themeClasses.text.muted}`}>Address</span>
                 <button
                   onClick={() => {
-                    const fullAddress = `${location.street}, ${location.city}, ${location.state} ${location.zip_code}${location.country && location.country !== 'USA' ? ', ' + location.country : ''}`;
+                    const streetFull = `${location.street}${location.street_address_2 ? ' ' + location.street_address_2 : ''}`;
+                    const fullAddress = `${streetFull}, ${location.city}, ${location.state} ${location.zip_code}${location.country && location.country !== 'USA' ? ', ' + location.country : ''}`;
                     const encodedAddress = encodeURIComponent(fullAddress);
                     const mapsUrl = `https://maps.google.com/maps?q=${encodedAddress}`;
                     window.open(mapsUrl, '_blank', 'noopener,noreferrer');
                   }}
-                  className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left w-full mt-1`}
+                  className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left w-full mt-1 group`}
                   title="Click to open in maps"
                 >
                   <div className="flex items-start">
-                    <MapPin className={`w-4 h-4 ${themeClasses.text.muted} mr-1 mt-0.5 flex-shrink-0`} />
+                    <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 mt-0.5 flex-shrink-0 transition-colors`} />
                     <div>
-                      <div>{location.street}</div>
-                      <div>{location.city}, {location.state} {location.zip_code}</div>
-                      {location.country !== 'USA' && <div>{location.country}</div>}
+                      <div className="group-hover:text-blue-600 transition-colors">
+                        {location.street}
+                        {location.street_address_2 && ` ${location.street_address_2}`}
+                      </div>
+                      <div className="group-hover:text-blue-500 transition-colors">{location.city}, {location.state} {location.zip_code}</div>
                     </div>
                   </div>
                 </button>

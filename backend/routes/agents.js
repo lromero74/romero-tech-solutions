@@ -5,6 +5,7 @@ import { query } from '../config/database.js';
 import { authenticateAgent, requireAgentMatch } from '../middleware/agentAuthMiddleware.js';
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
+import { websocketService } from '../services/websocketService.js';
 
 const router = express.Router();
 
@@ -619,6 +620,29 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
       );
     }
 
+    // Broadcast metrics update to all connected admin clients via WebSocket
+    // Get agent device info for the broadcast
+    const agentInfo = await query(
+      'SELECT device_name, status FROM agent_devices WHERE id = $1',
+      [agent_id]
+    );
+
+    if (agentInfo.rows.length > 0) {
+      // Broadcast the latest metrics to admin sockets
+      const latestMetric = metricsArray[metricsArray.length - 1]; // Use the most recent metric
+
+      if (websocketService && websocketService.io) {
+        websocketService.io.emit('agent-metrics-update', {
+          agentId: agent_id,
+          deviceName: agentInfo.rows[0].device_name,
+          status: agentInfo.rows[0].status,
+          metrics: latestMetric,
+          timestamp: new Date().toISOString()
+        });
+        console.log(`📊 Broadcasted agent metrics update for agent ${agent_id} via WebSocket`);
+      }
+    }
+
     res.json({
       success: true,
       message: 'Metrics received',
@@ -919,9 +943,19 @@ router.get('/', authMiddleware, async (req, res) => {
         ad.is_active,
         ad.created_at,
         b.business_name,
-        sl.location_name
+        b.is_individual,
+        u.first_name as individual_first_name,
+        u.last_name as individual_last_name,
+        sl.location_name,
+        sl.street_address_1 as location_street,
+        sl.street_address_2 as location_street2,
+        sl.city as location_city,
+        sl.state as location_state,
+        sl.zip_code as location_zip,
+        sl.country as location_country
       FROM agent_devices ad
       LEFT JOIN businesses b ON ad.business_id = b.id
+      LEFT JOIN users u ON b.id = u.business_id AND b.is_individual = true AND u.is_primary_contact = true
       LEFT JOIN service_locations sl ON ad.service_location_id = sl.id
       WHERE ad.soft_delete = false
     `;
@@ -994,6 +1028,12 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
         ad.*,
         b.business_name,
         sl.location_name,
+        sl.street_address_1 as location_street,
+        sl.street_address_2 as location_street2,
+        sl.city as location_city,
+        sl.state as location_state,
+        sl.zip_code as location_zip,
+        sl.country as location_country,
         e.first_name || ' ' || e.last_name as created_by_name
       FROM agent_devices ad
       LEFT JOIN businesses b ON ad.business_id = b.id
@@ -1332,6 +1372,183 @@ router.post('/:agent_id/commands', authMiddleware, requireEmployee, async (req, 
     res.status(500).json({
       success: false,
       message: 'Failed to create command',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Update Agent Settings (Employee Only - RBAC Controlled)
+ * PATCH /api/agents/:agent_id
+ *
+ * Updates agent device name, service location, monitoring status, etc.
+ */
+router.patch('/:agent_id', authMiddleware, requireEmployee, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { device_name, device_type, service_location_id, monitoring_enabled, is_active } = req.body;
+
+    // Verify agent exists
+    const agentResult = await query(
+      'SELECT id, business_id FROM agent_devices WHERE id = $1 AND soft_delete = false',
+      [agent_id]
+    );
+
+    if (agentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    // Build dynamic update query based on provided fields
+    const updates = [];
+    const values = [];
+    let paramIndex = 1;
+
+    if (device_name !== undefined) {
+      updates.push(`device_name = $${paramIndex}`);
+      values.push(device_name);
+      paramIndex++;
+    }
+
+    if (device_type !== undefined) {
+      updates.push(`device_type = $${paramIndex}`);
+      values.push(device_type);
+      paramIndex++;
+    }
+
+    if (service_location_id !== undefined) {
+      updates.push(`service_location_id = $${paramIndex}`);
+      values.push(service_location_id || null);
+      paramIndex++;
+    }
+
+    if (monitoring_enabled !== undefined) {
+      updates.push(`monitoring_enabled = $${paramIndex}`);
+      values.push(monitoring_enabled);
+      paramIndex++;
+    }
+
+    if (is_active !== undefined) {
+      updates.push(`is_active = $${paramIndex}`);
+      values.push(is_active);
+      paramIndex++;
+    }
+
+    // Always update the updated_at timestamp
+    updates.push('updated_at = NOW()');
+
+    if (updates.length === 1) {
+      // Only updated_at, no actual changes
+      return res.status(400).json({
+        success: false,
+        message: 'No valid fields provided for update',
+        code: 'NO_UPDATES'
+      });
+    }
+
+    // Add agent_id as last parameter
+    values.push(agent_id);
+
+    // Execute update
+    await query(
+      `UPDATE agent_devices SET ${updates.join(', ')} WHERE id = $${paramIndex}`,
+      values
+    );
+
+    console.log(`✅ Agent ${agent_id} updated successfully by ${req.user.id}`);
+
+    res.json({
+      success: true,
+      message: 'Agent updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Update agent error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update agent',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Regenerate Agent Token (Employee Only - RBAC Controlled)
+ * POST /api/agents/:agent_id/regenerate-token
+ *
+ * Generates a new JWT token for the agent and invalidates the old one
+ * Restricted to executive, admin, and manager roles only
+ */
+router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const userRole = req.user.role;
+
+    // RBAC check - only executive, admin, and manager can regenerate tokens
+    const allowedRoles = ['executive', 'admin', 'manager'];
+    if (!allowedRoles.includes(userRole)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Insufficient permissions. Only executives, admins, and managers can regenerate tokens.',
+        code: 'INSUFFICIENT_PERMISSIONS'
+      });
+    }
+
+    // Verify agent exists and get business info
+    const agentResult = await query(
+      `SELECT id, business_id, service_location_id, device_name FROM agent_devices
+       WHERE id = $1 AND soft_delete = false`,
+      [agent_id]
+    );
+
+    if (agentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    const agent = agentResult.rows[0];
+
+    // Generate new JWT token for agent
+    const newToken = jwt.sign(
+      {
+        agent_id: agent.id,
+        type: 'agent',
+        business_id: agent.business_id,
+        service_location_id: agent.service_location_id
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '10y' } // Long-lived token for agent devices
+    );
+
+    // Update agent with new token
+    await query(
+      `UPDATE agent_devices
+       SET agent_token = $1, updated_at = NOW()
+       WHERE id = $2`,
+      [newToken, agent_id]
+    );
+
+    console.log(`🔑 Token regenerated for agent ${agent.device_name} (${agent_id}) by ${req.user.first_name} ${req.user.last_name} (${userRole})`);
+
+    res.json({
+      success: true,
+      message: 'Token regenerated successfully',
+      data: {
+        token: newToken
+      }
+    });
+
+  } catch (error) {
+    console.error('Regenerate token error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to regenerate token',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

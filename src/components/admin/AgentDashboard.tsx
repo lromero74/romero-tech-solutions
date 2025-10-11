@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2 } from 'lucide-react';
+import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import { websocketService } from '../../services/websocketService';
+import AgentEditModal from './AgentEditModal';
+import { useAdminData } from '../../contexts/AdminDataContext';
 
 interface AgentDashboardProps {
   onViewAgentDetails?: (agentId: string) => void;
   onCreateRegistrationToken?: () => void;
+  onViewBusiness?: (businessId: string) => void;
 }
 
 const AgentDashboard: React.FC<AgentDashboardProps> = ({
   onViewAgentDetails,
   onCreateRegistrationToken,
+  onViewBusiness,
 }) => {
   const [agents, setAgents] = useState<AgentDevice[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,12 +32,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     agentId?: string;
     agentName?: string;
   }>({ show: false });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [selectedAgent, setSelectedAgent] = useState<AgentDevice | null>(null);
+
+  // Get businesses and service locations for the edit modal
+  const { businesses, serviceLocations } = useAdminData();
 
   // Permission checks
   const { checkPermission, loading: permissionsLoading } = usePermission();
   const canViewAgents = checkPermission('view.agents.enable');
   const canManageAgents = checkPermission('manage.agents.enable');
   const canCreateTokens = checkPermission('create.agent_tokens.enable');
+  const canEditAgents = checkPermission('edit.agents.enable');
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -154,6 +164,32 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     }
   };
 
+  // Edit agent
+  const handleEditAgent = (agent: AgentDevice) => {
+    if (!canEditAgents) {
+      setPermissionDenied({
+        show: true,
+        action: 'Edit Agent',
+        requiredPermission: 'edit.agents.enable',
+        message: 'You do not have permission to edit agents'
+      });
+      return;
+    }
+
+    setSelectedAgent(agent);
+    setShowEditModal(true);
+  };
+
+  const handleCloseEditModal = () => {
+    setShowEditModal(false);
+    setSelectedAgent(null);
+  };
+
+  const handleAgentUpdated = () => {
+    // Reload agents after edit
+    loadAgents();
+  };
+
   // WebSocket real-time updates for agent status and metrics
   useEffect(() => {
     if (!canViewAgents) return;
@@ -220,6 +256,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       default:
         return <Monitor className="w-5 h-5" />;
     }
+  };
+
+  // Get business display name (handles individuals vs businesses)
+  const getBusinessDisplayName = (agent: AgentDevice) => {
+    if (agent.is_individual && agent.individual_first_name && agent.individual_last_name) {
+      // For individuals, use actual first and last name from users table
+      return `${agent.individual_first_name} ${agent.individual_last_name}`;
+    }
+    return agent.business_name || '';
   };
 
   // Get status color and icon
@@ -587,9 +632,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     <tr key={agent.id} className={themeClasses.bg.hover}>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
                         <div className="flex items-center">
-                          <div className={`flex-shrink-0 h-10 w-10 rounded-full ${statusDisplay.bgColor} flex items-center justify-center ${statusDisplay.color}`}>
+                          <button
+                            onClick={() => onViewAgentDetails?.(agent.id)}
+                            className={`flex-shrink-0 h-10 w-10 rounded-full ${statusDisplay.bgColor} flex items-center justify-center ${statusDisplay.color} cursor-pointer hover:opacity-80 transition-opacity`}
+                            title="View agent details"
+                          >
                             {getDeviceIcon(agent.device_type)}
-                          </div>
+                          </button>
                           <div className="ml-4">
                             <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
                               {agent.device_name}
@@ -598,14 +647,54 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
-                        <div className={`text-sm ${themeClasses.text.primary}`}>
-                          {agent.business_name || 'N/A'}
-                        </div>
+                        {agent.business_id && agent.business_name ? (
+                          <button
+                            onClick={() => onViewBusiness?.(agent.business_id)}
+                            className={`flex items-center text-sm ${themeClasses.text.primary} hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer text-left`}
+                            title="View business details"
+                          >
+                            {agent.is_individual ? (
+                              <User className={`w-4 h-4 ${themeClasses.text.muted} mr-1`} />
+                            ) : (
+                              <Building className={`w-4 h-4 ${themeClasses.text.muted} mr-1`} />
+                            )}
+                            {getBusinessDisplayName(agent)}
+                          </button>
+                        ) : (
+                          <div className={`text-sm ${themeClasses.text.primary}`}>
+                            N/A
+                          </div>
+                        )}
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
-                        <div className={`text-sm ${themeClasses.text.primary}`}>
-                          {agent.location_name || 'N/A'}
-                        </div>
+                      <td className={`px-6 py-4 border-r ${themeClasses.border.primary}`}>
+                        {agent.location_street && agent.location_city ? (
+                          <button
+                            onClick={() => {
+                              const streetFull = `${agent.location_street}${agent.location_street2 ? ' ' + agent.location_street2 : ''}`;
+                              const fullAddress = `${streetFull}, ${agent.location_city}, ${agent.location_state} ${agent.location_zip}${agent.location_country && agent.location_country !== 'USA' ? ', ' + agent.location_country : ''}`;
+                              const encodedAddress = encodeURIComponent(fullAddress);
+                              const mapsUrl = `https://maps.google.com/maps?q=${encodedAddress}`;
+                              window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+                            }}
+                            className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left group`}
+                            title="Click to open in maps"
+                          >
+                            <div className="flex items-center">
+                              <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 transition-colors`} />
+                              <span className="group-hover:text-blue-600 transition-colors">
+                                {agent.location_street}
+                                {agent.location_street2 && ` ${agent.location_street2}`}
+                              </span>
+                            </div>
+                            <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 ml-5 transition-colors`}>
+                              {agent.location_city}, {agent.location_state} {agent.location_zip}
+                            </div>
+                          </button>
+                        ) : (
+                          <div className={`text-sm ${themeClasses.text.primary}`}>
+                            {agent.location_name || 'N/A'}
+                          </div>
+                        )}
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
                         <div className={`text-sm ${themeClasses.text.primary}`}>
@@ -635,6 +724,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
+                          {canEditAgents && (
+                            <button
+                              onClick={() => handleEditAgent(agent)}
+                              disabled={actionInProgress === agent.id}
+                              className="text-purple-600 hover:text-purple-900 dark:text-purple-400 dark:hover:text-purple-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Edit agent"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </button>
+                          )}
                           {canManageAgents && (
                             <>
                               <button
@@ -682,9 +781,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex items-center space-x-3">
-                    <div className={`h-12 w-12 rounded-full ${statusDisplay.bgColor} flex items-center justify-center ${statusDisplay.color}`}>
+                    <button
+                      onClick={() => onViewAgentDetails?.(agent.id)}
+                      className={`h-12 w-12 rounded-full ${statusDisplay.bgColor} flex items-center justify-center ${statusDisplay.color} cursor-pointer hover:opacity-80 transition-opacity`}
+                      title="View agent details"
+                    >
                       {getDeviceIcon(agent.device_type)}
-                    </div>
+                    </button>
                     <div>
                       <h3 className={`text-base font-semibold ${themeClasses.text.primary}`}>
                         {agent.device_name}
@@ -703,11 +806,51 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 <div className="grid grid-cols-2 gap-3 text-sm mb-3">
                   <div>
                     <span className={`text-xs ${themeClasses.text.muted}`}>Business</span>
-                    <div className={themeClasses.text.primary}>{agent.business_name || 'N/A'}</div>
+                    {agent.business_id && agent.business_name ? (
+                      <button
+                        onClick={() => onViewBusiness?.(agent.business_id)}
+                        className={`flex items-center ${themeClasses.text.primary} hover:text-blue-600 dark:hover:text-blue-400 hover:underline cursor-pointer text-left`}
+                        title="View business details"
+                      >
+                        {agent.is_individual ? (
+                          <User className={`w-3 h-3 ${themeClasses.text.muted} mr-1`} />
+                        ) : (
+                          <Building className={`w-3 h-3 ${themeClasses.text.muted} mr-1`} />
+                        )}
+                        {getBusinessDisplayName(agent)}
+                      </button>
+                    ) : (
+                      <div className={themeClasses.text.primary}>N/A</div>
+                    )}
                   </div>
                   <div>
                     <span className={`text-xs ${themeClasses.text.muted}`}>Location</span>
-                    <div className={themeClasses.text.primary}>{agent.location_name || 'N/A'}</div>
+                    {agent.location_street && agent.location_city ? (
+                      <button
+                        onClick={() => {
+                          const streetFull = `${agent.location_street}${agent.location_street2 ? ' ' + agent.location_street2 : ''}`;
+                          const fullAddress = `${streetFull}, ${agent.location_city}, ${agent.location_state} ${agent.location_zip}${agent.location_country && agent.location_country !== 'USA' ? ', ' + agent.location_country : ''}`;
+                          const encodedAddress = encodeURIComponent(fullAddress);
+                          const mapsUrl = `https://maps.google.com/maps?q=${encodedAddress}`;
+                          window.open(mapsUrl, '_blank', 'noopener,noreferrer');
+                        }}
+                        className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left group block`}
+                        title="Click to open in maps"
+                      >
+                        <div className="flex items-center">
+                          <MapPin className={`w-3 h-3 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 transition-colors`} />
+                          <span className="group-hover:text-blue-600 transition-colors text-xs">
+                            {agent.location_street}
+                            {agent.location_street2 && ` ${agent.location_street2}`}
+                          </span>
+                        </div>
+                        <div className={`text-xs ${themeClasses.text.secondary} group-hover:text-blue-500 ml-4 transition-colors`}>
+                          {agent.location_city}, {agent.location_state} {agent.location_zip}
+                        </div>
+                      </button>
+                    ) : (
+                      <div className={themeClasses.text.primary}>{agent.location_name || 'N/A'}</div>
+                    )}
                   </div>
                   <div className="col-span-2">
                     <span className={`text-xs ${themeClasses.text.muted}`}>Last Seen</span>
@@ -716,7 +859,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 </div>
 
                 <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 flex-wrap">
+                    {canEditAgents && (
+                      <button
+                        onClick={() => handleEditAgent(agent)}
+                        disabled={actionInProgress === agent.id}
+                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-purple-600 hover:text-purple-800 dark:text-purple-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Edit className="w-4 h-4 mr-1" />
+                        Edit
+                      </button>
+                    )}
                     {canManageAgents && (
                       <>
                         <button
@@ -748,7 +901,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     className="inline-flex items-center px-3 py-2 text-sm font-medium text-blue-600 hover:text-blue-800 dark:text-blue-400"
                   >
                     <Eye className="w-4 h-4 mr-2" />
-                    View Details
+                    View
                   </button>
                 </div>
               </div>
@@ -810,6 +963,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         action={permissionDenied.action}
         requiredPermission={permissionDenied.requiredPermission}
         message={permissionDenied.message}
+      />
+
+      {/* Agent Edit Modal */}
+      <AgentEditModal
+        isOpen={showEditModal}
+        onClose={handleCloseEditModal}
+        agent={selectedAgent}
+        businesses={businesses}
+        serviceLocations={serviceLocations}
+        onUpdate={handleAgentUpdated}
       />
     </div>
   );

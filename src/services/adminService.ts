@@ -113,6 +113,7 @@ interface ServiceLocation {
   location_name?: string;
   location_type: string;
   street: string;
+  street_address_2?: string;
   city: string;
   state: string;
   zip_code: string;

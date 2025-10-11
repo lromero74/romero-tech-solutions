@@ -1679,6 +1679,16 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
               onViewChange?.('agent-details');
             }}
             onCreateRegistrationToken={() => setShowAgentRegistrationModal(true)}
+            onViewBusiness={(businessId) => {
+              // Find the business by ID to get its name
+              const business = businesses.find(b => b.id === businessId);
+              if (business) {
+                // Set the business name filter
+                businessFilters.setBusinessNameFilter(business.businessName);
+                // Navigate to businesses view
+                onViewChange?.('businesses');
+              }
+            }}
           />
         );
 
