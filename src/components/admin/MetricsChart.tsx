@@ -452,6 +452,16 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
               <option value={168}>7 Days</option>
             </select>
           </div>
+
+          {/* Jump to Now button */}
+          <button
+            onClick={handleJumpToNow}
+            className="flex items-center gap-1.5 px-2 py-1 text-xs font-medium rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
+            title="Jump to most recent data"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            Now
+          </button>
         </div>
 
         <div className="flex items-center gap-3">
@@ -573,18 +583,6 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             </div>
           </>
         )}
-
-        {/* Jump to Now button - always shown */}
-        <div className="ml-auto">
-          <button
-            onClick={handleJumpToNow}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-blue-300 dark:border-blue-700 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 transition-colors"
-            title="Jump to most recent data"
-          >
-            <Clock className="w-3.5 h-3.5" />
-            Jump to Now
-          </button>
-        </div>
       </div>
 
       {/* Anomaly Warning and Navigation */}
