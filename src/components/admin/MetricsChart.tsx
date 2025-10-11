@@ -86,11 +86,6 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
     data.forEach((point, index) => {
       let value = point.value;
 
-      // Debug: Log first few data points to understand the data
-      if (index < 3) {
-        console.log(`[MetricsChart] ${title} data point ${index}:`, { timestamp: point.timestamp, value: point.value, unit });
-      }
-
       // For percentage metrics, ensure values are in 0-100 range
       if (unit === '%') {
         // Filter out invalid values (timestamps, negative numbers, etc.)
@@ -107,7 +102,6 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       });
     });
 
-    console.log(`[MetricsChart] ${title}: Validated ${validPoints.length} out of ${data.length} data points`);
     return validPoints;
   }, [data, unit, title]);
 
@@ -148,35 +142,51 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Determine the visible data range (use animated domain for smooth transitions)
+    // Determine visible time range from the zoom domain
     const activeDomain = animatedZoomDomain || zoomDomain;
-    const visibleData = activeDomain
-      ? chartData.slice(activeDomain.startIndex, activeDomain.endIndex + 1)
-      : chartData;
+    let visibleData: typeof chartData;
+
+    if (activeDomain) {
+      // Get the timestamp range that will be displayed
+      const startTime = new Date(chartData[activeDomain.startIndex].timestamp).getTime();
+      const endTime = new Date(chartData[activeDomain.endIndex].timestamp).getTime();
+
+      // Filter to data points within the visible time range (with no artificial padding)
+      // Recharts will handle rendering appropriately, we just need to capture all visible values
+      visibleData = chartData.filter(point => {
+        const pointTime = new Date(point.timestamp).getTime();
+        return pointTime >= startTime && pointTime <= endTime;
+      });
+    } else {
+      visibleData = chartData;
+    }
 
     if (visibleData.length === 0) {
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Find min and max values across all relevant data keys
+    // Find min and max values from visible data points and mean line
+    // Ignore statistical bands to avoid wasted space for stable metrics
     let min = Infinity;
     let max = -Infinity;
 
     visibleData.forEach((point) => {
-      // Check value
-      if (point.value != null && isFinite(point.value)) {
-        min = Math.min(min, point.value);
-        max = Math.max(max, point.value);
-      }
-      // Check standard deviation bands if they exist
-      if (showStdDev) {
-        if (point.stdDev3Lower != null && isFinite(point.stdDev3Lower)) {
-          min = Math.min(min, point.stdDev3Lower);
+      // Check all zone values (the chart displays these, not just point.value)
+      const values = [
+        point.value,
+        point.valueGreen,
+        point.valueYellow,
+        point.valueOrange,
+        point.valueRed,
+        point.mean
+      ];
+
+      values.forEach(val => {
+        if (val != null && isFinite(val)) {
+          min = Math.min(min, val);
+          max = Math.max(max, val);
         }
-        if (point.stdDev3Upper != null && isFinite(point.stdDev3Upper)) {
-          max = Math.max(max, point.stdDev3Upper);
-        }
-      }
+      });
     });
 
     // If we couldn't find valid values, use defaults
@@ -184,32 +194,22 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
       return unit === '%' ? [0, 100] : ['auto', 'auto'];
     }
 
-    // Debug: Log calculated domain
-    console.log(`[MetricsChart] ${title} Y-axis domain calculation:`, { min, max, unit, autoFitYAxis });
+    // Calculate buffer as percentage of visible data range
+    const dataRange = max - min;
+    const bufferPercent = 0.05; // 5% of the visible data range
+    const buffer = dataRange * bufferPercent;
 
-    // For percentage metrics, clamp to 0-100 range but allow dynamic scaling within that
+    // For percentage metrics, clamp to 0-100 range
     if (unit === '%') {
-      // Calculate range before clamping
-      const range = max - min;
-
-      // Add buffer to prevent clipping (minimum 5% buffer, or 20% of range)
-      const buffer = Math.max(5, range * 0.2);
-
-      // Apply buffer first, then clamp to 0-100
+      // Apply buffer based on visible range, then clamp to 0-100
       min = Math.max(0, min - buffer);
       max = Math.min(100, max + buffer);
 
-      console.log(`[MetricsChart] ${title} Final Y-axis domain:`, [min, max]);
       return [min, max];
     }
 
-    // For non-percentage metrics, add buffer space
-    const range = max - min;
-    const buffer = range > 0 ? range * 0.2 : 1; // 20% buffer or minimum 1 unit
-
-    const finalDomain = [Math.max(0, min - buffer), max + buffer];
-    console.log(`[MetricsChart] ${title} Final Y-axis domain:`, finalDomain);
-    return finalDomain;
+    // For non-percentage metrics, apply buffer based on visible range
+    return [Math.max(0, min - buffer), max + buffer];
   }, [chartData, animatedZoomDomain, zoomDomain, unit, showStdDev, autoFitYAxis, title]);
 
   // Calculate initial zoom domain based on selectedTimeWindow
@@ -833,6 +833,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="+3σ"
+                isAnimationActive={false}
               />
               {/* -3σ line (red) */}
               <Line
@@ -844,6 +845,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="-3σ"
+                isAnimationActive={false}
               />
 
               {/* +2σ line (orange) */}
@@ -856,6 +858,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="+2σ"
+                isAnimationActive={false}
               />
               {/* -2σ line (orange) */}
               <Line
@@ -867,6 +870,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="-2σ"
+                isAnimationActive={false}
               />
 
               {/* +1σ line (yellow) */}
@@ -879,6 +883,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="+1σ"
+                isAnimationActive={false}
               />
               {/* -1σ line (yellow) */}
               <Line
@@ -890,6 +895,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
                 dot={false}
                 activeDot={false}
                 name="-1σ"
+                isAnimationActive={false}
               />
             </>
           )}
@@ -904,6 +910,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
             dot={false}
             activeDot={false}
             name={averagingMode === 'moving' ? `Moving Avg (${windowSize}pts)` : 'Mean'}
+            isAnimationActive={false}
           />
 
           {/* Zone-colored line segments */}
@@ -963,6 +970,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
           <Scatter
             dataKey="value"
             fill="none"
+            isAnimationActive={false}
             shape={(props: any) => {
               const { cx, cy, payload } = props;
               // Only render triangle for anomalous points
