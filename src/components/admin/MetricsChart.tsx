@@ -186,16 +186,15 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
     // For percentage metrics, clamp to 0-100 range but allow dynamic scaling within that
     if (unit === '%') {
-      min = Math.max(0, min);
-      max = Math.min(100, max);
-
-      // If range is very small (e.g., 95-100%), add buffer
+      // Calculate range before clamping
       const range = max - min;
-      if (range < 10) {
-        const buffer = Math.max(2, range * 0.15); // 15% buffer or minimum 2%
-        min = Math.max(0, min - buffer);
-        max = Math.min(100, max + buffer);
-      }
+
+      // Add buffer to prevent clipping (minimum 5% buffer, or 20% of range)
+      const buffer = Math.max(5, range * 0.2);
+
+      // Apply buffer first, then clamp to 0-100
+      min = Math.max(0, min - buffer);
+      max = Math.min(100, max + buffer);
 
       console.log(`[MetricsChart] ${title} Final Y-axis domain:`, [min, max]);
       return [min, max];
@@ -203,7 +202,7 @@ const MetricsChart: React.FC<MetricsChartProps> = ({
 
     // For non-percentage metrics, add buffer space
     const range = max - min;
-    const buffer = range > 0 ? range * 0.1 : 1; // 10% buffer or minimum 1 unit
+    const buffer = range > 0 ? range * 0.2 : 1; // 20% buffer or minimum 1 unit
 
     const finalDomain = [Math.max(0, min - buffer), max + buffer];
     console.log(`[MetricsChart] ${title} Final Y-axis domain:`, finalDomain);
