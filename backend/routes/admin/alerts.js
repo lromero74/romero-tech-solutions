@@ -5,9 +5,10 @@
 
 import express from 'express';
 import authMiddleware from '../../middleware/authMiddleware.js';
-import { checkPermission } from '../../middleware/permissionMiddleware.js';
-import alertConfigService from '../../services/alertConfigService.js';
-import alertHistoryService from '../../services/alertHistoryService.js';
+import { requirePermission } from '../../middleware/permissionMiddleware.js';
+import { alertConfigService } from '../../services/alertConfigService.js';
+import { alertHistoryService } from '../../services/alertHistoryService.js';
+import { query } from '../../config/database.js';
 
 const router = express.Router();
 
@@ -22,7 +23,7 @@ router.use(authMiddleware);
  * GET /api/admin/alerts/configurations
  * Get all alert configurations
  */
-router.get('/configurations', checkPermission('view.system_settings.enable'), async (req, res) => {
+router.get('/configurations', requirePermission('view.agents.enable'), async (req, res) => {
   try {
     const { enabled } = req.query;
 
@@ -31,13 +32,13 @@ router.get('/configurations', checkPermission('view.system_settings.enable'), as
       configs = await alertConfigService.getAllConfigs();
     } else if (enabled === 'false') {
       // Get all configurations including disabled
-      const result = await require('../../config/database.js').query(
+      const result = await query(
         'SELECT * FROM alert_configurations WHERE enabled = false ORDER BY id'
       );
       configs = result.rows;
     } else {
       // Get all configurations
-      const result = await require('../../config/database.js').query(
+      const result = await query(
         'SELECT * FROM alert_configurations ORDER BY id'
       );
       configs = result.rows;
@@ -61,7 +62,7 @@ router.get('/configurations', checkPermission('view.system_settings.enable'), as
  * GET /api/admin/alerts/configurations/:id
  * Get alert configuration by ID
  */
-router.get('/configurations/:id', checkPermission('view.system_settings.enable'), async (req, res) => {
+router.get('/configurations/:id', requirePermission('view.agents.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const config = await alertConfigService.getConfigById(id);
@@ -91,7 +92,7 @@ router.get('/configurations/:id', checkPermission('view.system_settings.enable')
  * POST /api/admin/alerts/configurations
  * Create new alert configuration
  */
-router.post('/configurations', checkPermission('modify.system_settings.enable'), async (req, res) => {
+router.post('/configurations', requirePermission('modify.agents.enable'), async (req, res) => {
   try {
     const configData = req.body;
     const createdBy = req.user.id;
@@ -117,7 +118,7 @@ router.post('/configurations', checkPermission('modify.system_settings.enable'),
  * PUT /api/admin/alerts/configurations/:id
  * Update alert configuration
  */
-router.put('/configurations/:id', checkPermission('modify.system_settings.enable'), async (req, res) => {
+router.put('/configurations/:id', requirePermission('modify.agents.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
@@ -151,7 +152,7 @@ router.put('/configurations/:id', checkPermission('modify.system_settings.enable
  * DELETE /api/admin/alerts/configurations/:id
  * Delete (disable) alert configuration
  */
-router.delete('/configurations/:id', checkPermission('modify.system_settings.enable'), async (req, res) => {
+router.delete('/configurations/:id', requirePermission('modify.agents.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const updatedBy = req.user.id;
@@ -188,7 +189,7 @@ router.delete('/configurations/:id', checkPermission('modify.system_settings.ena
  * GET /api/admin/alerts/history
  * Get alert history with filters
  */
-router.get('/history', checkPermission('view.agents.enable'), async (req, res) => {
+router.get('/history', requirePermission('view.agents.enable'), async (req, res) => {
   try {
     const {
       agentId,
@@ -237,7 +238,7 @@ router.get('/history', checkPermission('view.agents.enable'), async (req, res) =
  * GET /api/admin/alerts/active
  * Get active (unresolved) alerts
  */
-router.get('/active', checkPermission('view.agents.enable'), async (req, res) => {
+router.get('/active', requirePermission('view.agents.enable'), async (req, res) => {
   try {
     const { agentId } = req.query;
     const activeAlerts = await alertHistoryService.getActiveAlerts(agentId ? parseInt(agentId) : null);
@@ -261,7 +262,7 @@ router.get('/active', checkPermission('view.agents.enable'), async (req, res) =>
  * POST /api/admin/alerts/history/:id/acknowledge
  * Acknowledge an alert
  */
-router.post('/history/:id/acknowledge', checkPermission('modify.agents.enable'), async (req, res) => {
+router.post('/history/:id/acknowledge', requirePermission('modify.agents.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const employeeId = req.user.id;
@@ -294,7 +295,7 @@ router.post('/history/:id/acknowledge', checkPermission('modify.agents.enable'),
  * POST /api/admin/alerts/history/:id/resolve
  * Resolve an alert
  */
-router.post('/history/:id/resolve', checkPermission('modify.agents.enable'), async (req, res) => {
+router.post('/history/:id/resolve', requirePermission('modify.agents.enable'), async (req, res) => {
   try {
     const { id } = req.params;
     const { notes } = req.body;
@@ -328,7 +329,7 @@ router.post('/history/:id/resolve', checkPermission('modify.agents.enable'), asy
  * GET /api/admin/alerts/stats
  * Get alert statistics
  */
-router.get('/stats', checkPermission('view.agents.enable'), async (req, res) => {
+router.get('/stats', requirePermission('view.agents.enable'), async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
     const stats = await alertHistoryService.getAlertStats(startDate, endDate);
