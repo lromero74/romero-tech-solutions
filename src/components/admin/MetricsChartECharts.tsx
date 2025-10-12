@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import ReactECharts from 'echarts-for-react';
 import { format } from 'date-fns';
 import { ZoomIn, ZoomOut, Maximize2, Clock, BarChart2, LineChart as LineChartIcon, Expand, ChevronLeft, ChevronRight, Filter, TrendingUp } from 'lucide-react';
@@ -12,6 +13,23 @@ import {
   type BandMode,
 } from '../../utils/metricsStats';
 import { themeClasses, useTheme } from '../../contexts/ThemeContext';
+import type { ActiveIndicators, ChartDisplayType, CandlestickDataPoint } from '../../types/chartTypes';
+import {
+  calculateAllTechnicalIndicators,
+  calculateCandleIndicators,
+} from '../../utils/technicalIndicators';
+import {
+  buildGrids,
+  buildXAxes,
+  buildYAxes,
+  buildBaseConfig,
+} from '../../utils/chartConfigBuilders';
+import {
+  buildLineChartSeries,
+  buildCandlestickSeries,
+  buildHeikenAshiSeries,
+  buildOscillatorSeries,
+} from '../../utils/chartSeriesBuilders';
 
 interface MetricsChartEChartsProps {
   data: MetricDataPoint[];
@@ -37,19 +55,18 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   const { isDark } = useTheme();
 
   // State for chart display type
-  type ChartDisplayType = 'line' | 'candlestick' | 'heiken-ashi';
-  const [chartDisplayType, setChartDisplayType] = useState<ChartDisplayType>('line');
+  const [chartDisplayType, setChartDisplayType] = useState<ChartDisplayType>('heiken-ashi');
 
   // State for candlestick period (in minutes)
-  const [candlestickPeriod, setCandlestickPeriod] = useState<number>(30);
+  const [candlestickPeriod, setCandlestickPeriod] = useState<number>(15);
 
   // State for averaging mode
   const [averagingMode, setAveragingMode] = useState<AveragingMode>('moving');
   const [windowSize, setWindowSize] = useState<number>(20);
   const [bandMode, setBandMode] = useState<BandMode>('dynamic');
 
-  // State for time window selection (default to 4 hours)
-  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(4);
+  // State for time window selection (default to 1 day = 24 hours)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(24);
 
   // State for Y-axis autofitting (default to enabled)
   const [autoFitYAxis, setAutoFitYAxis] = useState<boolean>(true);
@@ -68,18 +85,40 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   const zoomTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Technical indicators state
-  const [activeIndicators, setActiveIndicators] = useState<{
-    sma7?: boolean;
-    sma20?: boolean;
-    sma25?: boolean;
-    sma99?: boolean;
-    ema12?: boolean;
-    ema26?: boolean;
-    bb?: boolean;
-    rsi?: boolean;
-    macd?: boolean;
-  }>({});
+  const [activeIndicators, setActiveIndicators] = useState<ActiveIndicators>({
+    sma20: true,
+    bb: true,
+  });
   const [showIndicatorsMenu, setShowIndicatorsMenu] = useState(false);
+
+  // Ref for indicators button to calculate dropdown position
+  const indicatorsButtonRef = useRef<HTMLButtonElement>(null);
+
+  // Ref for the dropdown menu itself (for click-outside detection)
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Dropdown position state (for portal positioning)
+  const [dropdownPosition, setDropdownPosition] = useState<{ top: number; left: number; right: number } | null>(null);
+
+  // Oscillator panel heights (as percentages of total chart height)
+  const [oscillatorHeights, setOscillatorHeights] = useState({
+    main: 60,
+    rsi: 0,
+    macd: 0,
+    stochastic: 0,
+    williamsR: 0,
+    roc: 0,
+    atr: 0,
+  });
+
+  // Dragging state for resize handles
+  const [isDragging, setIsDragging] = useState<string | null>(null);
+  const chartContainerRef = useRef<HTMLDivElement>(null);
+  // Store the initial offset between mouse and handle position when drag starts
+  const dragOffsetRef = useRef<number>(0);
+
+  // Chart height state (can be resized by user)
+  const [chartHeight, setChartHeight] = useState(height);
 
   // Validate and normalize data
   const validatedData = useMemo(() => {
@@ -169,129 +208,14 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     return bands;
   }, [validatedData]);
 
-  // Calculate technical indicators
+  // Calculate technical indicators using extracted functions
   const technicalIndicators = useMemo(() => {
     if (!validatedData || validatedData.length === 0) return null;
 
     const values = validatedData.map(p => p.value);
     const timestamps = validatedData.map(p => new Date(p.timestamp).getTime());
 
-    // SMA calculation
-    const calculateSMA = (period: number) => {
-      const sma: number[] = [];
-      for (let i = 0; i < values.length; i++) {
-        if (i < period - 1) {
-          sma.push(NaN);
-        } else {
-          const sum = values.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
-          sma.push(sum / period);
-        }
-      }
-      return sma;
-    };
-
-    // EMA calculation
-    const calculateEMA = (period: number) => {
-      const ema: number[] = [];
-      const multiplier = 2 / (period + 1);
-
-      // First EMA is SMA
-      let sum = 0;
-      for (let i = 0; i < period; i++) {
-        sum += values[i];
-        ema.push(i === period - 1 ? sum / period : NaN);
-      }
-
-      // Calculate EMA
-      for (let i = period; i < values.length; i++) {
-        ema.push((values[i] - ema[i - 1]) * multiplier + ema[i - 1]);
-      }
-
-      return ema;
-    };
-
-    // RSI calculation
-    const calculateRSI = (period: number = 14) => {
-      const rsi: number[] = [];
-      let gains = 0;
-      let losses = 0;
-
-      // First RSI calculation
-      for (let i = 1; i <= period; i++) {
-        const change = values[i] - values[i - 1];
-        if (change > 0) gains += change;
-        else losses -= change;
-      }
-
-      let avgGain = gains / period;
-      let avgLoss = losses / period;
-      rsi.push(...Array(period).fill(NaN));
-      rsi.push(100 - (100 / (1 + avgGain / avgLoss)));
-
-      // Smooth RSI
-      for (let i = period + 1; i < values.length; i++) {
-        const change = values[i] - values[i - 1];
-        const gain = change > 0 ? change : 0;
-        const loss = change < 0 ? -change : 0;
-
-        avgGain = (avgGain * (period - 1) + gain) / period;
-        avgLoss = (avgLoss * (period - 1) + loss) / period;
-
-        rsi.push(100 - (100 / (1 + avgGain / avgLoss)));
-      }
-
-      return rsi;
-    };
-
-    // MACD calculation
-    const calculateMACD = () => {
-      const ema12 = calculateEMA(12);
-      const ema26 = calculateEMA(26);
-      const macdLine = ema12.map((val, i) => val - ema26[i]);
-
-      // Signal line (9-period EMA of MACD)
-      const signalLine: number[] = [];
-      const multiplier = 2 / (9 + 1);
-      let emaValue = 0;
-      let count = 0;
-
-      for (let i = 0; i < macdLine.length; i++) {
-        if (isNaN(macdLine[i])) {
-          signalLine.push(NaN);
-          continue;
-        }
-
-        if (count < 9) {
-          emaValue += macdLine[i];
-          count++;
-          if (count === 9) {
-            emaValue = emaValue / 9;
-            signalLine.push(emaValue);
-          } else {
-            signalLine.push(NaN);
-          }
-        } else {
-          emaValue = (macdLine[i] - emaValue) * multiplier + emaValue;
-          signalLine.push(emaValue);
-        }
-      }
-
-      const histogram = macdLine.map((val, i) => val - signalLine[i]);
-
-      return { macdLine, signalLine, histogram };
-    };
-
-    return {
-      sma7: calculateSMA(7),
-      sma20: calculateSMA(20),
-      sma25: calculateSMA(25),
-      sma99: calculateSMA(99),
-      ema12: calculateEMA(12),
-      ema26: calculateEMA(26),
-      rsi: calculateRSI(14),
-      macd: calculateMACD(),
-      timestamps,
-    };
+    return calculateAllTechnicalIndicators(values, timestamps);
   }, [validatedData]);
 
   // Aggregate data into candlesticks for candlestick display
@@ -335,86 +259,18 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     return buckets;
   }, [chartData, candlestickPeriod]);
 
-  // Calculate indicators specifically for candlestick data (based on candle closes)
+  // Calculate indicators specifically for candlestick data using extracted functions
   const candleIndicators = useMemo(() => {
     if (!candlestickData || candlestickData.length === 0) return null;
 
-    const closes = candlestickData.map(c => c.close);
-    const timestamps = candlestickData.map(c => c.timestamp);
+    // Convert candlestick data to the format expected by calculateCandleIndicators
+    const candlestickDataPoints: CandlestickDataPoint[] = candlestickData.map(candle => ({
+      timestamp: candle.timestamp,
+      value: candle.value, // Already in [open, close, low, high] format
+      close: candle.close,
+    }));
 
-    // SMA calculation
-    const calculateSMA = (period: number) => {
-      const sma: number[] = [];
-      for (let i = 0; i < closes.length; i++) {
-        if (i < period - 1) {
-          sma.push(NaN);
-        } else {
-          const sum = closes.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
-          sma.push(sum / period);
-        }
-      }
-      return sma;
-    };
-
-    // EMA calculation
-    const calculateEMA = (period: number) => {
-      const ema: number[] = [];
-      const multiplier = 2 / (period + 1);
-
-      // First EMA is SMA
-      let sum = 0;
-      for (let i = 0; i < Math.min(period, closes.length); i++) {
-        sum += closes[i];
-        ema.push(i === period - 1 ? sum / period : NaN);
-      }
-
-      // Calculate EMA
-      for (let i = period; i < closes.length; i++) {
-        ema.push((closes[i] - ema[i - 1]) * multiplier + ema[i - 1]);
-      }
-
-      return ema;
-    };
-
-    // Bollinger Bands (20-period)
-    const calculateBB = () => {
-      const bbPeriod = 20;
-      const upper: number[] = [];
-      const middle: number[] = [];
-      const lower: number[] = [];
-
-      for (let i = 0; i < closes.length; i++) {
-        if (i < bbPeriod - 1) {
-          upper.push(NaN);
-          middle.push(NaN);
-          lower.push(NaN);
-        } else {
-          const windowCloses = closes.slice(i - bbPeriod + 1, i + 1);
-          const sma = windowCloses.reduce((sum, v) => sum + v, 0) / bbPeriod;
-          const variance = windowCloses.reduce((sum, v) => sum + Math.pow(v - sma, 2), 0) / bbPeriod;
-          const stdDev = Math.sqrt(variance);
-
-          middle.push(sma);
-          upper.push(sma + (2 * stdDev));
-          lower.push(sma - (2 * stdDev));
-        }
-      }
-
-      return { upper, middle, lower };
-    };
-
-    const bb = calculateBB();
-
-    return {
-      sma7: calculateSMA(7),
-      sma20: calculateSMA(20),
-      sma25: calculateSMA(25),
-      sma99: calculateSMA(99),
-      ema12: calculateEMA(12),
-      ema26: calculateEMA(26),
-      bb,
-      timestamps,
-    };
+    return calculateCandleIndicators(candlestickDataPoints);
   }, [candlestickData]);
 
   // Calculate Heiken Ashi candles from regular candlestick data
@@ -496,11 +352,401 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     };
   }, []);
 
+  // Click-outside detection and scroll handling for dropdown menu
+  useEffect(() => {
+    if (!showIndicatorsMenu) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      // Check if click is outside both button and dropdown
+      if (
+        indicatorsButtonRef.current &&
+        !indicatorsButtonRef.current.contains(event.target as Node) &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node)
+      ) {
+        setShowIndicatorsMenu(false);
+      }
+    };
+
+    const handleScroll = () => {
+      // Close dropdown when user scrolls (standard UX pattern)
+      setShowIndicatorsMenu(false);
+    };
+
+    // Add listener with a small delay to prevent immediate closing
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true); // Use capture to catch all scroll events
+    }, 0);
+
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('scroll', handleScroll, true);
+    };
+  }, [showIndicatorsMenu]);
+
+  // Adjust oscillator heights when indicators are toggled
+  useEffect(() => {
+    const hasRSI = activeIndicators.rsi === true;
+    const hasMACD = activeIndicators.macd === true;
+    const hasStochastic = activeIndicators.stochastic === true;
+    const hasWilliamsR = activeIndicators.williamsR === true;
+    const hasROC = activeIndicators.roc === true;
+    const hasATR = activeIndicators.atr === true;
+
+    const oscillatorCount =
+      (hasRSI ? 1 : 0) +
+      (hasMACD ? 1 : 0) +
+      (hasStochastic ? 1 : 0) +
+      (hasWilliamsR ? 1 : 0) +
+      (hasROC ? 1 : 0) +
+      (hasATR ? 1 : 0);
+
+    // Calculate dynamic heights based on number of oscillators
+    let mainHeight = 92; // Default when no oscillators
+    let oscillatorHeight = 0;
+
+    if (oscillatorCount > 0) {
+      // Reserve 8% for slider, distribute remaining space
+      const availableSpace = 92; // Total available (100% - 8% for slider)
+
+      if (oscillatorCount === 1) {
+        mainHeight = 70;
+        oscillatorHeight = 30;
+      } else if (oscillatorCount === 2) {
+        mainHeight = 60;
+        oscillatorHeight = 20;
+      } else if (oscillatorCount === 3) {
+        mainHeight = 55;
+        oscillatorHeight = 15;
+      } else if (oscillatorCount === 4) {
+        mainHeight = 50;
+        oscillatorHeight = 12.5;
+      } else if (oscillatorCount === 5) {
+        mainHeight = 45;
+        oscillatorHeight = 11;
+      } else if (oscillatorCount === 6) {
+        mainHeight = 40;
+        oscillatorHeight = 10;
+      }
+    }
+
+    setOscillatorHeights({
+      main: mainHeight,
+      rsi: hasRSI ? oscillatorHeight : 0,
+      macd: hasMACD ? oscillatorHeight : 0,
+      stochastic: hasStochastic ? oscillatorHeight : 0,
+      williamsR: hasWilliamsR ? oscillatorHeight : 0,
+      roc: hasROC ? oscillatorHeight : 0,
+      atr: hasATR ? oscillatorHeight : 0,
+    });
+  }, [
+    activeIndicators.rsi,
+    activeIndicators.macd,
+    activeIndicators.stochastic,
+    activeIndicators.williamsR,
+    activeIndicators.roc,
+    activeIndicators.atr
+  ]);
+
+  // Handle resize dragging
+  const handleResizeMouseDown = (panelName: string) => (e: React.MouseEvent) => {
+    e.preventDefault();
+
+    const container = chartContainerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    const mouseY = e.clientY - rect.top;
+
+    // Calculate the handle's current position (in pixels)
+    let handleY = 0;
+    if (panelName === 'main-rsi') {
+      handleY = (oscillatorHeights.main / 100) * rect.height;
+    } else if (panelName === 'rsi-macd') {
+      handleY = ((oscillatorHeights.main + oscillatorHeights.rsi) / 100) * rect.height;
+    } else if (panelName === 'card-height') {
+      handleY = rect.height; // Bottom of container
+    }
+
+    // Store the offset between mouse position and handle position
+    dragOffsetRef.current = mouseY - handleY;
+
+    setIsDragging(panelName);
+  };
+
+  useEffect(() => {
+    if (!isDragging || !chartContainerRef.current) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const container = chartContainerRef.current;
+      if (!container) return;
+
+      const hasRSI = activeIndicators.rsi === true;
+      const hasMACD = activeIndicators.macd === true;
+
+      if (isDragging === 'card-height') {
+        // Resizing the entire card height
+        const rect = container.getBoundingClientRect();
+        // Apply the stored offset to maintain grab point
+        const adjustedMouseY = e.clientY - rect.top - dragOffsetRef.current;
+        const newHeight = Math.max(200, Math.min(1000, adjustedMouseY));
+        setChartHeight(newHeight);
+        return;
+      }
+
+      const rect = container.getBoundingClientRect();
+      // Apply the stored offset to maintain grab point
+      const adjustedMouseY = e.clientY - rect.top - dragOffsetRef.current;
+      const percentY = (adjustedMouseY / rect.height) * 100;
+
+      if (isDragging === 'main-rsi' && hasRSI) {
+        // Dragging between main and RSI
+        const newMainHeight = Math.max(30, Math.min(70, percentY));
+        const remaining = 100 - newMainHeight;
+
+        if (hasMACD) {
+          // Keep MACD at minimum 10%, distribute rest between main and RSI
+          const macdHeight = Math.max(10, oscillatorHeights.macd);
+          const rsiHeight = Math.max(10, remaining - macdHeight);
+          setOscillatorHeights({
+            main: newMainHeight,
+            rsi: rsiHeight,
+            macd: macdHeight,
+          });
+        } else {
+          setOscillatorHeights({
+            ...oscillatorHeights,
+            main: newMainHeight,
+            rsi: remaining,
+          });
+        }
+      } else if (isDragging === 'rsi-macd' && hasRSI && hasMACD) {
+        // Dragging between RSI and MACD
+        const mainHeight = oscillatorHeights.main;
+        const rsiTop = mainHeight;
+        const relativeY = percentY - rsiTop;
+        const availableHeight = 100 - mainHeight;
+
+        const newRSIHeight = Math.max(10, Math.min(availableHeight - 10, relativeY));
+        const newMACDHeight = Math.max(10, availableHeight - newRSIHeight);
+
+        setOscillatorHeights({
+          main: mainHeight,
+          rsi: newRSIHeight,
+          macd: newMACDHeight,
+        });
+      }
+    };
+
+    const handleMouseUp = () => {
+      setIsDragging(null);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, oscillatorHeights, activeIndicators]);
+
+  // Detect gaps in data for visual indicators (always use raw data for gap detection)
+  const dataGaps = useMemo(() => {
+    // Always use raw chartData for gap detection, regardless of display mode
+    // This ensures we see gaps in the underlying data even when displayed as candles
+    if (!chartData || chartData.length < 2) return [];
+
+    const gaps: Array<{ start: number; end: number }> = [];
+    const sortedData = [...chartData].sort((a, b) => {
+      const aTime = typeof a.timestamp === 'number' ? a.timestamp : new Date(a.timestamp).getTime();
+      const bTime = typeof b.timestamp === 'number' ? b.timestamp : new Date(b.timestamp).getTime();
+      return aTime - bTime;
+    });
+
+    // Calculate expected interval from first few points
+    const time0 = typeof sortedData[0].timestamp === 'number' ? sortedData[0].timestamp : new Date(sortedData[0].timestamp).getTime();
+    const time1 = typeof sortedData[1].timestamp === 'number' ? sortedData[1].timestamp : new Date(sortedData[1].timestamp).getTime();
+    const expectedInterval = time1 - time0;
+
+    console.log(`🔍 [${chartDisplayType}] Gap detection - Expected interval: ${(expectedInterval / 60000).toFixed(1)}min, Data points: ${sortedData.length}`);
+
+    // Detect gaps - if there's more than 3x the expected interval between points
+    for (let i = 1; i < sortedData.length; i++) {
+      const prevTime = typeof sortedData[i - 1].timestamp === 'number'
+        ? sortedData[i - 1].timestamp
+        : new Date(sortedData[i - 1].timestamp).getTime();
+      const currTime = typeof sortedData[i].timestamp === 'number'
+        ? sortedData[i].timestamp
+        : new Date(sortedData[i].timestamp).getTime();
+      const interval = currTime - prevTime;
+
+      // If gap is more than 3x expected interval, mark it (excluding the data points themselves)
+      if (interval > expectedInterval * 3) {
+        gaps.push({
+          start: prevTime,
+          end: currTime,
+        });
+      }
+    }
+
+    return gaps;
+  }, [chartData, chartDisplayType]);
+
   // ECharts option configuration
   const option = useMemo(() => {
     if (!stats || !chartData || chartData.length === 0) return {};
 
     const timestamps = chartData.map(d => new Date(d.timestamp).getTime());
+
+    // Calculate grid layout based on active oscillators
+    const activeOscillators = [
+      { key: 'rsi', active: activeIndicators.rsi === true, height: oscillatorHeights.rsi },
+      { key: 'macd', active: activeIndicators.macd === true, height: oscillatorHeights.macd },
+      { key: 'stochastic', active: activeIndicators.stochastic === true, height: oscillatorHeights.stochastic },
+      { key: 'williamsR', active: activeIndicators.williamsR === true, height: oscillatorHeights.williamsR },
+      { key: 'roc', active: activeIndicators.roc === true, height: oscillatorHeights.roc },
+      { key: 'atr', active: activeIndicators.atr === true, height: oscillatorHeights.atr },
+    ].filter(osc => osc.active);
+
+    const oscillatorCount = activeOscillators.length;
+    const sliderBottom = 10;
+
+    // Build grids array dynamically
+    const grids: any[] = [
+      {
+        left: 60,
+        right: 20,
+        top: 20,
+        bottom: oscillatorCount === 0 ? 80 : `${100 - oscillatorHeights.main}%`,
+        containLabel: false,
+      },
+    ];
+
+    // Add oscillator grids dynamically
+    let cumulativeTop = oscillatorHeights.main;
+    activeOscillators.forEach((osc, index) => {
+      const isLast = index === activeOscillators.length - 1;
+      grids.push({
+        left: 60,
+        right: 20,
+        top: `${cumulativeTop}%`,
+        height: isLast ? `${osc.height - 8}%` : `${osc.height}%`, // -8% for slider space on last panel
+        containLabel: false,
+      });
+      cumulativeTop += osc.height;
+    });
+
+    // Build xAxis array dynamically
+    const xAxes: any[] = [
+      {
+        type: 'time',
+        gridIndex: 0,
+        boundaryGap: (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') ? ['2%', '2%'] : ['0%', '0%'],
+        axisLine: {
+          lineStyle: {
+            color: isDark ? '#4b5563' : '#d1d5db',
+          },
+        },
+        axisLabel: {
+          color: isDark ? '#9ca3af' : '#6b7280',
+          fontSize: 12,
+          formatter: (value: number) => format(new Date(value), 'HH:mm'),
+        },
+        splitLine: {
+          show: false,
+        },
+      },
+    ];
+
+    // Add xAxis for each oscillator dynamically
+    activeOscillators.forEach((osc, index) => {
+      const isLast = index === activeOscillators.length - 1;
+      xAxes.push({
+        type: 'time',
+        gridIndex: index + 1,
+        boundaryGap: (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi') ? ['2%', '2%'] : ['0%', '0%'],
+        axisLine: {
+          lineStyle: {
+            color: isDark ? '#4b5563' : '#d1d5db',
+          },
+        },
+        axisLabel: {
+          show: isLast, // Only show labels on bottom-most panel
+          color: isDark ? '#9ca3af' : '#6b7280',
+          fontSize: 12,
+          formatter: (value: number) => format(new Date(value), 'HH:mm'),
+        },
+        splitLine: {
+          show: false,
+        },
+      });
+    });
+
+    // Build yAxis array dynamically
+    const yAxes: any[] = [
+      {
+        type: 'value',
+        gridIndex: 0,
+        scale: true,
+        axisLine: {
+          lineStyle: {
+            color: isDark ? '#4b5563' : '#d1d5db',
+          },
+        },
+        axisLabel: {
+          color: isDark ? '#9ca3af' : '#6b7280',
+          fontSize: 12,
+          formatter: (value: number) => `${value.toFixed(1)}${unit}`,
+        },
+        splitLine: {
+          lineStyle: {
+            color: isDark ? '#374151' : '#e5e7eb',
+            type: 'dashed',
+          },
+        },
+      },
+    ];
+
+    // Add yAxis for each oscillator dynamically with appropriate ranges
+    activeOscillators.forEach((osc, index) => {
+      const config: any = {
+        type: 'value',
+        gridIndex: index + 1,
+        scale: true,
+        axisLine: {
+          lineStyle: {
+            color: isDark ? '#4b5563' : '#d1d5db',
+          },
+        },
+        axisLabel: {
+          color: isDark ? '#9ca3af' : '#6b7280',
+          fontSize: 10,
+        },
+        splitLine: {
+          lineStyle: {
+            color: isDark ? '#374151' : '#e5e7eb',
+            type: 'dashed',
+          },
+        },
+      };
+
+      // Set appropriate Y-axis ranges for each indicator type
+      if (osc.key === 'rsi' || osc.key === 'stochastic') {
+        config.min = 0;
+        config.max = 100;
+        config.axisLabel.formatter = (value: number) => `${value.toFixed(0)}`;
+      } else if (osc.key === 'williamsR') {
+        config.min = -100;
+        config.max = 0;
+        config.axisLabel.formatter = (value: number) => `${value.toFixed(0)}`;
+      }
+      // MACD, ROC, ATR use auto-scaling (no min/max specified)
+
+      yAxes.push(config);
+    });
 
     // Base configuration
     const baseOption: any = {
@@ -508,13 +754,9 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       animation: true,
       animationDuration: 300,
       animationEasing: 'cubicOut',
-      grid: {
-        left: 60,
-        right: 20,
-        top: 20,
-        bottom: 80,
-        containLabel: false,
-      },
+      grid: grids,
+      xAxis: xAxes,
+      yAxis: yAxes,
       tooltip: {
         trigger: 'axis',
         axisPointer: {
@@ -555,46 +797,10 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           return lines.join('');
         },
       },
-      xAxis: {
-        type: 'time',
-        boundaryGap: chartDisplayType === 'candlestick' ? true : false,
-        axisLine: {
-          lineStyle: {
-            color: isDark ? '#4b5563' : '#d1d5db',
-          },
-        },
-        axisLabel: {
-          color: isDark ? '#9ca3af' : '#6b7280',
-          fontSize: 12,
-          formatter: (value: number) => format(new Date(value), 'HH:mm'),
-        },
-        splitLine: {
-          show: false,
-        },
-      },
-      yAxis: {
-        type: 'value',
-        scale: true,
-        axisLine: {
-          lineStyle: {
-            color: isDark ? '#4b5563' : '#d1d5db',
-          },
-        },
-        axisLabel: {
-          color: isDark ? '#9ca3af' : '#6b7280',
-          fontSize: 12,
-          formatter: (value: number) => `${value.toFixed(1)}${unit}`,
-        },
-        splitLine: {
-          lineStyle: {
-            color: isDark ? '#374151' : '#e5e7eb',
-            type: 'dashed',
-          },
-        },
-      },
       dataZoom: [
         {
           type: 'inside',
+          xAxisIndex: Array.from({ length: xAxes.length }, (_, i) => i), // Apply to all x-axes
           start: activeZoomRange[0],
           end: activeZoomRange[1],
           zoomOnMouseWheel: 'shift',
@@ -603,10 +809,11 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
         },
         {
           type: 'slider',
+          xAxisIndex: Array.from({ length: xAxes.length }, (_, i) => i), // Apply to all x-axes
           start: activeZoomRange[0],
           end: activeZoomRange[1],
           height: 30,
-          bottom: 10,
+          bottom: sliderBottom,
           borderColor: isDark ? '#4b5563' : '#d1d5db',
           fillerColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'rgba(59, 130, 246, 0.1)',
           handleStyle: {
@@ -718,7 +925,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
         });
       }
 
-      // Bollinger Bands
+      // Bollinger Bands (TradingView style)
       if (activeIndicators.bb && bollingerBands.length > 0) {
         const bbUpperData = bollingerBands
           .map(bb => [new Date(bb.timestamp).getTime(), bb.upper])
@@ -732,11 +939,48 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           .map(bb => [new Date(bb.timestamp).getTime(), bb.lower])
           .filter(([t, v]) => !isNaN(v as number));
 
+        // TradingView standard: all three lines same color and style
+        const bbColor = '#2962FF';
+        const bbWidth = 1;
+
+        // Add smooth fill area between upper and lower bands using stack
+        // First invisible series to establish baseline at lower band
+        series.push({
+          name: 'BB Base',
+          type: 'line',
+          data: bbLowerData,
+          lineStyle: { opacity: 0 },
+          areaStyle: { opacity: 0 },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: true,
+          z: 0,
+        });
+
+        // Second series: difference between upper and lower (stacked on top of lower)
+        const bbDiffData = bollingerBands
+          .map(bb => [new Date(bb.timestamp).getTime(), bb.upper - bb.lower])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        series.push({
+          name: 'BB Fill',
+          type: 'line',
+          data: bbDiffData,
+          lineStyle: { opacity: 0 },
+          areaStyle: {
+            color: 'rgba(41, 98, 255, 0.15)',
+          },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: true,
+          z: 0,
+        });
+
         series.push({
           name: 'BB Upper',
           type: 'line',
           data: bbUpperData,
-          lineStyle: { color: '#94a3b8', width: 1, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: true,
         });
@@ -745,7 +989,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Middle',
           type: 'line',
           data: bbMiddleData,
-          lineStyle: { color: '#64748b', width: 1.5 },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: true,
         });
@@ -754,7 +998,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Lower',
           type: 'line',
           data: bbLowerData,
-          lineStyle: { color: '#94a3b8', width: 1, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: true,
         });
@@ -876,11 +1120,48 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           .map((t, i) => [t, candleIndicators.bb.lower[i]])
           .filter(([t, v]) => !isNaN(v as number));
 
+        // TradingView standard: all three lines same color and style
+        const bbColor = '#2962FF';
+        const bbWidth = 1;
+
+        // Add smooth fill area between upper and lower bands using stack
+        // First invisible series to establish baseline at lower band
+        series.push({
+          name: 'BB Base',
+          type: 'line',
+          data: bbLowerData,
+          lineStyle: { opacity: 0 },
+          areaStyle: { opacity: 0 },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: false,
+          z: 0,
+        });
+
+        // Second series: difference between upper and lower (stacked on top of lower)
+        const bbDiffData = candleIndicators.timestamps
+          .map((t, i) => [t, candleIndicators.bb.upper[i] - candleIndicators.bb.lower[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        series.push({
+          name: 'BB Fill',
+          type: 'line',
+          data: bbDiffData,
+          lineStyle: { opacity: 0 },
+          areaStyle: {
+            color: 'rgba(41, 98, 255, 0.15)',
+          },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: false,
+          z: 0,
+        });
+
         series.push({
           name: 'BB Upper',
           type: 'line',
           data: bbUpperData,
-          lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -889,7 +1170,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Middle',
           type: 'line',
           data: bbMiddleData,
-          lineStyle: { color: '#64748b', width: 2 },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -898,7 +1179,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Lower',
           type: 'line',
           data: bbLowerData,
-          lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -1023,11 +1304,48 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           .map((t, i) => [t, candleIndicators.bb.lower[i]])
           .filter(([t, v]) => !isNaN(v as number));
 
+        // TradingView standard: all three lines same color and style
+        const bbColor = '#2962FF';
+        const bbWidth = 1;
+
+        // Add smooth fill area between upper and lower bands using stack
+        // First invisible series to establish baseline at lower band
+        series.push({
+          name: 'BB Base',
+          type: 'line',
+          data: bbLowerData,
+          lineStyle: { opacity: 0 },
+          areaStyle: { opacity: 0 },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: false,
+          z: 0,
+        });
+
+        // Second series: difference between upper and lower (stacked on top of lower)
+        const bbDiffData = candleIndicators.timestamps
+          .map((t, i) => [t, candleIndicators.bb.upper[i] - candleIndicators.bb.lower[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        series.push({
+          name: 'BB Fill',
+          type: 'line',
+          data: bbDiffData,
+          lineStyle: { opacity: 0 },
+          areaStyle: {
+            color: 'rgba(41, 98, 255, 0.15)',
+          },
+          stack: 'bb-fill',
+          symbol: 'none',
+          smooth: false,
+          z: 0,
+        });
+
         series.push({
           name: 'BB Upper',
           type: 'line',
           data: bbUpperData,
-          lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -1036,7 +1354,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Middle',
           type: 'line',
           data: bbMiddleData,
-          lineStyle: { color: '#64748b', width: 2 },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -1045,7 +1363,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           name: 'BB Lower',
           type: 'line',
           data: bbLowerData,
-          lineStyle: { color: '#94a3b8', width: 1.5, type: 'dashed' },
+          lineStyle: { color: bbColor, width: bbWidth },
           symbol: 'none',
           smooth: false,
         });
@@ -1068,55 +1386,347 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       baseOption.series = series;
     }
 
+    // Add oscillator panels dynamically
+    activeOscillators.forEach((osc, index) => {
+      const axisIndex = index + 1; // +1 because main chart is index 0
 
-    // Y-axis autofitting
+      if (osc.key === 'rsi' && technicalIndicators) {
+        // RSI line (purple)
+        const rsiData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.rsi[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'RSI',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: rsiData,
+          lineStyle: { color: '#a855f7', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // RSI reference lines (30 oversold, 70 overbought)
+        baseOption.series.push({
+          name: 'RSI Oversold',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 30]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+
+        baseOption.series.push({
+          name: 'RSI Overbought',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 70]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+      }
+
+      if (osc.key === 'macd' && technicalIndicators) {
+        // MACD line (blue)
+        const macdLineData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.macd.macdLine[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'MACD',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: macdLineData,
+          lineStyle: { color: '#3b82f6', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // Signal line (orange)
+        const signalLineData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.macd.signalLine[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'Signal',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: signalLineData,
+          lineStyle: { color: '#f97316', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // MACD histogram (red/green bars)
+        const histogramData = technicalIndicators.timestamps
+          .map((t, i) => {
+            const val = technicalIndicators.macd.histogram[i];
+            return [t, isNaN(val) ? null : val];
+          });
+
+        baseOption.series.push({
+          name: 'MACD Histogram',
+          type: 'bar',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: histogramData,
+          itemStyle: {
+            color: (params: any) => {
+              return params.value[1] >= 0 ? '#22c55e' : '#ef4444';
+            },
+          },
+          barWidth: '60%',
+        });
+
+        // Zero line
+        baseOption.series.push({
+          name: 'MACD Zero',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 0]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'solid' },
+          symbol: 'none',
+          silent: true,
+        });
+      }
+
+      if (osc.key === 'stochastic' && technicalIndicators) {
+        // Stochastic %K line (blue)
+        const stochKData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.stochastic.k[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'Stoch %K',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: stochKData,
+          lineStyle: { color: '#3b82f6', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // Stochastic %D line (orange)
+        const stochDData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.stochastic.d[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'Stoch %D',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: stochDData,
+          lineStyle: { color: '#f97316', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // Stochastic reference lines (20 oversold, 80 overbought)
+        baseOption.series.push({
+          name: 'Stoch Oversold',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 20]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+
+        baseOption.series.push({
+          name: 'Stoch Overbought',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 80]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+      }
+
+      if (osc.key === 'williamsR' && technicalIndicators) {
+        // Williams %R line (purple)
+        const williamsRData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.williamsR[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'Williams %R',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: williamsRData,
+          lineStyle: { color: '#a855f7', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // Williams %R reference lines (-20 overbought, -80 oversold)
+        baseOption.series.push({
+          name: 'Williams Overbought',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, -20]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+
+        baseOption.series.push({
+          name: 'Williams Oversold',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, -80]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
+          symbol: 'none',
+          silent: true,
+        });
+      }
+
+      if (osc.key === 'roc' && technicalIndicators) {
+        // ROC line (cyan)
+        const rocData = technicalIndicators.timestamps
+          .map((t, i) => [t, technicalIndicators.roc[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'ROC',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: rocData,
+          lineStyle: { color: '#06b6d4', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+
+        // ROC zero line
+        baseOption.series.push({
+          name: 'ROC Zero',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: technicalIndicators.timestamps.map(t => [t, 0]),
+          lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'solid' },
+          symbol: 'none',
+          silent: true,
+        });
+      }
+
+      if (osc.key === 'atr' && candleIndicators) {
+        // ATR line (orange) - requires candlestick data
+        const atrData = candleIndicators.timestamps
+          .map((t, i) => [t, candleIndicators.atr[i]])
+          .filter(([t, v]) => !isNaN(v as number));
+
+        baseOption.series.push({
+          name: 'ATR',
+          type: 'line',
+          xAxisIndex: axisIndex,
+          yAxisIndex: axisIndex,
+          data: atrData,
+          lineStyle: { color: '#f59e0b', width: 2 },
+          symbol: 'none',
+          smooth: false,
+        });
+      }
+    });
+
+    // Add gap indicators for all chart types
+    if (dataGaps.length > 0) {
+      console.log(`🔍 [${chartDisplayType}] Detected ${dataGaps.length} gaps:`, dataGaps.map(g => ({
+        start: new Date(g.start).toISOString(),
+        end: new Date(g.end).toISOString(),
+        duration: ((g.end - g.start) / 60000).toFixed(1) + 'min'
+      })));
+      console.log(`📊 [${chartDisplayType}] Adding gap series to ${baseOption.series.length} existing series`);
+
+      // Add a dedicated series for gap visualization (ensures it renders properly)
+      baseOption.series.unshift({
+        name: 'Data Gaps',
+        type: 'line',
+        data: [], // No actual data points
+        markArea: {
+          silent: true,
+          itemStyle: {
+            color: 'rgba(239, 68, 68, 0.25)', // Red with 25% opacity
+            borderWidth: 0,
+          },
+          emphasis: {
+            disabled: true,
+          },
+          data: dataGaps.map(gap => [
+            {
+              xAxis: gap.start,
+            },
+            {
+              xAxis: gap.end,
+            },
+          ]),
+        },
+        z: 15, // Render on top of everything for visibility
+      });
+
+      console.log(`✅ [${chartDisplayType}] Gap series added, total series: ${baseOption.series.length}`);
+    } else {
+      console.log(`ℹ️ [${chartDisplayType}] No gaps detected`);
+    }
+
+    // Y-axis autofitting (only apply to main chart yAxis, not oscillators)
     if (autoFitYAxis && chartData.length > 0) {
       const values = chartData.map(d => d.value);
       const minVal = Math.min(...values);
       const maxVal = Math.max(...values);
       const buffer = (maxVal - minVal) * 0.1; // 10% buffer
-      baseOption.yAxis.min = Math.max(0, minVal - buffer);
-      baseOption.yAxis.max = maxVal + buffer;
+      baseOption.yAxis[0].min = Math.max(0, minVal - buffer);
+      baseOption.yAxis[0].max = maxVal + buffer;
     } else {
       // When autoscale is off, show full range 0-100% for percentage metrics
       if (unit === '%') {
-        baseOption.yAxis.min = 0;
-        baseOption.yAxis.max = 100;
+        baseOption.yAxis[0].min = 0;
+        baseOption.yAxis[0].max = 100;
       }
     }
 
     return baseOption;
-  }, [stats, chartData, candlestickData, heikenAshiData, chartDisplayType, showStdDev, dataKey, unit, isDark, activeZoomRange, candlestickPeriod, anomalies, autoFitYAxis, bollingerBands, validatedData, activeIndicators, technicalIndicators, candleIndicators, color]);
+  }, [stats, chartData, candlestickData, heikenAshiData, chartDisplayType, showStdDev, dataKey, unit, isDark, activeZoomRange, candlestickPeriod, anomalies, autoFitYAxis, bollingerBands, validatedData, activeIndicators, technicalIndicators, candleIndicators, color, dataGaps, oscillatorHeights]);
 
-  // Handle chart events to capture zoom changes (debounced to prevent interrupting drag)
-  const onChartEvents = {
+  // Handle chart events - but don't update React state on user zoom actions
+  // ECharts maintains its own zoom state internally, and updating React state
+  // causes a re-render with the same values, creating a visible "blink"
+  // Memoize to ensure stable reference for chartElement memoization
+  const onChartEvents = useMemo(() => ({
     dataZoom: (params: any) => {
-      // Clear any existing timeout
-      if (zoomTimeoutRef.current) {
-        clearTimeout(zoomTimeoutRef.current);
-      }
-
-      // Extract zoom values
-      let start: number | undefined;
-      let end: number | undefined;
-
-      if (params.batch && params.batch.length > 0) {
-        start = params.batch[0].start;
-        end = params.batch[0].end;
-      } else if (params.start !== undefined && params.end !== undefined) {
-        start = params.start;
-        end = params.end;
-      }
-
-      // Debounce the state update to avoid interrupting drag operations
-      if (start !== undefined && end !== undefined) {
-        zoomTimeoutRef.current = setTimeout(() => {
-          setCurrentZoom({ start, end });
-          setIsInitialRender(false);
-        }, 150); // Wait 150ms after user stops dragging
-      }
+      // Don't sync zoom state back to React - ECharts handles this internally
+      // We only update React state when we programmatically change zoom (e.g., time window buttons)
     },
-  };
+  }), []);
+
+  // Memoize the chart rendering to prevent re-renders when only dropdown menu state changes
+  // This prevents the blink when opening/closing the indicators dropdown
+  const chartElement = useMemo(() => (
+    <ReactECharts
+      option={option}
+      style={{ height: `${chartHeight}px` }}
+      opts={{ renderer: 'canvas' }}
+      notMerge={false}
+      lazyUpdate={true}
+      onEvents={onChartEvents}
+    />
+  ), [option, chartHeight, onChartEvents]);
 
   if (!data || data.length === 0) {
     return (
@@ -1214,6 +1824,8 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
                 <option value={30}>30m</option>
                 <option value={60}>1h</option>
                 <option value={240}>4h</option>
+                <option value={480}>8h</option>
+                <option value={1440}>1d</option>
               </select>
             </>
           )}
@@ -1246,7 +1858,19 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
         {/* Right: Studies/Indicators */}
         <div className="flex items-center gap-1 relative">
           <button
-            onClick={() => setShowIndicatorsMenu(!showIndicatorsMenu)}
+            ref={indicatorsButtonRef}
+            onClick={() => {
+              if (!showIndicatorsMenu && indicatorsButtonRef.current) {
+                // Calculate dropdown position when opening
+                const rect = indicatorsButtonRef.current.getBoundingClientRect();
+                setDropdownPosition({
+                  top: rect.bottom + 8, // 8px below button
+                  left: rect.left,
+                  right: window.innerWidth - rect.right,
+                });
+              }
+              setShowIndicatorsMenu(!showIndicatorsMenu);
+            }}
             className={`px-3 py-1 text-xs font-medium rounded transition-colors flex items-center gap-1 ${
               Object.values(activeIndicators).some(v => v)
                 ? 'bg-blue-500 text-white'
@@ -1258,13 +1882,15 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
           </button>
 
           {/* Indicators dropdown menu */}
-          {showIndicatorsMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-40"
-                onClick={() => setShowIndicatorsMenu(false)}
-              ></div>
-              <div className={`absolute right-0 top-8 z-50 ${themeClasses.bg.card} ${themeClasses.shadow.lg} rounded-lg border ${themeClasses.border.primary} py-2 min-w-[200px]`}>
+          {showIndicatorsMenu && dropdownPosition && createPortal(
+            <div
+              ref={dropdownRef}
+              className={`fixed z-[60] ${themeClasses.bg.card} ${themeClasses.shadow.lg} rounded-lg border ${themeClasses.border.primary} py-2 min-w-[200px]`}
+              style={{
+                top: `${dropdownPosition.top}px`,
+                right: `${dropdownPosition.right}px`,
+              }}
+            >
                 <div className={`px-3 py-1 text-xs font-semibold ${themeClasses.text.secondary} uppercase`}>
                   Moving Averages
                 </div>
@@ -1312,41 +1938,127 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
                   )}
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setActiveIndicators(prev => ({ ...prev, rsi: !prev.rsi }));
                   }}
                   className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
-                  disabled
-                  title="Coming soon"
                 >
-                  <span className="opacity-50">RSI (14)</span>
+                  <span>RSI (14)</span>
+                  {activeIndicators.rsi && (
+                    <span className="text-blue-500">✓</span>
+                  )}
                 </button>
                 <button
-                  onClick={() => {
+                  onClick={(e) => {
+                    e.stopPropagation();
                     setActiveIndicators(prev => ({ ...prev, macd: !prev.macd }));
                   }}
                   className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
-                  disabled
-                  title="Coming soon"
                 >
-                  <span className="opacity-50">MACD</span>
+                  <span>MACD (12, 26, 9)</span>
+                  {activeIndicators.macd && (
+                    <span className="text-blue-500">✓</span>
+                  )}
                 </button>
-              </div>
-            </>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveIndicators(prev => ({ ...prev, stochastic: !prev.stochastic }));
+                  }}
+                  className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
+                >
+                  <span>Stochastic (14, 3, 3)</span>
+                  {activeIndicators.stochastic && (
+                    <span className="text-blue-500">✓</span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveIndicators(prev => ({ ...prev, williamsR: !prev.williamsR }));
+                  }}
+                  className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
+                >
+                  <span>Williams %R (14)</span>
+                  {activeIndicators.williamsR && (
+                    <span className="text-blue-500">✓</span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveIndicators(prev => ({ ...prev, roc: !prev.roc }));
+                  }}
+                  className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
+                >
+                  <span>ROC (12)</span>
+                  {activeIndicators.roc && (
+                    <span className="text-blue-500">✓</span>
+                  )}
+                </button>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setActiveIndicators(prev => ({ ...prev, atr: !prev.atr }));
+                  }}
+                  className={`w-full px-3 py-1.5 text-xs text-left hover:${themeClasses.bg.hover} flex items-center justify-between ${themeClasses.text.primary}`}
+                >
+                  <span>ATR (14)</span>
+                  {activeIndicators.atr && (
+                    <span className="text-blue-500">✓</span>
+                  )}
+                </button>
+            </div>,
+            document.body
           )}
         </div>
       </div>
 
       {/* Chart */}
-      <div className="relative">
-        <ReactECharts
-          option={option}
-          style={{ height: `${height}px` }}
-          opts={{ renderer: 'canvas' }}
-          notMerge={true}
-          lazyUpdate={false}
-          onEvents={onChartEvents}
-        />
+      <div className="relative" ref={chartContainerRef}>
+        {chartElement}
+
+        {/* Resize handles */}
+        {activeIndicators.rsi && (
+          <div
+            className={`absolute left-0 right-0 h-1 cursor-row-resize z-50 hover:bg-blue-500 hover:opacity-30 transition-opacity ${
+              isDragging === 'main-rsi' ? 'bg-blue-500 opacity-50' : ''
+            }`}
+            style={{
+              top: `${oscillatorHeights.main}%`,
+              transform: 'translateY(-50%)',
+            }}
+            onMouseDown={handleResizeMouseDown('main-rsi')}
+          >
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-gray-400 dark:bg-gray-600"></div>
+          </div>
+        )}
+
+        {activeIndicators.rsi && activeIndicators.macd && (
+          <div
+            className={`absolute left-0 right-0 h-1 cursor-row-resize z-50 hover:bg-blue-500 hover:opacity-30 transition-opacity ${
+              isDragging === 'rsi-macd' ? 'bg-blue-500 opacity-50' : ''
+            }`}
+            style={{
+              top: `${oscillatorHeights.main + oscillatorHeights.rsi}%`,
+              transform: 'translateY(-50%)',
+            }}
+            onMouseDown={handleResizeMouseDown('rsi-macd')}
+          >
+            <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-0.5 bg-gray-400 dark:bg-gray-600"></div>
+          </div>
+        )}
+
+        {/* Card height resize handle */}
+        <div
+          className={`absolute left-0 right-0 bottom-0 h-2 cursor-ns-resize z-50 hover:bg-blue-500 hover:opacity-30 transition-opacity ${
+            isDragging === 'card-height' ? 'bg-blue-500 opacity-50' : ''
+          }`}
+          onMouseDown={handleResizeMouseDown('card-height')}
+        >
+          <div className="absolute inset-x-0 bottom-1 h-0.5 bg-gray-400 dark:bg-gray-600"></div>
+        </div>
       </div>
 
       {/* Bottom Stats Bar */}
