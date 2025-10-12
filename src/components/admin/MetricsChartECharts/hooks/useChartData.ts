@@ -11,7 +11,8 @@ import {
   calculateAllTechnicalIndicators,
   calculateCandleIndicators,
 } from '../../../../utils/technicalIndicators';
-import type { CandlestickDataPoint } from '../../../../types/chartTypes';
+import type { CandlestickDataPoint, ActiveIndicators } from '../../../../types/chartTypes';
+import { analyzeConfluence } from '../../../../utils/indicatorConfluence';
 
 interface UseChartDataProps {
   data: MetricDataPoint[];
@@ -20,6 +21,8 @@ interface UseChartDataProps {
   windowSize: number;
   bandMode: BandMode;
   candlestickPeriod: number;
+  activeIndicators: ActiveIndicators;
+  chartDisplayType: 'line' | 'candlestick' | 'heiken-ashi';
 }
 
 export const useChartData = ({
@@ -29,6 +32,8 @@ export const useChartData = ({
   windowSize,
   bandMode,
   candlestickPeriod,
+  activeIndicators,
+  chartDisplayType,
 }: UseChartDataProps) => {
   // Validate and normalize data
   const validatedData = useMemo(() => {
@@ -247,6 +252,18 @@ export const useChartData = ({
     return gaps;
   }, [chartData]);
 
+  // Analyze indicator confluence for alerts
+  const confluenceAlerts = useMemo(() => {
+    // Use candle indicators for candlestick/heiken-ashi modes, technical indicators for line mode
+    const indicators = (chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi')
+      ? candleIndicators
+      : technicalIndicators;
+
+    if (!indicators) return [];
+
+    return analyzeConfluence(indicators, activeIndicators);
+  }, [technicalIndicators, candleIndicators, activeIndicators, chartDisplayType]);
+
   return {
     validatedData,
     stats,
@@ -258,5 +275,6 @@ export const useChartData = ({
     candleIndicators,
     heikenAshiData,
     dataGaps,
+    confluenceAlerts,
   };
 };

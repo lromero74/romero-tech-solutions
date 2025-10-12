@@ -38,6 +38,7 @@ import pushRoutes from './routes/pushRoutes.js';
 import serviceRatingsRoutes from './routes/serviceRatings.js';
 import adminTestimonialsRoutes from './routes/admin/testimonials.js';
 import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
+import adminAlertsRoutes from './routes/admin/alerts.js';
 import agentRoutes from './routes/agents.js';
 import agentDownloadRoutes from './routes/agentDownloads.js';
 
@@ -47,6 +48,9 @@ import { sessionService } from './services/sessionService.js';
 // Import verification cleanup service
 import { verificationCleanupService } from './services/verificationCleanupService.js';
 
+// Import metrics cleanup service
+import { metricsCleanupService } from './services/metricsCleanupService.js';
+
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
 
@@ -55,6 +59,9 @@ import { workflowScheduler } from './services/workflowScheduler.js';
 
 // Import agent monitoring service
 import { startAgentMonitoring, stopAgentMonitoring } from './services/agentMonitoringService.js';
+
+// Import alert configuration service
+import alertConfigService from './services/alertConfigService.js';
 
 // Import environment-aware logger
 import { loggers as log } from './utils/logger.js';
@@ -479,6 +486,7 @@ app.use('/api', emailValidationRoutes); // Email domain validation proxy (no aut
 app.use('/api/ratings', generalLimiter, serviceRatingsRoutes); // Public rating submission (token-based auth)
 app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminTestimonialsRoutes); // Admin testimonials management
 app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
+app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminAlertsRoutes); // Admin alert management (confluence alerts)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
 
@@ -629,6 +637,17 @@ const startServer = async () => {
     // Start agent heartbeat monitoring
     startAgentMonitoring();
 
+    // Start metrics cleanup service
+    metricsCleanupService.start();
+
+    // Load alert configurations
+    console.log('⚙️  Loading alert configurations...');
+    try {
+      await alertConfigService.loadConfigurations();
+    } catch (error) {
+      console.warn('⚠️  Failed to load alert configurations:', error.message);
+    }
+
     // Start the server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
@@ -638,6 +657,8 @@ const startServer = async () => {
       console.log(`🔒 CORS origins: ${process.env.CORS_ORIGINS || 'http://localhost:5173'}`);
       console.log(`🔌 WebSocket service: ENABLED`);
       console.log(`📡 Agent monitoring: ENABLED`);
+      console.log(`🧹 Metrics cleanup: ENABLED (1-year retention)`);
+      console.log(`🚨 Alert configurations: LOADED`);
 
       // Start session cleanup process
       startSessionCleanup();
@@ -654,6 +675,7 @@ process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   stopSessionCleanup();
   stopAgentMonitoring();
+  metricsCleanupService.stop();
   process.exit(0);
 });
 
@@ -661,6 +683,7 @@ process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   stopSessionCleanup();
   stopAgentMonitoring();
+  metricsCleanupService.stop();
   process.exit(0);
 });
 

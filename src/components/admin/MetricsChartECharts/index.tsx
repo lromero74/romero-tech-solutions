@@ -16,6 +16,7 @@ import { ChartToolbar } from './components/ChartToolbar';
 import { ChartContainer } from './components/ChartContainer';
 import { BottomStatsBar } from './components/BottomStatsBar';
 import { IndicatorsDropdown } from './components/IndicatorsDropdown';
+import { ConfluenceAlerts } from './components/ConfluenceAlerts';
 
 // Utils
 import { buildChartOption } from './utils/buildChartOption';
@@ -43,6 +44,8 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     windowSize: chartState.windowSize,
     bandMode: chartState.bandMode,
     candlestickPeriod: chartState.candlestickPeriod,
+    activeIndicators: chartState.activeIndicators,
+    chartDisplayType: chartState.chartDisplayType,
   });
 
   // Filter anomalies based on severity
@@ -221,6 +224,11 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
         activeIndicators={chartState.activeIndicators}
         onToggleIndicator={handleToggleIndicator}
       />
+
+      {/* Confluence Alerts */}
+      {chartDataResults.confluenceAlerts && chartDataResults.confluenceAlerts.length > 0 && (
+        <ConfluenceAlerts alerts={chartDataResults.confluenceAlerts} />
+      )}
 
       {/* Chart */}
       <ChartContainer
