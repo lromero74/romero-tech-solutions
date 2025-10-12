@@ -495,11 +495,29 @@ socket.on('confluence_alert', (alert) => {
 3. Alert analytics and reporting
 4. Machine learning for threshold optimization
 
-## Notes
+## Notes & Lessons Learned
 
-- All thresholds must be configurable via admin UI
-- No hardcoded alert rules in frontend code
-- Use database as single source of truth for configurations
-- Support multiple alert profiles (default, aggressive, conservative)
-- Allow per-agent alert overrides in the future
-- Consider alert fatigue - implement smart throttling
+**Implementation Discoveries**:
+- ✅ employees table uses UUID, not INTEGER - all foreign keys updated accordingly
+- ✅ Agent table is named `agent_devices`, not `agents` - used UUID for agent_id
+- ✅ CASCADE DELETE on agent_id ensures clean removal of alert history when agents are deleted
+- ✅ Alert configurations use integer IDs for simplicity and performance
+- ✅ 5-minute cache TTL on alert configurations reduces database load
+- ✅ Server loads alert configurations on startup for immediate availability
+
+**Design Decisions**:
+- All thresholds must be configurable via admin UI (no hardcoded rules)
+- Database is single source of truth for alert configurations
+- Frontend uses real-time detection, backend will process for persistence
+- Support for multiple alert profiles planned (default, aggressive, conservative)
+- Per-agent alert overrides planned for future enhancement
+- Alert debouncing prevents duplicate alerts within 15-minute windows
+- JSONB used for flexible threshold storage without schema changes
+
+**Future Enhancements to Remember**:
+- Implement alert throttling to prevent fatigue (max alerts per hour/day)
+- Add email notifications (currently only dashboard + WebSocket)
+- Create alert analytics dashboard (trends, most common alerts, resolution times)
+- Machine learning for dynamic threshold optimization based on historical patterns
+- Alert templates for different agent types (servers vs workstations)
+- Bulk alert operations (acknowledge all, resolve all for specific agent)
