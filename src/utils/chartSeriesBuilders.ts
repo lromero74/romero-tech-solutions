@@ -409,6 +409,8 @@ export const buildCandlestickSeries = (
       borderColor: isDark ? '#16a34a' : '#15803d',
       borderColor0: isDark ? '#dc2626' : '#b91c1c',
     },
+    barMaxWidth: 8, // Prevent candles from becoming too wide (reduced for many candles)
+    barMinWidth: 1, // Ensure candles remain visible
     z: 10, // Ensure candles are on top
   });
 
@@ -442,6 +444,8 @@ export const buildHeikenAshiSeries = (
       borderColor: isDark ? '#16a34a' : '#15803d',
       borderColor0: isDark ? '#dc2626' : '#b91c1c',
     },
+    barMaxWidth: 8, // Prevent candles from becoming too wide (reduced for many candles)
+    barMinWidth: 1, // Ensure candles remain visible
     z: 10, // Ensure candles are on top
   });
 
