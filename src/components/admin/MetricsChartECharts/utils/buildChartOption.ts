@@ -29,6 +29,10 @@ interface BuildChartOptionProps {
   color: string;
   dataGaps: Array<{ start: number; end: number }>;
   oscillatorHeights: OscillatorHeights;
+  highlightTimeRange?: {
+    start: string;
+    end: string;
+  } | null;
 }
 
 export const buildChartOption = ({
@@ -53,6 +57,7 @@ export const buildChartOption = ({
   color,
   dataGaps,
   oscillatorHeights,
+  highlightTimeRange,
 }: BuildChartOptionProps) => {
   if (!stats || !chartData || chartData.length === 0) return {};
 
@@ -367,6 +372,38 @@ export const buildChartOption = ({
         ]),
       },
       z: 15,
+    });
+  }
+
+  // Add highlight time range from alert navigation
+  if (highlightTimeRange) {
+    const startTime = new Date(highlightTimeRange.start).getTime();
+    const endTime = new Date(highlightTimeRange.end).getTime();
+
+    baseOption.series.unshift({
+      name: 'Alert Time Range',
+      type: 'line',
+      data: [],
+      markArea: {
+        silent: true,
+        itemStyle: {
+          color: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(59, 130, 246, 0.1)', // Blue highlight
+          borderWidth: 2,
+          borderColor: isDark ? 'rgba(59, 130, 246, 0.5)' : 'rgba(59, 130, 246, 0.4)',
+        },
+        emphasis: {
+          disabled: true,
+        },
+        data: [[
+          {
+            xAxis: startTime,
+          },
+          {
+            xAxis: endTime,
+          },
+        ]],
+      },
+      z: 10, // Below data gaps but above main chart
     });
   }
 

@@ -86,6 +86,22 @@ interface AdminViewRouterProps {
   onOpenModal?: (modalName: string, entity?: unknown) => void;
   // Service request highlighting
   highlightUnacknowledged?: boolean;
+  // Agent navigation from alerts
+  agentNavigationContext?: {
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  } | null;
+  onNavigateToAgentFromAlert?: (context: {
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  }) => void;
+  onClearAgentNavigationContext?: () => void;
 }
 
 export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
@@ -115,7 +131,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   setShowSoftDeletedServiceLocations: externalSetShowSoftDeletedServiceLocations,
   setShowInactiveEmployees: externalSetShowInactiveEmployees,
   setShowSoftDeletedEmployees: externalSetShowSoftDeletedEmployees,
-  highlightUnacknowledged = false
+  highlightUnacknowledged = false,
+  agentNavigationContext,
+  onNavigateToAgentFromAlert,
+  onClearAgentNavigationContext
 }) => {
   const {
     dashboardData,
@@ -1695,11 +1714,14 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         );
 
       case 'agent-details':
-        return selectedAgentId ? (
+        return (agentNavigationContext?.agentId || selectedAgentId) ? (
           <AgentDetails
-            agentId={selectedAgentId}
+            agentId={agentNavigationContext?.agentId || selectedAgentId!}
+            navigationContext={agentNavigationContext}
+            onClearNavigationContext={onClearAgentNavigationContext}
             onBack={() => {
               setSelectedAgentId(null);
+              onClearAgentNavigationContext?.();
               onViewChange?.('agents');
             }}
             onSendCommand={(agentId) => {
@@ -1719,7 +1741,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return <AlertConfigurationManager />;
 
       case 'alert-history':
-        return <AlertHistoryDashboard />;
+        return <AlertHistoryDashboard onNavigateToAgent={onNavigateToAgentFromAlert} />;
 
       default:
         return (

@@ -17,12 +17,22 @@ interface AgentDetailsProps {
   agentId: string;
   onBack?: () => void;
   onSendCommand?: (agentId: string) => void;
+  navigationContext?: {
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  } | null;
+  onClearNavigationContext?: () => void;
 }
 
 const AgentDetails: React.FC<AgentDetailsProps> = ({
   agentId,
   onBack,
   onSendCommand,
+  navigationContext,
+  onClearNavigationContext,
 }) => {
   const [agent, setAgent] = useState<AgentDevice | null>(null);
   const [latestMetrics, setLatestMetrics] = useState<AgentMetric | null>(null);
@@ -32,6 +42,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands'>('overview');
+  const [activeResourceTab, setActiveResourceTab] = useState<'cpu' | 'memory' | 'disk'>('cpu');
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
 
   // Permission checks
@@ -123,6 +134,24 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   useEffect(() => {
     loadAgentDetails();
   }, [loadAgentDetails]);
+
+  // Process navigation context from alerts
+  useEffect(() => {
+    if (navigationContext) {
+      console.log('📍 Processing navigation context:', navigationContext);
+
+      // Switch to the correct resource tab
+      setActiveResourceTab(navigationContext.resource);
+
+      // Note: The actual scrolling, indicator overlay, and time range highlighting
+      // are now handled by the MetricsChartECharts component via props
+
+      // Clear the navigation context after a delay to allow chart to process it
+      setTimeout(() => {
+        onClearNavigationContext?.();
+      }, 2000); // 2 seconds to allow user to see the highlight
+    }
+  }, [navigationContext, onClearNavigationContext]);
 
   // WebSocket listener for real-time metrics updates
   useEffect(() => {
@@ -599,46 +628,132 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       {/* Metrics History Charts */}
       {metricsHistory.length > 0 && (
         <div className="space-y-6">
-          <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
-            <TrendingUp className="w-6 h-6 mr-2" />
-            Metrics Trends
-          </h3>
+          <div className="flex items-center justify-between">
+            <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
+              <TrendingUp className="w-6 h-6 mr-2" />
+              Metrics Trends
+            </h3>
+            {/* Resource Tab Selector */}
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveResourceTab('cpu')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeResourceTab === 'cpu'
+                    ? 'bg-blue-600 text-white'
+                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                }`}
+              >
+                <Cpu className="w-4 h-4 inline mr-2" />
+                CPU
+              </button>
+              <button
+                onClick={() => setActiveResourceTab('memory')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeResourceTab === 'memory'
+                    ? 'bg-purple-600 text-white'
+                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                }`}
+              >
+                <Activity className="w-4 h-4 inline mr-2" />
+                Memory
+              </button>
+              <button
+                onClick={() => setActiveResourceTab('disk')}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                  activeResourceTab === 'disk'
+                    ? 'bg-amber-600 text-white'
+                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                }`}
+              >
+                <HardDrive className="w-4 h-4 inline mr-2" />
+                Disk
+              </button>
+            </div>
+          </div>
 
           {/* CPU Usage Chart */}
-          <MetricsChartECharts
-            data={metricsHistory.map(m => ({
-              timestamp: m.collected_at,
-              value: m.cpu_percent
-            }))}
-            title="CPU Usage"
-            dataKey="CPU"
-            unit="%"
-            color="#3b82f6"
-          />
+          {activeResourceTab === 'cpu' && (
+            <MetricsChartECharts
+              data={metricsHistory.map(m => ({
+                timestamp: m.collected_at,
+                value: m.cpu_percent
+              }))}
+              title="CPU Usage"
+              dataKey="CPU"
+              unit="%"
+              color="#3b82f6"
+              scrollToTimestamp={
+                navigationContext?.resource === 'cpu' ? navigationContext.timestamp : null
+              }
+              indicatorOverlay={
+                navigationContext?.resource === 'cpu' ? navigationContext.indicator : null
+              }
+              highlightTimeRange={
+                navigationContext?.resource === 'cpu' && navigationContext.timestamp
+                  ? {
+                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(), // -15 min
+                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),   // +15 min
+                    }
+                  : null
+              }
+            />
+          )}
 
           {/* Memory Usage Chart */}
-          <MetricsChartECharts
-            data={metricsHistory.map(m => ({
-              timestamp: m.collected_at,
-              value: m.memory_percent
-            }))}
-            title="Memory Usage"
-            dataKey="Memory"
-            unit="%"
-            color="#8b5cf6"
-          />
+          {activeResourceTab === 'memory' && (
+            <MetricsChartECharts
+              data={metricsHistory.map(m => ({
+                timestamp: m.collected_at,
+                value: m.memory_percent
+              }))}
+              title="Memory Usage"
+              dataKey="Memory"
+              unit="%"
+              color="#8b5cf6"
+              scrollToTimestamp={
+                navigationContext?.resource === 'memory' ? navigationContext.timestamp : null
+              }
+              indicatorOverlay={
+                navigationContext?.resource === 'memory' ? navigationContext.indicator : null
+              }
+              highlightTimeRange={
+                navigationContext?.resource === 'memory' && navigationContext.timestamp
+                  ? {
+                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
+                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
+                    }
+                  : null
+              }
+            />
+          )}
 
           {/* Disk Usage Chart */}
-          <MetricsChartECharts
-            data={metricsHistory.map(m => ({
-              timestamp: m.collected_at,
-              value: m.disk_percent
-            }))}
-            title="Disk Usage"
-            dataKey="Disk"
-            unit="%"
-            color="#f59e0b"
-          />
+          {activeResourceTab === 'disk' && (
+            <MetricsChartECharts
+              data={metricsHistory.map(m => ({
+                timestamp: m.collected_at,
+                value: m.disk_percent
+              }))}
+              title="Disk Usage"
+              dataKey="Disk"
+              unit="%"
+              color="#f59e0b"
+              scrollToTimestamp={
+                navigationContext?.resource === 'disk' ? navigationContext.timestamp : null
+              }
+              indicatorOverlay={
+                navigationContext?.resource === 'disk' ? navigationContext.indicator : null
+              }
+              highlightTimeRange={
+                navigationContext?.resource === 'disk' && navigationContext.timestamp
+                  ? {
+                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
+                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
+                    }
+                  : null
+              }
+            />
+          )}
         </div>
       )}
 

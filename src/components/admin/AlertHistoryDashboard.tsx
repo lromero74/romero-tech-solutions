@@ -3,6 +3,16 @@ import { AlertTriangle, Filter, CheckCircle, XCircle, Clock, TrendingUp, Trendin
 import { themeClasses } from '../../contexts/ThemeContext';
 import api from '../../services/apiService';
 
+interface AlertHistoryDashboardProps {
+  onNavigateToAgent?: (context: {
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  }) => void;
+}
+
 interface AlertHistoryItem {
   id: number;
   agent_id: string;
@@ -41,7 +51,7 @@ let cachedStats: AlertStats | null = null;
 let cacheTimestamp: number | null = null;
 const CACHE_DURATION = 30 * 1000; // 30 seconds (shorter for real-time alert data)
 
-const AlertHistoryDashboard: React.FC = () => {
+const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigateToAgent }) => {
   const [alerts, setAlerts] = useState<AlertHistoryItem[]>(cachedAlerts || []);
   const [stats, setStats] = useState<AlertStats | null>(cachedStats);
   const [loading, setLoading] = useState(!cachedAlerts);
@@ -526,15 +536,21 @@ const AlertHistoryDashboard: React.FC = () => {
                                   value.clickable ? 'cursor-pointer hover:shadow-md transition-shadow hover:border-blue-500' : ''
                                 }`}
                                 onClick={() => {
-                                  if (value.clickable) {
-                                    // TODO: Navigate to agent details with specific resource and timestamp
-                                    console.log('Navigate to:', {
+                                  if (value.clickable && onNavigateToAgent) {
+                                    console.log('📍 Navigating from alert to agent:', {
                                       agentId: value.agent_id,
                                       resource: value.resource,
                                       timestamp: value.timestamp,
-                                      indicator: value.indicator
+                                      indicator: value.indicator,
+                                      alertId: alert.id
                                     });
-                                    alert(`Will navigate to ${value.agent_name} > ${value.resource.toUpperCase()} chart at ${new Date(value.timestamp).toLocaleString()}`);
+                                    onNavigateToAgent({
+                                      agentId: value.agent_id,
+                                      resource: value.resource,
+                                      timestamp: value.timestamp,
+                                      indicator: value.indicator,
+                                      alertId: alert.id
+                                    });
                                   }
                                 }}
                                 title={value.clickable ? `Click to view ${value.resource.toUpperCase()} chart at ${new Date(value.timestamp).toLocaleTimeString()}` : ''}

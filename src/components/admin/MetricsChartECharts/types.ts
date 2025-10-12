@@ -10,6 +10,13 @@ export interface MetricsChartEChartsProps {
   showStdDev?: boolean;
   showRateOfChange?: boolean;
   height?: number;
+  // Navigation from alerts
+  highlightTimeRange?: {
+    start: string; // ISO timestamp
+    end: string;   // ISO timestamp
+  } | null;
+  scrollToTimestamp?: string | null; // ISO timestamp to center on
+  indicatorOverlay?: string | null; // Which indicator to highlight (e.g., 'RSI', 'Stochastic')
 }
 
 export interface OscillatorHeights {

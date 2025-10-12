@@ -219,6 +219,15 @@ const AdminDashboardContent: React.FC = () => {
   const [showInactiveEmployees, setShowInactiveEmployees] = useState(true);
   const [showSoftDeletedEmployees, setShowSoftDeletedEmployees] = useState(false);
 
+  // Agent navigation context (from alerts)
+  const [agentNavigationContext, setAgentNavigationContext] = useState<{
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  } | null>(null);
+
   // Reset highlight flag when navigating away from service requests
   useEffect(() => {
     if (currentView !== 'service-requests') {
@@ -369,6 +378,24 @@ const AdminDashboardContent: React.FC = () => {
       businessFilters.setSortBy('businessName');
       businessFilters.setSortOrder('asc');
     }, 100);
+  };
+
+  // Handle navigation from alert to agent details
+  const handleNavigateToAgentFromAlert = (context: {
+    agentId: string;
+    resource: 'cpu' | 'memory' | 'disk';
+    timestamp: string;
+    indicator?: string;
+    alertId?: number;
+  }) => {
+    console.log('📍 Navigating to agent from alert:', context);
+
+    // Set the navigation context
+    setAgentNavigationContext(context);
+
+    // Navigate to agent details view
+    setCurrentView('agent-details');
+    localStorage.setItem('adminDashboardView', 'agent-details');
   };
 
   return (
@@ -671,6 +698,9 @@ const AdminDashboardContent: React.FC = () => {
               externalShowSoftDeletedEmployees={showSoftDeletedEmployees}
               setShowInactiveEmployees={setShowInactiveEmployees}
               setShowSoftDeletedEmployees={setShowSoftDeletedEmployees}
+              agentNavigationContext={agentNavigationContext}
+              onNavigateToAgentFromAlert={handleNavigateToAgentFromAlert}
+              onClearAgentNavigationContext={() => setAgentNavigationContext(null)}
             />
           </main>
           </div>

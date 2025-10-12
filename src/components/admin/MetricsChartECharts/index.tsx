@@ -30,6 +30,9 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   showStdDev = true,
   showRateOfChange = true,
   height = 300,
+  highlightTimeRange = null,
+  scrollToTimestamp = null,
+  indicatorOverlay = null,
 }) => {
   const { isDark } = useTheme();
 
@@ -89,6 +92,62 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     isInitialRender: chartState.isInitialRender,
   });
 
+  // Handle navigation context (scroll to timestamp, highlight range, enable indicator)
+  React.useEffect(() => {
+    if (scrollToTimestamp && chartDataResults.chartData.length > 0) {
+      console.log('📍 Scrolling to timestamp:', scrollToTimestamp);
+
+      const targetTime = new Date(scrollToTimestamp).getTime();
+      const dataIndex = chartDataResults.chartData.findIndex(d =>
+        new Date(d.timestamp).getTime() >= targetTime
+      );
+
+      if (dataIndex !== -1) {
+        // Calculate zoom range to center on this timestamp (±30 minutes)
+        const windowMs = 30 * 60 * 1000; // 30 minutes
+        const startTime = targetTime - windowMs;
+        const endTime = targetTime + windowMs;
+
+        chartState.setCurrentZoom({
+          start: startTime,
+          end: endTime,
+        });
+
+        console.log('✅ Zoomed to timestamp:', {
+          targetTime: new Date(targetTime).toISOString(),
+          startTime: new Date(startTime).toISOString(),
+          endTime: new Date(endTime).toISOString(),
+        });
+      }
+    }
+  }, [scrollToTimestamp, chartDataResults.chartData, chartState]);
+
+  // Handle indicator overlay from navigation
+  React.useEffect(() => {
+    if (indicatorOverlay) {
+      console.log('📊 Enabling indicator overlay:', indicatorOverlay);
+
+      // Map indicator names to chart state keys
+      const indicatorMap: Record<string, keyof ActiveIndicators> = {
+        'RSI': 'rsi',
+        'Stochastic': 'stochastic',
+        'Williams %R': 'williamsR',
+        'MACD': 'macd',
+        'ROC': 'roc',
+        'ATR': 'atr',
+      };
+
+      const indicatorKey = indicatorMap[indicatorOverlay];
+      if (indicatorKey && !chartState.activeIndicators[indicatorKey]) {
+        chartState.setActiveIndicators(prev => ({
+          ...prev,
+          [indicatorKey]: true,
+        }));
+        console.log('✅ Enabled indicator:', indicatorKey);
+      }
+    }
+  }, [indicatorOverlay, chartState]);
+
   // Build ECharts option
   const option = useMemo(() => {
     return buildChartOption({
@@ -113,6 +172,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       color,
       dataGaps: chartDataResults.dataGaps,
       oscillatorHeights: chartState.oscillatorHeights,
+      highlightTimeRange, // Add highlight time range for alert navigation
     });
   }, [
     chartDataResults.stats,
@@ -136,6 +196,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     isDark,
     activeZoomRange,
     color,
+    highlightTimeRange, // Include in dependencies
   ]);
 
   // Memoize chart events
