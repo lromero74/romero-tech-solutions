@@ -35,6 +35,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   indicatorOverlay = null,
 }) => {
   const { isDark } = useTheme();
+  const [containerWidth, setContainerWidth] = React.useState<number>(0);
 
   // Initialize all state
   const chartState = useChartState(height);
@@ -91,6 +92,26 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     currentZoom: chartState.currentZoom,
     isInitialRender: chartState.isInitialRender,
   });
+
+  // Track container width for dynamic candle sizing
+  React.useEffect(() => {
+    const container = chartState.chartContainerRef.current;
+    if (!container) return;
+
+    const updateWidth = () => {
+      const width = container.getBoundingClientRect().width;
+      setContainerWidth(width);
+    };
+
+    // Initial measurement
+    updateWidth();
+
+    // Track resize
+    const resizeObserver = new ResizeObserver(updateWidth);
+    resizeObserver.observe(container);
+
+    return () => resizeObserver.disconnect();
+  }, [chartState.chartContainerRef]);
 
   // Handle navigation context (scroll to timestamp, highlight range, enable indicator)
   React.useEffect(() => {
@@ -173,6 +194,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       dataGaps: chartDataResults.dataGaps,
       oscillatorHeights: chartState.oscillatorHeights,
       highlightTimeRange, // Add highlight time range for alert navigation
+      containerWidth, // Add container width for dynamic candle sizing
     });
   }, [
     chartDataResults.stats,
@@ -197,6 +219,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     activeZoomRange,
     color,
     highlightTimeRange, // Include in dependencies
+    containerWidth, // Include in dependencies for dynamic sizing
   ]);
 
   // Memoize chart events

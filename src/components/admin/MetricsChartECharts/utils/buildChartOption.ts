@@ -33,6 +33,7 @@ interface BuildChartOptionProps {
     start: string;
     end: string;
   } | null;
+  containerWidth: number;
 }
 
 export const buildChartOption = ({
@@ -58,8 +59,36 @@ export const buildChartOption = ({
   dataGaps,
   oscillatorHeights,
   highlightTimeRange,
+  containerWidth,
 }: BuildChartOptionProps) => {
   if (!stats || !chartData || chartData.length === 0) return {};
+
+  // Calculate dynamic candle width based on container size and number of candles
+  const calculateDynamicBarWidth = () => {
+    if (containerWidth === 0) return 8; // Fallback to static value
+
+    // Account for chart margins (left: 60px, right: 20px from grid config)
+    const effectiveWidth = containerWidth - 80;
+
+    // Calculate number of visible candles based on zoom range
+    const zoomPercent = (activeZoomRange[1] - activeZoomRange[0]) / 100;
+    const numCandles = chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi'
+      ? candlestickData.length
+      : 0;
+
+    if (numCandles === 0) return 8;
+
+    const visibleCandles = Math.ceil(numCandles * zoomPercent);
+
+    // Calculate width per candle, using 60% for candle and 40% for spacing
+    const widthPerCandle = effectiveWidth / visibleCandles;
+    const barWidth = widthPerCandle * 0.6;
+
+    // Clamp between reasonable min/max values
+    return Math.max(2, Math.min(20, barWidth));
+  };
+
+  const dynamicBarWidth = calculateDynamicBarWidth();
 
   const timestamps = chartData.map(d => new Date(d.timestamp).getTime());
 
@@ -324,7 +353,8 @@ export const buildChartOption = ({
       candleIndicators,
       candlestickData,
       dataKey,
-      isDark
+      isDark,
+      dynamicBarWidth
     );
   } else if (chartDisplayType === 'heiken-ashi') {
     series = buildHeikenAshiSeries(
@@ -332,7 +362,8 @@ export const buildChartOption = ({
       candleIndicators,
       heikenAshiData,
       dataKey,
-      isDark
+      isDark,
+      dynamicBarWidth
     );
   }
 

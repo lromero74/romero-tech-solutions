@@ -390,7 +390,8 @@ export const buildCandlestickSeries = (
   candleIndicators: CandleIndicators | null,
   candlestickData: CandlestickDataPoint[],
   dataKey: string,
-  isDark: boolean
+  isDark: boolean,
+  barMaxWidth: number = 8
 ): any[] => {
   const candleTimestamps = candlestickData.map(d => d.timestamp);
   const series: any[] = [];
@@ -409,7 +410,7 @@ export const buildCandlestickSeries = (
       borderColor: isDark ? '#16a34a' : '#15803d',
       borderColor0: isDark ? '#dc2626' : '#b91c1c',
     },
-    barMaxWidth: 8, // Prevent candles from becoming too wide (reduced for many candles)
+    barMaxWidth, // Dynamic width based on container size and zoom level
     barMinWidth: 1, // Ensure candles remain visible
     z: 10, // Ensure candles are on top
   });
@@ -425,7 +426,8 @@ export const buildHeikenAshiSeries = (
   candleIndicators: CandleIndicators | null,
   heikenAshiData: CandlestickDataPoint[],
   dataKey: string,
-  isDark: boolean
+  isDark: boolean,
+  barMaxWidth: number = 8
 ): any[] => {
   const haTimestamps = heikenAshiData.map(d => d.timestamp);
   const series: any[] = [];
@@ -444,7 +446,7 @@ export const buildHeikenAshiSeries = (
       borderColor: isDark ? '#16a34a' : '#15803d',
       borderColor0: isDark ? '#dc2626' : '#b91c1c',
     },
-    barMaxWidth: 8, // Prevent candles from becoming too wide (reduced for many candles)
+    barMaxWidth, // Dynamic width based on container size and zoom level
     barMinWidth: 1, // Ensure candles remain visible
     z: 10, // Ensure candles are on top
   });
