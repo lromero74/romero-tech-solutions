@@ -112,8 +112,21 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       oscillatorHeights: chartState.oscillatorHeights,
     });
   }, [
-    chartDataResults,
-    chartState,
+    chartDataResults.stats,
+    chartDataResults.chartData,
+    chartDataResults.candlestickData,
+    chartDataResults.heikenAshiData,
+    chartDataResults.anomalies,
+    chartDataResults.bollingerBands,
+    chartDataResults.validatedData,
+    chartDataResults.technicalIndicators,
+    chartDataResults.candleIndicators,
+    chartDataResults.dataGaps,
+    chartState.chartDisplayType,
+    chartState.candlestickPeriod,
+    chartState.autoFitYAxis,
+    chartState.activeIndicators,
+    chartState.oscillatorHeights,
     showStdDev,
     dataKey,
     unit,
@@ -135,8 +148,8 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
       option={option}
       style={{ height: `${chartState.chartHeight}px` }}
       opts={{ renderer: 'canvas' }}
-      notMerge={false}
-      lazyUpdate={true}
+      notMerge={true} // Force complete chart rebuild when indicators change
+      lazyUpdate={false} // Always update immediately for smooth resizing
       onEvents={onChartEvents}
     />
   ), [option, chartState.chartHeight, onChartEvents]);
