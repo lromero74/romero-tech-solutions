@@ -455,17 +455,22 @@ export const buildOscillatorSeries = (
   activeOscillators: ActiveOscillator[],
   technicalIndicators: TechnicalIndicators | null,
   candleIndicators: CandleIndicators | null,
-  isDark: boolean
+  isDark: boolean,
+  chartDisplayType: 'line' | 'candlestick' | 'heiken-ashi'
 ): any[] => {
   const series: any[] = [];
+
+  // Use candle indicators for candlestick/heiken-ashi modes, technical indicators for line mode
+  const useCandle = chartDisplayType === 'candlestick' || chartDisplayType === 'heiken-ashi';
+  const indicators = useCandle ? candleIndicators : technicalIndicators;
 
   activeOscillators.forEach((osc, index) => {
     const axisIndex = index + 1; // +1 because main chart is index 0
 
-    if (osc.key === 'rsi' && technicalIndicators) {
+    if (osc.key === 'rsi' && indicators) {
       // RSI line (purple)
-      const rsiData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.rsi[i]])
+      const rsiData = indicators.timestamps
+        .map((t, i) => [t, indicators.rsi[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -485,7 +490,7 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 30]),
+        data: indicators.timestamps.map(t => [t, 30]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
@@ -496,17 +501,17 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 70]),
+        data: indicators.timestamps.map(t => [t, 70]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
       });
     }
 
-    if (osc.key === 'macd' && technicalIndicators) {
+    if (osc.key === 'macd' && indicators) {
       // MACD line (blue)
-      const macdLineData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.macd.macdLine[i]])
+      const macdLineData = indicators.timestamps
+        .map((t, i) => [t, indicators.macd.macdLine[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -521,8 +526,8 @@ export const buildOscillatorSeries = (
       });
 
       // Signal line (orange)
-      const signalLineData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.macd.signalLine[i]])
+      const signalLineData = indicators.timestamps
+        .map((t, i) => [t, indicators.macd.signalLine[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -537,9 +542,9 @@ export const buildOscillatorSeries = (
       });
 
       // MACD histogram (red/green bars)
-      const histogramData = technicalIndicators.timestamps
+      const histogramData = indicators.timestamps
         .map((t, i) => {
-          const val = technicalIndicators.macd.histogram[i];
+          const val = indicators.macd.histogram[i];
           return [t, isNaN(val) ? null : val];
         });
 
@@ -563,17 +568,17 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 0]),
+        data: indicators.timestamps.map(t => [t, 0]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'solid' },
         symbol: 'none',
         silent: true,
       });
     }
 
-    if (osc.key === 'stochastic' && technicalIndicators) {
+    if (osc.key === 'stochastic' && indicators) {
       // Stochastic %K line (blue)
-      const stochKData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.stochastic.k[i]])
+      const stochKData = indicators.timestamps
+        .map((t, i) => [t, indicators.stochastic.k[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -588,8 +593,8 @@ export const buildOscillatorSeries = (
       });
 
       // Stochastic %D line (orange)
-      const stochDData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.stochastic.d[i]])
+      const stochDData = indicators.timestamps
+        .map((t, i) => [t, indicators.stochastic.d[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -609,7 +614,7 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 20]),
+        data: indicators.timestamps.map(t => [t, 20]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
@@ -620,17 +625,17 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 80]),
+        data: indicators.timestamps.map(t => [t, 80]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
       });
     }
 
-    if (osc.key === 'williamsR' && technicalIndicators) {
+    if (osc.key === 'williamsR' && indicators) {
       // Williams %R line (purple)
-      const williamsRData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.williamsR[i]])
+      const williamsRData = indicators.timestamps
+        .map((t, i) => [t, indicators.williamsR[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -650,7 +655,7 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, -20]),
+        data: indicators.timestamps.map(t => [t, -20]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
@@ -661,17 +666,17 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, -80]),
+        data: indicators.timestamps.map(t => [t, -80]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'dashed' },
         symbol: 'none',
         silent: true,
       });
     }
 
-    if (osc.key === 'roc' && technicalIndicators) {
+    if (osc.key === 'roc' && indicators) {
       // ROC line (cyan)
-      const rocData = technicalIndicators.timestamps
-        .map((t, i) => [t, technicalIndicators.roc[i]])
+      const rocData = indicators.timestamps
+        .map((t, i) => [t, indicators.roc[i]])
         .filter(([t, v]) => !isNaN(v as number));
 
       series.push({
@@ -691,7 +696,7 @@ export const buildOscillatorSeries = (
         type: 'line',
         xAxisIndex: axisIndex,
         yAxisIndex: axisIndex,
-        data: technicalIndicators.timestamps.map(t => [t, 0]),
+        data: indicators.timestamps.map(t => [t, 0]),
         lineStyle: { color: isDark ? '#6b7280' : '#9ca3af', width: 1, type: 'solid' },
         symbol: 'none',
         silent: true,
@@ -699,7 +704,7 @@ export const buildOscillatorSeries = (
     }
 
     if (osc.key === 'atr' && candleIndicators) {
-      // ATR line (orange) - requires candlestick data
+      // ATR line (orange) - ATR requires candlestick data (high/low/close), so always use candleIndicators
       const atrData = candleIndicators.timestamps
         .map((t, i) => [t, candleIndicators.atr[i]])
         .filter(([t, v]) => !isNaN(v as number));

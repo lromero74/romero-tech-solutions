@@ -339,6 +339,11 @@ export const calculateCandleIndicators = (
     ema12: calculateEMA(closes, 12),
     ema26: calculateEMA(closes, 26),
     bb: calculateBollingerBands(closes, 20),
+    rsi: calculateRSI(closes, 14),
+    macd: calculateMACD(closes),
+    stochastic: calculateStochastic(closes, 14, 3, 3),
+    williamsR: calculateWilliamsR(closes, 14),
+    roc: calculateROC(closes, 12),
     atr: calculateATR(candlestickData, 14),
     timestamps,
   };

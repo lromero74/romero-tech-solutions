@@ -71,6 +71,18 @@ export interface CandleIndicators {
     middle: number[];
     lower: number[];
   };
+  rsi: number[];
+  macd: {
+    macdLine: number[];
+    signalLine: number[];
+    histogram: number[];
+  };
+  stochastic: {
+    k: number[];
+    d: number[];
+  };
+  williamsR: number[];
+  roc: number[];
   atr: number[];
   timestamps: number[];
 }
