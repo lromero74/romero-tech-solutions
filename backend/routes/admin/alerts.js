@@ -348,4 +348,113 @@ router.get('/stats', requirePermission('view.agents.enable'), async (req, res) =
   }
 });
 
+// ============================================================================
+// TEST/DEVELOPMENT ENDPOINTS
+// ============================================================================
+
+/**
+ * POST /api/admin/alerts/test/trigger
+ * Trigger a test alert for development/testing purposes
+ */
+router.post('/test/trigger', requirePermission('modify.agents.enable'), async (req, res) => {
+  try {
+    // Get a random agent for the test alert
+    const agentResult = await query('SELECT id, device_name FROM agent_devices ORDER BY RANDOM() LIMIT 1');
+
+    if (agentResult.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No agents found. Please add an agent first.',
+      });
+    }
+
+    const agent = agentResult.rows[0];
+
+    // Get the most recent metric for this agent to use real timestamp
+    const metricsResult = await query(
+      'SELECT collected_at, cpu_percent, memory_percent, disk_percent FROM agent_metrics WHERE agent_device_id = $1 ORDER BY collected_at DESC LIMIT 1',
+      [agent.id]
+    );
+
+    const recentMetric = metricsResult.rows[0];
+    const alertTimestamp = recentMetric?.collected_at || new Date().toISOString();
+
+    // Create test alert data with detailed context for each indicator
+    const testAlertData = {
+      agent_id: agent.id,
+      configuration_id: null, // Test alert without specific configuration
+      alert_name: 'Test Alert - High CPU Utilization Detected',
+      alert_type: 'high_utilization',
+      severity: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)], // Random severity
+      indicator_count: 3,
+      contributing_indicators: {
+        rsi: {
+          indicator: 'RSI',
+          value: 85.5,
+          threshold: 70,
+          signal: 'overbought',
+          resource: 'cpu',
+          resource_value: recentMetric?.cpu_percent || 89.7,
+          timestamp: alertTimestamp,
+          agent_id: agent.id,
+          agent_name: agent.device_name,
+          chart_period: '1h', // Time period shown in chart
+          clickable: true // Flag to indicate this can be clicked to drill down
+        },
+        stochastic: {
+          indicator: 'Stochastic',
+          k: 92.3,
+          d: 88.1,
+          threshold: 80,
+          signal: 'overbought',
+          resource: 'memory',
+          resource_value: recentMetric?.memory_percent || 72.3,
+          timestamp: alertTimestamp,
+          agent_id: agent.id,
+          agent_name: agent.device_name,
+          chart_period: '1h',
+          clickable: true
+        },
+        williams_r: {
+          indicator: 'Williams %R',
+          value: -5.2,
+          threshold: -20,
+          signal: 'overbought',
+          resource: 'cpu',
+          resource_value: recentMetric?.cpu_percent || 89.7,
+          timestamp: alertTimestamp,
+          agent_id: agent.id,
+          agent_name: agent.device_name,
+          chart_period: '1h',
+          clickable: true
+        }
+      },
+      metric_values: {
+        cpu_percent: recentMetric?.cpu_percent || 89.7,
+        memory_percent: recentMetric?.memory_percent || 72.3,
+        disk_percent: recentMetric?.disk_percent || 45.1
+      },
+      notify_email: false,
+      notify_dashboard: true,
+      notify_websocket: true,
+    };
+
+    // Save the test alert (this will trigger WebSocket notification)
+    const savedAlert = await alertHistoryService.saveAlert(testAlertData);
+
+    res.json({
+      success: true,
+      message: `Test alert triggered for agent: ${agent.device_name}`,
+      data: savedAlert,
+    });
+  } catch (error) {
+    console.error('Error triggering test alert:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to trigger test alert',
+      error: error.message,
+    });
+  }
+});
+
 export default router;

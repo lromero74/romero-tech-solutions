@@ -156,11 +156,14 @@ export const AdminModalManager: React.FC<AdminModalManagerProps> = ({
     }
   };
 
-  const handleUpdateServiceLocation = async (serviceLocationData: unknown) => {
-    if (!selectedEntities.serviceLocation?.id) return;
+  const handleUpdateServiceLocation = async (serviceLocationId: string, serviceLocationData: unknown) => {
     try {
-      await serviceLocationCRUD.updateEntity(selectedEntities.serviceLocation.id, serviceLocationData);
-      // WebSocket will handle the refresh automatically
+      console.log('=== HANDLE UPDATE SERVICE LOCATION ===');
+      console.log('Service Location ID:', serviceLocationId);
+      console.log('Service Location Data:', serviceLocationData);
+      await serviceLocationCRUD.updateEntity(serviceLocationId, serviceLocationData);
+      // Wait for WebSocket to trigger refresh, then close modal
+      await new Promise(resolve => setTimeout(resolve, 300));
       onCloseModal('editServiceLocation');
     } catch (error) {
       console.error('Error updating service location:', error);

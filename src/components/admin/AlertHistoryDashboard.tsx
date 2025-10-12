@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, Filter, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import api from '../../services/apiService';
@@ -35,11 +35,18 @@ interface AlertStats {
   };
 }
 
+// Cache alerts and stats outside component to persist across unmounts
+let cachedAlerts: AlertHistoryItem[] | null = null;
+let cachedStats: AlertStats | null = null;
+let cacheTimestamp: number | null = null;
+const CACHE_DURATION = 30 * 1000; // 30 seconds (shorter for real-time alert data)
+
 const AlertHistoryDashboard: React.FC = () => {
-  const [alerts, setAlerts] = useState<AlertHistoryItem[]>([]);
-  const [stats, setStats] = useState<AlertStats | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [alerts, setAlerts] = useState<AlertHistoryItem[]>(cachedAlerts || []);
+  const [stats, setStats] = useState<AlertStats | null>(cachedStats);
+  const [loading, setLoading] = useState(!cachedAlerts);
   const [error, setError] = useState<string | null>(null);
+  const hasLoadedRef = useRef(false);
 
   // Filters
   const [filters, setFilters] = useState({
@@ -55,10 +62,51 @@ const AlertHistoryDashboard: React.FC = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [expandedAlert, setExpandedAlert] = useState<number | null>(null);
 
+  // Check if filters are empty (default state)
+  const hasActiveFilters = Object.values(filters).some(v => v);
+
   useEffect(() => {
-    loadAlerts();
-    loadStats();
-  }, [filters]);
+    // If filters are active, always reload (no caching with filters)
+    if (hasActiveFilters) {
+      loadAlerts();
+      loadStats();
+      return;
+    }
+
+    // For default view (no filters), use cache if valid
+    const isCacheValid = cachedAlerts && cacheTimestamp && (Date.now() - cacheTimestamp < CACHE_DURATION);
+
+    if (!isCacheValid && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadAlerts();
+      loadStats();
+    } else if (isCacheValid) {
+      // Use cached data immediately
+      setAlerts(cachedAlerts!);
+      setStats(cachedStats);
+      setLoading(false);
+    }
+  }, [filters, hasActiveFilters]);
+
+  // Listen for real-time alert notifications via CustomEvent
+  useEffect(() => {
+    const handleAlertCreated = (event: Event) => {
+      const customEvent = event as CustomEvent;
+      console.log('📬 Alert notification received in AlertHistoryDashboard:', customEvent.detail);
+
+      // Invalidate cache
+      cachedAlerts = null;
+      cachedStats = null;
+      cacheTimestamp = null;
+
+      // Reload data to show new alert
+      loadAlerts();
+      loadStats();
+    };
+
+    window.addEventListener('alert:created', handleAlertCreated);
+    return () => window.removeEventListener('alert:created', handleAlertCreated);
+  }, []);
 
   const loadAlerts = async () => {
     try {
@@ -75,7 +123,15 @@ const AlertHistoryDashboard: React.FC = () => {
       if (filters.endDate) params.append('end_date', filters.endDate);
 
       const response = await api.get(`/admin/alerts/history?${params.toString()}`);
-      setAlerts(response.data);
+      const data = response.data;
+
+      setAlerts(data);
+
+      // Only cache if no filters are active
+      if (!hasActiveFilters) {
+        cachedAlerts = data;
+        cacheTimestamp = Date.now();
+      }
     } catch (err: any) {
       console.error('Failed to load alert history:', err);
       setError(err.response?.data?.message || 'Failed to load alert history');
@@ -87,7 +143,14 @@ const AlertHistoryDashboard: React.FC = () => {
   const loadStats = async () => {
     try {
       const response = await api.get('/admin/alerts/stats');
-      setStats(response.data);
+      const data = response.data;
+
+      setStats(data);
+
+      // Only cache if no filters are active
+      if (!hasActiveFilters) {
+        cachedStats = data;
+      }
     } catch (err) {
       console.error('Failed to load alert stats:', err);
     }
@@ -116,6 +179,20 @@ const AlertHistoryDashboard: React.FC = () => {
     } catch (err: any) {
       console.error('Failed to resolve alert:', err);
       alert(err.response?.data?.message || 'Failed to resolve alert');
+    }
+  };
+
+  const handleTriggerTestAlert = async () => {
+    try {
+      const response = await api.post('/admin/alerts/test/trigger');
+      console.log('✅ Test alert triggered:', response.data);
+
+      // Refresh alerts to show the new test alert
+      await loadAlerts();
+      await loadStats();
+    } catch (err: any) {
+      console.error('Failed to trigger test alert:', err);
+      alert(err.response?.data?.message || 'Failed to trigger test alert');
     }
   };
 
@@ -159,13 +236,22 @@ const AlertHistoryDashboard: React.FC = () => {
             </p>
           </div>
         </div>
-        <button
-          onClick={() => setShowFilters(!showFilters)}
-          className={`inline-flex items-center px-4 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} hover:bg-gray-100 dark:hover:bg-gray-700`}
-        >
-          <Filter className="w-4 h-4 mr-2" />
-          {showFilters ? 'Hide Filters' : 'Show Filters'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleTriggerTestAlert}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500"
+          >
+            <AlertTriangle className="w-4 h-4 mr-2" />
+            Trigger Test Alert
+          </button>
+          <button
+            onClick={() => setShowFilters(!showFilters)}
+            className={`inline-flex items-center px-4 py-2 border ${themeClasses.border.primary} rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} hover:bg-gray-100 dark:hover:bg-gray-700`}
+          >
+            <Filter className="w-4 h-4 mr-2" />
+            {showFilters ? 'Hide Filters' : 'Show Filters'}
+          </button>
+        </div>
       </div>
 
       {/* Statistics Cards */}
@@ -427,17 +513,91 @@ const AlertHistoryDashboard: React.FC = () => {
                       <h4 className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>
                         Contributing Indicators
                       </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                        {Object.entries(alert.contributing_indicators || {}).map(([key, value]: [string, any]) => (
-                          <div key={key} className={`${themeClasses.bg.secondary} rounded p-2`}>
-                            <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                              {key.toUpperCase()}:
-                            </span>
-                            <span className={`text-sm ${themeClasses.text.secondary} ml-2`}>
-                              {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                            </span>
-                          </div>
-                        ))}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {Object.entries(alert.contributing_indicators || {}).map(([key, value]: [string, any]) => {
+                          const isDetailedIndicator = value && typeof value === 'object' && value.indicator && value.resource;
+
+                          if (isDetailedIndicator) {
+                            // Enhanced indicator with context
+                            return (
+                              <div
+                                key={key}
+                                className={`${themeClasses.bg.secondary} rounded-lg p-3 border ${themeClasses.border.primary} ${
+                                  value.clickable ? 'cursor-pointer hover:shadow-md transition-shadow hover:border-blue-500' : ''
+                                }`}
+                                onClick={() => {
+                                  if (value.clickable) {
+                                    // TODO: Navigate to agent details with specific resource and timestamp
+                                    console.log('Navigate to:', {
+                                      agentId: value.agent_id,
+                                      resource: value.resource,
+                                      timestamp: value.timestamp,
+                                      indicator: value.indicator
+                                    });
+                                    alert(`Will navigate to ${value.agent_name} > ${value.resource.toUpperCase()} chart at ${new Date(value.timestamp).toLocaleString()}`);
+                                  }
+                                }}
+                                title={value.clickable ? `Click to view ${value.resource.toUpperCase()} chart at ${new Date(value.timestamp).toLocaleTimeString()}` : ''}
+                              >
+                                <div className="flex items-start justify-between mb-2">
+                                  <span className={`text-sm font-semibold ${themeClasses.text.primary}`}>
+                                    {value.indicator}
+                                  </span>
+                                  <span className={`text-xs px-2 py-0.5 rounded ${
+                                    value.signal === 'overbought' || value.signal === 'oversold'
+                                      ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                      : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                  }`}>
+                                    {value.signal}
+                                  </span>
+                                </div>
+                                <div className={`text-xs ${themeClasses.text.secondary} space-y-1`}>
+                                  <div className="flex justify-between">
+                                    <span>Resource:</span>
+                                    <span className="font-medium">{value.resource.toUpperCase()}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Value:</span>
+                                    <span className="font-medium">{value.value || `K:${value.k} D:${value.d}` || 'N/A'}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Threshold:</span>
+                                    <span className="font-medium">{value.threshold}</span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Metric Value:</span>
+                                    <span className="font-medium">
+                                      {value.resource_value != null ? Number(value.resource_value).toFixed(1) : 'N/A'}%
+                                    </span>
+                                  </div>
+                                  <div className="flex justify-between">
+                                    <span>Time:</span>
+                                    <span className="font-medium">{new Date(value.timestamp).toLocaleTimeString()}</span>
+                                  </div>
+                                </div>
+                                {value.clickable && (
+                                  <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                                    <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                      🔍 Click to view in agent dashboard
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          } else {
+                            // Legacy format - simple display
+                            return (
+                              <div key={key} className={`${themeClasses.bg.secondary} rounded p-2`}>
+                                <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                  {key.toUpperCase()}:
+                                </span>
+                                <span className={`text-sm ${themeClasses.text.secondary} ml-2`}>
+                                  {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                </span>
+                              </div>
+                            );
+                          }
+                        })}
                       </div>
                     </div>
 

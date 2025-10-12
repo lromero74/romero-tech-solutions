@@ -61,7 +61,7 @@ import { workflowScheduler } from './services/workflowScheduler.js';
 import { startAgentMonitoring, stopAgentMonitoring } from './services/agentMonitoringService.js';
 
 // Import alert configuration service
-import alertConfigService from './services/alertConfigService.js';
+import { alertConfigService } from './services/alertConfigService.js';
 
 // Import environment-aware logger
 import { loggers as log } from './utils/logger.js';

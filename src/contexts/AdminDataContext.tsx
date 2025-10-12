@@ -1372,6 +1372,30 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
           }
         });
 
+        // Listen for alert notifications
+        websocketService.on('alert:created', (data: any) => {
+          console.log('🚨 Real-time alert notification received:', data);
+
+          const alert = data.alert;
+
+          // Invalidate alert cache in AlertConfigurationManager and AlertHistoryDashboard
+          // The components will automatically reload when navigated to
+          console.log(`🔔 Alert: ${alert.alert_name} (${alert.severity}) from ${alert.agent_name}`);
+
+          // Optionally show browser notification (if permission granted)
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification(`Alert: ${alert.alert_name}`, {
+              body: `${alert.severity.toUpperCase()} - ${alert.agent_name}\n${alert.indicator_count} indicators in confluence`,
+              icon: '/favicon.ico',
+              tag: `alert-${alert.id}`, // Prevents duplicate notifications
+            });
+          }
+
+          // Force cache invalidation by updating a timestamp
+          // This will cause AlertHistoryDashboard to reload if it's currently open
+          window.dispatchEvent(new CustomEvent('alert:created', { detail: alert }));
+        });
+
         websocketService.onAuthenticationError((error) => {
           console.error('❌ WebSocket authentication failed:', error.message);
           // Fallback to polling if WebSocket auth fails

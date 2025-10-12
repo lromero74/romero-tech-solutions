@@ -6,6 +6,7 @@ import { authenticateAgent, requireAgentMatch } from '../middleware/agentAuthMid
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
+import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 
 const router = express.Router();
 
@@ -513,112 +514,9 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
       [agent_id]
     );
 
-    // Check if any alert rules are triggered
-    const alertRulesResult = await query(
-      `SELECT id, alert_name, alert_type, severity, conditions
-       FROM agent_alerts
-       WHERE (agent_device_id = $1 OR agent_device_id IS NULL)
-         AND is_active = true
-         AND soft_delete = false`,
-      [agent_id]
-    );
-
-    const triggeredAlerts = [];
-
-    for (const rule of alertRulesResult.rows) {
-      for (const metric of metricsArray) {
-        // Parse the conditions JSONB: {"metric": "cpu_percent", "operator": ">", "threshold": 90}
-        const conditions = rule.conditions;
-        if (!conditions || !conditions.metric || !conditions.operator || conditions.threshold === undefined) {
-          continue;
-        }
-
-        // Get metric value based on condition's metric field
-        let metricValue = null;
-        switch (conditions.metric) {
-          case 'cpu_percent':
-            metricValue = metric.cpu_percent || metric.cpu_usage;
-            break;
-          case 'memory_percent':
-            metricValue = metric.memory_percent || metric.memory_usage;
-            break;
-          case 'disk_percent':
-            metricValue = metric.disk_percent || metric.disk_usage;
-            break;
-        }
-
-        if (metricValue === null) continue;
-
-        // Check if alert is triggered based on comparison operator
-        let isTriggered = false;
-        switch (conditions.operator) {
-          case '>':
-            isTriggered = metricValue > conditions.threshold;
-            break;
-          case '<':
-            isTriggered = metricValue < conditions.threshold;
-            break;
-          case '>=':
-            isTriggered = metricValue >= conditions.threshold;
-            break;
-          case '<=':
-            isTriggered = metricValue <= conditions.threshold;
-            break;
-          case '=':
-          case '==':
-            isTriggered = metricValue === conditions.threshold;
-            break;
-        }
-
-        if (isTriggered) {
-          triggeredAlerts.push({
-            rule_id: rule.id,
-            alert_name: rule.alert_name,
-            alert_type: rule.alert_type,
-            metric_type: conditions.metric,
-            metric_value: metricValue,
-            threshold: conditions.threshold,
-            severity: rule.severity
-          });
-        }
-      }
-    }
-
-    // Create alert history entries for triggered alerts
-    for (const alert of triggeredAlerts) {
-      await query(
-        `INSERT INTO agent_alert_history (
-          id,
-          agent_alert_id,
-          agent_device_id,
-          severity,
-          alert_message,
-          metric_value,
-          threshold_value,
-          status
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-        [
-          uuidv4(),
-          alert.rule_id,
-          agent_id,
-          alert.severity,
-          `${alert.alert_name}: ${alert.metric_type} = ${alert.metric_value}% (threshold: ${alert.threshold}%)`,
-          alert.metric_value,
-          alert.threshold,
-          'active'
-        ]
-      );
-
-      // Update alert last_triggered and trigger_count
-      await query(
-        `UPDATE agent_alerts
-         SET last_triggered = NOW(),
-             trigger_count = trigger_count + 1,
-             updated_at = NOW()
-         WHERE id = $1`,
-        [alert.rule_id]
-      );
-    }
+    // Detect confluence alerts using the latest metric
+    const latestMetric = metricsArray[metricsArray.length - 1];
+    const triggeredAlerts = await confluenceDetectionService.detectAndCreateAlerts(agent_id, latestMetric);
 
     // Broadcast metrics update to all connected admin clients via WebSocket
     // Get agent device info for the broadcast
@@ -628,10 +526,8 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
     );
 
     if (agentInfo.rows.length > 0) {
-      // Broadcast the latest metrics to admin sockets
-      const latestMetric = metricsArray[metricsArray.length - 1]; // Use the most recent metric
-
       if (websocketService && websocketService.io) {
+        // Broadcast the latest metrics to admin sockets
         websocketService.io.emit('agent-metrics-update', {
           agentId: agent_id,
           deviceName: agentInfo.rows[0].device_name,
@@ -640,6 +536,19 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
           timestamp: new Date().toISOString()
         });
         console.log(`📊 Broadcasted agent metrics update for agent ${agent_id} via WebSocket`);
+
+        // Broadcast any triggered alerts
+        if (triggeredAlerts.length > 0) {
+          for (const alert of triggeredAlerts) {
+            websocketService.io.emit('agent-alert-triggered', {
+              agentId: agent_id,
+              deviceName: agentInfo.rows[0].device_name,
+              alert: alert,
+              timestamp: new Date().toISOString()
+            });
+          }
+          console.log(`🚨 Broadcasted ${triggeredAlerts.length} alert(s) for agent ${agent_id} via WebSocket`);
+        }
       }
     }
 

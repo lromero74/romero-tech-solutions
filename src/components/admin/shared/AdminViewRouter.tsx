@@ -29,6 +29,8 @@ import AdminRatingQuestions from '../AdminRatingQuestions';
 import AgentDashboard from '../AgentDashboard';
 import AgentDetails from '../AgentDetails';
 import AgentRegistrationModal from '../AgentRegistrationModal';
+import AlertConfigurationManager from '../AlertConfigurationManager';
+import AlertHistoryDashboard from '../AlertHistoryDashboard';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -49,7 +51,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1712,6 +1714,12 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             </div>
           </div>
         );
+
+      case 'alert-configurations':
+        return <AlertConfigurationManager />;
+
+      case 'alert-history':
+        return <AlertHistoryDashboard />;
 
       default:
         return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { AlertTriangle, Plus, Edit2, Power, Settings as SettingsIcon, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import AlertConfigurationEditorModal from './AlertConfigurationEditorModal';
@@ -24,22 +24,44 @@ interface AlertConfiguration {
   updated_at: string;
 }
 
+// Cache configurations outside component to persist across unmounts
+let cachedConfigurations: AlertConfiguration[] | null = null;
+let cacheTimestamp: number | null = null;
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
 const AlertConfigurationManager: React.FC = () => {
-  const [configurations, setConfigurations] = useState<AlertConfiguration[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [configurations, setConfigurations] = useState<AlertConfiguration[]>(cachedConfigurations || []);
+  const [loading, setLoading] = useState(!cachedConfigurations);
   const [error, setError] = useState<string | null>(null);
   const [editingConfig, setEditingConfig] = useState<AlertConfiguration | null>(null);
   const [showEditorModal, setShowEditorModal] = useState(false);
+  const hasLoadedRef = useRef(false);
 
   useEffect(() => {
-    loadConfigurations();
+    // Check if cache is valid
+    const isCacheValid = cachedConfigurations && cacheTimestamp && (Date.now() - cacheTimestamp < CACHE_DURATION);
+
+    // Only load if we don't have valid cached data
+    if (!isCacheValid && !hasLoadedRef.current) {
+      hasLoadedRef.current = true;
+      loadConfigurations();
+    } else if (isCacheValid) {
+      // Use cached data immediately
+      setConfigurations(cachedConfigurations!);
+      setLoading(false);
+    }
   }, []);
 
   const loadConfigurations = async () => {
     try {
       setLoading(true);
       const response = await api.get('/admin/alerts/configurations');
-      setConfigurations(response.data || []);
+      const data = response.data || [];
+
+      // Update both component state and cache
+      setConfigurations(data);
+      cachedConfigurations = data;
+      cacheTimestamp = Date.now();
       setError(null);
     } catch (err: any) {
       console.error('Failed to load alert configurations:', err);
@@ -56,11 +78,14 @@ const AlertConfigurationManager: React.FC = () => {
       });
 
       if (response.data.success) {
-        setConfigurations(prevConfigs =>
-          prevConfigs.map(c =>
-            c.id === config.id ? { ...c, enabled: !c.enabled } : c
-          )
+        const updatedConfigs = configurations.map(c =>
+          c.id === config.id ? { ...c, enabled: !c.enabled } : c
         );
+
+        // Update both component state and cache
+        setConfigurations(updatedConfigs);
+        cachedConfigurations = updatedConfigs;
+        cacheTimestamp = Date.now();
       }
     } catch (err: any) {
       console.error('Failed to toggle alert configuration:', err);
@@ -79,6 +104,7 @@ const AlertConfigurationManager: React.FC = () => {
   };
 
   const handleSaveConfig = async () => {
+    // Reload data and update cache
     await loadConfigurations();
     setShowEditorModal(false);
     setEditingConfig(null);

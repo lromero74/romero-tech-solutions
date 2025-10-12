@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import type { OscillatorHeights, ActiveIndicators } from '../types';
 
 interface UseChartResizeProps {
@@ -34,11 +34,22 @@ export const useChartResize = ({
     ].filter(osc => osc.active);
   }, [activeIndicators, oscillatorHeights]);
 
+  // Use requestAnimationFrame to throttle updates
+  const rafRef = useRef<number | null>(null);
+
   useEffect(() => {
     if (!isDragging || !chartContainerRef.current) return;
 
     const handleMouseMove = (e: MouseEvent) => {
-      const container = chartContainerRef.current;
+      // Cancel any pending animation frame
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      // Schedule update on next frame
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        const container = chartContainerRef.current;
       if (!container) return;
 
       if (isDragging === 'card-height') {
@@ -106,9 +117,15 @@ export const useChartResize = ({
           });
         }
       }
+      }); // Close requestAnimationFrame callback
     };
 
     const handleMouseUp = () => {
+      // Cancel any pending animation frame
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
       setIsDragging(null);
     };
 
@@ -118,6 +135,11 @@ export const useChartResize = ({
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      // Cancel any pending animation frame on cleanup
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+        rafRef.current = null;
+      }
     };
   }, [isDragging, oscillatorHeights, activeIndicators, chartContainerRef, dragOffsetRef, setIsDragging, setOscillatorHeights, setChartHeight, activeOscillators]);
 

@@ -3,7 +3,7 @@
  * Manages alert configurations from database
  */
 
-const db = require('../config/database');
+import { query } from '../config/database.js';
 
 class AlertConfigService {
   constructor() {
@@ -17,7 +17,7 @@ class AlertConfigService {
    */
   async loadConfigurations() {
     try {
-      const result = await db.query(
+      const result = await query(
         `SELECT * FROM alert_configurations WHERE enabled = true ORDER BY id`
       );
 
@@ -58,7 +58,7 @@ class AlertConfigService {
    */
   async getConfigById(id) {
     try {
-      const result = await db.query(
+      const result = await query(
         'SELECT * FROM alert_configurations WHERE id = $1',
         [id]
       );
@@ -96,14 +96,14 @@ class AlertConfigService {
       // Add ID for WHERE clause
       values.push(id);
 
-      const query = `
+      const sql = `
         UPDATE alert_configurations
         SET ${setFields.join(', ')}
         WHERE id = $${paramCount}
         RETURNING *
       `;
 
-      const result = await db.query(query, values);
+      const result = await query(sql, values);
 
       // Invalidate cache
       this.lastLoadTime = null;
@@ -137,7 +137,7 @@ class AlertConfigService {
         notify_websocket = true,
       } = configData;
 
-      const query = `
+      const sql = `
         INSERT INTO alert_configurations (
           alert_name, alert_type, enabled,
           min_indicator_count, require_extreme_for_single,
@@ -167,7 +167,7 @@ class AlertConfigService {
         createdBy,
       ];
 
-      const result = await db.query(query, values);
+      const result = await query(sql, values);
 
       // Invalidate cache
       this.lastLoadTime = null;
@@ -184,7 +184,7 @@ class AlertConfigService {
    */
   async deleteConfig(id, updatedBy) {
     try {
-      const result = await db.query(
+      const result = await query(
         `UPDATE alert_configurations
          SET enabled = false, updated_at = NOW(), updated_by = $2
          WHERE id = $1
@@ -226,4 +226,4 @@ class AlertConfigService {
 }
 
 // Export singleton instance
-module.exports = new AlertConfigService();
+export const alertConfigService = new AlertConfigService();

@@ -358,6 +358,29 @@ class WebSocketService {
   getSocket(): Socket | null {
     return this.socket;
   }
+
+  // Generic event listener for custom events (like alert:created)
+  on(eventName: string, callback: (data: any) => void): void {
+    if (!this.socket) {
+      console.error(`❌ Cannot register listener for '${eventName}': WebSocket not initialized`);
+      return;
+    }
+    console.log(`📝 Registering custom event listener: ${eventName}`);
+    this.socket.on(eventName, callback);
+  }
+
+  // Remove generic event listener
+  off(eventName: string, callback?: (data: any) => void): void {
+    if (!this.socket) {
+      return;
+    }
+    console.log(`🗑️ Removing custom event listener: ${eventName}`);
+    if (callback) {
+      this.socket.off(eventName, callback);
+    } else {
+      this.socket.off(eventName);
+    }
+  }
 }
 
 // Export singleton instance

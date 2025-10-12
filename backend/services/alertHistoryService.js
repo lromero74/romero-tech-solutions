@@ -3,7 +3,8 @@
  * Manages alert history and lifecycle
  */
 
-const db = require('../config/database');
+import { query } from '../config/database.js';
+import { websocketService } from './websocketService.js';
 
 class AlertHistoryService {
   /**
@@ -12,19 +13,23 @@ class AlertHistoryService {
   async saveAlert(alertData) {
     try {
       const {
-        alertConfigId,
-        agentId,
-        metricType,
-        alertType,
+        agent_id,
+        configuration_id,
+        alert_name,
+        alert_type,
         severity,
-        indicatorCount,
-        indicatorsTriggered,
-        metricValue,
-        alertTitle,
-        alertDescription,
+        indicator_count,
+        contributing_indicators,
+        metric_values,
+        notify_email,
+        notify_dashboard,
+        notify_websocket,
       } = alertData;
 
-      const query = `
+      // Determine metric_type from metric_values
+      const metricType = this._determineMetricType(metric_values);
+
+      const sql = `
         INSERT INTO alert_history (
           alert_config_id, agent_id, metric_type,
           alert_type, severity, indicator_count,
@@ -35,23 +40,96 @@ class AlertHistoryService {
       `;
 
       const values = [
-        alertConfigId || null,
-        agentId,
+        configuration_id || null,
+        agent_id,
         metricType,
-        alertType,
+        alert_type,
         severity,
-        indicatorCount,
-        JSON.stringify(indicatorsTriggered),
-        metricValue,
-        alertTitle,
-        alertDescription,
+        indicator_count,
+        JSON.stringify(contributing_indicators),
+        metric_values.cpu_percent || metric_values.memory_percent || metric_values.disk_percent || 0,
+        alert_name,
+        this._generateAlertDescription(alert_type, severity, indicator_count, contributing_indicators),
       ];
 
-      const result = await db.query(query, values);
-      return result.rows[0];
+      const result = await query(sql, values);
+      const savedAlert = result.rows[0];
+
+      // Get agent name for notification
+      const agentResult = await query(
+        'SELECT device_name FROM agent_devices WHERE id = $1',
+        [agent_id]
+      );
+      const agentName = agentResult.rows[0]?.device_name || 'Unknown Agent';
+
+      // Send WebSocket notification if enabled
+      if (notify_websocket) {
+        await this._sendWebSocketNotification(savedAlert, agentName, alert_name);
+      }
+
+      console.log(`✅ Alert saved: ${alert_name} (${severity}) - ID: ${savedAlert.id}`);
+      return savedAlert;
     } catch (error) {
       console.error('❌ Error saving alert to history:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Determine primary metric type from metric values
+   */
+  _determineMetricType(metricValues) {
+    if (!metricValues) return 'cpu';
+
+    const cpu = metricValues.cpu_percent || 0;
+    const memory = metricValues.memory_percent || 0;
+    const disk = metricValues.disk_percent || 0;
+
+    // Return the metric with highest value
+    if (cpu >= memory && cpu >= disk) return 'cpu';
+    if (memory >= disk) return 'memory';
+    return 'disk';
+  }
+
+  /**
+   * Generate human-readable alert description
+   */
+  _generateAlertDescription(alertType, severity, indicatorCount, contributingIndicators) {
+    const indicators = Object.keys(contributingIndicators || {}).join(', ');
+    return `${severity.toUpperCase()} alert: ${alertType.replace(/_/g, ' ')} detected with ${indicatorCount} indicator(s) in confluence (${indicators})`;
+  }
+
+  /**
+   * Send WebSocket notification to all admins
+   */
+  async _sendWebSocketNotification(alert, agentName, alertName) {
+    try {
+      console.log('📡 Broadcasting alert via WebSocket:', alert.id);
+
+      websocketService.broadcastToAdmins({
+        type: 'alert:created',
+        data: {
+          alert: {
+            id: alert.id,
+            agent_id: alert.agent_id,
+            agent_name: agentName,
+            configuration_id: alert.alert_config_id,
+            alert_name: alertName,
+            alert_type: alert.alert_type,
+            severity: alert.severity,
+            indicator_count: alert.indicator_count,
+            contributing_indicators: alert.indicators_triggered,
+            triggered_at: alert.triggered_at,
+            acknowledged_at: alert.acknowledged_at,
+            resolved_at: alert.resolved_at,
+          }
+        }
+      });
+
+      console.log('✅ WebSocket alert notification sent');
+    } catch (error) {
+      console.error('❌ Error sending WebSocket alert notification:', error);
+      // Don't throw - alert is already saved, notification failure shouldn't break the flow
     }
   }
 
@@ -129,21 +207,22 @@ class AlertHistoryService {
 
       values.push(limit, offset);
 
-      const query = `
+      const sql = `
         SELECT
           ah.*,
-          a.hostname as agent_hostname,
-          a.os_type as agent_os,
+          ah.indicators_triggered as contributing_indicators,
+          ad.device_name as agent_name,
+          ad.os_type as agent_os,
           ac.alert_name as config_name
         FROM alert_history ah
-        LEFT JOIN agents a ON ah.agent_id = a.id
+        LEFT JOIN agent_devices ad ON ah.agent_id = ad.id
         LEFT JOIN alert_configurations ac ON ah.alert_config_id = ac.id
         ${whereClause}
         ORDER BY ah.triggered_at DESC
         LIMIT $${paramCount} OFFSET $${paramCount + 1}
       `;
 
-      const result = await db.query(query, values);
+      const result = await query(sql, values);
       return result.rows;
     } catch (error) {
       console.error('❌ Error fetching alert history:', error);
@@ -156,15 +235,15 @@ class AlertHistoryService {
    */
   async getActiveAlerts(agentId = null) {
     try {
-      let query = 'SELECT * FROM active_alerts';
+      let sql = 'SELECT * FROM active_alerts';
       const values = [];
 
       if (agentId) {
-        query += ' WHERE agent_id = $1';
+        sql += ' WHERE agent_id = $1';
         values.push(agentId);
       }
 
-      const result = await db.query(query, values);
+      const result = await query(sql, values);
       return result.rows;
     } catch (error) {
       console.error('❌ Error fetching active alerts:', error);
@@ -177,7 +256,7 @@ class AlertHistoryService {
    */
   async acknowledgeAlert(alertId, employeeId) {
     try {
-      const result = await db.query(
+      const result = await query(
         `UPDATE alert_history
          SET acknowledged_at = NOW(),
              acknowledged_by = $2,
@@ -199,7 +278,7 @@ class AlertHistoryService {
    */
   async resolveAlert(alertId, employeeId, notes = null) {
     try {
-      const result = await db.query(
+      const result = await query(
         `UPDATE alert_history
          SET resolved_at = NOW(),
              resolved_by = $2,
@@ -240,7 +319,7 @@ class AlertHistoryService {
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
-      const query = `
+      const sql = `
         SELECT
           COUNT(*) as total_alerts,
           COUNT(CASE WHEN severity = 'critical' THEN 1 END) as critical_count,
@@ -255,7 +334,7 @@ class AlertHistoryService {
         ${whereClause}
       `;
 
-      const result = await db.query(query, values);
+      const result = await query(sql, values);
       return result.rows[0];
     } catch (error) {
       console.error('❌ Error fetching alert statistics:', error);
@@ -268,7 +347,7 @@ class AlertHistoryService {
    */
   async hasRecentSimilarAlert(agentId, metricType, alertType, minutesAgo = 15) {
     try {
-      const result = await db.query(
+      const result = await query(
         `SELECT id FROM alert_history
          WHERE agent_id = $1
            AND metric_type = $2
@@ -288,4 +367,4 @@ class AlertHistoryService {
 }
 
 // Export singleton instance
-module.exports = new AlertHistoryService();
+export const alertHistoryService = new AlertHistoryService();
