@@ -399,7 +399,7 @@ export const buildCandlestickSeries = (
   // Add indicators first (so they're behind candles)
   series.push(...buildCandleMAsSeries(activeIndicators, candleIndicators));
 
-  // Candlesticks on top
+  // Candlesticks
   series.push({
     name: dataKey,
     type: 'candlestick',
@@ -412,7 +412,7 @@ export const buildCandlestickSeries = (
     },
     barMaxWidth, // Dynamic width based on container size and zoom level
     barMinWidth: 1, // Ensure candles remain visible
-    z: 10, // Ensure candles are on top
+    z: 1, // Below y-axis but above background
   });
 
   return series;
@@ -435,7 +435,7 @@ export const buildHeikenAshiSeries = (
   // Add indicators first (so they're behind candles)
   series.push(...buildCandleMAsSeries(activeIndicators, candleIndicators));
 
-  // Heiken Ashi candles on top
+  // Heiken Ashi candles
   series.push({
     name: dataKey,
     type: 'candlestick',
@@ -448,7 +448,7 @@ export const buildHeikenAshiSeries = (
     },
     barMaxWidth, // Dynamic width based on container size and zoom level
     barMinWidth: 1, // Ensure candles remain visible
-    z: 10, // Ensure candles are on top
+    z: 1, // Below y-axis but above background
   });
 
   return series;

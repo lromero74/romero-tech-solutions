@@ -67,8 +67,8 @@ export const buildChartOption = ({
   const calculateDynamicBarWidth = () => {
     if (containerWidth === 0) return 8; // Fallback to static value
 
-    // Account for chart margins (left: 60px, right: 20px from grid config)
-    const effectiveWidth = containerWidth - 80;
+    // Account for chart margins (left: 70px, right: 20px from grid config)
+    const effectiveWidth = containerWidth - 90;
 
     // Calculate number of visible candles based on zoom range
     const zoomPercent = (activeZoomRange[1] - activeZoomRange[0]) / 100;
@@ -85,7 +85,7 @@ export const buildChartOption = ({
     const barWidth = widthPerCandle * 0.6;
 
     // Clamp between reasonable min/max values
-    return Math.max(2, Math.min(20, barWidth));
+    return Math.max(2, Math.min(80, barWidth));
   };
 
   const dynamicBarWidth = calculateDynamicBarWidth();
@@ -113,7 +113,7 @@ export const buildChartOption = ({
   // Build grids array dynamically
   const grids: any[] = [
     {
-      left: 60,
+      left: 70,
       right: 20,
       top: 20,
       bottom: oscillatorCount === 0 ? 80 : `${100 - oscillatorHeights.main}%`,
@@ -126,7 +126,7 @@ export const buildChartOption = ({
   activeOscillators.forEach((osc, index) => {
     const isLast = index === activeOscillators.length - 1;
     grids.push({
-      left: 60,
+      left: 70,
       right: 20,
       top: `${cumulativeTop}%`,
       height: isLast ? `${osc.height - 8}%` : `${osc.height}%`, // -8% for slider space on last panel

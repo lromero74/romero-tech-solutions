@@ -259,6 +259,37 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     chartState.setActiveIndicators(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  // Handle jump to now
+  const handleJumpToNow = () => {
+    console.log('🕐 Jump to Now clicked');
+
+    // Calculate the zoom range for the most recent data
+    if (chartDataResults.chartData.length > 0) {
+      const mostRecentDataTime = new Date(chartDataResults.chartData[chartDataResults.chartData.length - 1].timestamp);
+      const cutoffTime = new Date(mostRecentDataTime.getTime() - chartState.selectedTimeWindow * 60 * 60 * 1000);
+
+      let startIndex = 0;
+      for (let i = chartDataResults.chartData.length - 1; i >= 0; i--) {
+        const dataTime = new Date(chartDataResults.chartData[i].timestamp);
+        if (dataTime >= cutoffTime) {
+          startIndex = i;
+        } else {
+          break;
+        }
+      }
+
+      const startPercent = (startIndex / chartDataResults.chartData.length) * 100;
+      console.log('📊 Jump to Now: Calculated zoom range:', [startPercent, 100]);
+
+      // Set the zoom to show the most recent data within the selected time window
+      chartState.setCurrentZoom({
+        start: startPercent,
+        end: 100,
+      });
+      chartState.setIsInitialRender(false);
+    }
+  };
+
   // Early returns for edge cases
   if (!data || data.length === 0) {
     return (
@@ -284,6 +315,8 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
         stats={chartDataResults.stats}
         autoFitYAxis={chartState.autoFitYAxis}
         onToggleAutoFit={() => chartState.setAutoFitYAxis(!chartState.autoFitYAxis)}
+        onReset={chartState.resetToDefaults}
+        onJumpToNow={handleJumpToNow}
       />
 
       {/* Toolbar */}
