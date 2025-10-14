@@ -3,6 +3,33 @@ import { Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 
+/**
+ * Format days into human-readable time units (Years, Weeks, Days)
+ * Omits zero values and properly pluralizes
+ */
+const formatTimeRemaining = (days: number): string => {
+  if (days < 0) return '';
+
+  const years = Math.floor(days / 365);
+  const remainingAfterYears = days % 365;
+  const weeks = Math.floor(remainingAfterYears / 7);
+  const remainingDays = remainingAfterYears % 7;
+
+  const parts: string[] = [];
+
+  if (years > 0) {
+    parts.push(`${years} ${years === 1 ? 'Year' : 'Years'}`);
+  }
+  if (weeks > 0) {
+    parts.push(`${weeks} ${weeks === 1 ? 'Week' : 'Weeks'}`);
+  }
+  if (remainingDays > 0) {
+    parts.push(`${remainingDays} ${remainingDays === 1 ? 'Day' : 'Days'}`);
+  }
+
+  return parts.join(', ') || '0 Days';
+};
+
 export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
   if (!latestMetrics || !latestMetrics.eol_status) {
     return null;
@@ -47,7 +74,7 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
                 'text-green-600 dark:text-green-400'
               }`}>
                 {latestMetrics.days_until_sec_eol < 0 ? 'Ended' :
-                 `${latestMetrics.days_until_sec_eol} days`}
+                 formatTimeRemaining(latestMetrics.days_until_sec_eol)}
               </span>
             </div>
             {latestMetrics.security_eol_date && (
@@ -70,7 +97,7 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
                 'text-green-600 dark:text-green-400'
               }`}>
                 {latestMetrics.days_until_eol < 0 ? 'Past EOL' :
-                 `${latestMetrics.days_until_eol} days`}
+                 formatTimeRemaining(latestMetrics.days_until_eol)}
               </span>
             </div>
             {latestMetrics.eol_date && (

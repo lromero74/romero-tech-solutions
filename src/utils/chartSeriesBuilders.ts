@@ -139,62 +139,54 @@ export const buildLineChartSeries = (
     const bbColor = '#2962FF';
     const bbWidth = 1;
 
-    // Add smooth fill area between upper and lower bands using stack
+    // Draw fill area with its own borders (mathematically accurate, non-smoothed)
+    // Bottom border of fill area (lower band)
     series.push({
-      name: 'BB Base',
+      name: 'BB Lower',
       type: 'line',
       data: bbLowerData,
-      lineStyle: { opacity: 0 },
-      areaStyle: { opacity: 0 },
-      stack: 'bb-fill',
+      lineStyle: {
+        color: bbColor,
+        width: bbWidth,
+      },
       symbol: 'none',
-      smooth: true,
-      z: 0,
+      smooth: false, // No smoothing - raw data
+      z: 1,
+      stack: 'bb-confidence',
+      areaStyle: { opacity: 0 }, // No fill on lower, just the border
     });
 
+    // Top border of fill area (stacked to create upper band)
     const bbDiffData = bollingerBands
       .map(bb => [new Date(bb.timestamp).getTime(), bb.upper - bb.lower])
       .filter(([t, v]) => !isNaN(v as number));
 
     series.push({
-      name: 'BB Fill',
-      type: 'line',
-      data: bbDiffData,
-      lineStyle: { opacity: 0 },
-      areaStyle: {
-        color: 'rgba(41, 98, 255, 0.15)',
-      },
-      stack: 'bb-fill',
-      symbol: 'none',
-      smooth: true,
-      z: 0,
-    });
-
-    series.push({
       name: 'BB Upper',
       type: 'line',
-      data: bbUpperData,
-      lineStyle: { color: bbColor, width: bbWidth },
+      data: bbDiffData,
+      lineStyle: {
+        color: bbColor,
+        width: bbWidth,
+      },
       symbol: 'none',
-      smooth: true,
+      smooth: false, // No smoothing - raw data
+      z: 1,
+      stack: 'bb-confidence',
+      areaStyle: {
+        color: 'rgba(41, 98, 255, 0.15)', // Fill between the borders
+      },
     });
 
+    // Middle line (separate, not part of stack)
     series.push({
       name: 'BB Middle',
       type: 'line',
       data: bbMiddleData,
       lineStyle: { color: bbColor, width: bbWidth },
       symbol: 'none',
-      smooth: true,
-    });
-
-    series.push({
-      name: 'BB Lower',
-      type: 'line',
-      data: bbLowerData,
-      lineStyle: { color: bbColor, width: bbWidth },
-      symbol: 'none',
-      smooth: true,
+      smooth: false, // Keep consistent with borders
+      z: 1,
     });
   }
 
