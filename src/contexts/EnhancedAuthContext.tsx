@@ -66,6 +66,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const [showTimeoutDialog, setShowTimeoutDialog] = useState(false);
   const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const timeoutUserRoleRef = useRef<UserRole | null>(null); // Store user role for timeout redirect
 
   // Helper function to determine if a user requires MFA
   // NOTE: These role checks are appropriate here because:
@@ -288,6 +289,9 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   };
 
   const handleTimeout = async () => {
+    // Store user role before clearing auth state for proper redirect
+    timeoutUserRoleRef.current = user?.role || null;
+
     setUser(null);
     setIsSessionActive(false);
     setSessionWarning({ isVisible: false, timeLeft: 0 });
@@ -311,7 +315,16 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   const handleTimeoutConfirm = () => {
     setShowTimeoutDialog(false);
-    window.location.href = '/';
+
+    // Determine redirect URL based on user role stored before timeout
+    // All employee types (admin, executive, sales, technician) use /employee
+    let redirectUrl = '/employee'; // Default for all employee roles
+    if (timeoutUserRoleRef.current === 'client') {
+      redirectUrl = '/clogin';
+    }
+
+    // Use replace() instead of href to prevent back button issues
+    window.location.replace(redirectUrl);
   };
 
   // Database settings are now loaded during checkAuthState, so this useEffect is no longer needed

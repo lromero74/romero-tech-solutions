@@ -13,17 +13,22 @@ async function triggerTestAlert() {
 
     const agent = agentResult.rows[0];
 
-    // Create test alert data with random severity
-    const severities = ['low', 'medium', 'high', 'critical'];
-    const severity = severities[Math.floor(Math.random() * severities.length)];
+    // Create test alert data with correct severity based on indicator count
+    // Matches the logic in confluenceDetectionService.js
+    const indicatorCount = 3;
+    let severity;
+    if (indicatorCount >= 5) severity = 'critical';
+    else if (indicatorCount >= 4) severity = 'high';
+    else if (indicatorCount >= 3) severity = 'medium';
+    else severity = 'low';
 
     const testAlertData = {
       agent_id: agent.id,
       configuration_id: null,
-      alert_name: 'Test Alert - High CPU Utilization Detected',
+      alert_name: '[TEST] High CPU Utilization Detected',
       alert_type: 'high_utilization',
       severity: severity,
-      indicator_count: 3,
+      indicator_count: indicatorCount,
       contributing_indicators: {
         rsi: { value: 85.5, threshold: 70, signal: 'overbought' },
         stochastic: { k: 92.3, d: 88.1, threshold: 80, signal: 'overbought' },

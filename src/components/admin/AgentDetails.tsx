@@ -2,7 +2,8 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity,
   RefreshCw, ArrowLeft, Terminal, Bell, Clock, CheckCircle, XCircle,
-  Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info, MapPin
+  Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info, MapPin,
+  Link, Unlink, RotateCcw, Save
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -12,6 +13,7 @@ import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChartECharts from './MetricsChartECharts';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
 import { websocketService } from '../../services/websocketService';
+import { useSharedChartSettings } from './MetricsChartECharts/hooks/useSharedChartSettings';
 
 interface AgentDetailsProps {
   agentId: string;
@@ -44,6 +46,16 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands'>('overview');
   const [activeResourceTab, setActiveResourceTab] = useState<'cpu' | 'memory' | 'disk'>('cpu');
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
+
+  // Chart settings management (shared across resource types)
+  const {
+    settings: chartSettings,
+    linkSettings,
+    toggleLinkSettings,
+    saveAsUserDefaults,
+    revertToSystemDefaults,
+    hasUserDefaults,
+  } = useSharedChartSettings(agentId);
 
   // Permission checks
   const { checkPermission } = usePermission();
@@ -634,46 +646,85 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               <TrendingUp className="w-6 h-6 mr-2" />
               Metrics Trends
             </h3>
-            {/* Resource Tab Selector */}
-            <div className="flex gap-2">
-              <button
-                onClick={() => setActiveResourceTab('cpu')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeResourceTab === 'cpu'
-                    ? 'bg-blue-600 text-white'
-                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
-                }`}
-              >
-                <Cpu className="w-4 h-4 inline mr-2" />
-                CPU
-              </button>
-              <button
-                onClick={() => setActiveResourceTab('memory')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeResourceTab === 'memory'
-                    ? 'bg-purple-600 text-white'
-                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
-                }`}
-              >
-                <Activity className="w-4 h-4 inline mr-2" />
-                Memory
-              </button>
-              <button
-                onClick={() => setActiveResourceTab('disk')}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                  activeResourceTab === 'disk'
-                    ? 'bg-amber-600 text-white'
-                    : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
-                }`}
-              >
-                <HardDrive className="w-4 h-4 inline mr-2" />
-                Disk
-              </button>
+            <div className="flex items-center gap-3">
+              {/* Chart Settings Controls */}
+              <div className="flex items-center gap-2 px-3 py-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800">
+                <button
+                  onClick={toggleLinkSettings}
+                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs font-medium transition-colors ${
+                    linkSettings
+                      ? 'text-blue-600 dark:text-blue-400'
+                      : `${themeClasses.text.secondary}`
+                  }`}
+                  title={linkSettings ? 'Settings are linked across all metrics' : 'Settings are independent per metric'}
+                >
+                  {linkSettings ? (
+                    <Link className="w-3.5 h-3.5" />
+                  ) : (
+                    <Unlink className="w-3.5 h-3.5" />
+                  )}
+                  <span>{linkSettings ? 'Linked' : 'Independent'}</span>
+                </button>
+                {hasUserDefaults() && (
+                  <button
+                    onClick={revertToSystemDefaults}
+                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${themeClasses.text.secondary} hover:text-orange-600 transition-colors`}
+                    title="Revert to system defaults"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  onClick={() => saveAsUserDefaults(activeResourceTab)}
+                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${themeClasses.text.secondary} hover:text-green-600 transition-colors`}
+                  title="Save current settings as your personal default"
+                >
+                  <Save className="w-3.5 h-3.5" />
+                </button>
+              </div>
+
+              {/* Resource Tab Selector */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setActiveResourceTab('cpu')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeResourceTab === 'cpu'
+                      ? 'bg-blue-600 text-white'
+                      : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                  }`}
+                >
+                  <Cpu className="w-4 h-4 inline mr-2" />
+                  CPU
+                </button>
+                <button
+                  onClick={() => setActiveResourceTab('memory')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeResourceTab === 'memory'
+                      ? 'bg-purple-600 text-white'
+                      : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                  }`}
+                >
+                  <Activity className="w-4 h-4 inline mr-2" />
+                  Memory
+                </button>
+                <button
+                  onClick={() => setActiveResourceTab('disk')}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    activeResourceTab === 'disk'
+                      ? 'bg-amber-600 text-white'
+                      : `${themeClasses.bg.hover} ${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
+                  }`}
+                >
+                  <HardDrive className="w-4 h-4 inline mr-2" />
+                  Disk
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* All charts rendered simultaneously to preserve state when switching tabs */}
           {/* CPU Usage Chart */}
-          {activeResourceTab === 'cpu' && (
+          <div style={{ display: activeResourceTab === 'cpu' ? 'block' : 'none' }}>
             <MetricsChartECharts
               data={metricsHistory.map(m => ({
                 timestamp: m.collected_at,
@@ -697,11 +748,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     }
                   : null
               }
+              agentId={agentId}
+              resourceType="cpu"
             />
-          )}
+          </div>
 
           {/* Memory Usage Chart */}
-          {activeResourceTab === 'memory' && (
+          <div style={{ display: activeResourceTab === 'memory' ? 'block' : 'none' }}>
             <MetricsChartECharts
               data={metricsHistory.map(m => ({
                 timestamp: m.collected_at,
@@ -725,11 +778,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     }
                   : null
               }
+              agentId={agentId}
+              resourceType="memory"
             />
-          )}
+          </div>
 
           {/* Disk Usage Chart */}
-          {activeResourceTab === 'disk' && (
+          <div style={{ display: activeResourceTab === 'disk' ? 'block' : 'none' }}>
             <MetricsChartECharts
               data={metricsHistory.map(m => ({
                 timestamp: m.collected_at,
@@ -753,8 +808,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     }
                   : null
               }
+              agentId={agentId}
+              resourceType="disk"
             />
-          )}
+          </div>
         </div>
       )}
 

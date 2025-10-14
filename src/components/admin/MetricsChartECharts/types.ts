@@ -1,5 +1,6 @@
 import type { MetricDataPoint, AveragingMode, BandMode } from '../../../utils/metricsStats';
 import type { ActiveIndicators, ChartDisplayType } from '../../../types/chartTypes';
+import type { ChartSettings } from './hooks/useSharedChartSettings';
 
 export interface MetricsChartEChartsProps {
   data: MetricDataPoint[];
@@ -17,6 +18,10 @@ export interface MetricsChartEChartsProps {
   } | null;
   scrollToTimestamp?: string | null; // ISO timestamp to center on
   indicatorOverlay?: string | null; // Which indicator to highlight (e.g., 'RSI', 'Stochastic')
+
+  // Settings persistence (optional - enables localStorage persistence and sync)
+  agentId?: string;
+  resourceType?: 'cpu' | 'memory' | 'disk';
 }
 
 export interface OscillatorHeights {

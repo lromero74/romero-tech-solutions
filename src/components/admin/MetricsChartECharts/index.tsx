@@ -33,12 +33,14 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   highlightTimeRange = null,
   scrollToTimestamp = null,
   indicatorOverlay = null,
+  agentId,
+  resourceType,
 }) => {
   const { isDark } = useTheme();
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
 
-  // Initialize all state
-  const chartState = useChartState(height);
+  // Initialize all state (with persistence if agentId and resourceType are provided)
+  const chartState = useChartState({ initialHeight: height, agentId, resourceType });
 
   // Calculate all data
   const chartDataResults = useChartData({

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { AlertTriangle, Filter, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, Activity } from 'lucide-react';
+import { AlertTriangle, Filter, CheckCircle, XCircle, Clock, TrendingUp, TrendingDown, Activity, Trash2 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import api from '../../services/apiService';
 
@@ -57,6 +57,7 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
   const [loading, setLoading] = useState(!cachedAlerts);
   const [error, setError] = useState<string | null>(null);
   const hasLoadedRef = useRef(false);
+  const [reloadTrigger, setReloadTrigger] = useState(0); // Force reload when this changes
 
   // Filters
   const [filters, setFilters] = useState({
@@ -64,7 +65,7 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
     severity: '',
     alertType: '',
     acknowledged: '',
-    resolved: '',
+    resolved: 'false', // Default to showing only unresolved alerts
     startDate: '',
     endDate: '',
   });
@@ -76,9 +77,12 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
   const hasActiveFilters = Object.values(filters).some(v => v);
 
   useEffect(() => {
+    // Determine if this is a background refresh (reloadTrigger > 0) or initial load
+    const isBackgroundRefresh = reloadTrigger > 0;
+
     // If filters are active, always reload (no caching with filters)
     if (hasActiveFilters) {
-      loadAlerts();
+      loadAlerts(!isBackgroundRefresh); // Don't show spinner on background refresh
       loadStats();
       return;
     }
@@ -88,15 +92,19 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
 
     if (!isCacheValid && !hasLoadedRef.current) {
       hasLoadedRef.current = true;
-      loadAlerts();
+      loadAlerts(true); // Show spinner on initial load
       loadStats();
-    } else if (isCacheValid) {
-      // Use cached data immediately
+    } else if (isCacheValid && !isBackgroundRefresh) {
+      // Use cached data immediately only if not a background refresh
       setAlerts(cachedAlerts!);
       setStats(cachedStats);
       setLoading(false);
+    } else if (isBackgroundRefresh) {
+      // Background refresh - don't show loading spinner
+      loadAlerts(false);
+      loadStats();
     }
-  }, [filters, hasActiveFilters]);
+  }, [filters, hasActiveFilters, reloadTrigger]);
 
   // Listen for real-time alert notifications via CustomEvent
   useEffect(() => {
@@ -104,23 +112,27 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
       const customEvent = event as CustomEvent;
       console.log('📬 Alert notification received in AlertHistoryDashboard:', customEvent.detail);
 
-      // Invalidate cache
+      const newAlert = customEvent.detail;
+
+      // Optimistic update: Add new alert to UI immediately
+      setAlerts(prevAlerts => [newAlert, ...prevAlerts]);
+
+      // Invalidate cache and trigger background refresh
       cachedAlerts = null;
       cachedStats = null;
       cacheTimestamp = null;
-
-      // Reload data to show new alert
-      loadAlerts();
-      loadStats();
+      setReloadTrigger(prev => prev + 1);
     };
 
     window.addEventListener('alert:created', handleAlertCreated);
     return () => window.removeEventListener('alert:created', handleAlertCreated);
   }, []);
 
-  const loadAlerts = async () => {
+  const loadAlerts = async (showLoadingSpinner = true) => {
     try {
-      setLoading(true);
+      if (showLoadingSpinner) {
+        setLoading(true);
+      }
       setError(null);
 
       const params = new URLSearchParams();
@@ -146,7 +158,9 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
       console.error('Failed to load alert history:', err);
       setError(err.response?.data?.message || 'Failed to load alert history');
     } finally {
-      setLoading(false);
+      if (showLoadingSpinner) {
+        setLoading(false);
+      }
     }
   };
 
@@ -167,28 +181,60 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
   };
 
   const handleAcknowledge = async (alertId: number) => {
+    // Optimistic update: Update UI immediately
+    setAlerts(prevAlerts =>
+      prevAlerts.map(alert =>
+        alert.id === alertId
+          ? { ...alert, acknowledged_at: new Date().toISOString() }
+          : alert
+      )
+    );
+
     try {
       await api.post(`/admin/alerts/history/${alertId}/acknowledge`, {
         notes: 'Acknowledged via dashboard',
       });
-      await loadAlerts();
-      await loadStats();
+
+      // Invalidate cache and trigger background refresh
+      cachedAlerts = null;
+      cachedStats = null;
+      cacheTimestamp = null;
+      setReloadTrigger(prev => prev + 1);
     } catch (err: any) {
       console.error('Failed to acknowledge alert:', err);
       alert(err.response?.data?.message || 'Failed to acknowledge alert');
+
+      // Rollback on error: reload to restore correct state
+      setReloadTrigger(prev => prev + 1);
     }
   };
 
   const handleResolve = async (alertId: number) => {
+    // Optimistic update: Update UI immediately
+    setAlerts(prevAlerts =>
+      prevAlerts.map(alert =>
+        alert.id === alertId
+          ? { ...alert, resolved_at: new Date().toISOString() }
+          : alert
+      )
+    );
+
     try {
       await api.post(`/admin/alerts/history/${alertId}/resolve`, {
         notes: 'Resolved via dashboard',
       });
-      await loadAlerts();
-      await loadStats();
+
+      // Invalidate cache and trigger background refresh
+      cachedAlerts = null;
+      cachedStats = null;
+      cacheTimestamp = null;
+      setReloadTrigger(prev => prev + 1);
     } catch (err: any) {
       console.error('Failed to resolve alert:', err);
       alert(err.response?.data?.message || 'Failed to resolve alert');
+
+      // Rollback on error: reload to restore correct state
+      setReloadTrigger(prev => prev + 1);
     }
   };
 
@@ -197,12 +243,37 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
       const response = await api.post('/admin/alerts/test/trigger');
       console.log('✅ Test alert triggered:', response.data);
 
-      // Refresh alerts to show the new test alert
-      await loadAlerts();
-      await loadStats();
+      // Note: WebSocket will handle the real-time update via alert:created event
+      // No need to manually reload here as the event listener will trigger it
     } catch (err: any) {
       console.error('Failed to trigger test alert:', err);
       alert(err.response?.data?.message || 'Failed to trigger test alert');
+    }
+  };
+
+  const handleDelete = async (alertId: number) => {
+    if (!confirm('Are you sure you want to delete this test alert? This action cannot be undone.')) {
+      return;
+    }
+
+    // Optimistic update: Remove from UI immediately
+    setAlerts(prevAlerts => prevAlerts.filter(a => a.id !== alertId));
+
+    try {
+      await api.delete(`/admin/alerts/history/${alertId}`);
+      console.log('✅ Test alert deleted:', alertId);
+
+      // Invalidate cache and trigger background refresh
+      cachedAlerts = null;
+      cachedStats = null;
+      cacheTimestamp = null;
+      setReloadTrigger(prev => prev + 1);
+    } catch (err: any) {
+      console.error('Failed to delete alert:', err);
+      alert(err.response?.data?.message || 'Failed to delete alert');
+
+      // Rollback on error: reload to restore correct state
+      setReloadTrigger(prev => prev + 1);
     }
   };
 
@@ -464,6 +535,11 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
                         <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>
                           {alert.alert_name}
                         </h3>
+                        {alert.alert_name?.startsWith('[TEST]') && (
+                          <span className="px-2 py-1 text-xs font-medium rounded text-purple-600 bg-purple-50 border border-purple-200 dark:bg-purple-900/20 dark:border-purple-800 dark:text-purple-400">
+                            TEST ALERT
+                          </span>
+                        )}
                         <span className={`px-2 py-1 text-xs font-medium rounded ${getSeverityColor(alert.severity)}`}>
                           {alert.severity.toUpperCase()}
                         </span>
@@ -505,6 +581,16 @@ const AlertHistoryDashboard: React.FC<AlertHistoryDashboardProps> = ({ onNavigat
                       >
                         <XCircle className="w-4 h-4 mr-1" />
                         Resolve
+                      </button>
+                    )}
+                    {alert.alert_name?.startsWith('[TEST]') && (
+                      <button
+                        onClick={() => handleDelete(alert.id)}
+                        className="inline-flex items-center px-3 py-1 text-sm font-medium rounded-md text-red-600 bg-red-50 border border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:border-red-800 dark:text-red-400"
+                        title="Delete this test alert"
+                      >
+                        <Trash2 className="w-4 h-4 mr-1" />
+                        Delete
                       </button>
                     )}
                     <button

@@ -210,6 +210,7 @@ class AlertHistoryService {
       const sql = `
         SELECT
           ah.*,
+          ah.alert_title as alert_name,
           ah.indicators_triggered as contributing_indicators,
           ad.device_name as agent_name,
           ad.os_type as agent_os,

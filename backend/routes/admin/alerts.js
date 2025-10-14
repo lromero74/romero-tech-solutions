@@ -326,6 +326,41 @@ router.post('/history/:id/resolve', requirePermission('modify.agents.enable'), a
 });
 
 /**
+ * DELETE /api/admin/alerts/history/:id
+ * Delete an alert from history (permanently removes it)
+ */
+router.delete('/history/:id', requirePermission('modify.agents.enable'), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const result = await query(
+      'DELETE FROM alert_history WHERE id = $1 RETURNING id',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Alert not found',
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Alert deleted successfully',
+      data: { id: parseInt(id) },
+    });
+  } catch (error) {
+    console.error('Error deleting alert:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete alert',
+      error: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/admin/alerts/stats
  * Get alert statistics
  */
@@ -380,13 +415,21 @@ router.post('/test/trigger', requirePermission('modify.agents.enable'), async (r
     const alertTimestamp = recentMetric?.collected_at || new Date().toISOString();
 
     // Create test alert data with detailed context for each indicator
+    // Use 3 indicators which should result in MEDIUM severity per confluence logic
+    const indicatorCount = 3;
+    let severity;
+    if (indicatorCount >= 5) severity = 'critical';
+    else if (indicatorCount >= 4) severity = 'high';
+    else if (indicatorCount >= 3) severity = 'medium';
+    else severity = 'low';
+
     const testAlertData = {
       agent_id: agent.id,
       configuration_id: null, // Test alert without specific configuration
-      alert_name: 'Test Alert - High CPU Utilization Detected',
+      alert_name: '[TEST] High CPU Utilization Detected',
       alert_type: 'high_utilization',
-      severity: ['low', 'medium', 'high', 'critical'][Math.floor(Math.random() * 4)], // Random severity
-      indicator_count: 3,
+      severity: severity, // Calculated based on indicator count
+      indicator_count: indicatorCount,
       contributing_indicators: {
         rsi: {
           indicator: 'RSI',
