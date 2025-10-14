@@ -272,6 +272,10 @@ export class AuthService {
   // Send MFA code for admin login
   async sendAdminMfaCode(email: string, password: string): Promise<{ email: string; phoneNumber?: string; message: string }> {
     try {
+      // Generate device fingerprint for trusted device detection
+      const deviceFingerprint = this.generateDeviceFingerprint();
+      console.log('🔍 [sendAdminMfaCode] Including device fingerprint for trusted device check');
+
       const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/admin-login-mfa`, {
         method: 'POST',
         headers: {
@@ -279,7 +283,8 @@ export class AuthService {
         },
         body: JSON.stringify({
           email,
-          password
+          password,
+          deviceFingerprint
         })
       });
 

@@ -13,8 +13,8 @@ export const useChartState = (initialHeight: number) => {
   const [windowSize, setWindowSize] = useState<number>(20);
   const [bandMode, setBandMode] = useState<BandMode>('dynamic');
 
-  // Time window selection (default to 1 day = 24 hours)
-  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(24);
+  // Time window selection (default to 2 days = 48 hours)
+  const [selectedTimeWindow, setSelectedTimeWindow] = useState<number>(48);
 
   // Y-axis autofitting (default to enabled)
   const [autoFitYAxis, setAutoFitYAxis] = useState<boolean>(true);
@@ -64,6 +64,32 @@ export const useChartState = (initialHeight: number) => {
 
   // Chart height state
   const [chartHeight, setChartHeight] = useState(initialHeight);
+
+  // Reset function to restore all defaults
+  const resetToDefaults = () => {
+    setChartDisplayType('heiken-ashi');
+    setCandlestickPeriod(15);
+    setAveragingMode('moving');
+    setWindowSize(20);
+    setBandMode('dynamic');
+    setSelectedTimeWindow(48); // 2 days
+    setAutoFitYAxis(true);
+    setActiveIndicators({
+      sma20: true,
+      bb: true,
+    });
+    setCurrentZoom(null);
+    setChartHeight(initialHeight);
+    setOscillatorHeights({
+      main: 60,
+      rsi: 0,
+      macd: 0,
+      stochastic: 0,
+      williamsR: 0,
+      roc: 0,
+      atr: 0,
+    });
+  };
 
   return {
     // Display settings
@@ -128,5 +154,8 @@ export const useChartState = (initialHeight: number) => {
     // Chart dimensions
     chartHeight,
     setChartHeight,
+
+    // Reset
+    resetToDefaults,
   };
 };

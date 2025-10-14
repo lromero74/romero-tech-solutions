@@ -77,8 +77,9 @@ export const useChartEffects = ({
   const initialZoomRange = useMemo(() => {
     if (!chartData || chartData.length === 0) return [0, 100];
 
-    const now = new Date();
-    const cutoffTime = new Date(now.getTime() - selectedTimeWindow * 60 * 60 * 1000);
+    // Always calculate based on "now" (most recent data point)
+    const mostRecentDataTime = new Date(chartData[chartData.length - 1].timestamp);
+    const cutoffTime = new Date(mostRecentDataTime.getTime() - selectedTimeWindow * 60 * 60 * 1000);
 
     let startIndex = 0;
     for (let i = chartData.length - 1; i >= 0; i--) {
@@ -91,14 +92,17 @@ export const useChartEffects = ({
     }
 
     const startPercent = (startIndex / chartData.length) * 100;
+    console.log('📊 Calculated initial zoom range:', [startPercent, 100], 'based on most recent data');
     return [startPercent, 100];
   }, [chartData, selectedTimeWindow]);
 
   // Get the zoom range to use (current zoom if available, otherwise initial)
   const activeZoomRange = useMemo(() => {
     if (currentZoom && !isInitialRender) {
+      console.log('📊 Using current zoom:', currentZoom);
       return [currentZoom.start, currentZoom.end];
     }
+    console.log('📊 Using initial zoom range:', initialZoomRange);
     return initialZoomRange;
   }, [currentZoom, isInitialRender, initialZoomRange]);
 

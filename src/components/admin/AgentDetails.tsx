@@ -246,6 +246,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           homebrew_outdated: update.metrics.homebrew_outdated || 0,
           npm_outdated: update.metrics.npm_outdated || 0,
           pip_outdated: update.metrics.pip_outdated || 0,
+          mas_outdated: update.metrics.mas_outdated || 0,
           outdated_packages_data: update.metrics.outdated_packages_data || null,
           raw_metrics: update.metrics.raw_metrics || null,
         };

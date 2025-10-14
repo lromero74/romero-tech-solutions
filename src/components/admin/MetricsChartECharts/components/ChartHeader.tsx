@@ -1,5 +1,5 @@
 import React from 'react';
-import { Maximize2 } from 'lucide-react';
+import { Maximize2, RotateCcw, Clock } from 'lucide-react';
 import { themeClasses } from '../../../../contexts/ThemeContext';
 
 interface ChartHeaderProps {
@@ -11,6 +11,8 @@ interface ChartHeaderProps {
   };
   autoFitYAxis: boolean;
   onToggleAutoFit: () => void;
+  onReset: () => void;
+  onJumpToNow: () => void;
 }
 
 export const ChartHeader: React.FC<ChartHeaderProps> = ({
@@ -19,6 +21,8 @@ export const ChartHeader: React.FC<ChartHeaderProps> = ({
   stats,
   autoFitYAxis,
   onToggleAutoFit,
+  onReset,
+  onJumpToNow,
 }) => {
   return (
     <div className={`flex items-center justify-between px-4 py-2 border-b ${themeClasses.border.primary}`}>
@@ -34,6 +38,20 @@ export const ChartHeader: React.FC<ChartHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-2">
+        <button
+          onClick={onJumpToNow}
+          className={`p-1.5 rounded transition-colors ${themeClasses.text.muted} hover:${themeClasses.bg.hover}`}
+          title="Jump to Now"
+        >
+          <Clock className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={onReset}
+          className={`p-1.5 rounded transition-colors ${themeClasses.text.muted} hover:${themeClasses.bg.hover}`}
+          title="Reset to Defaults"
+        >
+          <RotateCcw className="w-3.5 h-3.5" />
+        </button>
         <button
           onClick={onToggleAutoFit}
           className={`p-1.5 rounded transition-colors ${

@@ -12,7 +12,7 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
         <Download className="w-5 h-5 mr-2" />
         Package Manager Status
       </h3>
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-5 gap-6">
         {/* Total Outdated */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
@@ -93,6 +93,26 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
               {latestMetrics.pip_outdated === 0 ? 'Up to date' : `${latestMetrics.pip_outdated} outdated`}
+            </p>
+          </div>
+        )}
+
+        {/* mas (Mac App Store) */}
+        {latestMetrics.mas_outdated !== undefined && (
+          <div>
+            <div className="flex items-baseline gap-2 mb-2">
+              <div className="flex items-center gap-2">
+                <Download className={`w-4 h-4 ${themeClasses.text.muted}`} />
+                <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>mas:</span>
+              </div>
+              <span className={`text-lg font-bold ${
+                latestMetrics.mas_outdated === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+              }`}>
+                {latestMetrics.mas_outdated}
+              </span>
+            </div>
+            <p className={`text-xs ${themeClasses.text.muted}`}>
+              {latestMetrics.mas_outdated === 0 ? 'Up to date' : `${latestMetrics.mas_outdated} outdated`}
             </p>
           </div>
         )}

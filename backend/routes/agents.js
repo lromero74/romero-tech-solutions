@@ -422,10 +422,11 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
           homebrew_outdated,
           npm_outdated,
           pip_outdated,
+          mas_outdated,
           outdated_packages_data,
           raw_metrics,
           collected_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70, $71, $72, $73, $74, $75, $76, $77)`,
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37, $38, $39, $40, $41, $42, $43, $44, $45, $46, $47, $48, $49, $50, $51, $52, $53, $54, $55, $56, $57, $58, $59, $60, $61, $62, $63, $64, $65, $66, $67, $68, $69, $70, $71, $72, $73, $74, $75, $76, $77, $78)`,
         [
           uuidv4(),
           agent_id,
@@ -501,6 +502,7 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
           metric.homebrew_outdated || 0,
           metric.npm_outdated || 0,
           metric.pip_outdated || 0,
+          metric.mas_outdated || 0,
           metric.outdated_packages_data ? JSON.stringify(metric.outdated_packages_data) : null,
           metric.raw_metrics || metric.custom_metrics ? JSON.stringify(metric.raw_metrics || metric.custom_metrics) : null,
           metric.collected_at || new Date()
@@ -1093,6 +1095,7 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
         homebrew_outdated,
         npm_outdated,
         pip_outdated,
+        mas_outdated,
         outdated_packages_data,
         raw_metrics,
         collected_at
