@@ -326,7 +326,10 @@ const conditionalCsrfProtection = (req, res, next) => {
     '/register-client',
     '/client-password-requirements',
     '/trial-magic-login',
-    '/agent-magic-login'
+    '/agent-magic-login',
+    '/heartbeat',  // Session heartbeat - already secured by session token validation
+    '/validate-session',  // Session validation - already secured by session token validation
+    '/extend-session'  // Session extension - already secured by session token validation
   ];
 
   // Check if this is a pre-auth endpoint
