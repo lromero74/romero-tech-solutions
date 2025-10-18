@@ -1701,7 +1701,7 @@ router.post('/:agent_id/inventory/storage', authenticateAgent, requireAgentMatch
 router.get('/:agent_id/inventory/hardware', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -1759,7 +1759,7 @@ router.get('/:agent_id/inventory/software', authMiddleware, async (req, res) => 
   try {
     const { agent_id } = req.params;
     const { package_manager, category, search } = req.query;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -1857,7 +1857,7 @@ router.get('/:agent_id/inventory/software', authMiddleware, async (req, res) => 
 router.get('/:agent_id/inventory/storage', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -1929,7 +1929,7 @@ router.get('/:agent_id/commands/list', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
     const { status } = req.query;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -2191,7 +2191,7 @@ router.post('/registration-tokens', authMiddleware, requireEmployee, async (req,
 router.get('/', authMiddleware, async (req, res) => {
   try {
     const { business_id, service_location_id, status } = req.query;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     let queryText = `
       SELECT
@@ -2286,7 +2286,7 @@ router.get('/', authMiddleware, async (req, res) => {
 router.get('/:agent_id/policies', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -2368,7 +2368,7 @@ router.get('/:agent_id/policies', authMiddleware, async (req, res) => {
 router.get('/:agent_id', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     let queryText = `
       SELECT
@@ -2432,7 +2432,7 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
     const { hours = 24, metric_type } = req.query;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
@@ -2565,7 +2565,7 @@ router.get('/:agent_id/alerts', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
     const { status } = req.query;
-    const isEmployee = req.user.role !== 'customer';
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     // Verify access to this agent
     let accessCheckQuery = `
