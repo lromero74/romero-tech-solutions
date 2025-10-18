@@ -236,11 +236,8 @@ function AppContent() {
           const agentIdToUse = (authUser as any)?.agentId || pendingAgentId;
           console.log('📊 Routing to TrialDashboard (agent magic-link user with agentId:', agentIdToUse, ')');
 
-          // Clear pendingAgentId after using it for routing
-          if (pendingAgentId) {
-            sessionStorage.removeItem('pendingAgentId');
-            console.log('🧹 Cleared pendingAgentId from sessionStorage');
-          }
+          // DON'T clear pendingAgentId yet - TrialDashboard component needs it
+          // It will be cleared when auth context updates with the full user data
 
           return <TrialDashboard onNavigate={setCurrentPage} />;
         }

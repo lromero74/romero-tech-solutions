@@ -17,8 +17,20 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
   // Support both trial users and regular users accessing via agent magic-link
   const trialAgentId = (authUser as any)?.trialAgentId;
   const trialId = (authUser as any)?.trialId;
-  const agentId = (authUser as any)?.agentId || trialAgentId; // Use agentId or trialAgentId
+
+  // CRITICAL: Check sessionStorage for pendingAgentId in case auth context hasn't updated yet
+  // This handles the race condition where routing happens before React state updates
+  const pendingAgentId = sessionStorage.getItem('pendingAgentId');
+  const agentId = (authUser as any)?.agentId || trialAgentId || pendingAgentId; // Use agentId, trialAgentId, or pendingAgentId
   const isTrial = (authUser as any)?.isTrial || false;
+
+  console.log('📊 TrialDashboard agentId resolution:', {
+    authUserAgentId: (authUser as any)?.agentId,
+    trialAgentId,
+    pendingAgentId,
+    finalAgentId: agentId,
+    isTrial
+  });
 
   // Apply dark mode to document
   useEffect(() => {
