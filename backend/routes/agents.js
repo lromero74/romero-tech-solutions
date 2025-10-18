@@ -898,11 +898,11 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     const agent = agentResult.rows[0];
 
     // Find primary user account for this business
-    // Look for customer role user associated with this business
+    // Look for customer/client role user associated with this business
     const userResult = await query(
       `SELECT id, email, first_name, last_name, role, time_format_preference
        FROM users
-       WHERE business_id = $1 AND role = 'customer' AND is_active = true AND email_verified = true
+       WHERE business_id = $1 AND role IN ('customer', 'client') AND is_active = true AND email_verified = true
        ORDER BY created_at ASC
        LIMIT 1`,
       [agent.business_id]
@@ -911,7 +911,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     if (userResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'No customer account found for this agent',
+        message: 'No customer/client account found for this agent',
         code: 'NO_CUSTOMER_ACCOUNT'
       });
     }
