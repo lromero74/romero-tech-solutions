@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import AgentDetails from '../components/admin/AgentDetails';
+import AgentSelector from '../components/trial/AgentSelector';
+import { agentService, AgentDevice } from '../services/agentService';
 import { LogOut, Sun, Moon, HardDrive } from 'lucide-react';
 
 interface TrialDashboardProps {
@@ -15,6 +17,10 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
 
+  // Multi-agent support
+  const [agents, setAgents] = useState<AgentDevice[]>([]);
+  const [loadingAgents, setLoadingAgents] = useState(true);
+
   // Support both trial users and regular users accessing via agent magic-link
   const trialAgentId = (authUser as any)?.trialAgentId;
   const trialId = (authUser as any)?.trialId;
@@ -22,14 +28,23 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
   // CRITICAL: Check sessionStorage for pendingAgentId in case auth context hasn't updated yet
   // This handles the race condition where routing happens before React state updates
   const pendingAgentId = sessionStorage.getItem('pendingAgentId');
-  const agentId = (authUser as any)?.agentId || trialAgentId || pendingAgentId; // Use agentId, trialAgentId, or pendingAgentId
+  const initialAgentId = (authUser as any)?.agentId || trialAgentId || pendingAgentId;
+
+  // Selected agent (can be different from the one opened via magic-link)
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
+    // Check if there's a previously selected agent in localStorage
+    const savedAgentId = localStorage.getItem('selectedAgentId');
+    return savedAgentId || initialAgentId || '';
+  });
+
   const isTrial = (authUser as any)?.isTrial || false;
 
   console.log('📊 TrialDashboard agentId resolution:', {
     authUserAgentId: (authUser as any)?.agentId,
     trialAgentId,
     pendingAgentId,
-    finalAgentId: agentId,
+    initialAgentId,
+    selectedAgentId,
     isTrial
   });
 
@@ -46,6 +61,43 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
 
   const toggleTheme = () => {
     setIsDarkMode(!isDarkMode);
+  };
+
+  // Fetch all agents for the user's business
+  useEffect(() => {
+    const fetchAgents = async () => {
+      try {
+        setLoadingAgents(true);
+        const response = await agentService.listAgents();
+
+        if (response.success && response.data) {
+          setAgents(response.data.agents);
+
+          // If we have agents and no selected agent, select the initial one
+          if (response.data.agents.length > 0 && !selectedAgentId) {
+            const firstAgentId = initialAgentId || response.data.agents[0].id;
+            setSelectedAgentId(firstAgentId);
+            localStorage.setItem('selectedAgentId', firstAgentId);
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching agents:', error);
+      } finally {
+        setLoadingAgents(false);
+      }
+    };
+
+    // Only fetch if user is authenticated
+    if (authUser) {
+      fetchAgents();
+    }
+  }, [authUser, initialAgentId]);
+
+  // Handle agent selection
+  const handleSelectAgent = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    localStorage.setItem('selectedAgentId', agentId);
+    console.log('📊 Selected agent changed:', agentId);
   };
 
   const handleLogout = async () => {
@@ -66,13 +118,28 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
     }
   };
 
-  if (!agentId) {
+  // Show loading state while fetching agents
+  if (loadingAgents) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+        <div className="text-center">
+          <HardDrive className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-4 animate-pulse" />
+          <p className="text-gray-600 dark:text-gray-400">
+            Loading your devices...
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if no agents found
+  if (agents.length === 0 && !selectedAgentId) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
           <HardDrive className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
           <p className="text-gray-600 dark:text-gray-400 mb-4">
-            No agent device found for this account.
+            No agent devices found for your account.
           </p>
           <button
             onClick={handleLogout}
@@ -164,10 +231,18 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
           </div>
         )}
 
+        {/* Agent Selector (only show if user has multiple agents) */}
+        <AgentSelector
+          agents={agents}
+          selectedAgentId={selectedAgentId}
+          onSelectAgent={handleSelectAgent}
+          isDarkMode={isDarkMode}
+        />
+
         {/* Agent Details Component */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
           <ThemeProvider>
-            <AgentDetails agentId={agentId} />
+            <AgentDetails agentId={selectedAgentId} />
           </ThemeProvider>
         </div>
       </main>
