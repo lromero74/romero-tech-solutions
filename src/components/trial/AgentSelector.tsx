@@ -58,21 +58,30 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
     if (!osType) return 'Unknown OS';
 
     const type = osType.toLowerCase();
+    const version = osVersion?.trim();
+
+    // Handle cases where os_version is just a duplicate of the OS name
+    const isDuplicate = version && (
+      version.toLowerCase() === type ||
+      version.toLowerCase() === 'macos' && type === 'darwin' ||
+      version.toLowerCase() === 'linux' ||
+      version.toLowerCase() === 'windows'
+    );
 
     // Format based on OS type
     if (type === 'darwin' || type === 'macos') {
-      return `macOS ${osVersion || ''}`.trim();
+      return isDuplicate || !version ? 'macOS' : `macOS ${version}`;
     } else if (type === 'linux') {
-      // For Linux, os_version might contain distro name like "Fedora 40" or just version
-      return osVersion || 'Linux';
+      // For Linux, show distro name if available and not duplicate
+      return isDuplicate || !version ? 'Linux' : version;
     } else if (type === 'windows') {
-      // For Windows, show version like "Windows 11 Build 22621"
-      return osVersion ? `Windows ${osVersion}` : 'Windows';
+      // For Windows, show version if available and not duplicate
+      return isDuplicate || !version ? 'Windows' : `Windows ${version}`;
     }
 
-    // Default: capitalize OS type and append version if available
+    // Default: capitalize OS type
     const formatted = type.charAt(0).toUpperCase() + type.slice(1);
-    return osVersion ? `${formatted} ${osVersion}` : formatted;
+    return isDuplicate || !version ? formatted : `${formatted} ${version}`;
   };
 
   if (agents.length === 0) {
