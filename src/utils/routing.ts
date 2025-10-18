@@ -37,6 +37,12 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/confirm-email') {
     return 'confirm-email';
   }
+  if (path === '/trial/login' || path.startsWith('/trial/login')) {
+    return 'trial-login';
+  }
+  if (path === '/agent/login' || path.startsWith('/agent/login')) {
+    return 'agent-login';
+  }
   return 'home';
 };
 
@@ -59,12 +65,18 @@ export const getPathFromPage = (page: AppPage): string => {
   if (page === 'employee') {
     return '/employee';
   }
+  if (page === 'trial-login') {
+    return '/trial/login';
+  }
+  if (page === 'agent-login') {
+    return '/agent/login';
+  }
   return `/${page}`;
 };
 
 export const updateUrlForPage = (page: AppPage): void => {
-  // Don't update URL for rate page as it contains a dynamic token parameter
-  if (page === 'rate') {
+  // Don't update URL for pages with dynamic parameters
+  if (page === 'rate' || page === 'trial-login' || page === 'agent-login') {
     return;
   }
 

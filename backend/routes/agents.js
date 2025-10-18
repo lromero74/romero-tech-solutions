@@ -1,6 +1,7 @@
 import express from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import crypto from 'crypto';
+import bcrypt from 'bcrypt';
 import { query } from '../config/database.js';
 import { authenticateAgent, requireAgentMatch } from '../middleware/agentAuthMiddleware.js';
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
@@ -10,6 +11,696 @@ import { confluenceDetectionService } from '../services/confluenceDetectionServi
 import { policySchedulerService } from '../services/policySchedulerService.js';
 
 const router = express.Router();
+
+// Namespace UUID for trial agents (generated once, used consistently)
+const TRIAL_NAMESPACE = 'a8f5f167-d5e9-4c91-a3d2-7e5c8f9b1c4a';
+
+/**
+ * Convert trial-{timestamp} ID to deterministic UUID
+ * This allows trial IDs to be stored as UUIDs in the database
+ * while maintaining uniqueness and traceability
+ */
+function trialIdToUUID(trialId) {
+  return uuidv5(trialId, TRIAL_NAMESPACE);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TRIAL AGENT ENDPOINTS (No Authentication Required)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Trial Agent Heartbeat Endpoint
+ * POST /api/agents/trial/heartbeat
+ *
+ * Accepts heartbeat from trial agents without authentication
+ * Trial agents use trial-{timestamp} as their ID
+ */
+router.post('/trial/heartbeat', async (req, res) => {
+  try {
+    const {
+      trial_id,
+      access_code,
+      status,
+      device_name,
+      os_type,
+      os_version,
+      agent_version,
+      system_info
+    } = req.body;
+
+    // Validate required fields
+    if (!trial_id || !device_name || !os_type) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, device_name, os_type',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Validate access_code if provided (required for new trial agents)
+    if (access_code && !/^\d{6}$/.test(access_code)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid access_code format. Must be 6 digits.',
+        code: 'INVALID_ACCESS_CODE'
+      });
+    }
+
+    // Validate trial_id format
+    if (!trial_id.startsWith('trial-')) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trial_id format. Must start with "trial-"',
+        code: 'INVALID_TRIAL_ID'
+      });
+    }
+
+    // Convert trial_id to UUID for database storage
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Check if trial agent already exists
+    const existingResult = await query(
+      'SELECT id, is_trial, trial_end_date, trial_converted_at, trial_original_id FROM agent_devices WHERE id = $1',
+      [trialUUID]
+    );
+
+    let trialStatus, daysRemaining;
+
+    if (existingResult.rows.length > 0) {
+      // Trial agent exists - update heartbeat
+      const trial = existingResult.rows[0];
+
+      // Check if trial has been converted
+      if (trial.trial_converted_at) {
+        return res.status(403).json({
+          success: false,
+          message: 'This trial has been converted to a paid account. Please use your registration token.',
+          code: 'TRIAL_CONVERTED'
+        });
+      }
+
+      // Check if trial has expired
+      if (new Date(trial.trial_end_date) < new Date()) {
+        return res.status(403).json({
+          success: false,
+          message: 'Your trial has expired. Subscribe at https://romerotechsolutions.com/pricing',
+          code: 'TRIAL_EXPIRED',
+          data: {
+            trial_status: 'expired',
+            expired_at: trial.trial_end_date
+          }
+        });
+      }
+
+      // Calculate days remaining
+      const now = new Date();
+      const endDate = new Date(trial.trial_end_date);
+      daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+      // Update heartbeat
+      await query(
+        `UPDATE agent_devices
+         SET last_heartbeat = NOW(),
+             status = COALESCE($2, status),
+             agent_version = COALESCE($3, agent_version),
+             updated_at = NOW()
+         WHERE id = $1`,
+        [trialUUID, status || 'online', agent_version]
+      );
+
+      trialStatus = 'active';
+
+    } else {
+      // New trial agent - create record
+      const trialStartDate = new Date();
+      const trialEndDate = new Date(trialStartDate);
+      trialEndDate.setDate(trialEndDate.getDate() + 30); // 30-day trial
+
+      // Extract system info
+      const hostname = system_info?.hostname || null;
+      const cpu_model = system_info?.cpu_model || null;
+      const total_memory_gb = system_info?.total_memory_gb || null;
+
+      // Generate a unique trial token for this trial agent
+      const trialToken = `trial-token-${crypto.randomBytes(16).toString('hex')}`;
+
+      await query(
+        `INSERT INTO agent_devices (
+          id,
+          business_id,
+          service_location_id,
+          agent_token,
+          device_name,
+          device_type,
+          os_type,
+          os_version,
+          hostname,
+          cpu_model,
+          total_memory_gb,
+          agent_version,
+          status,
+          monitoring_enabled,
+          is_active,
+          is_trial,
+          trial_start_date,
+          trial_end_date,
+          trial_original_id,
+          trial_access_code
+        ) VALUES ($1, NULL, NULL, $2, $3, 'desktop', $4, $5, $6, $7, $8, $9, $10, true, true, true, $11, $12, $13, $14)`,
+        [
+          trialUUID,
+          trialToken,
+          device_name,
+          os_type,
+          os_version || null,
+          hostname,
+          cpu_model,
+          total_memory_gb,
+          agent_version || '1.0.0',
+          status || 'online',
+          trialStartDate,
+          trialEndDate,
+          trial_id, // Store original trial-{timestamp} ID
+          access_code || null // Store access code for trial dashboard access
+        ]
+      );
+
+      daysRemaining = 30;
+      trialStatus = 'active';
+
+      console.log(`✅ New trial agent registered: ${device_name} (${trial_id}) - Expires: ${trialEndDate.toISOString()}`);
+
+      // Auto-create user account for trial dashboard access (if access_code provided)
+      if (access_code) {
+        // Check if trial user account already exists for this trial ID
+        const existingUserResult = await query(
+          `SELECT id FROM users WHERE email = $1`,
+          [`trial-${trial_id}@trial.romerotechsolutions.com`]
+        );
+
+        if (existingUserResult.rows.length === 0) {
+          // Create user account with access_code as password
+          const passwordHash = await bcrypt.hash(access_code, 10);
+          const userId = uuidv4();
+
+          await query(
+            `INSERT INTO users (
+              id, email, password_hash, first_name, last_name,
+              role, is_active, is_verified, business_id, created_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+            [
+              userId,
+              `trial-${trial_id}@trial.romerotechsolutions.com`,
+              passwordHash,
+              'Trial',
+              'User',
+              'customer',
+              true,
+              true, // Auto-verify trial accounts
+              null  // Trial users don't have business_id initially
+            ]
+          );
+
+          console.log(`✅ Auto-created trial user account for ${trial_id} (access code: ${access_code})`);
+        }
+      }
+    }
+
+    // Generate magic-link token for auto-login (if access_code provided)
+    let magicLinkUrl = null;
+    if (access_code) {
+      // Create short-lived magic-link token (valid for 10 minutes)
+      const magicToken = jwt.sign(
+        {
+          trial_id: trial_id,
+          access_code: access_code,
+          type: 'trial_magic_link'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' }
+      );
+
+      // Construct magic-link URL for agent to open
+      magicLinkUrl = `https://romerotechsolutions.com/trial/login?token=${magicToken}`;
+    }
+
+    res.json({
+      success: true,
+      message: 'Heartbeat received',
+      data: {
+        trial_status: trialStatus,
+        days_remaining: daysRemaining,
+        magic_link_url: magicLinkUrl, // URL for agent to open in browser
+        timestamp: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial heartbeat error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Heartbeat processing failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Agent Metrics Upload Endpoint
+ * POST /api/agents/trial/metrics
+ *
+ * Accepts metrics from trial agents without authentication
+ */
+router.post('/trial/metrics', async (req, res) => {
+  try {
+    const { trial_id, metrics } = req.body;
+
+    if (!trial_id || !metrics) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, metrics',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Validate trial exists and is active
+    const trialResult = await query(
+      `SELECT id, is_trial, trial_end_date, trial_converted_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trial = trialResult.rows[0];
+
+    // Check if trial has been converted
+    if (trial.trial_converted_at) {
+      return res.status(403).json({
+        success: false,
+        message: 'Trial has been converted. Please use your registered agent.',
+        code: 'TRIAL_CONVERTED'
+      });
+    }
+
+    // Check if trial has expired
+    if (new Date(trial.trial_end_date) < new Date()) {
+      const daysExpired = Math.floor((new Date() - new Date(trial.trial_end_date)) / (1000 * 60 * 60 * 24));
+      return res.status(403).json({
+        success: false,
+        message: `Your trial expired ${daysExpired} day(s) ago. Subscribe at https://romerotechsolutions.com/pricing`,
+        code: 'TRIAL_EXPIRED',
+        data: {
+          expired_at: trial.trial_end_date,
+          days_expired: daysExpired,
+          upgrade_url: 'https://romerotechsolutions.com/pricing'
+        }
+      });
+    }
+
+    // Calculate days remaining
+    const now = new Date();
+    const endDate = new Date(trial.trial_end_date);
+    const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+
+    // Insert metrics (supports both single metric and array)
+    const metricsArray = Array.isArray(metrics) ? metrics : [metrics];
+
+    for (const metric of metricsArray) {
+      await query(
+        `INSERT INTO agent_metrics (
+          id,
+          agent_device_id,
+          cpu_percent,
+          memory_percent,
+          memory_used_gb,
+          disk_percent,
+          disk_used_gb,
+          network_rx_bytes,
+          network_tx_bytes,
+          collected_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          uuidv4(),
+          trialUUID,
+          metric.cpu_percent || null,
+          metric.memory_percent || null,
+          metric.memory_used_gb || null,
+          metric.disk_percent || null,
+          metric.disk_used_gb || null,
+          metric.network_rx_bytes || null,
+          metric.network_tx_bytes || null,
+          metric.collected_at || new Date()
+        ]
+      );
+    }
+
+    // Update last metrics received timestamp
+    await query(
+      'UPDATE agent_devices SET last_metrics_received = NOW() WHERE id = $1',
+      [trialUUID]
+    );
+
+    res.json({
+      success: true,
+      message: 'Metrics received',
+      data: {
+        metrics_count: metricsArray.length,
+        trial_status: 'active',
+        days_remaining: daysRemaining
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial metrics upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Metrics upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Agent Conversion Endpoint
+ * POST /api/agents/trial/convert
+ *
+ * Converts a trial agent to a registered (paid) agent
+ * This provides an easy path from trial to customer
+ */
+router.post('/trial/convert', async (req, res) => {
+  try {
+    const { trial_id, registration_token, preserve_data = true } = req.body;
+
+    if (!trial_id || !registration_token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, registration_token',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Verify trial agent exists
+    const trialResult = await query(
+      `SELECT id, device_name, os_type, os_version, hostname, cpu_model,
+              total_memory_gb, agent_version, is_trial, trial_converted_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trialAgent = trialResult.rows[0];
+
+    // Check if trial has already been converted
+    if (trialAgent.trial_converted_at) {
+      return res.status(400).json({
+        success: false,
+        message: 'Trial has already been converted',
+        code: 'ALREADY_CONVERTED'
+      });
+    }
+
+    // Verify registration token
+    const tokenResult = await query(
+      `SELECT id, business_id, service_location_id, created_by, expires_at, is_used
+       FROM agent_registration_tokens
+       WHERE token = $1`,
+      [registration_token]
+    );
+
+    if (tokenResult.rows.length === 0) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid registration token',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    const tokenData = tokenResult.rows[0];
+
+    // Check if token is already used
+    if (tokenData.is_used) {
+      return res.status(401).json({
+        success: false,
+        message: 'Registration token has already been used',
+        code: 'TOKEN_ALREADY_USED'
+      });
+    }
+
+    // Check if token is expired
+    if (new Date(tokenData.expires_at) < new Date()) {
+      return res.status(401).json({
+        success: false,
+        message: 'Registration token has expired',
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+
+    // BEGIN TRANSACTION - Atomic conversion
+    await query('BEGIN');
+
+    try {
+      // Generate new agent ID and JWT token
+      const newAgentId = uuidv4();
+      const permanentToken = jwt.sign(
+        {
+          agent_id: newAgentId,
+          type: 'agent',
+          business_id: tokenData.business_id,
+          service_location_id: tokenData.service_location_id
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10y' }
+      );
+
+      // Create new registered agent
+      await query(
+        `INSERT INTO agent_devices (
+          id,
+          business_id,
+          service_location_id,
+          agent_token,
+          device_name,
+          device_type,
+          os_type,
+          os_version,
+          hostname,
+          cpu_model,
+          total_memory_gb,
+          agent_version,
+          status,
+          created_by,
+          monitoring_enabled,
+          is_active,
+          is_trial,
+          trial_original_id
+        ) VALUES ($1, $2, $3, $4, $5, 'desktop', $6, $7, $8, $9, $10, $11, 'online', $12, true, true, false, $13)`,
+        [
+          newAgentId,
+          tokenData.business_id,
+          tokenData.service_location_id,
+          permanentToken,
+          trialAgent.device_name,
+          trialAgent.os_type,
+          trialAgent.os_version,
+          trialAgent.hostname,
+          trialAgent.cpu_model,
+          trialAgent.total_memory_gb,
+          trialAgent.agent_version,
+          tokenData.created_by,
+          trial_id // Store original trial ID for reference
+        ]
+      );
+
+      // Migrate metrics if preserve_data is true
+      let metricsMigrated = 0;
+      if (preserve_data) {
+        const migrateResult = await query(
+          `UPDATE agent_metrics
+           SET agent_device_id = $1
+           WHERE agent_device_id = $2`,
+          [newAgentId, trialUUID]
+        );
+        metricsMigrated = migrateResult.rowCount;
+      }
+
+      // Mark original trial agent as converted
+      await query(
+        `UPDATE agent_devices
+         SET trial_converted_at = NOW(),
+             trial_converted_to_agent_id = $2,
+             is_active = false,
+             status = 'offline',
+             updated_at = NOW()
+         WHERE id = $1`,
+        [trialUUID, newAgentId]
+      );
+
+      // Mark registration token as used
+      await query(
+        `UPDATE agent_registration_tokens
+         SET is_used = true, used_at = NOW(), used_by_agent_id = $1
+         WHERE id = $2`,
+        [newAgentId, tokenData.id]
+      );
+
+      // COMMIT TRANSACTION
+      await query('COMMIT');
+
+      console.log(`✅ Trial agent converted successfully: ${trial_id} → ${newAgentId}`);
+      console.log(`   Device: ${trialAgent.device_name}`);
+      console.log(`   Business: ${tokenData.business_id}`);
+      console.log(`   Metrics migrated: ${metricsMigrated}`);
+
+      res.json({
+        success: true,
+        message: 'Trial converted successfully! Welcome to RTS Monitoring.',
+        data: {
+          agent_id: newAgentId,
+          agent_token: permanentToken,
+          business_id: tokenData.business_id,
+          service_location_id: tokenData.service_location_id,
+          metrics_migrated: metricsMigrated,
+          trial_id: trial_id
+        }
+      });
+
+    } catch (error) {
+      // ROLLBACK on error
+      await query('ROLLBACK');
+      throw error;
+    }
+
+  } catch (error) {
+    console.error('Trial conversion error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Trial conversion failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Get Trial Status
+ * GET /api/agents/trial/status/:trial_id
+ *
+ * Returns current status of a trial agent
+ */
+router.get('/trial/status/:trial_id', async (req, res) => {
+  try {
+    const { trial_id } = req.params;
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Get trial agent details
+    const trialResult = await query(
+      `SELECT
+        id,
+        trial_original_id,
+        device_name,
+        os_type,
+        status,
+        is_trial,
+        trial_start_date,
+        trial_end_date,
+        trial_converted_at,
+        trial_converted_to_agent_id,
+        last_heartbeat,
+        last_metrics_received,
+        created_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trial = trialResult.rows[0];
+
+    // Calculate trial status
+    const now = new Date();
+    const startDate = new Date(trial.trial_start_date);
+    const endDate = new Date(trial.trial_end_date);
+
+    const daysElapsed = Math.floor((now - startDate) / (1000 * 60 * 60 * 24));
+    const daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
+    const totalDays = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24));
+    const percentUsed = Math.round((daysElapsed / totalDays) * 100);
+
+    let trialStatus;
+    if (trial.trial_converted_at) {
+      trialStatus = 'converted';
+    } else if (endDate < now) {
+      trialStatus = 'expired';
+    } else {
+      trialStatus = 'active';
+    }
+
+    res.json({
+      success: true,
+      data: {
+        trial_id: trial.id,
+        device_name: trial.device_name,
+        os_type: trial.os_type,
+        status: trialStatus,
+        is_active: trialStatus === 'active',
+        trial_start_date: trial.trial_start_date,
+        trial_end_date: trial.trial_end_date,
+        days_elapsed: daysElapsed,
+        days_remaining: Math.max(0, daysRemaining),
+        total_days: totalDays,
+        percent_used: percentUsed,
+        converted_at: trial.trial_converted_at,
+        converted_to_agent_id: trial.trial_converted_to_agent_id,
+        last_heartbeat: trial.last_heartbeat,
+        last_metrics_received: trial.last_metrics_received,
+        created_at: trial.created_at,
+        upgrade_url: 'https://romerotechsolutions.com/pricing'
+      }
+    });
+
+  } catch (error) {
+    console.error('Get trial status error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get trial status',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// REGULAR AGENT ENDPOINTS (Require Authentication)
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
  * Agent Registration Endpoint
@@ -175,6 +866,95 @@ router.post('/register', async (req, res) => {
  *
  * Updates agent status and last contact time
  */
+/**
+ * Agent Dashboard Magic-Link Endpoint
+ * POST /api/agents/:agent_id/dashboard-link
+ *
+ * Generates a short-lived magic-link for agent to open user-specific dashboard
+ * Requires agent authentication
+ */
+router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+
+    // Get agent details including business_id and service_location_id
+    const agentResult = await query(
+      `SELECT ad.id, ad.business_id, ad.service_location_id, ad.device_name,
+              b.id as business_uuid, b.name as business_name
+       FROM agent_devices ad
+       LEFT JOIN businesses b ON ad.business_id = b.id
+       WHERE ad.id = $1 AND ad.is_active = true`,
+      [agent_id]
+    );
+
+    if (agentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or inactive',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    const agent = agentResult.rows[0];
+
+    // Find primary user account for this business
+    // Look for customer role user associated with this business
+    const userResult = await query(
+      `SELECT id, email, first_name, last_name, role, time_format_preference
+       FROM users
+       WHERE business_id = $1 AND role = 'customer' AND is_active = true AND is_verified = true
+       ORDER BY created_at ASC
+       LIMIT 1`,
+      [agent.business_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No customer account found for this agent',
+        code: 'NO_CUSTOMER_ACCOUNT'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Generate magic-link token with agent and user info
+    const magicToken = jwt.sign(
+      {
+        agent_id: agent_id,
+        user_id: user.id,
+        business_id: agent.business_id,
+        type: 'agent_magic_link'
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '10m' } // 10 minute expiration
+    );
+
+    const magicLinkUrl = `https://romerotechsolutions.com/agent/login?token=${magicToken}`;
+
+    console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})`);
+
+    res.json({
+      success: true,
+      message: 'Magic-link generated',
+      data: {
+        magic_link_url: magicLinkUrl,
+        expires_in: '10m',
+        agent_name: agent.device_name,
+        business_name: agent.business_name
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent dashboard-link error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate dashboard link',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;

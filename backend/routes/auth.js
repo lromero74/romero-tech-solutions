@@ -1,5 +1,6 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
 import { query } from '../config/database.js';
 import { sessionService } from '../services/sessionService.js';
 import { generateCsrfToken } from '../server.js';
@@ -2365,6 +2366,264 @@ router.post('/client-login', async (req, res) => {
 
   } catch (error) {
     console.error('Client login error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Login failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/trial-magic-login - Auto-login for trial users via magic link
+router.post('/trial-magic-login', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Magic link token is required'
+      });
+    }
+
+    // Verify and decode magic-link token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired magic link',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    // Validate token type
+    if (decoded.type !== 'trial_magic_link') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token type',
+        code: 'INVALID_TOKEN_TYPE'
+      });
+    }
+
+    const { trial_id, access_code } = decoded;
+
+    // Find trial user account and associated agent device
+    const userResult = await query(`
+      SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role,
+             u.email_verified, u.time_format_preference, ad.id as agent_id
+      FROM users u
+      LEFT JOIN agent_devices ad ON ad.trial_access_code = $2 AND ad.is_trial = true
+      WHERE u.email = $1
+    `, [`trial-${trial_id}@trial.romerotechsolutions.com`, access_code]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial account not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Verify access code matches
+    const isAccessCodeValid = await bcrypt.compare(access_code, user.password_hash);
+    if (!isAccessCodeValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid access code',
+        code: 'INVALID_ACCESS_CODE'
+      });
+    }
+
+    // Create session for trial user
+    const userAgent = req.get('User-Agent');
+    const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null);
+
+    const session = await sessionService.createSession(
+      user.id,
+      user.email,
+      userAgent,
+      ipAddress
+    );
+
+    // Get session timeout from database
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
+    // Set HttpOnly session cookie
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: sessionTimeoutMs,
+      path: '/'
+    };
+
+    res.cookie('sessionToken', session.sessionToken, cookieOptions);
+
+    // Return successful login response
+    const userData = {
+      id: user.id,
+      email: user.email,
+      role: user.role || 'customer',
+      name: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      businessName: null,
+      timeFormatPreference: user.time_format_preference || '12h',
+      isFirstAdmin: false,
+      isTrial: true,
+      trialAgentId: user.agent_id,  // Link to the trial agent device
+      trialId: trial_id             // Original trial ID for reference
+    };
+
+    console.log(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Trial login successful',
+      user: userData,
+      session: {
+        sessionToken: session.sessionToken,
+        expiresAt: session.expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial magic-link login error:', error);
+
+    res.status(500).json({
+      success: false,
+      message: 'Login failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/agent-magic-login - Auto-login for registered agent users via magic link
+router.post('/agent-magic-login', async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: 'Magic link token is required'
+      });
+    }
+
+    // Verify and decode magic-link token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid or expired magic link',
+        code: 'INVALID_TOKEN'
+      });
+    }
+
+    // Validate token type
+    if (decoded.type !== 'agent_magic_link') {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid token type',
+        code: 'INVALID_TOKEN_TYPE'
+      });
+    }
+
+    const { agent_id, user_id, business_id } = decoded;
+
+    // Validate agent exists and belongs to the specified business
+    const agentResult = await query(`
+      SELECT ad.id, ad.device_name, ad.business_id, ad.is_active
+      FROM agent_devices ad
+      WHERE ad.id = $1 AND ad.business_id = $2 AND ad.is_active = true
+    `, [agent_id, business_id]);
+
+    if (agentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or inactive',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    // Get user account
+    const userResult = await query(`
+      SELECT u.id, u.email, u.first_name, u.last_name, u.role,
+             u.email_verified, u.time_format_preference, b.business_name
+      FROM users u
+      LEFT JOIN businesses b ON u.business_id = b.id
+      WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.is_verified = true
+    `, [user_id, business_id]);
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User account not found or inactive',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    const user = userResult.rows[0];
+
+    // Create session for user
+    const userAgent = req.get('User-Agent');
+    const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
+                     (req.connection.socket ? req.connection.socket.remoteAddress : null);
+
+    const session = await sessionService.createSession(
+      user.id,
+      user.email,
+      userAgent,
+      ipAddress
+    );
+
+    // Get session timeout from database
+    const sessionTimeoutMs = await sessionService.getSessionTimeoutMs();
+
+    // Set HttpOnly session cookie
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+      maxAge: sessionTimeoutMs,
+      path: '/'
+    };
+
+    res.cookie('sessionToken', session.sessionToken, cookieOptions);
+
+    // Return successful login response with agent info
+    const userData = {
+      id: user.id,
+      email: user.email,
+      role: user.role || 'customer',
+      name: `${user.first_name} ${user.last_name}`.trim() || user.email,
+      businessName: user.business_name,
+      timeFormatPreference: user.time_format_preference || '12h',
+      isFirstAdmin: false,
+      agentId: agent_id,  // Link to the specific agent that opened dashboard
+      businessId: business_id
+    };
+
+    console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})`);
+
+    res.status(200).json({
+      success: true,
+      message: 'Login successful',
+      user: userData,
+      session: {
+        sessionToken: session.sessionToken,
+        expiresAt: session.expiresAt
+      }
+    });
+
+  } catch (error) {
+    console.error('Agent magic-link login error:', error);
 
     res.status(500).json({
       success: false,

@@ -29,12 +29,13 @@ import {
   AlertTriangle,
   Bell,
   Code,
-  Package
+  Package,
+  TestTube
 } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -98,6 +99,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       title: 'Monitoring & Alerts',
       items: [
         { id: 'agents', label: 'Monitoring Agents', icon: Monitor, permission: 'view.agents.enable' },
+        { id: 'trial-agents', label: 'Trial Agents', icon: TestTube, permission: 'view.agents.enable' },
         { id: 'alert-configurations', label: 'Alert Configurations', icon: AlertTriangle, permission: 'view.agents.enable' },
         { id: 'alert-history', label: 'Alert History', icon: Bell, permission: 'view.agents.enable' }
       ]

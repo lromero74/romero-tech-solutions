@@ -22,6 +22,9 @@ import Download from './pages/Download';
 import ConfirmEmail from './pages/ConfirmEmail';
 import ComingSoon from './pages/ComingSoon';
 import ServiceRating from './pages/ServiceRating';
+import TrialLogin from './pages/TrialLogin';
+import TrialDashboard from './pages/TrialDashboard';
+import AgentLogin from './pages/AgentLogin';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import { useVersionCheck } from './hooks/useVersionCheck';
@@ -35,7 +38,7 @@ function AppContent() {
     getPageFromPath(window.location.pathname)
   );
 
-  const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut } = useEnhancedAuth();
+  const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut, authUser } = useEnhancedAuth();
   const { language, t } = useLanguage();
 
   // Automatically check for new versions and reload when deployed
@@ -116,6 +119,16 @@ function AppContent() {
       return <ConfirmEmail onSuccess={() => setCurrentPage('dashboard')} />;
     }
 
+    // Handle trial magic-link login page
+    if (currentPage === 'trial-login') {
+      return <TrialLogin onSuccess={() => setCurrentPage('dashboard')} />;
+    }
+
+    // Handle agent magic-link login page
+    if (currentPage === 'agent-login') {
+      return <AgentLogin onSuccess={() => setCurrentPage('dashboard')} />;
+    }
+
     // Handle service rating page (public - no auth required)
     if (currentPage === 'rate') {
       return <ServiceRating />;
@@ -191,6 +204,23 @@ function AppContent() {
 
       // Route to appropriate dashboard based on user type
       if (isClient) {
+        // Check if this is a trial user (has trialAgentId)
+        const isTrial = authUser && (authUser as any).isTrial;
+        const hasAgentId = authUser && (authUser as any).agentId;
+
+        if (isTrial) {
+          // Show TrialDashboard for trial users
+          return <TrialDashboard onNavigate={setCurrentPage} />;
+        }
+
+        // If user accessed via agent magic-link, show agent-specific view
+        if (hasAgentId) {
+          // Show TrialDashboard component (it works for any agent, not just trial)
+          // Pass agentId instead of trialAgentId
+          return <TrialDashboard onNavigate={setCurrentPage} />;
+        }
+
+        // Show ClientDashboard for regular clients (general portal view)
         return (
           <ClientLanguageProvider>
             <ClientThemeProvider>
@@ -241,8 +271,8 @@ function AppContent() {
     }
   };
 
-  // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, and client dashboard when authenticated or loading
-  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' ||
+  // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, trial login, and client dashboard when authenticated or loading
+  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' || currentPage === 'trial-login' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
       (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isExecutive || isSales || isClient))))) {
     return renderPage();

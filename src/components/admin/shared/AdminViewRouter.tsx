@@ -29,6 +29,8 @@ import AdminRatingQuestions from '../AdminRatingQuestions';
 import AgentDashboard from '../AgentDashboard';
 import AgentDetails from '../AgentDetails';
 import AgentRegistrationModal from '../AgentRegistrationModal';
+import TrialAgentsDashboard from '../TrialAgentsDashboard';
+import TrialConversionModal from '../TrialConversionModal';
 import AlertConfigurationManager from '../AlertConfigurationManager';
 import AlertHistoryDashboard from '../AlertHistoryDashboard';
 import PolicyAutomationDashboard from '../PolicyAutomationDashboard';
@@ -42,6 +44,7 @@ import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServic
 import AddServiceLocationModal from '../AdminServiceLocations_Modals/AddServiceLocationModal';
 import { useAdminData, Business, Client, Employee, ServiceLocation } from '../../../contexts/AdminDataContext';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import { agentService, type AgentDevice } from '../../../services/agentService';
 import { useEmployeeFilters } from '../../../hooks/admin/useEmployeeFilters';
 import { useClientFilters } from '../../../hooks/admin/useClientFilters';
 import { useBusinessFilters } from '../../../hooks/admin/useBusinessFilters';
@@ -53,7 +56,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -315,6 +318,10 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
   // Agent state
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(null);
   const [showAgentRegistrationModal, setShowAgentRegistrationModal] = useState(false);
+
+  // Trial conversion modal state
+  const [showTrialConversionModal, setShowTrialConversionModal] = useState(false);
+  const [selectedTrialAgent, setSelectedTrialAgent] = useState<AgentDevice | null>(null);
 
   // Use external state/setters if provided, otherwise use internal state
   const currentShowInactiveClients = externalShowInactiveClients !== undefined ? externalShowInactiveClients : showInactiveClients;
@@ -1715,6 +1722,35 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
           />
         );
 
+      case 'trial-agents':
+        return (
+          <TrialAgentsDashboard
+            onViewAgentDetails={(agentId) => {
+              setSelectedAgentId(agentId);
+              onViewChange?.('agent-details');
+            }}
+            onConvertTrial={async (trialId) => {
+              // Fetch the trial agent details
+              try {
+                const response = await agentService.listTrialAgents();
+                if (response.success && response.data) {
+                  const trialAgent = response.data.agents.find(
+                    agent => agent.trial_original_id === trialId || agent.id === trialId
+                  );
+                  if (trialAgent) {
+                    setSelectedTrialAgent(trialAgent);
+                    setShowTrialConversionModal(true);
+                  } else {
+                    console.error('Trial agent not found:', trialId);
+                  }
+                }
+              } catch (error) {
+                console.error('Failed to fetch trial agent:', error);
+              }
+            }}
+          />
+        );
+
       case 'agent-details':
         return (agentNavigationContext?.agentId || selectedAgentId) ? (
           <AgentDetails
@@ -1886,6 +1922,24 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         onClose={() => setShowAgentRegistrationModal(false)}
         businesses={businesses}
         serviceLocations={serviceLocations}
+      />
+
+      {/* Trial Conversion Modal */}
+      <TrialConversionModal
+        isOpen={showTrialConversionModal}
+        onClose={() => {
+          setShowTrialConversionModal(false);
+          setSelectedTrialAgent(null);
+        }}
+        trialAgent={selectedTrialAgent}
+        onConversionSuccess={(newAgentId) => {
+          console.log('Trial converted successfully! New agent ID:', newAgentId);
+          setShowTrialConversionModal(false);
+          setSelectedTrialAgent(null);
+          // Navigate to the new agent details or refresh trial agents list
+          setSelectedAgentId(newAgentId);
+          onViewChange?.('agent-details');
+        }}
       />
     </>
   );

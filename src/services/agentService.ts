@@ -35,6 +35,33 @@ export interface AgentDevice {
   location_state?: string; // Joined from service_locations table
   location_zip?: string; // Joined from service_locations table
   location_country?: string; // Joined from service_locations table
+  // Trial mode fields
+  is_trial?: boolean;
+  trial_start_date?: string | null;
+  trial_end_date?: string | null;
+  trial_converted_at?: string | null;
+  trial_converted_to_agent_id?: string | null;
+  trial_original_id?: string | null;
+}
+
+export interface TrialAgentStatus {
+  trial_id: string;
+  device_name: string;
+  os_type: string;
+  status: 'active' | 'expired' | 'converted';
+  is_active: boolean;
+  trial_start_date: string;
+  trial_end_date: string;
+  days_elapsed: number;
+  days_remaining: number;
+  total_days: number;
+  percent_used: number;
+  converted_at: string | null;
+  converted_to_agent_id: string | null;
+  last_heartbeat: string | null;
+  last_metrics_received: string | null;
+  created_at: string;
+  upgrade_url: string;
 }
 
 export interface DiskHealth {
@@ -606,6 +633,58 @@ class AgentService {
     }>
   > {
     return apiService.get(`/agents/${agentId}/inventory/storage`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRIAL AGENT METHODS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get trial agent status by trial_id (e.g., "trial-1234567890")
+   */
+  async getTrialStatus(trialId: string): Promise<ApiResponse<TrialAgentStatus>> {
+    return apiService.get(`/agents/trial/status/${trialId}`);
+  }
+
+  /**
+   * Convert trial agent to registered agent
+   */
+  async convertTrialAgent(data: {
+    trial_id: string;
+    registration_token: string;
+    preserve_data?: boolean;
+  }): Promise<ApiResponse<{
+    agent_id: string;
+    agent_token: string;
+    business_id: string;
+    service_location_id: string | null;
+    metrics_migrated: number;
+    trial_id: string;
+  }>> {
+    return apiService.post('/agents/trial/convert', data);
+  }
+
+  /**
+   * List all trial agents (employees only)
+   * This queries the agent_devices table for agents with is_trial=true
+   */
+  async listTrialAgents(): Promise<ApiResponse<{ agents: AgentDevice[]; count: number }>> {
+    // Use the existing listAgents endpoint but filter for trial agents on the frontend
+    // Alternatively, we could add a backend endpoint specifically for this
+    const response = await this.listAgents();
+
+    if (response.success && response.data) {
+      const trialAgents = response.data.agents.filter(agent => agent.is_trial === true);
+      return {
+        success: true,
+        data: {
+          agents: trialAgents,
+          count: trialAgents.length
+        }
+      };
+    }
+
+    return response;
   }
 }
 
