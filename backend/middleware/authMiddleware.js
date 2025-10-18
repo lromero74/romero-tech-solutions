@@ -1,4 +1,5 @@
 import { sessionService } from '../services/sessionService.js';
+import { query } from '../config/database.js';
 
 /**
  * Authentication middleware to protect routes
@@ -29,7 +30,40 @@ export const authMiddleware = async (req, res, next) => {
       });
     }
 
-    // Add session info to request for use in route handlers
+    // Fetch user details including role and business_id for RBAC
+    // First try employees table
+    let userDetails = await query(
+      `SELECT e.id, e.email, r.name as role, NULL as business_id
+       FROM employees e
+       LEFT JOIN employee_roles er ON e.id = er.employee_id
+       LEFT JOIN roles r ON er.role_id = r.id
+       WHERE e.id = $1 AND e.is_active = true
+       LIMIT 1`,
+      [session.userId]
+    );
+
+    if (userDetails.rows.length === 0) {
+      // Fall back to users table for client users
+      userDetails = await query(
+        `SELECT id, email, role, business_id
+         FROM users
+         WHERE id = $1 AND is_active = true
+         LIMIT 1`,
+        [session.userId]
+      );
+    }
+
+    if (userDetails.rows.length === 0) {
+      return res.status(403).json({
+        success: false,
+        message: 'User account not found or inactive',
+        code: 'USER_NOT_FOUND'
+      });
+    }
+
+    const user = userDetails.rows[0];
+
+    // Add full session info to request for use in route handlers
     req.session = {
       sessionId: session.sessionId,
       userId: session.userId,
@@ -38,13 +72,15 @@ export const authMiddleware = async (req, res, next) => {
       lastActivity: session.lastActivity
     };
 
-    // Add user info to request (useful for authorization)
+    // Add complete user info to request including role and business_id for RBAC
     req.user = {
       id: session.userId,
-      email: session.userEmail
+      email: session.userEmail,
+      role: user.role || 'customer',
+      business_id: user.business_id
     };
 
-    console.log(`🔐 Authenticated request from user: ${session.userEmail}`);
+    console.log(`🔐 Authenticated request from user: ${session.userEmail} (role: ${req.user.role}, business: ${req.user.business_id || 'none'})`);
 
     // Continue to the protected route
     next();
