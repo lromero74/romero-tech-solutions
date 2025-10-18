@@ -206,7 +206,7 @@ router.post('/trial/heartbeat', async (req, res) => {
           await query(
             `INSERT INTO users (
               id, email, password_hash, first_name, last_name,
-              role, is_active, is_verified, business_id, created_at
+              role, is_active, email_verified, business_id, created_at
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
             [
               userId,
@@ -902,7 +902,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     const userResult = await query(
       `SELECT id, email, first_name, last_name, role, time_format_preference
        FROM users
-       WHERE business_id = $1 AND role = 'customer' AND is_active = true AND is_verified = true
+       WHERE business_id = $1 AND role = 'customer' AND is_active = true AND email_verified = true
        ORDER BY created_at ASC
        LIMIT 1`,
       [agent.business_id]

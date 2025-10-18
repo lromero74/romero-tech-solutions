@@ -2558,7 +2558,7 @@ router.post('/agent-magic-login', async (req, res) => {
              u.email_verified, u.time_format_preference, b.business_name
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
-      WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.is_verified = true
+      WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.email_verified = true
     `, [user_id, business_id]);
 
     if (userResult.rows.length === 0) {
