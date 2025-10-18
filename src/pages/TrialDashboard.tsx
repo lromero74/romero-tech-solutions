@@ -67,29 +67,41 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
   useEffect(() => {
     const fetchAgents = async () => {
       try {
+        console.log('📋 Fetching agents for user:', authUser?.email);
         setLoadingAgents(true);
         const response = await agentService.listAgents();
+        console.log('📋 Agent list response:', response);
 
         if (response.success && response.data) {
+          console.log('📋 Found agents:', response.data.agents.length);
           setAgents(response.data.agents);
 
           // If we have agents and no selected agent, select the initial one
           if (response.data.agents.length > 0 && !selectedAgentId) {
             const firstAgentId = initialAgentId || response.data.agents[0].id;
+            console.log('📋 Auto-selecting first agent:', firstAgentId);
             setSelectedAgentId(firstAgentId);
             localStorage.setItem('selectedAgentId', firstAgentId);
           }
+        } else {
+          console.warn('📋 Agent list fetch failed or returned no data:', response);
         }
       } catch (error) {
-        console.error('Error fetching agents:', error);
+        console.error('❌ Error fetching agents:', error);
       } finally {
+        console.log('📋 Setting loadingAgents to false');
         setLoadingAgents(false);
       }
     };
 
+    console.log('📋 useEffect triggered - authUser:', authUser?.email, 'initialAgentId:', initialAgentId);
+
     // Only fetch if user is authenticated
     if (authUser) {
       fetchAgents();
+    } else {
+      console.warn('📋 No authUser, skipping agent fetch');
+      setLoadingAgents(false);
     }
   }, [authUser, initialAgentId]);
 
