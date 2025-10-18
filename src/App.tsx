@@ -208,8 +208,17 @@ function AppContent() {
         const isTrial = authUser && (authUser as any).isTrial;
         const hasAgentId = authUser && (authUser as any).agentId;
 
+        // Debug: Log the routing decision for agent magic-link users
+        console.log('🚦 Client dashboard routing:', {
+          isTrial,
+          hasAgentId,
+          agentId: (authUser as any)?.agentId,
+          authUserKeys: authUser ? Object.keys(authUser) : []
+        });
+
         if (isTrial) {
           // Show TrialDashboard for trial users
+          console.log('📊 Routing to TrialDashboard (trial user)');
           return <TrialDashboard onNavigate={setCurrentPage} />;
         }
 
@@ -217,6 +226,7 @@ function AppContent() {
         if (hasAgentId) {
           // Show TrialDashboard component (it works for any agent, not just trial)
           // Pass agentId instead of trialAgentId
+          console.log('📊 Routing to TrialDashboard (agent magic-link user with agentId:', (authUser as any).agentId, ')');
           return <TrialDashboard onNavigate={setCurrentPage} />;
         }
 

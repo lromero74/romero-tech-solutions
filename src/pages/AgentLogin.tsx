@@ -38,6 +38,15 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
         const result = await response.json();
 
         if (result.success && result.user) {
+          // Debug: Log the complete user data to verify agentId is present
+          console.log('🔍 Agent magic-link authentication result:', {
+            hasAgentId: !!result.user.agentId,
+            agentId: result.user.agentId,
+            userId: result.user.id,
+            email: result.user.email,
+            role: result.user.role
+          });
+
           // Store user info in auth context using setUserFromTrustedDevice
           // This method properly handles authentication state for magic-link logins
           await setUserFromTrustedDevice(result.user, result.session?.sessionToken);
