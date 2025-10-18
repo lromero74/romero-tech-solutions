@@ -171,6 +171,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     }
   }, [indicatorOverlay, chartState]);
 
+
   // Build ECharts option
   const option = useMemo(() => {
     return buildChartOption({
