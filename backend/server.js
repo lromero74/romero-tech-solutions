@@ -324,7 +324,9 @@ const conditionalCsrfProtection = (req, res, next) => {
     '/trusted-device-login',
     '/send-verification',
     '/register-client',
-    '/client-password-requirements'
+    '/client-password-requirements',
+    '/trial-magic-login',
+    '/agent-magic-login'
   ];
 
   // Check if this is a pre-auth endpoint
