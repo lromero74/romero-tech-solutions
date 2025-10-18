@@ -880,7 +880,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     // Get agent details including business_id and service_location_id
     const agentResult = await query(
       `SELECT ad.id, ad.business_id, ad.service_location_id, ad.device_name,
-              b.id as business_uuid, b.name as business_name
+              b.id as business_uuid, b.business_name
        FROM agent_devices ad
        LEFT JOIN businesses b ON ad.business_id = b.id
        WHERE ad.id = $1 AND ad.is_active = true`,
