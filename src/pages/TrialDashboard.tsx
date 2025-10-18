@@ -94,16 +94,12 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
       }
     };
 
-    console.log('📋 useEffect triggered - authUser:', authUser?.email, 'initialAgentId:', initialAgentId);
+    console.log('📋 useEffect triggered - authUser:', authUser?.email);
 
-    // Only fetch if user is authenticated
-    if (authUser) {
-      fetchAgents();
-    } else {
-      console.warn('📋 No authUser, skipping agent fetch');
-      setLoadingAgents(false);
-    }
-  }, [authUser, initialAgentId]);
+    // Fetch agents unconditionally (API will handle auth)
+    // This ensures we fetch even if authUser loads after component mount
+    fetchAgents();
+  }, [authUser]);
 
   // Handle agent selection
   const handleSelectAgent = (agentId: string) => {
