@@ -68,20 +68,25 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
       version.toLowerCase() === 'windows'
     );
 
-    // Format based on OS type
+    let osName = '';
+
+    // Determine OS name
     if (type === 'darwin' || type === 'macos') {
-      return isDuplicate || !version ? 'macOS' : `macOS ${version}`;
+      osName = 'macOS';
     } else if (type === 'linux') {
-      // For Linux, show distro name if available and not duplicate
-      return isDuplicate || !version ? 'Linux' : version;
+      osName = 'Linux';
     } else if (type === 'windows') {
-      // For Windows, show version if available and not duplicate
-      return isDuplicate || !version ? 'Windows' : `Windows ${version}`;
+      osName = 'Windows';
+    } else {
+      osName = type.charAt(0).toUpperCase() + type.slice(1);
     }
 
-    // Default: capitalize OS type
-    const formatted = type.charAt(0).toUpperCase() + type.slice(1);
-    return isDuplicate || !version ? formatted : `${formatted} ${version}`;
+    // Return "OS_NAME • version" format if version exists and isn't duplicate
+    if (version && !isDuplicate) {
+      return `${osName} • ${version}`;
+    }
+
+    return osName;
   };
 
   if (agents.length === 0) {
