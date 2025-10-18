@@ -460,6 +460,11 @@ const authRateLimiter = (req, res, next) => {
   if (req.path === '/check-admin') {
     return generalLimiter(req, res, next);
   }
+  // Magic-link authentication endpoints use general limiting (more lenient than auth limiter)
+  // These are token-based and already have expiration, so we can be more permissive
+  if (req.path === '/trial-magic-login' || req.path === '/agent-magic-login') {
+    return generalLimiter(req, res, next);
+  }
   // Login and MFA endpoints use strict auth limiting
   return authLimiter(req, res, next);
 };
