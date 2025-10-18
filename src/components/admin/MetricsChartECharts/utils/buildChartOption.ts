@@ -92,6 +92,21 @@ export const buildChartOption = ({
 
   const timestamps = chartData.map(d => new Date(d.timestamp).getTime());
 
+  // Find day boundaries (midnight timestamps) for vertical lines
+  const dayBoundaries: number[] = [];
+  const seenDates = new Set<string>();
+
+  timestamps.forEach(ts => {
+    const date = new Date(ts);
+    const dateKey = format(date, 'yyyy-MM-dd');
+
+    // Check if this is midnight (00:00) and we haven't seen this date yet
+    if (date.getHours() === 0 && date.getMinutes() === 0 && !seenDates.has(dateKey)) {
+      dayBoundaries.push(ts);
+      seenDates.add(dateKey);
+    }
+  });
+
   // Calculate grid layout based on active oscillators
   const activeOscillators = [
     { key: 'rsi', active: activeIndicators.rsi === true, height: oscillatorHeights.rsi },
@@ -149,7 +164,15 @@ export const buildChartOption = ({
       axisLabel: {
         color: isDark ? '#9ca3af' : '#6b7280',
         fontSize: 12,
-        formatter: (value: number) => format(new Date(value), 'HH:mm'),
+        formatter: (value: number) => {
+          const date = new Date(value);
+          // If it's midnight (00:00), show day and date
+          if (date.getHours() === 0 && date.getMinutes() === 0) {
+            return format(date, 'EEE M/d');
+          }
+          // Otherwise just show time
+          return format(date, 'HH:mm');
+        },
       },
       splitLine: {
         show: false,
@@ -173,7 +196,15 @@ export const buildChartOption = ({
         show: isLast,
         color: isDark ? '#9ca3af' : '#6b7280',
         fontSize: 12,
-        formatter: (value: number) => format(new Date(value), 'HH:mm'),
+        formatter: (value: number) => {
+          const date = new Date(value);
+          // If it's midnight (00:00), show day and date
+          if (date.getHours() === 0 && date.getMinutes() === 0) {
+            return format(date, 'EEE M/d');
+          }
+          // Otherwise just show time
+          return format(date, 'HH:mm');
+        },
       },
       splitLine: {
         show: false,
@@ -403,6 +434,31 @@ export const buildChartOption = ({
         ]),
       },
       z: 15,
+    });
+  }
+
+  // Add vertical dashed lines at day boundaries
+  if (dayBoundaries.length > 0) {
+    baseOption.series.unshift({
+      name: 'Day Boundaries',
+      type: 'line',
+      data: [],
+      markLine: {
+        silent: true,
+        symbol: 'none',
+        lineStyle: {
+          type: 'dashed',
+          color: isDark ? '#4b5563' : '#d1d5db',
+          width: 1,
+        },
+        label: {
+          show: false,
+        },
+        data: dayBoundaries.map(boundary => ({
+          xAxis: boundary,
+        })),
+      },
+      z: 5, // Behind most elements but visible
     });
   }
 
