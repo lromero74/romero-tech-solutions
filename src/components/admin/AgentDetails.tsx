@@ -3,17 +3,20 @@ import {
   Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity,
   RefreshCw, ArrowLeft, Terminal, Bell, Clock, CheckCircle, XCircle,
   Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info, MapPin,
-  Link, Unlink, RotateCcw, Save
+  Link, Unlink, RotateCcw, Save, Plus, Trash2, Play
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
-import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand } from '../../services/agentService';
+import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, AgentPolicy } from '../../services/agentService';
+import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChartECharts from './MetricsChartECharts';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
+import AssetInventory from './agent-details/AssetInventory';
 import { websocketService } from '../../services/websocketService';
 import { useSharedChartSettings } from './MetricsChartECharts/hooks/useSharedChartSettings';
+import ExecutionDetailsModal from './modals/ExecutionDetailsModal';
 
 interface AgentDetailsProps {
   agentId: string;
@@ -41,12 +44,26 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [metricsHistory, setMetricsHistory] = useState<AgentMetric[]>([]);
   const [alerts, setAlerts] = useState<AgentAlert[]>([]);
   const [commands, setCommands] = useState<AgentCommand[]>([]);
+  const [policies, setPolicies] = useState<AgentPolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands' | 'inventory' | 'policies'>('overview');
   const [activeResourceTab, setActiveResourceTab] = useState<'cpu' | 'memory' | 'disk'>('cpu');
   const [loadedCharts, setLoadedCharts] = useState<Set<'cpu' | 'memory' | 'disk'>>(new Set(['cpu'])); // Track which charts have been loaded
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
+
+  // Policy management state
+  const [availablePolicies, setAvailablePolicies] = useState<AutomationPolicy[]>([]);
+  const [allScripts, setAllScripts] = useState<AutomationScript[]>([]);
+  const [loadingPolicies, setLoadingPolicies] = useState(false);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assigningPolicy, setAssigningPolicy] = useState<string | null>(null);
+  const [removingAssignment, setRemovingAssignment] = useState<string | null>(null);
+
+  // Execution history state
+  const [executions, setExecutions] = useState<PolicyExecutionHistory[]>([]);
+  const [loadingExecutions, setLoadingExecutions] = useState(false);
+  const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
 
   // Chart settings management (shared across resource types)
   const {
@@ -153,6 +170,12 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       const commandsResponse = await agentService.getAgentCommands(agentId);
       if (commandsResponse.success && commandsResponse.data) {
         setCommands(commandsResponse.data.commands);
+      }
+
+      // Load assigned policies
+      const policiesResponse = await agentService.getAgentPolicies(agentId);
+      if (policiesResponse.success && policiesResponse.data) {
+        setPolicies(policiesResponse.data.policies);
       }
 
     } catch (err) {
@@ -496,6 +519,47 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     }
   };
 
+  // Get execution status display
+  const getExecutionStatusDisplay = (status: string) => {
+    switch (status) {
+      case 'completed':
+        return {
+          color: 'text-green-600',
+          bgColor: 'bg-green-100 dark:bg-green-900/20',
+          icon: <CheckCircle className="w-3 h-3" />,
+          label: 'Completed'
+        };
+      case 'failed':
+        return {
+          color: 'text-red-600',
+          bgColor: 'bg-red-100 dark:bg-red-900/20',
+          icon: <XCircle className="w-3 h-3" />,
+          label: 'Failed'
+        };
+      case 'running':
+        return {
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-100 dark:bg-blue-900/20',
+          icon: <Activity className="w-3 h-3 animate-spin" />,
+          label: 'Running'
+        };
+      case 'timeout':
+        return {
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
+          icon: <Clock className="w-3 h-3" />,
+          label: 'Timeout'
+        };
+      default:
+        return {
+          color: 'text-gray-600',
+          bgColor: 'bg-gray-100 dark:bg-gray-800',
+          icon: <Activity className="w-3 h-3" />,
+          label: 'Unknown'
+        };
+    }
+  };
+
 
   // Handle acknowledge alert
   const handleAcknowledgeAlert = async (alertId: string) => {
@@ -507,6 +571,145 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       }
     } catch (err) {
       console.error('Error acknowledging alert:', err);
+    }
+  };
+
+  // Load available policies and scripts for assignment
+  const loadAvailablePolicies = useCallback(async () => {
+    if (!agent) return;
+
+    try {
+      setLoadingPolicies(true);
+
+      // Load all policies and scripts in parallel
+      const [policiesResponse, scriptsResponse] = await Promise.all([
+        automationService.listPolicies({ enabled: true }),
+        automationService.listScripts(),
+      ]);
+
+      if (scriptsResponse.success && scriptsResponse.data) {
+        setAllScripts(scriptsResponse.data.scripts);
+      }
+
+      if (policiesResponse.success && policiesResponse.data) {
+        const allPolicies = policiesResponse.data.policies;
+
+        // Filter policies by OS compatibility
+        const compatiblePolicies = allPolicies.filter(policy => {
+          // If policy has no script, it's compatible (might be a config policy)
+          if (!policy.script_id) return true;
+
+          // Find the script for this policy
+          const script = scriptsResponse.data?.scripts.find(s => s.id === policy.script_id);
+          if (!script) return false;
+
+          // Check if agent's OS is in the script's supported_os array
+          // Agent OS values: darwin, linux, windows
+          return script.supported_os.includes(agent.os_type);
+        });
+
+        setAvailablePolicies(compatiblePolicies);
+      }
+    } catch (err) {
+      console.error('Error loading available policies:', err);
+    } finally {
+      setLoadingPolicies(false);
+    }
+  }, [agent]);
+
+  // Load available policies when policies tab is viewed
+  useEffect(() => {
+    if (activeTab === 'policies' && agent && availablePolicies.length === 0) {
+      loadAvailablePolicies();
+    }
+  }, [activeTab, agent, availablePolicies.length, loadAvailablePolicies]);
+
+  // Load execution history for this agent
+  const loadExecutionHistory = useCallback(async () => {
+    try {
+      setLoadingExecutions(true);
+
+      const response = await automationService.getExecutionHistory({
+        agent_id: agentId,
+        limit: 50, // Last 50 executions
+      });
+
+      if (response.success && response.data) {
+        setExecutions(response.data.executions);
+      }
+    } catch (err) {
+      console.error('Error loading execution history:', err);
+    } finally {
+      setLoadingExecutions(false);
+    }
+  }, [agentId]);
+
+  // Load execution history when policies tab is viewed
+  useEffect(() => {
+    if (activeTab === 'policies' && executions.length === 0) {
+      loadExecutionHistory();
+    }
+  }, [activeTab, executions.length, loadExecutionHistory]);
+
+  // Handle policy assignment
+  const handleAssignPolicy = async (policyId: string) => {
+    try {
+      setAssigningPolicy(policyId);
+
+      const response = await automationService.assignPolicy(policyId, {
+        agent_device_id: agentId,
+      });
+
+      if (response.success) {
+        // Reload policies for this agent
+        const policiesResponse = await agentService.getAgentPolicies(agentId);
+        if (policiesResponse.success && policiesResponse.data) {
+          setPolicies(policiesResponse.data.policies);
+        }
+
+        // Reload execution history (in case policy ran on assignment)
+        loadExecutionHistory();
+
+        // Close the modal
+        setShowAssignModal(false);
+
+        // Show success feedback (optional - could add a toast notification)
+        console.log('✅ Policy assigned successfully');
+      } else {
+        alert(response.message || 'Failed to assign policy');
+      }
+    } catch (err) {
+      console.error('Error assigning policy:', err);
+      alert('An error occurred while assigning the policy');
+    } finally {
+      setAssigningPolicy(null);
+    }
+  };
+
+  // Handle policy removal
+  const handleRemovePolicy = async (policyId: string, assignmentId: string, policyName: string) => {
+    if (!confirm(`Are you sure you want to remove the policy "${policyName}" from this agent?`)) {
+      return;
+    }
+
+    try {
+      setRemovingAssignment(assignmentId);
+
+      const response = await automationService.removePolicyAssignment(policyId, assignmentId);
+
+      if (response.success) {
+        // Remove from local state
+        setPolicies(prev => prev.filter(p => p.assignment_id !== assignmentId));
+
+        console.log('✅ Policy assignment removed successfully');
+      } else {
+        alert(response.message || 'Failed to remove policy assignment');
+      }
+    } catch (err) {
+      console.error('Error removing policy assignment:', err);
+      alert('An error occurred while removing the policy assignment');
+    } finally {
+      setRemovingAssignment(null);
     }
   };
 
@@ -966,6 +1169,28 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <Terminal className="w-4 h-4 inline mr-2" />
             Commands ({commands.length})
           </button>
+          <button
+            onClick={() => setActiveTab('inventory')}
+            className={`flex-1 px-6 py-3 text-sm font-medium ${
+              activeTab === 'inventory'
+                ? `${themeClasses.text.primary} border-b-2 border-purple-600`
+                : `${themeClasses.text.secondary} hover:${themeClasses.text.primary}`
+            }`}
+          >
+            <Disc className="w-4 h-4 inline mr-2" />
+            Inventory
+          </button>
+          <button
+            onClick={() => setActiveTab('policies')}
+            className={`flex-1 px-6 py-3 text-sm font-medium ${
+              activeTab === 'policies'
+                ? `${themeClasses.text.primary} border-b-2 border-purple-600`
+                : `${themeClasses.text.secondary} hover:${themeClasses.text.primary}`
+            }`}
+          >
+            <Shield className="w-4 h-4 inline mr-2" />
+            Policies ({policies.length})
+          </button>
         </div>
 
         <div className="p-6">
@@ -1094,6 +1319,350 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               )}
             </div>
           )}
+
+          {/* Inventory Tab */}
+          {activeTab === 'inventory' && (
+            <AssetInventory agentId={agentId} />
+          )}
+
+          {/* Policies Tab */}
+          {activeTab === 'policies' && (
+            <div className="space-y-4">
+              {/* Assign Policy Button */}
+              <div className="flex items-center justify-between">
+                <p className={`text-sm ${themeClasses.text.secondary}`}>
+                  {policies.length} {policies.length === 1 ? 'policy' : 'policies'} assigned to this agent
+                </p>
+                {canManageAgents && (
+                  <button
+                    onClick={() => setShowAssignModal(true)}
+                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                  >
+                    <Plus className="w-4 h-4 mr-1.5" />
+                    Assign Policy
+                  </button>
+                )}
+              </div>
+
+              {/* Assigned Policies List */}
+              <div className="space-y-3">
+                {policies.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Shield className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
+                    <p className={`${themeClasses.text.secondary}`}>No policies assigned to this agent</p>
+                    {canManageAgents && (
+                      <button
+                        onClick={() => setShowAssignModal(true)}
+                        className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
+                      >
+                        <Plus className="w-4 h-4 mr-2" />
+                        Assign Your First Policy
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  policies.map((policy) => (
+                    <div
+                      key={policy.assignment_id}
+                      className={`p-4 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover}`}
+                    >
+                      <div className="flex items-start justify-between mb-2">
+                        <div className="flex-1">
+                          <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>
+                            {policy.policy_name}
+                          </h4>
+                          {policy.description && (
+                            <p className={`text-xs ${themeClasses.text.secondary} mt-1`}>
+                              {policy.description}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-1 rounded text-xs font-medium ${
+                            policy.assignment_type === 'direct'
+                              ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
+                              : 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-200'
+                          }`}>
+                            {policy.assignment_type === 'direct' ? 'Direct Assignment' : 'Business-Wide'}
+                          </span>
+                          {/* Only show remove button for direct assignments */}
+                          {canManageAgents && policy.assignment_type === 'direct' && (
+                            <button
+                              onClick={() => handleRemovePolicy(policy.id, policy.assignment_id, policy.policy_name)}
+                              disabled={removingAssignment === policy.assignment_id}
+                              className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
+                              title="Remove policy assignment"
+                            >
+                              {removingAssignment === policy.assignment_id ? (
+                                <Activity className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-xs mt-3">
+                        <div>
+                          <span className={`${themeClasses.text.muted}`}>Type:</span>
+                          <span className={`ml-1 ${themeClasses.text.primary} capitalize`}>
+                            {policy.policy_type.replace(/_/g, ' ')}
+                          </span>
+                        </div>
+                        <div>
+                          <span className={`${themeClasses.text.muted}`}>Mode:</span>
+                          <span className={`ml-1 ${themeClasses.text.primary} capitalize`}>
+                            {policy.execution_mode}
+                          </span>
+                        </div>
+                        {policy.script_name && (
+                          <div className="col-span-2">
+                            <span className={`${themeClasses.text.muted}`}>Script:</span>
+                            <span className={`ml-1 ${themeClasses.text.primary}`}>{policy.script_name}</span>
+                          </div>
+                        )}
+                        {policy.schedule_cron && (
+                          <div className="col-span-2">
+                            <span className={`${themeClasses.text.muted}`}>Schedule:</span>
+                            <span className={`ml-1 font-mono text-xs ${themeClasses.text.primary}`}>
+                              {policy.schedule_cron}
+                            </span>
+                          </div>
+                        )}
+                        <div className="col-span-2">
+                          <span className={`${themeClasses.text.muted}`}>Status:</span>
+                          <span className={`ml-1 ${policy.enabled ? 'text-green-600 dark:text-green-400' : 'text-gray-600'}`}>
+                            {policy.enabled ? '✓ Enabled' : '✗ Disabled'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className={`text-xs ${themeClasses.text.muted} mt-3 pt-2 border-t ${themeClasses.border.primary}`}>
+                        Assigned {formatRelativeTime(policy.assigned_at)}
+                        {policy.assigned_by_name && ` by ${policy.assigned_by_name}`}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              {/* Execution History Section */}
+              <div className="space-y-3 mt-8">
+                <div className="flex items-center justify-between">
+                  <h4 className={`text-lg font-semibold ${themeClasses.text.primary} flex items-center`}>
+                    <Play className="w-5 h-5 mr-2" />
+                    Recent Executions
+                  </h4>
+                  <button
+                    onClick={loadExecutionHistory}
+                    className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
+                  >
+                    <RefreshCw className="w-4 h-4 mr-1.5" />
+                    Refresh
+                  </button>
+                </div>
+
+                {loadingExecutions ? (
+                  <div className="text-center py-8">
+                    <Activity className={`w-8 h-8 mx-auto mb-3 animate-spin ${themeClasses.text.muted}`} />
+                    <p className={`${themeClasses.text.secondary}`}>Loading execution history...</p>
+                  </div>
+                ) : executions.length === 0 ? (
+                  <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center border ${themeClasses.border.primary}`}>
+                    <Play className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
+                    <p className={`${themeClasses.text.secondary}`}>No executions yet</p>
+                    <p className={`text-sm ${themeClasses.text.muted} mt-1`}>
+                      Policy executions will appear here
+                    </p>
+                  </div>
+                ) : (
+                  <div className={`${themeClasses.bg.card} rounded-lg overflow-hidden border ${themeClasses.border.primary}`}>
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+                        <thead className={themeClasses.bg.secondary}>
+                          <tr>
+                            <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                              Policy / Script
+                            </th>
+                            <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                              Status
+                            </th>
+                            <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                              Duration
+                            </th>
+                            <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                              Started At
+                            </th>
+                            <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                              Actions
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody className={`${themeClasses.bg.primary} divide-y divide-gray-200 dark:divide-gray-700`}>
+                          {executions.slice(0, 10).map((execution) => {
+                            const statusDisplay = getExecutionStatusDisplay(execution.status);
+                            return (
+                              <tr key={execution.id} className={themeClasses.bg.hover}>
+                                <td className={`px-4 py-3`}>
+                                  <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+                                    {execution.policy_name || execution.script_name || 'N/A'}
+                                  </div>
+                                  {execution.triggered_by && (
+                                    <div className={`text-xs ${themeClasses.text.muted} capitalize`}>
+                                      Triggered by: {execution.triggered_by}
+                                    </div>
+                                  )}
+                                </td>
+                                <td className={`px-4 py-3`}>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${statusDisplay.bgColor} ${statusDisplay.color}`}>
+                                    <span className="mr-1">{statusDisplay.icon}</span>
+                                    {statusDisplay.label}
+                                  </span>
+                                </td>
+                                <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
+                                  {execution.execution_duration_seconds
+                                    ? `${execution.execution_duration_seconds}s`
+                                    : 'N/A'}
+                                </td>
+                                <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
+                                  {formatRelativeTime(execution.started_at)}
+                                </td>
+                                <td className={`px-4 py-3 text-sm font-medium`}>
+                                  <button
+                                    onClick={() => setSelectedExecutionId(execution.id)}
+                                    className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
+                                    title="View execution details"
+                                  >
+                                    <Terminal className="w-4 h-4 mr-1" />
+                                    View
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {executions.length > 10 && (
+                      <div className={`px-4 py-3 ${themeClasses.bg.secondary} border-t ${themeClasses.border.primary} text-center`}>
+                        <p className={`text-sm ${themeClasses.text.muted}`}>
+                          Showing 10 of {executions.length} executions
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Assign Policy Modal */}
+              {showAssignModal && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+                  <div className={`${themeClasses.bg.card} rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-hidden flex flex-col`}>
+                    {/* Modal Header */}
+                    <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+                      <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>
+                        Assign Policy to {agent?.device_name}
+                      </h3>
+                      <button
+                        onClick={() => setShowAssignModal(false)}
+                        className={`p-1 rounded-lg ${themeClasses.text.muted} hover:${themeClasses.bg.hover}`}
+                      >
+                        <XCircle className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    {/* Modal Body */}
+                    <div className="flex-1 overflow-y-auto p-6">
+                      {loadingPolicies ? (
+                        <div className="text-center py-8">
+                          <Activity className={`w-8 h-8 mx-auto mb-3 animate-spin ${themeClasses.text.muted}`} />
+                          <p className={`${themeClasses.text.secondary}`}>Loading compatible policies...</p>
+                        </div>
+                      ) : (
+                        <>
+                          <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
+                            Showing only policies compatible with <strong>{agent?.os_type}</strong> ({availablePolicies.filter(p => !policies.find(ap => ap.id === p.id)).length} available)
+                          </p>
+
+                          <div className="space-y-3">
+                            {availablePolicies
+                              .filter(policy => !policies.find(ap => ap.id === policy.id)) // Exclude already assigned
+                              .map(policy => (
+                                <div
+                                  key={policy.id}
+                                  className={`p-4 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:shadow-md transition-shadow`}
+                                >
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1">
+                                      <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>
+                                        {policy.policy_name}
+                                      </h4>
+                                      {policy.description && (
+                                        <p className={`text-xs ${themeClasses.text.secondary} mt-1`}>
+                                          {policy.description}
+                                        </p>
+                                      )}
+                                      <div className="flex items-center gap-3 mt-2 text-xs">
+                                        <span className={`${themeClasses.text.muted}`}>
+                                          Type: <span className="capitalize">{policy.policy_type.replace(/_/g, ' ')}</span>
+                                        </span>
+                                        <span className={`${themeClasses.text.muted}`}>
+                                          Mode: <span className="capitalize">{policy.execution_mode}</span>
+                                        </span>
+                                        {policy.script_name && (
+                                          <span className={`${themeClasses.text.muted}`}>
+                                            Script: {policy.script_name}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                    <button
+                                      onClick={() => handleAssignPolicy(policy.id)}
+                                      disabled={assigningPolicy === policy.id}
+                                      className="ml-4 px-3 py-1.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                      {assigningPolicy === policy.id ? (
+                                        <>
+                                          <Activity className="w-4 h-4 inline mr-1 animate-spin" />
+                                          Assigning...
+                                        </>
+                                      ) : (
+                                        'Assign'
+                                      )}
+                                    </button>
+                                  </div>
+                                </div>
+                              ))}
+
+                            {availablePolicies.filter(p => !policies.find(ap => ap.id === p.id)).length === 0 && (
+                              <div className="text-center py-8">
+                                <Shield className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
+                                <p className={`${themeClasses.text.secondary}`}>
+                                  No compatible policies available to assign
+                                </p>
+                                <p className={`text-xs ${themeClasses.text.muted} mt-2`}>
+                                  All compatible policies for {agent?.os_type} are already assigned
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </div>
+
+                    {/* Modal Footer */}
+                    <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-200 dark:border-gray-700">
+                      <button
+                        onClick={() => setShowAssignModal(false)}
+                        className={`px-4 py-2 text-sm font-medium ${themeClasses.text.secondary} hover:${themeClasses.bg.hover} rounded-lg transition-colors`}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -1105,6 +1674,15 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
         requiredPermission={permissionDenied.requiredPermission}
         message={permissionDenied.message}
       />
+
+      {/* Execution Details Modal */}
+      {selectedExecutionId && (
+        <ExecutionDetailsModal
+          isOpen={!!selectedExecutionId}
+          onClose={() => setSelectedExecutionId(null)}
+          executionId={selectedExecutionId}
+        />
+      )}
     </div>
   );
 };

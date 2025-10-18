@@ -282,6 +282,99 @@ export interface RegistrationToken {
   created_at: string;
 }
 
+export interface HardwareInventory {
+  id: string;
+  agent_device_id: string;
+  cpu_model: string | null;
+  cpu_cores: number | null;
+  cpu_threads: number | null;
+  cpu_speed_mhz: number | null;
+  cpu_architecture: string | null;
+  total_memory_gb: number | null;
+  memory_slots_used: number | null;
+  memory_slots_total: number | null;
+  memory_type: string | null;
+  memory_speed_mhz: number | null;
+  total_storage_gb: number | null;
+  storage_type: string | null;
+  motherboard_manufacturer: string | null;
+  motherboard_model: string | null;
+  bios_version: string | null;
+  bios_date: string | null;
+  chassis_type: string | null;
+  serial_number: string | null;
+  asset_tag: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  display_count: number;
+  primary_display_resolution: string | null;
+  network_interface_count: number;
+  mac_addresses: string[] | null;
+  usb_devices: Record<string, unknown>[] | null;
+  has_battery: boolean;
+  battery_health_percent: number | null;
+  battery_cycle_count: number | null;
+  raw_inventory_data: Record<string, unknown> | null;
+  last_updated_at: string;
+  created_at: string;
+}
+
+export interface SoftwareInventory {
+  id: string;
+  agent_device_id: string;
+  software_name: string;
+  software_version: string | null;
+  software_publisher: string | null;
+  install_date: string | null;
+  install_location: string | null;
+  install_source: string | null;
+  size_mb: number | null;
+  requires_license: boolean;
+  package_manager: string | null;
+  package_name: string | null;
+  software_category: string | null;
+  is_system_software: boolean;
+  last_seen_at: string;
+  created_at: string;
+}
+
+export interface StorageDevice {
+  id: string;
+  agent_device_id: string;
+  device_name: string;
+  device_type: string | null;
+  interface_type: string | null;
+  capacity_gb: number | null;
+  model: string | null;
+  serial_number: string | null;
+  firmware_version: string | null;
+  smart_status: string | null;
+  smart_temperature_c: number | null;
+  smart_power_on_hours: number | null;
+  smart_reallocated_sectors: number | null;
+  smart_pending_sectors: number | null;
+  partition_count: number;
+  partitions: Record<string, unknown>[] | null;
+  health_status: string;
+  last_scanned_at: string;
+  created_at: string;
+}
+
+export interface AgentPolicy {
+  id: string;
+  policy_name: string;
+  description: string | null;
+  policy_type: string;
+  execution_mode: string;
+  schedule_cron: string | null;
+  enabled: boolean;
+  script_name: string | null;
+  assignment_id: string;
+  assigned_at: string;
+  assignment_type: 'direct' | 'business';
+  assigned_by_name: string | null;
+}
+
 export interface ApiResponse<T = unknown> {
   success: boolean;
   data?: T;
@@ -312,6 +405,13 @@ class AgentService {
    */
   async getAgent(agentId: string): Promise<ApiResponse<AgentDevice>> {
     return apiService.get(`/agents/${agentId}`);
+  }
+
+  /**
+   * Get policies assigned to a specific agent (direct + business-level)
+   */
+  async getAgentPolicies(agentId: string): Promise<ApiResponse<{ policies: AgentPolicy[]; count: number }>> {
+    return apiService.get(`/agents/${agentId}/policies`);
   }
 
   /**
@@ -448,6 +548,64 @@ class AgentService {
    */
   async deleteAgent(agentId: string): Promise<ApiResponse<{ message: string }>> {
     return apiService.delete(`/agents/${agentId}`);
+  }
+
+  /**
+   * Get hardware inventory for an agent
+   */
+  async getHardwareInventory(
+    agentId: string
+  ): Promise<ApiResponse<{ hardware: HardwareInventory | null; has_data: boolean }>> {
+    return apiService.get(`/agents/${agentId}/inventory/hardware`);
+  }
+
+  /**
+   * Get software inventory for an agent
+   */
+  async getSoftwareInventory(
+    agentId: string,
+    filters?: {
+      package_manager?: string;
+      category?: string;
+      search?: string;
+    }
+  ): Promise<
+    ApiResponse<{
+      software: SoftwareInventory[];
+      count: number;
+      stats: {
+        total_packages: number;
+        package_managers_count: number;
+        categories_count: number;
+        total_size_mb: number;
+      } | null;
+    }>
+  > {
+    const params: Record<string, string> = {};
+    if (filters?.package_manager) params.package_manager = filters.package_manager;
+    if (filters?.category) params.category = filters.category;
+    if (filters?.search) params.search = filters.search;
+
+    return apiService.get(`/agents/${agentId}/inventory/software`, { params });
+  }
+
+  /**
+   * Get storage device inventory for an agent
+   */
+  async getStorageInventory(
+    agentId: string
+  ): Promise<
+    ApiResponse<{
+      storage: StorageDevice[];
+      count: number;
+      stats: {
+        total_devices: number;
+        total_capacity_gb: number;
+        devices_with_issues: number;
+      } | null;
+    }>
+  > {
+    return apiService.get(`/agents/${agentId}/inventory/storage`);
   }
 }
 

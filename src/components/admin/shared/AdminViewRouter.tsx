@@ -31,6 +31,8 @@ import AgentDetails from '../AgentDetails';
 import AgentRegistrationModal from '../AgentRegistrationModal';
 import AlertConfigurationManager from '../AlertConfigurationManager';
 import AlertHistoryDashboard from '../AlertHistoryDashboard';
+import PolicyAutomationDashboard from '../PolicyAutomationDashboard';
+import SoftwareDeploymentDashboard from '../SoftwareDeploymentDashboard';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -51,7 +53,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1742,6 +1744,38 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'alert-history':
         return <AlertHistoryDashboard onNavigateToAgent={onNavigateToAgentFromAlert} />;
+
+      case 'policy-automation':
+        return (
+          <PolicyAutomationDashboard
+            onViewScriptDetails={(scriptId) => {
+              console.log('View script details:', scriptId);
+              // TODO: Implement script details modal/view
+            }}
+            onViewPolicyDetails={(policyId) => {
+              console.log('View policy details:', policyId);
+              // TODO: Implement policy details modal/view
+            }}
+          />
+        );
+
+      case 'software-deployment':
+        return (
+          <SoftwareDeploymentDashboard
+            onViewPackageDetails={(packageId) => {
+              console.log('View package details:', packageId);
+              // TODO: Implement package details modal/view
+            }}
+            onViewScheduleDetails={(scheduleId) => {
+              console.log('View schedule details:', scheduleId);
+              // TODO: Implement schedule details modal/view
+            }}
+            onViewDeploymentDetails={(deploymentId) => {
+              console.log('View deployment details:', deploymentId);
+              // TODO: Implement deployment details modal/view
+            }}
+          />
+        );
 
       default:
         return (

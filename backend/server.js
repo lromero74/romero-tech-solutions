@@ -41,6 +41,8 @@ import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
 import adminAlertsRoutes from './routes/admin/alerts.js';
 import agentRoutes from './routes/agents.js';
 import agentDownloadRoutes from './routes/agentDownloads.js';
+import automationRoutes from './routes/automation.js';
+import deploymentRoutes from './routes/deployment.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -62,6 +64,9 @@ import { startAgentMonitoring, stopAgentMonitoring } from './services/agentMonit
 
 // Import alert configuration service
 import { alertConfigService } from './services/alertConfigService.js';
+
+// Import policy scheduler service
+import { policySchedulerService } from './services/policySchedulerService.js';
 
 // Import environment-aware logger
 import { loggers as log } from './utils/logger.js';
@@ -489,6 +494,8 @@ app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsr
 app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminAlertsRoutes); // Admin alert management (confluence alerts)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
+app.use('/api/automation', generalLimiter, methodBasedCsrfProtection, automationRoutes); // Policy automation and script library
+app.use('/api/deployment', generalLimiter, methodBasedCsrfProtection, deploymentRoutes); // Software deployment and package management
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {
@@ -648,6 +655,14 @@ const startServer = async () => {
       console.warn('⚠️  Failed to load alert configurations:', error.message);
     }
 
+    // Start policy scheduler service
+    console.log('🤖 Starting policy scheduler...');
+    try {
+      await policySchedulerService.start();
+    } catch (error) {
+      console.warn('⚠️  Failed to start policy scheduler:', error.message);
+    }
+
     // Start the server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
@@ -659,6 +674,7 @@ const startServer = async () => {
       console.log(`📡 Agent monitoring: ENABLED`);
       console.log(`🧹 Metrics cleanup: ENABLED (1-year retention)`);
       console.log(`🚨 Alert configurations: LOADED`);
+      console.log(`🤖 Policy scheduler: ENABLED`);
 
       // Start session cleanup process
       startSessionCleanup();
@@ -676,6 +692,7 @@ process.on('SIGTERM', () => {
   stopSessionCleanup();
   stopAgentMonitoring();
   metricsCleanupService.stop();
+  policySchedulerService.stop();
   process.exit(0);
 });
 
@@ -684,6 +701,7 @@ process.on('SIGINT', () => {
   stopSessionCleanup();
   stopAgentMonitoring();
   metricsCleanupService.stop();
+  policySchedulerService.stop();
   process.exit(0);
 });
 
