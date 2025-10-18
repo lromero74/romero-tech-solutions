@@ -114,7 +114,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       }
 
       if (metricsResponse?.success && metricsResponse.data && metricsResponse.data.metrics.length > 0) {
-        const rawMetrics = metricsResponse.data.metrics[metricsResponse.data.metrics.length - 1];
+        // Use latest_metric if available (when aggregation is used), otherwise use last item from array
+        const rawMetrics = metricsResponse.data.latest_metric ||
+                          metricsResponse.data.metrics[metricsResponse.data.metrics.length - 1];
+
         // Ensure numeric fields are properly converted (PostgreSQL may return strings)
         setLatestMetrics({
           ...rawMetrics,

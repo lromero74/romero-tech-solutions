@@ -1060,13 +1060,9 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
         ORDER BY collected_at ASC
       `;
     } else {
-      // Raw data for short time ranges (1-24 hours)
+      // Raw data for short time ranges (1-24 hours) - return ALL columns for full metric display
       metricsQuery = `
-        SELECT
-          collected_at,
-          cpu_percent,
-          memory_percent,
-          disk_percent
+        SELECT *
         FROM agent_metrics
         WHERE agent_device_id = $1
           AND collected_at >= NOW() - INTERVAL '${hoursInt} hours'
@@ -1075,6 +1071,20 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
     }
 
     const metricsResult = await query(metricsQuery, [agent_id]);
+
+    // If using aggregation, also fetch the latest full metric for overview display
+    // (aggregated data doesn't include patch status, EOL info, disk health, etc.)
+    let latestMetric = null;
+    if (aggregationInterval) {
+      const latestMetricResult = await query(
+        `SELECT * FROM agent_metrics
+         WHERE agent_device_id = $1
+         ORDER BY collected_at DESC
+         LIMIT 1`,
+        [agent_id]
+      );
+      latestMetric = latestMetricResult.rows[0] || null;
+    }
 
     // Log performance metrics for monitoring
     const actualPoints = metricsResult.rows.length;
@@ -1091,6 +1101,7 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
       success: true,
       data: {
         metrics: metricsResult.rows,
+        latest_metric: latestMetric, // Full metric data for overview (null if no aggregation)
         count: metricsResult.rows.length,
         time_range_hours: hoursInt,
         aggregation_interval: aggregationInterval || 'raw',
