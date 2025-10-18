@@ -9,7 +9,7 @@ interface AgentLoginProps {
 const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
-  const { setClientAuth } = useEnhancedAuth();
+  const { setUserFromTrustedDevice } = useEnhancedAuth();
 
   useEffect(() => {
     const performMagicLinkLogin = async () => {
@@ -38,8 +38,9 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
         const result = await response.json();
 
         if (result.success && result.user) {
-          // Store user info in auth context
-          setClientAuth(result.user);
+          // Store user info in auth context using setUserFromTrustedDevice
+          // This method properly handles authentication state for magic-link logins
+          await setUserFromTrustedDevice(result.user, result.session?.sessionToken);
 
           setStatus('success');
           setMessage('Welcome! Opening your agent dashboard...');
@@ -60,7 +61,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
     };
 
     performMagicLinkLogin();
-  }, [setClientAuth, onSuccess]);
+  }, [setUserFromTrustedDevice, onSuccess]);
 
   const renderLoadingState = () => (
     <div className="text-center">
