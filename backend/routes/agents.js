@@ -1020,98 +1020,81 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
       });
     }
 
-    // Fetch metrics history
-    const metricsResult = await query(
-      `SELECT
-        cpu_percent,
-        memory_percent,
-        memory_used_gb,
-        disk_percent,
-        disk_used_gb,
-        network_rx_bytes,
-        network_tx_bytes,
-        patches_available,
-        security_patches_available,
-        patches_require_reboot,
-        eol_status,
-        eol_date,
-        security_eol_date,
-        days_until_eol,
-        days_until_sec_eol,
-        eol_message,
-        disk_health_status,
-        disk_health_data,
-        disk_failures_predicted,
-        disk_temperature_max,
-        disk_reallocated_sectors_total,
-        system_uptime_seconds,
-        last_boot_time,
-        unexpected_reboot,
-        services_monitored,
-        services_running,
-        services_failed,
-        services_data,
-        network_devices_monitored,
-        network_devices_online,
-        network_devices_offline,
-        network_devices_data,
-        backups_detected,
-        backups_running,
-        backups_with_issues,
-        backup_data,
-        antivirus_installed,
-        antivirus_enabled,
-        antivirus_up_to_date,
-        firewall_enabled,
-        security_products_count,
-        security_issues_count,
-        security_data,
-        failed_login_attempts,
-        failed_login_last_24h,
-        unique_attacking_ips,
-        failed_login_data,
-        internet_connected,
-        gateway_reachable,
-        dns_working,
-        avg_latency_ms,
-        packet_loss_percent,
-        connectivity_issues_count,
-        connectivity_data,
-        cpu_temperature_c,
-        gpu_temperature_c,
-        motherboard_temperature_c,
-        highest_temperature_c,
-        temperature_critical_count,
-        fan_count,
-        fan_speeds_rpm,
-        fan_failure_count,
-        sensor_data,
-        critical_events_count,
-        error_events_count,
-        warning_events_count,
-        last_critical_event,
-        last_critical_event_message,
-        package_managers_outdated,
-        homebrew_outdated,
-        npm_outdated,
-        pip_outdated,
-        mas_outdated,
-        outdated_packages_data,
-        raw_metrics,
-        collected_at
-       FROM agent_metrics
-       WHERE agent_device_id = $1
-         AND collected_at >= NOW() - INTERVAL '${parseInt(hours)} hours'
-       ORDER BY collected_at ASC`,
-      [agent_id]
-    );
+    // Determine aggregation interval based on time range for performance optimization
+    // This reduces payload size by 93-98% for longer time ranges
+    const hoursInt = parseInt(hours);
+    let aggregationInterval = null;
+    let expectedPoints = 0;
+
+    if (hoursInt <= 24) {
+      // 1-24 hours: Raw 1-minute data (up to 1,440 points)
+      aggregationInterval = null;
+      expectedPoints = hoursInt * 60;
+    } else if (hoursInt <= 168) {
+      // 1-7 days: 5-minute averages (up to 2,016 points for 7 days)
+      aggregationInterval = '5 minutes';
+      expectedPoints = (hoursInt * 60) / 5;
+    } else {
+      // 7-30 days: 15-minute averages (up to 2,880 points for 30 days)
+      aggregationInterval = '15 minutes';
+      expectedPoints = (hoursInt * 60) / 15;
+    }
+
+    // Fetch metrics history with intelligent aggregation
+    // Only select columns needed for charts (cpu_percent, memory_percent, disk_percent)
+    // This reduces payload from 70+ columns to just 4 columns
+    let metricsQuery;
+
+    if (aggregationInterval) {
+      // Aggregated data with time-bucketing using date_bin() for custom intervals
+      metricsQuery = `
+        SELECT
+          date_bin('${aggregationInterval}'::interval, collected_at, TIMESTAMP '2000-01-01') as collected_at,
+          ROUND(AVG(cpu_percent)::numeric, 2) as cpu_percent,
+          ROUND(AVG(memory_percent)::numeric, 2) as memory_percent,
+          ROUND(AVG(disk_percent)::numeric, 2) as disk_percent
+        FROM agent_metrics
+        WHERE agent_device_id = $1
+          AND collected_at >= NOW() - INTERVAL '${hoursInt} hours'
+        GROUP BY date_bin('${aggregationInterval}'::interval, collected_at, TIMESTAMP '2000-01-01')
+        ORDER BY collected_at ASC
+      `;
+    } else {
+      // Raw data for short time ranges (1-24 hours)
+      metricsQuery = `
+        SELECT
+          collected_at,
+          cpu_percent,
+          memory_percent,
+          disk_percent
+        FROM agent_metrics
+        WHERE agent_device_id = $1
+          AND collected_at >= NOW() - INTERVAL '${hoursInt} hours'
+        ORDER BY collected_at ASC
+      `;
+    }
+
+    const metricsResult = await query(metricsQuery, [agent_id]);
+
+    // Log performance metrics for monitoring
+    const actualPoints = metricsResult.rows.length;
+    const reductionPercent = expectedPoints > 0
+      ? Math.round((1 - actualPoints / (hoursInt * 60)) * 100)
+      : 0;
+
+    console.log(`📊 Metrics query for agent ${agent_id}: ${hoursInt}h range, ` +
+                `${aggregationInterval ? aggregationInterval + ' aggregation' : 'raw data'}, ` +
+                `${actualPoints} points returned (${reductionPercent}% reduction)`);
+
 
     res.json({
       success: true,
       data: {
         metrics: metricsResult.rows,
         count: metricsResult.rows.length,
-        time_range_hours: parseInt(hours)
+        time_range_hours: hoursInt,
+        aggregation_interval: aggregationInterval || 'raw',
+        payload_reduction_percent: reductionPercent
       }
     });
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity,
   RefreshCw, ArrowLeft, Terminal, Bell, Clock, CheckCircle, XCircle,
@@ -45,6 +45,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands'>('overview');
   const [activeResourceTab, setActiveResourceTab] = useState<'cpu' | 'memory' | 'disk'>('cpu');
+  const [loadedCharts, setLoadedCharts] = useState<Set<'cpu' | 'memory' | 'disk'>>(new Set(['cpu'])); // Track which charts have been loaded
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
 
   // Chart settings management (shared across resource types)
@@ -71,8 +72,8 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     message?: string;
   }>({ show: false });
 
-  // Load agent details
-  const loadAgentDetails = useCallback(async () => {
+  // Load agent details with retry logic for ServiceWorker failures
+  const loadAgentDetails = useCallback(async (retryCount = 0) => {
     if (!canViewAgents) {
       setPermissionDenied({
         show: true,
@@ -83,6 +84,9 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       setLoading(false);
       return;
     }
+
+    const MAX_RETRIES = 2;
+    const RETRY_DELAY = 1000; // 1 second
 
     try {
       setLoading(true);
@@ -95,8 +99,21 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       }
 
       // Load metrics history (fetch large window, zoom will be applied for display)
-      const metricsResponse = await agentService.getAgentMetricsHistory(agentId, METRICS_FETCH_WINDOW);
-      if (metricsResponse.success && metricsResponse.data && metricsResponse.data.metrics.length > 0) {
+      // Use retry logic specifically for metrics history since it's the largest response
+      let metricsResponse;
+      try {
+        metricsResponse = await agentService.getAgentMetricsHistory(agentId, METRICS_FETCH_WINDOW);
+      } catch (metricsError) {
+        // Check if this is an AbortError (ServiceWorker issue)
+        if (metricsError instanceof DOMException && metricsError.name === 'AbortError' && retryCount < MAX_RETRIES) {
+          console.warn(`⚠️  Metrics history request aborted (attempt ${retryCount + 1}/${MAX_RETRIES + 1}), retrying in ${RETRY_DELAY}ms...`);
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * (retryCount + 1))); // Exponential backoff
+          return loadAgentDetails(retryCount + 1); // Retry the entire load
+        }
+        throw metricsError; // Re-throw if not recoverable
+      }
+
+      if (metricsResponse?.success && metricsResponse.data && metricsResponse.data.metrics.length > 0) {
         const rawMetrics = metricsResponse.data.metrics[metricsResponse.data.metrics.length - 1];
         // Ensure numeric fields are properly converted (PostgreSQL may return strings)
         setLatestMetrics({
@@ -137,7 +154,14 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
     } catch (err) {
       console.error('Error loading agent details:', err);
-      setError(err instanceof Error ? err.message : 'Failed to load agent details');
+      const errorMessage = err instanceof Error ? err.message : 'Failed to load agent details';
+
+      // Provide more helpful error message for ServiceWorker issues
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        setError('Unable to load metrics history. Please try refreshing the page or clearing your browser cache.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -147,12 +171,20 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     loadAgentDetails();
   }, [loadAgentDetails]);
 
+  // Lazy load charts as they're viewed
+  useEffect(() => {
+    if (!loadedCharts.has(activeResourceTab)) {
+      console.log(`📊 Lazy loading ${activeResourceTab} chart...`);
+      setLoadedCharts(prev => new Set([...prev, activeResourceTab]));
+    }
+  }, [activeResourceTab, loadedCharts]);
+
   // Process navigation context from alerts
   useEffect(() => {
     if (navigationContext) {
       console.log('📍 Processing navigation context:', navigationContext);
 
-      // Switch to the correct resource tab
+      // Switch to the correct resource tab (will trigger lazy load if needed)
       setActiveResourceTab(navigationContext.resource);
 
       // Note: The actual scrolling, indicator overlay, and time range highlighting
@@ -265,8 +297,24 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
         setLatestMetrics(newMetrics);
 
-        // Also append to metrics history for charts
-        setMetricsHistory(prev => [...prev, newMetrics]);
+        // Append to metrics history for charts, but trim to maintain METRICS_FETCH_WINDOW
+        setMetricsHistory(prev => {
+          const updated = [...prev, newMetrics];
+
+          // Calculate cutoff time based on METRICS_FETCH_WINDOW (in hours)
+          const cutoffTime = new Date();
+          cutoffTime.setHours(cutoffTime.getHours() - METRICS_FETCH_WINDOW);
+
+          // Filter out metrics older than the cutoff
+          const trimmed = updated.filter(m => new Date(m.collected_at) >= cutoffTime);
+
+          // Log if we trimmed any old metrics
+          if (trimmed.length < updated.length) {
+            console.log(`🗑️  Trimmed ${updated.length - trimmed.length} old metrics (keeping ${trimmed.length} within ${METRICS_FETCH_WINDOW}h window)`);
+          }
+
+          return trimmed;
+        });
       }
     });
 
@@ -275,7 +323,32 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       console.log(`🧹 Cleaning up WebSocket listener for agent ${agentId}`);
       unsubscribe();
     };
-  }, [agentId]);
+  }, [agentId, METRICS_FETCH_WINDOW]);
+
+  // Memoize chart data to prevent unnecessary re-renders
+  const cpuChartData = useMemo(() =>
+    metricsHistory.map(m => ({
+      timestamp: m.collected_at,
+      value: m.cpu_percent
+    })),
+    [metricsHistory]
+  );
+
+  const memoryChartData = useMemo(() =>
+    metricsHistory.map(m => ({
+      timestamp: m.collected_at,
+      value: m.memory_percent
+    })),
+    [metricsHistory]
+  );
+
+  const diskChartData = useMemo(() =>
+    metricsHistory.map(m => ({
+      timestamp: m.collected_at,
+      value: m.disk_percent
+    })),
+    [metricsHistory]
+  );
 
   // Get device icon
   const getDeviceIcon = (deviceType: string) => {
@@ -722,96 +795,93 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             </div>
           </div>
 
-          {/* All charts rendered simultaneously to preserve state when switching tabs */}
-          {/* CPU Usage Chart */}
-          <div style={{ display: activeResourceTab === 'cpu' ? 'block' : 'none' }}>
-            <MetricsChartECharts
-              data={metricsHistory.map(m => ({
-                timestamp: m.collected_at,
-                value: m.cpu_percent
-              }))}
-              title="CPU Usage"
-              dataKey="CPU"
-              unit="%"
-              color="#3b82f6"
-              scrollToTimestamp={
-                navigationContext?.resource === 'cpu' ? navigationContext.timestamp : null
-              }
-              indicatorOverlay={
-                navigationContext?.resource === 'cpu' ? navigationContext.indicator : null
-              }
-              highlightTimeRange={
-                navigationContext?.resource === 'cpu' && navigationContext.timestamp
-                  ? {
-                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(), // -15 min
-                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),   // +15 min
-                    }
-                  : null
-              }
-              agentId={agentId}
-              resourceType="cpu"
-            />
-          </div>
+          {/* Lazy-loaded charts: only render charts that have been viewed */}
+          {/* CPU Usage Chart - loaded by default */}
+          {loadedCharts.has('cpu') && (
+            <div style={{ display: activeResourceTab === 'cpu' ? 'block' : 'none' }}>
+              <MetricsChartECharts
+                data={cpuChartData}
+                title="CPU Usage"
+                dataKey="CPU"
+                unit="%"
+                color="#3b82f6"
+                scrollToTimestamp={
+                  navigationContext?.resource === 'cpu' ? navigationContext.timestamp : null
+                }
+                indicatorOverlay={
+                  navigationContext?.resource === 'cpu' ? navigationContext.indicator : null
+                }
+                highlightTimeRange={
+                  navigationContext?.resource === 'cpu' && navigationContext.timestamp
+                    ? {
+                        start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(), // -15 min
+                        end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),   // +15 min
+                      }
+                    : null
+                }
+                agentId={agentId}
+                resourceType="cpu"
+              />
+            </div>
+          )}
 
-          {/* Memory Usage Chart */}
-          <div style={{ display: activeResourceTab === 'memory' ? 'block' : 'none' }}>
-            <MetricsChartECharts
-              data={metricsHistory.map(m => ({
-                timestamp: m.collected_at,
-                value: m.memory_percent
-              }))}
-              title="Memory Usage"
-              dataKey="Memory"
-              unit="%"
-              color="#8b5cf6"
-              scrollToTimestamp={
-                navigationContext?.resource === 'memory' ? navigationContext.timestamp : null
-              }
-              indicatorOverlay={
-                navigationContext?.resource === 'memory' ? navigationContext.indicator : null
-              }
-              highlightTimeRange={
-                navigationContext?.resource === 'memory' && navigationContext.timestamp
-                  ? {
-                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
-                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
-                    }
-                  : null
-              }
-              agentId={agentId}
-              resourceType="memory"
-            />
-          </div>
+          {/* Memory Usage Chart - lazy loaded on first view */}
+          {loadedCharts.has('memory') && (
+            <div style={{ display: activeResourceTab === 'memory' ? 'block' : 'none' }}>
+              <MetricsChartECharts
+                data={memoryChartData}
+                title="Memory Usage"
+                dataKey="Memory"
+                unit="%"
+                color="#8b5cf6"
+                scrollToTimestamp={
+                  navigationContext?.resource === 'memory' ? navigationContext.timestamp : null
+                }
+                indicatorOverlay={
+                  navigationContext?.resource === 'memory' ? navigationContext.indicator : null
+                }
+                highlightTimeRange={
+                  navigationContext?.resource === 'memory' && navigationContext.timestamp
+                    ? {
+                        start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
+                        end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
+                      }
+                    : null
+                }
+                agentId={agentId}
+                resourceType="memory"
+              />
+            </div>
+          )}
 
-          {/* Disk Usage Chart */}
-          <div style={{ display: activeResourceTab === 'disk' ? 'block' : 'none' }}>
-            <MetricsChartECharts
-              data={metricsHistory.map(m => ({
-                timestamp: m.collected_at,
-                value: m.disk_percent
-              }))}
-              title="Disk Usage"
-              dataKey="Disk"
-              unit="%"
-              color="#f59e0b"
-              scrollToTimestamp={
-                navigationContext?.resource === 'disk' ? navigationContext.timestamp : null
-              }
-              indicatorOverlay={
-                navigationContext?.resource === 'disk' ? navigationContext.indicator : null
-              }
-              highlightTimeRange={
-                navigationContext?.resource === 'disk' && navigationContext.timestamp
-                  ? {
-                      start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
-                      end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
-                    }
-                  : null
-              }
-              agentId={agentId}
-              resourceType="disk"
-            />
-          </div>
+          {/* Disk Usage Chart - lazy loaded on first view */}
+          {loadedCharts.has('disk') && (
+            <div style={{ display: activeResourceTab === 'disk' ? 'block' : 'none' }}>
+              <MetricsChartECharts
+                data={diskChartData}
+                title="Disk Usage"
+                dataKey="Disk"
+                unit="%"
+                color="#f59e0b"
+                scrollToTimestamp={
+                  navigationContext?.resource === 'disk' ? navigationContext.timestamp : null
+                }
+                indicatorOverlay={
+                  navigationContext?.resource === 'disk' ? navigationContext.indicator : null
+                }
+                highlightTimeRange={
+                  navigationContext?.resource === 'disk' && navigationContext.timestamp
+                    ? {
+                        start: new Date(new Date(navigationContext.timestamp).getTime() - 15 * 60 * 1000).toISOString(),
+                        end: new Date(new Date(navigationContext.timestamp).getTime() + 15 * 60 * 1000).toISOString(),
+                      }
+                    : null
+                }
+                agentId={agentId}
+                resourceType="disk"
+              />
+            </div>
+          )}
         </div>
       )}
 
