@@ -54,6 +54,27 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
     }
   };
 
+  const formatOsDisplay = (osType: string, osVersion: string | null): string => {
+    if (!osType) return 'Unknown OS';
+
+    const type = osType.toLowerCase();
+
+    // Format based on OS type
+    if (type === 'darwin' || type === 'macos') {
+      return `macOS ${osVersion || ''}`.trim();
+    } else if (type === 'linux') {
+      // For Linux, os_version might contain distro name like "Fedora 40" or just version
+      return osVersion || 'Linux';
+    } else if (type === 'windows') {
+      // For Windows, show version like "Windows 11 Build 22621"
+      return osVersion ? `Windows ${osVersion}` : 'Windows';
+    }
+
+    // Default: capitalize OS type and append version if available
+    const formatted = type.charAt(0).toUpperCase() + type.slice(1);
+    return osVersion ? `${formatted} ${osVersion}` : formatted;
+  };
+
   if (agents.length === 0) {
     return null;
   }
@@ -101,13 +122,7 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
 
               <div className={`text-xs space-y-1 ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>
                 <div className="flex items-center space-x-1">
-                  <span className="capitalize">{agent.os_type}</span>
-                  {agent.os_version && (
-                    <>
-                      <span>•</span>
-                      <span>{agent.os_version}</span>
-                    </>
-                  )}
+                  <span>{formatOsDisplay(agent.os_type, agent.os_version)}</span>
                 </div>
                 <div className="flex items-center space-x-1">
                   <Clock className="w-3 h-3" />
