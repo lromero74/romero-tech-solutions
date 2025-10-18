@@ -47,6 +47,13 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
             role: result.user.role
           });
 
+          // CRITICAL: Store agentId in sessionStorage before auth context update
+          // This ensures it's available immediately for routing logic
+          if (result.user.agentId) {
+            sessionStorage.setItem('pendingAgentId', result.user.agentId);
+            console.log('💾 Stored agentId in sessionStorage for routing:', result.user.agentId);
+          }
+
           // Store user info in auth context using setUserFromTrustedDevice
           // This method properly handles authentication state for magic-link logins
           await setUserFromTrustedDevice(result.user, result.session?.sessionToken);

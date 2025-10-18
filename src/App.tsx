@@ -206,12 +206,19 @@ function AppContent() {
       if (isClient) {
         // Check if this is a trial user (has trialAgentId)
         const isTrial = authUser && (authUser as any).isTrial;
-        const hasAgentId = authUser && (authUser as any).agentId;
+        const hasAgentIdInAuth = authUser && (authUser as any).agentId;
+
+        // CRITICAL: Check sessionStorage for pendingAgentId (set during agent magic-link login)
+        // This ensures we can route to agent dashboard even if auth context hasn't updated yet
+        const pendingAgentId = sessionStorage.getItem('pendingAgentId');
+        const hasAgentId = hasAgentIdInAuth || !!pendingAgentId;
 
         // Debug: Log the routing decision for agent magic-link users
         console.log('🚦 Client dashboard routing:', {
           isTrial,
+          hasAgentIdInAuth,
           hasAgentId,
+          pendingAgentId,
           agentId: (authUser as any)?.agentId,
           authUserKeys: authUser ? Object.keys(authUser) : []
         });
@@ -226,7 +233,15 @@ function AppContent() {
         if (hasAgentId) {
           // Show TrialDashboard component (it works for any agent, not just trial)
           // Pass agentId instead of trialAgentId
-          console.log('📊 Routing to TrialDashboard (agent magic-link user with agentId:', (authUser as any).agentId, ')');
+          const agentIdToUse = (authUser as any)?.agentId || pendingAgentId;
+          console.log('📊 Routing to TrialDashboard (agent magic-link user with agentId:', agentIdToUse, ')');
+
+          // Clear pendingAgentId after using it for routing
+          if (pendingAgentId) {
+            sessionStorage.removeItem('pendingAgentId');
+            console.log('🧹 Cleared pendingAgentId from sessionStorage');
+          }
+
           return <TrialDashboard onNavigate={setCurrentPage} />;
         }
 
