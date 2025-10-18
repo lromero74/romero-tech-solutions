@@ -8,6 +8,7 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
+import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
 import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, AgentPolicy } from '../../services/agentService';
 import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
@@ -75,11 +76,18 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     hasUserDefaults,
   } = useSharedChartSettings(agentId);
 
+  // Get current user info to check if they're a client viewing their own agent
+  const { authUser } = useEnhancedAuth();
+
   // Permission checks
   const { checkPermission } = usePermission();
   const canViewAgents = checkPermission('view.agents.enable');
   const canManageAgents = checkPermission('manage.agents.enable');
   const canSendCommands = checkPermission('send.agent_commands.enable');
+
+  // Check if user is a client (customer role)
+  const isClient = authUser && (authUser.role === 'client' || authUser.role === 'customer');
+  const userBusinessId = (authUser as any)?.businessId;
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -91,17 +99,6 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
   // Load agent details with retry logic for ServiceWorker failures
   const loadAgentDetails = useCallback(async (retryCount = 0) => {
-    if (!canViewAgents) {
-      setPermissionDenied({
-        show: true,
-        action: 'View Agent Details',
-        requiredPermission: 'view.agents.enable',
-        message: 'You do not have permission to view agent details'
-      });
-      setLoading(false);
-      return;
-    }
-
     const MAX_RETRIES = 2;
     const RETRY_DELAY = 1000; // 1 second
 
@@ -109,10 +106,40 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       setLoading(true);
       setError(null);
 
-      // Load agent info
+      // Load agent info first to check business_id for clients
       const agentResponse = await agentService.getAgent(agentId);
       if (agentResponse.success && agentResponse.data) {
         setAgent(agentResponse.data);
+
+        // Permission check: Allow if employee with permission OR client viewing their own business's agent
+        const canAccess = canViewAgents || (isClient && agentResponse.data.business_id === userBusinessId);
+
+        if (!canAccess) {
+          console.log('🚫 Access denied:', {
+            canViewAgents,
+            isClient,
+            agentBusinessId: agentResponse.data.business_id,
+            userBusinessId,
+          });
+
+          setPermissionDenied({
+            show: true,
+            action: 'View Agent Details',
+            requiredPermission: 'view.agents.enable',
+            message: isClient
+              ? 'This agent does not belong to your business'
+              : 'You do not have permission to view agent details'
+          });
+          setLoading(false);
+          return;
+        }
+
+        console.log('✅ Access granted:', {
+          canViewAgents,
+          isClient,
+          agentBusinessId: agentResponse.data.business_id,
+          userBusinessId,
+        });
       }
 
       // Load metrics history (fetch large window, zoom will be applied for display)
@@ -191,7 +218,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [agentId, canViewAgents, METRICS_FETCH_WINDOW]);
+  }, [agentId, canViewAgents, isClient, userBusinessId, METRICS_FETCH_WINDOW]);
 
   useEffect(() => {
     loadAgentDetails();
@@ -713,35 +740,6 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
     }
   };
 
-  if (!canViewAgents) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center">
-          <button
-            onClick={onBack}
-            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-          >
-            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
-          </button>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
-        </div>
-        <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
-          <AlertTriangle className={`w-16 h-16 mx-auto mb-4 ${themeClasses.text.muted}`} />
-          <p className={`text-lg ${themeClasses.text.secondary}`}>
-            You do not have permission to view agent details
-          </p>
-        </div>
-        <PermissionDeniedModal
-          isOpen={permissionDenied.show}
-          onClose={() => setPermissionDenied({ show: false })}
-          action={permissionDenied.action}
-          requiredPermission={permissionDenied.requiredPermission}
-          message={permissionDenied.message}
-        />
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="space-y-6">
@@ -758,6 +756,36 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           <Activity className={`w-8 h-8 mx-auto mb-4 animate-spin ${themeClasses.text.muted}`} />
           <p className={`${themeClasses.text.secondary}`}>Loading agent details...</p>
         </div>
+      </div>
+    );
+  }
+
+  // Show permission denied if access was denied during load
+  if (permissionDenied.show) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center">
+          <button
+            onClick={onBack}
+            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
+          >
+            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
+          </button>
+          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+        </div>
+        <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
+          <AlertTriangle className={`w-16 w-16 mx-auto mb-4 ${themeClasses.text.muted}`} />
+          <p className={`text-lg ${themeClasses.text.secondary}`}>
+            {permissionDenied.message || 'You do not have permission to view agent details'}
+          </p>
+        </div>
+        <PermissionDeniedModal
+          isOpen={permissionDenied.show}
+          onClose={() => setPermissionDenied({ show: false })}
+          action={permissionDenied.action}
+          requiredPermission={permissionDenied.requiredPermission}
+          message={permissionDenied.message}
+        />
       </div>
     );
   }
