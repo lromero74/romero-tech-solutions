@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import AgentDetails from '../components/admin/AgentDetails';
 import { LogOut, Sun, Moon, HardDrive } from 'lucide-react';
 
@@ -165,7 +166,9 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
 
         {/* Agent Details Component */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700">
-          <AgentDetails agentId={agentId} />
+          <ThemeProvider>
+            <AgentDetails agentId={agentId} />
+          </ThemeProvider>
         </div>
       </main>
     </div>
