@@ -38,20 +38,18 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
         const result = await response.json();
 
         if (result.success && result.user) {
-          // Debug: Log the complete user data to verify agentId is present
-          console.log('🔍 Agent magic-link authentication result:', {
-            hasAgentId: !!result.user.agentId,
-            agentId: result.user.agentId,
-            userId: result.user.id,
-            email: result.user.email,
-            role: result.user.role
-          });
+          // Debug: Log the COMPLETE user data to verify all fields are present
+          console.log('🔍 Agent magic-link authentication result (FULL):', result.user);
 
-          // CRITICAL: Store agentId in sessionStorage before auth context update
-          // This ensures it's available immediately for routing logic
+          // CRITICAL: Store agentId and businessId in sessionStorage before auth context update
+          // This ensures they're available immediately for routing and permission checks
           if (result.user.agentId) {
             sessionStorage.setItem('pendingAgentId', result.user.agentId);
             console.log('💾 Stored agentId in sessionStorage for routing:', result.user.agentId);
+          }
+          if (result.user.businessId) {
+            sessionStorage.setItem('pendingBusinessId', result.user.businessId);
+            console.log('💾 Stored businessId in sessionStorage for permissions:', result.user.businessId);
           }
 
           // Store user info in auth context using setUserFromTrustedDevice

@@ -86,8 +86,16 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const canSendCommands = checkPermission('send.agent_commands.enable');
 
   // Check if user is a client (customer role)
-  const isClient = authUser && (authUser.role === 'client' || authUser.role === 'customer');
-  const userBusinessId = (authUser as any)?.businessId;
+  // Use localStorage and sessionStorage fallbacks for async auth state (similar to agentId handling)
+  const storedAuthUser = localStorage.getItem('client_authUser');
+  const parsedStoredUser = storedAuthUser ? JSON.parse(storedAuthUser) : null;
+  const storedRole = parsedStoredUser?.role;
+  const storedBusinessId = parsedStoredUser?.businessId;
+
+  const isClient = (authUser && (authUser.role === 'client' || authUser.role === 'customer')) ||
+                   (storedRole === 'client' || storedRole === 'customer');
+  const pendingBusinessId = sessionStorage.getItem('pendingBusinessId');
+  const userBusinessId = (authUser as any)?.businessId || pendingBusinessId || storedBusinessId;
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -120,6 +128,11 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             isClient,
             agentBusinessId: agentResponse.data.business_id,
             userBusinessId,
+            authUserBusinessId: (authUser as any)?.businessId,
+            pendingBusinessId,
+            storedBusinessId,
+            authUserRole: authUser?.role,
+            storedRole,
           });
 
           setPermissionDenied({
@@ -139,6 +152,11 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           isClient,
           agentBusinessId: agentResponse.data.business_id,
           userBusinessId,
+          authUserBusinessId: (authUser as any)?.businessId,
+          pendingBusinessId,
+          storedBusinessId,
+          authUserRole: authUser?.role,
+          storedRole,
         });
       }
 
