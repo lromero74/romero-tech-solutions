@@ -279,7 +279,7 @@ export async function sendTrialVerificationEmail(email, verificationCode, device
             <div class="free-tier-info">
               <strong>🎉 Your Free Tier Includes:</strong>
               <ul style="margin: 10px 0;">
-                <li><strong>2 devices free forever</strong> - no expiration, no credit card required</li>
+                <li><strong>2 devices at no cost</strong> - no expiration, no credit card required</li>
                 <li>Full monitoring and management features</li>
                 <li>Easy upgrade to Pro or Enterprise anytime</li>
                 <li>Access your dashboard at: <a href="https://romerotechsolutions.com/clogin">romerotechsolutions.com/clogin</a></li>
@@ -314,7 +314,7 @@ Your verification code is: ${verificationCode}
 This code expires in 15 minutes and can only be used once.
 
 Your Free Tier Includes:
-- 2 devices free forever (no expiration, no credit card required)
+- 2 devices at no cost (no expiration, no credit card required)
 - Full monitoring and management features
 - Easy upgrade to Pro or Enterprise anytime
 - Access your dashboard at: https://romerotechsolutions.com/clogin

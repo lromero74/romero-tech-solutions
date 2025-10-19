@@ -208,7 +208,18 @@ router.post('/trial/verify-email', async (req, res) => {
 
     // Create agent device
     const agentId = uuidv4();
-    const agentToken = crypto.randomBytes(32).toString('hex');
+
+    // Generate proper JWT token for agent authentication
+    const agentToken = jwt.sign(
+      {
+        agent_id: agentId,
+        type: 'agent',
+        business_id: businessId,
+        service_location_id: null  // Free tier doesn't have service locations
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: '10y' }  // Permanent token for agent
+    );
 
     await query(`
       INSERT INTO agent_devices (
