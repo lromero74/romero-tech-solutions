@@ -16,6 +16,8 @@ import EditServiceLocationForm from '../components/client/EditServiceLocationFor
 import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
 import TrialDevicesManager from '../components/client/TrialDevicesManager';
 import AgentDetails from '../components/admin/AgentDetails';
+import AgentSelector from '../components/trial/AgentSelector';
+import { agentService, AgentDevice } from '../services/agentService';
 import {
   Building2,
   MapPin,
@@ -139,6 +141,14 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   // State for viewing agent details (from magic link)
   const [viewingAgentId, setViewingAgentId] = useState<string | null>(null);
 
+  // State for agent/device selection and metrics
+  const [agents, setAgents] = useState<AgentDevice[]>([]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
+    // Try to restore last selected agent from localStorage
+    const savedAgentId = localStorage.getItem('client_selectedAgentId');
+    return savedAgentId || '';
+  });
+
   // Function to handle successful service location addition
   const handleServiceLocationAdded = (newLocation: any) => {
     // Update the client data with the new location
@@ -233,6 +243,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const cancelDeleteLocation = () => {
     setShowDeleteConfirmation(false);
     setDeletingLocation(null);
+  };
+
+  // Function to handle agent selection
+  const handleSelectAgent = (agentId: string) => {
+    setSelectedAgentId(agentId);
+    localStorage.setItem('client_selectedAgentId', agentId);
   };
 
   // Check for pending agent ID from magic link login
@@ -458,6 +474,31 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+
+  // Fetch user's agents when auth data is available
+  useEffect(() => {
+    const fetchAgents = async () => {
+      if (!authUser) return;
+
+      try {
+        const response = await agentService.getMyAgents();
+        if (response.success && response.data?.agents) {
+          setAgents(response.data.agents);
+
+          // If no agent is selected but we have agents, select the first one
+          if (!selectedAgentId && response.data.agents.length > 0) {
+            const firstAgentId = response.data.agents[0].id;
+            setSelectedAgentId(firstAgentId);
+            localStorage.setItem('client_selectedAgentId', firstAgentId);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to fetch agents:', error);
+      }
+    };
+
+    fetchAgents();
+  }, [authUser, selectedAgentId]);
 
   // Handle navigation from FileManager to specific service request
   const handleNavigateToServiceRequest = (serviceRequestId: string) => {
@@ -889,6 +930,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   </div>
                 )}
 
+                {/* Device Selector - Show if user has devices */}
+                {agents.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                    <AgentSelector
+                      agents={agents}
+                      selectedAgentId={selectedAgentId}
+                      onSelectAgent={handleSelectAgent}
+                      isDarkMode={isDarkMode}
+                    />
+                  </div>
+                )}
+
                 {/* Welcome Section */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -999,6 +1052,17 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     </button>
                   </div>
                 </div>
+
+                {/* Device Metrics - Show if a device is selected */}
+                {selectedAgentId && (
+                  <div className="mt-6">
+                    <ThemeProvider>
+                      <AgentDetails
+                        agentId={selectedAgentId}
+                      />
+                    </ThemeProvider>
+                  </div>
+                )}
               </div>
             )}
 
