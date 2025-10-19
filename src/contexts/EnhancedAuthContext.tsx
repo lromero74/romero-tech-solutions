@@ -10,6 +10,7 @@ import { RoleBasedStorage } from '../utils/roleBasedStorage';
 
 interface EnhancedAuthContextType {
   user: AuthUser | null;
+  authUser: AuthUser | null; // Alias for backwards compatibility
   isLoading: boolean;
   isAuthenticated: boolean;
   role: UserRole | null;
@@ -902,6 +903,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   const value: EnhancedAuthContextType = {
     user,
+    authUser: user, // Alias for backwards compatibility
     isLoading,
     isAuthenticated,
     role,
