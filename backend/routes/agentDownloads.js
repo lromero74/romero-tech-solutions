@@ -10,11 +10,11 @@ const __dirname = dirname(__filename);
 const router = express.Router();
 
 // Agent binary storage directory
-// In production: /home/ec2-user/agent-binaries/
+// In production: /var/www/agent-downloads/
 // In development: /tmp/agent-binaries/ (for testing)
 const getAgentBinariesDir = () => {
   return process.env.NODE_ENV === 'production'
-    ? '/home/ec2-user/agent-binaries'
+    ? '/var/www/agent-downloads'
     : '/tmp/agent-binaries';
 };
 
@@ -96,19 +96,20 @@ const getLatestVersion = async (platform) => {
   }
 };
 
-// Get binary filename for platform and architecture
-const getBinaryFilename = (platform, arch) => {
-  const baseName = 'rts-agent';
+// Get binary filename for platform, architecture, and version
+const getBinaryFilename = (platform, arch, version) => {
+  // Remove 'v' prefix from version if present
+  const versionNumber = version.replace(/^v/, '');
 
   switch (platform) {
     case 'windows':
-      return `${baseName}-${arch}.exe`;
+      return `rts-agent-${versionNumber}-windows-${arch}.zip`;
     case 'macos':
-      return `${baseName}-${arch}.dmg`;
+      return `RTS-Agent-${versionNumber}-${arch}.pkg`;
     case 'linux':
-      return `${baseName}-${arch}.deb`;
+      return `rts-agent_${versionNumber}_${arch}.deb`;
     default:
-      return `${baseName}-${arch}`;
+      return `rts-agent-${versionNumber}-${arch}`;
   }
 };
 
@@ -121,21 +122,31 @@ const getBinaryFilename = (platform, arch) => {
  */
 router.get('/download/:platform', async (req, res) => {
   try {
-    const { platform } = req.params;
+    let { platform } = req.params;
     const requestedVersion = req.query.version;
     const requestedArch = req.query.arch;
     const userAgent = req.get('user-agent');
 
     console.log(`📥 Agent download request: platform=${platform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, UA=${userAgent}`);
 
-    // Validate platform
-    const validPlatforms = ['windows', 'macos', 'linux'];
-    if (!validPlatforms.includes(platform)) {
+    // Normalize platform name (darwin -> macos for directory lookup)
+    const platformMap = {
+      'darwin': 'macos',
+      'macos': 'macos',
+      'windows': 'windows',
+      'linux': 'linux'
+    };
+
+    const normalizedPlatform = platformMap[platform.toLowerCase()];
+
+    if (!normalizedPlatform) {
       return res.status(400).json({
         success: false,
-        message: `Invalid platform. Must be one of: ${validPlatforms.join(', ')}`
+        message: `Invalid platform '${platform}'. Must be one of: darwin, macos, windows, linux`
       });
     }
+
+    platform = normalizedPlatform;
 
     // Detect or validate architecture
     const arch = requestedArch || detectArchFromUserAgent(userAgent);
@@ -155,7 +166,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Build binary path
     const binariesDir = getAgentBinariesDir();
-    const filename = getBinaryFilename(platform, arch);
+    const filename = getBinaryFilename(platform, arch, version);
     const binaryPath = path.join(binariesDir, platform, version, filename);
 
     console.log(`📂 Binary path: ${binaryPath}`);
