@@ -585,6 +585,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             <AgentDetails
               agentId={viewingAgentId}
               onBack={() => setViewingAgentId(null)}
+              hideHeader={true}
             />
           </ThemeProvider>
         </div>
