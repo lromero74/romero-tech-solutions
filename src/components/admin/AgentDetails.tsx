@@ -31,6 +31,7 @@ interface AgentDetailsProps {
     alertId?: number;
   } | null;
   onClearNavigationContext?: () => void;
+  hideHeader?: boolean; // Hide back button and header when embedded in dashboard
 }
 
 const AgentDetails: React.FC<AgentDetailsProps> = ({
@@ -39,6 +40,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   onSendCommand,
   navigationContext,
   onClearNavigationContext,
+  hideHeader = false,
 }) => {
   const [agent, setAgent] = useState<AgentDevice | null>(null);
   const [latestMetrics, setLatestMetrics] = useState<AgentMetric | null>(null);
@@ -761,15 +763,17 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   if (loading) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center">
-          <button
-            onClick={onBack}
-            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-          >
-            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
-          </button>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
-        </div>
+        {!hideHeader && (
+          <div className="flex items-center">
+            <button
+              onClick={onBack}
+              className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
+            >
+              <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
+            </button>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+          </div>
+        )}
         <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
           <Activity className={`w-8 h-8 mx-auto mb-4 animate-spin ${themeClasses.text.muted}`} />
           <p className={`${themeClasses.text.secondary}`}>Loading agent details...</p>
@@ -782,15 +786,17 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   if (permissionDenied.show) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center">
-          <button
-            onClick={onBack}
-            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-          >
-            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
-          </button>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
-        </div>
+        {!hideHeader && (
+          <div className="flex items-center">
+            <button
+              onClick={onBack}
+              className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
+            >
+              <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
+            </button>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+          </div>
+        )}
         <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
           <AlertTriangle className={`w-16 w-16 mx-auto mb-4 ${themeClasses.text.muted}`} />
           <p className={`text-lg ${themeClasses.text.secondary}`}>
@@ -811,15 +817,17 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   if (error || !agent) {
     return (
       <div className="space-y-6">
-        <div className="flex items-center">
-          <button
-            onClick={onBack}
-            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-          >
-            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
-          </button>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
-        </div>
+        {!hideHeader && (
+          <div className="flex items-center">
+            <button
+              onClick={onBack}
+              className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
+            >
+              <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
+            </button>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+          </div>
+        )}
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
           <p className="text-red-800 dark:text-red-200">{error || 'Agent not found'}</p>
         </div>
@@ -832,52 +840,54 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center">
-          <button
-            onClick={onBack}
-            className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-            title="Back to agent list"
-          >
-            <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
-          </button>
-          <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
-        </div>
-        <div className="flex gap-3">
-          <button
-            onClick={loadAgentDetails}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Refresh
-          </button>
-          {canSendCommands ? (
+      {!hideHeader && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
             <button
-              onClick={() => onSendCommand?.(agentId)}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+              onClick={onBack}
+              className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
+              title="Back to agent list"
             >
-              <Terminal className="w-4 h-4 mr-2" />
-              Send Command
+              <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
             </button>
-          ) : (
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+          </div>
+          <div className="flex gap-3">
             <button
-              onClick={() => setPermissionDenied({
-                show: true,
-                action: 'Send Command',
-                requiredPermission: 'send.agent_commands.enable',
-                message: 'You do not have permission to send commands'
-              })}
-              disabled
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-400 cursor-not-allowed opacity-50"
-              title="Permission required"
+              onClick={loadAgentDetails}
+              className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
+              title="Refresh"
             >
-              <Terminal className="w-4 h-4 mr-2" />
-              Send Command
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Refresh
             </button>
-          )}
+            {canSendCommands ? (
+              <button
+                onClick={() => onSendCommand?.(agentId)}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
+              >
+                <Terminal className="w-4 h-4 mr-2" />
+                Send Command
+              </button>
+            ) : (
+              <button
+                onClick={() => setPermissionDenied({
+                  show: true,
+                  action: 'Send Command',
+                  requiredPermission: 'send.agent_commands.enable',
+                  message: 'You do not have permission to send commands'
+                })}
+                disabled
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-400 cursor-not-allowed opacity-50"
+                title="Permission required"
+              >
+                <Terminal className="w-4 h-4 mr-2" />
+                Send Command
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Agent Info Card */}
       <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>

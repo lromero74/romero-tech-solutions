@@ -1059,6 +1059,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     <ThemeProvider>
                       <AgentDetails
                         agentId={selectedAgentId}
+                        hideHeader={true}
                       />
                     </ThemeProvider>
                   </div>
