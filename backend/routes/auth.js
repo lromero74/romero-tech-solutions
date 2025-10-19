@@ -2517,6 +2517,7 @@ router.post('/trial-magic-login', async (req, res) => {
     };
 
     console.log(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);
+    console.log('📊 Trial userData:', JSON.stringify(userData, null, 2));
 
     res.status(200).json({
       success: true,
