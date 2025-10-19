@@ -127,7 +127,7 @@ router.post('/trial/send-verification', async (req, res) => {
  */
 router.post('/trial/verify-email', async (req, res) => {
   try {
-    const { email, verificationCode, contactName, phone, deviceName, osType, osVersion } = req.body;
+    const { email, verificationCode, contactName, phone, deviceName, deviceType, osType, osVersion } = req.body;
 
     if (!email || !verificationCode) {
       return res.status(400).json({
@@ -138,10 +138,10 @@ router.post('/trial/verify-email', async (req, res) => {
     }
 
     // Device info required for agent creation
-    if (!deviceName || !osType) {
+    if (!deviceName || !deviceType || !osType) {
       return res.status(400).json({
         success: false,
-        message: 'Device name and OS type are required for registration',
+        message: 'Device name, device type, and OS type are required for registration',
         code: 'MISSING_DEVICE_INFO'
       });
     }
@@ -212,10 +212,10 @@ router.post('/trial/verify-email', async (req, res) => {
 
     await query(`
       INSERT INTO agent_devices (
-        id, business_id, device_name, os_type, os_version,
+        id, business_id, device_name, device_type, os_type, os_version,
         agent_token, status, is_active, created_at, updated_at
-      ) VALUES ($1, $2, $3, $4, $5, $6, 'online', true, NOW(), NOW())
-    `, [agentId, businessId, deviceName, osType, osVersion || null, agentToken]);
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'online', true, NOW(), NOW())
+    `, [agentId, businessId, deviceName, deviceType, osType, osVersion || null, agentToken]);
 
     console.log(`✅ Free tier agent created: ${agentId} for ${email}`);
 
