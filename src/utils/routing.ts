@@ -40,7 +40,8 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/trial/login' || path.startsWith('/trial/login')) {
     return 'trial-login';
   }
-  if (path === '/agent/login' || path.startsWith('/agent/login')) {
+  if (path === '/agent/login' || path.startsWith('/agent/login') ||
+      path === '/agent-magic-login' || path.startsWith('/agent-magic-login')) {
     return 'agent-login';
   }
   return 'home';
