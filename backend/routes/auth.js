@@ -149,7 +149,7 @@ router.post('/login', async (req, res) => {
       userResult = await query(`
         SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
                b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
-               u.time_format_preference
+               u.time_format_preference, u.is_trial, u.trial_expires_at, u.business_id
         FROM users u
         LEFT JOIN businesses b ON u.business_id = b.id
         WHERE u.email = $1
@@ -328,7 +328,10 @@ router.post('/login', async (req, res) => {
       role: user.role || 'admin',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
+      isTrial: user.is_trial || false,
+      trialExpiresAt: user.trial_expires_at,
       isFirstAdmin: true // For now, default to true
     };
 
@@ -1039,7 +1042,8 @@ router.post('/verify-client-mfa', async (req, res) => {
     // Get client user data
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.email_verified,
-             b.business_name, 'client' as user_type, u.time_format_preference
+             b.business_name, 'client' as user_type, u.time_format_preference,
+             u.is_trial, u.trial_expires_at, u.business_id
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1
@@ -1095,7 +1099,10 @@ router.post('/verify-client-mfa', async (req, res) => {
       role: user.role || 'client',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
+      isTrial: user.is_trial || false,
+      trialExpiresAt: user.trial_expires_at,
       isFirstAdmin: false
     };
 
@@ -2593,7 +2600,8 @@ router.post('/agent-magic-login', async (req, res) => {
     // Get user account
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.role,
-             u.email_verified, u.time_format_preference, b.business_name
+             u.email_verified, u.time_format_preference, b.business_name,
+             u.is_trial, u.trial_expires_at, u.business_id
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.email_verified = true
@@ -2642,10 +2650,12 @@ router.post('/agent-magic-login', async (req, res) => {
       role: user.role || 'customer',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      businessId: business_id,
       timeFormatPreference: user.time_format_preference || '12h',
+      isTrial: user.is_trial || false,
+      trialExpiresAt: user.trial_expires_at,
       isFirstAdmin: false,
-      agentId: agent_id,  // Link to the specific agent that opened dashboard
-      businessId: business_id
+      agentId: agent_id  // Link to the specific agent that opened dashboard
     };
 
     console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})`);

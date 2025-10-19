@@ -346,11 +346,16 @@ export interface AuthUser {
   role: UserRole; // Primary role
   roles?: UserRoles; // Multiple roles
   name: string;
+  businessId?: string; // Business ID for the user
+  businessName?: string; // Business name for the user
   timeFormatPreference?: '12h' | '24h';
   isFirstAdmin?: boolean;
-  isTrial?: boolean; // Indicates if this is a trial user
-  trialAgentId?: string; // Agent ID for trial users
-  trialId?: string; // Trial ID for trial users
+  isTrial?: boolean; // Indicates if this is a trial user (unified approach)
+  trialExpiresAt?: string; // When the trial expires (unified approach)
+  agentId?: string; // Agent ID for users accessing via agent magic-link
+  // Legacy trial fields (deprecated, will be removed)
+  trialAgentId?: string;
+  trialId?: string;
 }
 
 export interface LoginRequest {

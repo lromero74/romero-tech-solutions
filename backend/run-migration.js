@@ -1,67 +1,44 @@
 #!/usr/bin/env node
 
-import { readFileSync } from 'fs';
-import { getPool } from './config/database.js';
+import { readFile } from 'fs/promises';
+import { query, closePool } from './config/database.js';
 
-async function runMigration() {
+async function runMigration(migrationFile) {
   try {
-    console.log('🚀 Running file association migration...');
+    console.log(`📂 Reading migration file: ${migrationFile}`);
+    const sql = await readFile(migrationFile, 'utf-8');
 
-    const pool = await getPool();
+    console.log(`🚀 Executing migration...`);
+    console.log(`═══════════════════════════════════════════════════════════════\n`);
 
-    // Read the migration file
-    const migrationSQL = readFileSync('./migrations/006_service_request_file_associations.sql', 'utf8');
+    const result = await query(sql);
 
-    // Execute the migration
-    console.log('📊 Executing SQL migration...');
-    await pool.query(migrationSQL);
+    console.log(`\n═══════════════════════════════════════════════════════════════`);
+    console.log(`✅ Migration completed successfully!`);
 
-    console.log('✅ File association migration completed successfully!');
-
-    // Verify changes were made
-    console.log('\n🔍 Verifying column addition...');
-    const columnCheck = await pool.query(`
-      SELECT column_name, data_type, is_nullable
-      FROM information_schema.columns
-      WHERE table_name = 't_client_files'
-      AND column_name = 'service_request_id'
-    `);
-
-    if (columnCheck.rows.length > 0) {
-      console.log('✅ service_request_id column added to t_client_files');
-    } else {
-      console.log('❌ service_request_id column not found');
+    // If there were any RAISE NOTICE messages, they would show in the console
+    if (result.rows && result.rows.length > 0) {
+      console.log('\nResults:');
+      console.table(result.rows);
     }
-
-    // Check functions were created
-    console.log('\n🔍 Verifying functions...');
-    const functionCheck = await pool.query(`
-      SELECT routine_name
-      FROM information_schema.routines
-      WHERE routine_schema = 'public'
-      AND routine_name IN (
-        'get_service_request_files',
-        'associate_file_with_service_request',
-        'disassociate_file_from_service_request'
-      )
-    `);
-
-    console.log('📋 Functions created:');
-    functionCheck.rows.forEach(row => {
-      console.log(`  ✅ ${row.routine_name}`);
-    });
-
-    console.log('\n🎉 Migration completed successfully! Files can now be associated with service requests.');
 
   } catch (error) {
-    console.error('❌ Migration failed:', error.message);
-    if (error.stack) {
-      console.error('Stack trace:', error.stack);
-    }
+    console.error(`\n❌ Migration failed:`);
+    console.error(error.message);
+    if (error.detail) console.error(`Detail: ${error.detail}`);
+    if (error.hint) console.error(`Hint: ${error.hint}`);
     process.exit(1);
   } finally {
     await closePool();
   }
 }
 
-runMigration();
+// Get migration file from command line args
+const migrationFile = process.argv[2];
+
+if (!migrationFile) {
+  console.error('Usage: node run-migration.js <path-to-migration-file.sql>');
+  process.exit(1);
+}
+
+runMigration(migrationFile);

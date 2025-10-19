@@ -13,6 +13,7 @@ import LanguageSelector from '../components/client/LanguageSelector';
 import AddServiceLocationForm from '../components/client/AddServiceLocationForm';
 import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
 import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
+import TrialDevicesManager from '../components/client/TrialDevicesManager';
 import {
   Building2,
   MapPin,
@@ -98,7 +99,7 @@ interface ClientDashboardProps {
 const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   const { isDarkMode, toggleTheme } = useClientTheme();
   const { t } = useClientLanguage();
-  const { signOut, sessionConfig } = useEnhancedAuth();
+  const { signOut, sessionConfig, authUser } = useEnhancedAuth();
   const { hasNotifications, unseenServiceRequestChanges, unseenInvoiceChanges, startViewTimer, clearViewTimer } = useNotifications();
   const [clientData, setClientData] = useState<ClientData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -662,6 +663,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
+              ...(authUser?.isTrial ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
               { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
               { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
               { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -765,6 +767,31 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           <main className="flex-1 overflow-y-auto lg:pr-2">
             {activeTab === 'dashboard' && (
               <div className="space-y-4 sm:space-y-6">
+                {/* Trial User Banner */}
+                {authUser?.isTrial && (
+                  <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg shadow-sm border-2 border-blue-300 dark:border-blue-600 p-4 sm:p-6">
+                    <div className="flex items-start space-x-3">
+                      <HardDrive className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-1">
+                          Welcome to Your 30-Day Trial!
+                        </h3>
+                        <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
+                          You have full access to monitor your device and explore all features.
+                          {authUser.trialExpiresAt && (
+                            <span className="block mt-1 font-medium">
+                              Trial expires: {new Date(authUser.trialExpiresAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-blue-600 dark:text-blue-400">
+                          Contact us to upgrade to a full subscription and continue enjoying seamless monitoring!
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Welcome Section */}
                 <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
                   <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -876,6 +903,17 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   </div>
                 </div>
               </div>
+            )}
+
+            {/* Trial Devices Tab - Only for trial users */}
+            {activeTab === 'devices' && authUser?.isTrial && (
+              <TrialDevicesManager
+                authUser={authUser}
+                onDeviceRemoved={() => {
+                  // Optionally refresh data or show notification
+                  console.log('Device removed successfully');
+                }}
+              />
             )}
 
             {activeTab === 'locations' && (

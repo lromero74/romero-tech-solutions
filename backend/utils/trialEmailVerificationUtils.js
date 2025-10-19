@@ -18,26 +18,41 @@ export function generateTrialVerificationCode() {
 
 /**
  * Check if email is already registered as a non-trial user
+ * IMPORTANT: Trial users (is_trial = true) are allowed to add additional devices
  * @param {string} email - The email address to check
- * @returns {Promise<{exists: boolean, message?: string}>}
+ * @returns {Promise<{exists: boolean, isTrial?: boolean, message?: string}>}
  */
 export async function checkEmailNotRegistered(email) {
   try {
     const result = await query(`
-      SELECT id, first_name, last_name, email
+      SELECT id, first_name, last_name, email, is_trial
       FROM users
       WHERE email = $1 AND is_test_account = FALSE
       LIMIT 1
     `, [email]);
 
     if (result.rows.length > 0) {
+      const user = result.rows[0];
+
+      // If user is a trial user, allow them to add additional devices
+      if (user.is_trial) {
+        console.log(`✅ Trial user ${email} adding additional device`);
+        return {
+          exists: false, // Allow trial users to add more devices
+          isTrial: true
+        };
+      }
+
+      // If user is a non-trial (paid) user, reject
       return {
         exists: true,
-        message: 'This email address is already registered. Please sign in or use a different email address.'
+        isTrial: false,
+        message: 'This email address is already registered with a full account. Please sign in or use a different email address.'
       };
     }
 
-    return { exists: false };
+    // Email doesn't exist - new trial user
+    return { exists: false, isTrial: false };
   } catch (error) {
     console.error('❌ Error checking email registration:', error);
     throw error;
@@ -98,20 +113,32 @@ export async function validateTrialEmailVerificationCode(email, verificationCode
     `, [email]);
 
     if (result.rows.length === 0) {
+      console.log(`❌ No verification code found for email: ${email}`);
       return { valid: false, message: 'No verification code found for this email' };
     }
 
     const record = result.rows[0];
 
     if (record.used) {
+      console.log(`❌ Verification code already used for email: ${email}`);
       return { valid: false, message: 'Verification code has already been used' };
     }
 
     if (new Date() > new Date(record.expires_at)) {
+      console.log(`❌ Verification code expired for email: ${email}`);
       return { valid: false, message: 'Verification code has expired. Please request a new code.' };
     }
 
-    if (record.verification_code !== verificationCode) {
+    // Defensive: Trim and normalize both codes for comparison
+    const storedCode = String(record.verification_code).trim();
+    const providedCode = String(verificationCode).trim();
+
+    console.log(`🔍 Comparing verification codes for ${email}:`);
+    console.log(`   Stored:   "${storedCode}" (length: ${storedCode.length}, type: ${typeof record.verification_code})`);
+    console.log(`   Provided: "${providedCode}" (length: ${providedCode.length}, type: ${typeof verificationCode})`);
+
+    if (storedCode !== providedCode) {
+      console.log(`❌ Code mismatch! Stored "${storedCode}" !== Provided "${providedCode}"`);
       return { valid: false, message: 'Invalid verification code' };
     }
 
@@ -313,49 +340,123 @@ If you didn't request this trial, you can safely ignore this email.
 }
 
 /**
- * Get or create trial user by email
+ * Get or create trial user by email (UNIFIED ARCHITECTURE)
  * Used during trial agent heartbeat to link agents to trial users
+ * Creates users in the main `users` table with is_trial flag
  * @param {string} email - The trial user email
- * @returns {Promise<{trialUserId: string, isVerified: boolean}>}
+ * @returns {Promise<{userId: string, businessId: string, isVerified: boolean}>}
  */
 export async function getOrCreateTrialUser(email) {
   try {
-    // First, check if trial user exists
+    // Import UUID generator
+    const { v4: uuidv4 } = await import('uuid');
+    const bcrypt = await import('bcrypt');
+
+    // First, check if trial user exists in unified users table
     let result = await query(`
-      SELECT id, email_verified
-      FROM trial_users
-      WHERE email = $1
+      SELECT u.id, u.email_verified, u.business_id, b.business_name
+      FROM users u
+      LEFT JOIN businesses b ON u.business_id = b.id
+      WHERE u.email = $1 AND u.is_trial = true
     `, [email]);
 
     if (result.rows.length > 0) {
+      const user = result.rows[0];
+
+      // If user exists but doesn't have a business, create one now
+      if (!user.business_id) {
+        const businessId = uuidv4();
+        const businessName = `Trial - ${email}`;
+
+        // Create business
+        await query(`
+          INSERT INTO businesses (id, business_name, is_individual, created_at)
+          VALUES ($1, $2, true, NOW())
+        `, [businessId, businessName]);
+
+        // Link user to business
+        await query(`
+          UPDATE users SET business_id = $1 WHERE id = $2
+        `, [businessId, user.id]);
+
+        console.log(`✅ Created business ${businessId} for existing trial user ${email}`);
+
+        return {
+          userId: user.id,
+          businessId: businessId,
+          isVerified: user.email_verified
+        };
+      }
+
       return {
-        trialUserId: result.rows[0].id,
-        isVerified: result.rows[0].email_verified
+        userId: user.id,
+        businessId: user.business_id,
+        isVerified: user.email_verified
       };
     }
 
-    // If not exists, create unverified trial user
-    // (will be verified later when they complete email verification)
+    // If not exists, create trial user with business (UNIFIED ARCHITECTURE)
+    const userId = uuidv4();
+    const businessId = uuidv4();
+    const businessName = `Trial - ${email}`;
     const trialExpiresAt = new Date();
     trialExpiresAt.setDate(trialExpiresAt.getDate() + 30); // 30-day trial
 
-    result = await query(`
-      INSERT INTO trial_users (
+    // Generate a random password (user will use magic-link to login)
+    const randomPassword = crypto.randomBytes(32).toString('hex');
+    const passwordHash = await bcrypt.default.hash(randomPassword, 10);
+
+    // Start transaction
+    const pool = await import('../config/database.js').then(m => m.getPool());
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      // 1. Create business
+      await client.query(`
+        INSERT INTO businesses (id, business_name, is_individual, created_at)
+        VALUES ($1, $2, true, NOW())
+      `, [businessId, businessName]);
+
+      // 2. Create user in users table with is_trial flag
+      await client.query(`
+        INSERT INTO users (
+          id, email, password_hash, first_name, last_name,
+          role, is_active, email_verified, business_id,
+          is_trial, trial_expires_at,
+          created_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+      `, [
+        userId,
         email,
-        email_verified,
-        trial_start_date,
-        trial_expires_at,
-        created_at
-      ) VALUES ($1, FALSE, CURRENT_TIMESTAMP, $2, CURRENT_TIMESTAMP)
-      RETURNING id
-    `, [email, trialExpiresAt]);
+        passwordHash,
+        'Trial',
+        'User',
+        'customer',
+        true,
+        false, // Will be verified when they complete email verification
+        businessId,
+        true, // is_trial = true
+        trialExpiresAt
+      ]);
 
-    console.log(`📝 Created unverified trial user for ${email}`);
+      await client.query('COMMIT');
 
-    return {
-      trialUserId: result.rows[0].id,
-      isVerified: false
-    };
+      console.log(`✅ Created trial user ${email} with business ${businessId} (UNIFIED ARCHITECTURE)`);
+
+      return {
+        userId: userId,
+        businessId: businessId,
+        isVerified: false
+      };
+
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   } catch (error) {
     console.error('❌ Error getting/creating trial user:', error);
     throw error;

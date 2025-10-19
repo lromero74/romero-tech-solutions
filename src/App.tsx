@@ -23,7 +23,7 @@ import ConfirmEmail from './pages/ConfirmEmail';
 import ComingSoon from './pages/ComingSoon';
 import ServiceRating from './pages/ServiceRating';
 import TrialLogin from './pages/TrialLogin';
-import TrialDashboard from './pages/TrialDashboard';
+// import TrialDashboard from './pages/TrialDashboard'; // DEPRECATED: All clients now use ClientDashboard
 import AgentLogin from './pages/AgentLogin';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
@@ -204,64 +204,14 @@ function AppContent() {
 
       // Route to appropriate dashboard based on user type
       if (isClient) {
-        // CRITICAL: Fallback to localStorage if authUser hasn't loaded yet
-        // This handles the race condition where isClient is true but authUser is still undefined
-        let userDataForRouting = authUser;
-        if (!authUser) {
-          try {
-            const storedUser = localStorage.getItem('client_authUser');
-            if (storedUser) {
-              userDataForRouting = JSON.parse(storedUser);
-              console.log('📦 Using localStorage fallback for routing decision');
-            }
-          } catch (e) {
-            console.error('Failed to parse client_authUser from localStorage:', e);
-          }
-        }
-
-        // Check if this is a trial user (has trialAgentId or isTrial flag)
-        const isTrial = userDataForRouting?.isTrial;
-        const trialAgentId = userDataForRouting?.trialAgentId;
-        const hasAgentIdInAuth = userDataForRouting && (userDataForRouting as any).agentId;
-
-        // CRITICAL: Check sessionStorage for pendingAgentId (set during agent magic-link login)
-        // This ensures we can route to agent dashboard even if auth context hasn't updated yet
-        const pendingAgentId = sessionStorage.getItem('pendingAgentId');
-        const hasAgentId = hasAgentIdInAuth || !!pendingAgentId;
-
-        // Debug: Log the routing decision for agent magic-link users
-        console.log('🚦 Client dashboard routing:', {
-          isTrial,
-          trialAgentId,
-          hasAgentIdInAuth,
-          hasAgentId,
-          pendingAgentId,
-          agentId: (userDataForRouting as any)?.agentId,
-          authUserKeys: userDataForRouting ? Object.keys(userDataForRouting) : [],
-          authUserRaw: userDataForRouting,
-          usedFallback: !authUser && !!userDataForRouting
+        // SIMPLIFIED: All clients (trial, regular, magic-link) use ClientDashboard
+        // ClientDashboard handles trial UI and agent selection internally
+        console.log('📊 Routing client to ClientDashboard:', {
+          isTrial: authUser?.isTrial,
+          agentId: authUser?.agentId,
+          businessId: authUser?.businessId
         });
 
-        if (isTrial || trialAgentId) {
-          // Show TrialDashboard for trial users
-          console.log('📊 Routing to TrialDashboard (trial user with trialAgentId:', trialAgentId, ')');
-          return <TrialDashboard onNavigate={setCurrentPage} />;
-        }
-
-        // If user accessed via agent magic-link, show agent-specific view
-        if (hasAgentId) {
-          // Show TrialDashboard component (it works for any agent, not just trial)
-          // Pass agentId instead of trialAgentId
-          const agentIdToUse = (authUser as any)?.agentId || pendingAgentId;
-          console.log('📊 Routing to TrialDashboard (agent magic-link user with agentId:', agentIdToUse, ')');
-
-          // DON'T clear pendingAgentId yet - TrialDashboard component needs it
-          // It will be cleared when auth context updates with the full user data
-
-          return <TrialDashboard onNavigate={setCurrentPage} />;
-        }
-
-        // Show ClientDashboard for regular clients (general portal view)
         return (
           <ClientLanguageProvider>
             <ClientThemeProvider>

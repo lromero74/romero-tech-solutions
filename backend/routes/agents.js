@@ -92,10 +92,18 @@ router.post('/trial/send-verification', async (req, res) => {
     // Send verification email
     await sendTrialVerificationEmail(email, verificationCode, deviceName);
 
+    // Provide appropriate message based on whether this is an existing trial user
+    const message = emailCheck.isTrial
+      ? 'Verification code sent! You are adding another device to your existing trial account.'
+      : 'Verification code sent to your email';
+
     res.json({
       success: true,
-      message: 'Verification code sent to your email',
-      expiresIn: 15 // minutes
+      message: message,
+      data: {
+        isExistingTrialUser: emailCheck.isTrial || false,
+        expiresIn: 15 // minutes
+      }
     });
 
   } catch (error) {
@@ -112,8 +120,8 @@ router.post('/trial/send-verification', async (req, res) => {
  * Trial Email Verification - Verify Code
  * POST /api/agents/trial/verify-email
  *
- * Verifies the email code and creates/updates trial_users record
- * Returns trial_user_id for linking agents
+ * Verifies the email code and marks user as verified (UNIFIED ARCHITECTURE)
+ * Returns user_id and business_id for linking agents
  */
 router.post('/trial/verify-email', async (req, res) => {
   try {
@@ -137,17 +145,32 @@ router.post('/trial/verify-email', async (req, res) => {
       });
     }
 
-    // Create/update trial_users record and mark email as verified
-    const { trialUserId } = await confirmTrialEmailAndCreateUser(email, {
-      contactName,
-      phone
-    });
+    // UNIFIED ARCHITECTURE: Get or create trial user in main users table
+    const { userId, businessId, isVerified } = await getOrCreateTrialUser(email);
+
+    // Mark verification code as used
+    await query(`
+      UPDATE trial_email_verifications
+      SET used = TRUE
+      WHERE email = $1
+    `, [email]);
+
+    // Mark user's email as verified
+    await query(`
+      UPDATE users
+      SET email_verified = TRUE
+      WHERE id = $1
+    `, [userId]);
+
+    console.log(`✅ Trial email verified for ${email} (user_id: ${userId}, business_id: ${businessId})`);
 
     res.json({
       success: true,
       message: 'Email verified successfully',
       data: {
-        trial_user_id: trialUserId,
+        trial_user_id: userId,  // Return user_id (agents expect this field name)
+        user_id: userId,
+        business_id: businessId,
         email: email,
         verified: true
       }
@@ -330,10 +353,10 @@ router.post('/trial/heartbeat', async (req, res) => {
       const endDate = new Date(trial.trial_end_date);
       daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
 
-      // Get or create trial_user record for this email (in case email changed)
-      const { trialUserId } = await getOrCreateTrialUser(trial_email);
+      // Get or create trial user and business (UNIFIED ARCHITECTURE)
+      const { userId, businessId } = await getOrCreateTrialUser(trial_email);
 
-      // Update heartbeat and trial_email/trial_user_id if changed
+      // Update heartbeat, link to business if not already linked
       await query(
         `UPDATE agent_devices
          SET last_heartbeat = NOW(),
@@ -341,9 +364,10 @@ router.post('/trial/heartbeat', async (req, res) => {
              agent_version = COALESCE($3, agent_version),
              trial_email = $4,
              trial_user_id = $5,
+             business_id = $6,
              updated_at = NOW()
          WHERE id = $1`,
-        [trialUUID, status || 'online', agent_version, trial_email, trialUserId]
+        [trialUUID, status || 'online', agent_version, trial_email, userId, businessId]
       );
 
       trialStatus = 'active';
@@ -354,8 +378,49 @@ router.post('/trial/heartbeat', async (req, res) => {
       const trialEndDate = new Date(trialStartDate);
       trialEndDate.setDate(trialEndDate.getDate() + 30); // 30-day trial
 
-      // Get or create trial_user record for this email
-      const { trialUserId, isVerified } = await getOrCreateTrialUser(trial_email);
+      // Get or create trial user and business (UNIFIED ARCHITECTURE)
+      const { userId, businessId } = await getOrCreateTrialUser(trial_email);
+
+      // TRIAL DEVICE LIMIT: Check how many active agents this trial user already has
+      const TRIAL_DEVICE_LIMIT = 2;
+      const existingAgentsResult = await query(
+        `SELECT COUNT(*) as agent_count
+         FROM agent_devices
+         WHERE trial_user_id = $1
+           AND is_trial = true
+           AND is_active = true
+           AND (trial_end_date IS NULL OR trial_end_date > NOW())`,
+        [userId]
+      );
+
+      const currentAgentCount = parseInt(existingAgentsResult.rows[0].agent_count);
+
+      if (currentAgentCount >= TRIAL_DEVICE_LIMIT) {
+        // Trial user has reached device limit - generate magic-link to manage devices
+        const managementToken = jwt.sign(
+          {
+            user_id: userId,
+            email: trial_email,
+            type: 'device_management'
+          },
+          process.env.JWT_SECRET,
+          { expiresIn: '1h' }
+        );
+
+        const managementUrl = `https://romerotechsolutions.com/agent-magic-login?token=${managementToken}`;
+
+        return res.status(403).json({
+          success: false,
+          message: `Trial accounts are limited to ${TRIAL_DEVICE_LIMIT} devices. Please remove an existing device to add this one.`,
+          code: 'TRIAL_DEVICE_LIMIT_REACHED',
+          data: {
+            current_device_count: currentAgentCount,
+            device_limit: TRIAL_DEVICE_LIMIT,
+            management_url: managementUrl, // Magic-link to access dashboard and manage devices
+            message: `You currently have ${currentAgentCount} active trial devices. To add this device, please remove one of your existing devices first.`
+          }
+        });
+      }
 
       // Extract system info
       const hostname = system_info?.hostname || null;
@@ -365,6 +430,7 @@ router.post('/trial/heartbeat', async (req, res) => {
       // Generate a unique trial token for this trial agent
       const trialToken = `trial-token-${crypto.randomBytes(16).toString('hex')}`;
 
+      // Create agent linked to real business (UNIFIED ARCHITECTURE)
       await query(
         `INSERT INTO agent_devices (
           id,
@@ -389,9 +455,10 @@ router.post('/trial/heartbeat', async (req, res) => {
           trial_access_code,
           trial_email,
           trial_user_id
-        ) VALUES ($1, NULL, NULL, $2, $3, 'desktop', $4, $5, $6, $7, $8, $9, $10, true, true, true, $11, $12, $13, $14, $15, $16)`,
+        ) VALUES ($1, $2, NULL, $3, $4, 'desktop', $5, $6, $7, $8, $9, $10, $11, true, true, true, $12, $13, $14, $15, $16, $17)`,
         [
           trialUUID,
+          businessId, // Real business ID (UNIFIED)
           trialToken,
           device_name,
           os_type,
@@ -406,7 +473,7 @@ router.post('/trial/heartbeat', async (req, res) => {
           trial_id, // Store original trial-{timestamp} ID
           access_code || null, // Store access code for trial dashboard access
           trial_email, // Store trial email
-          trialUserId // Link to trial_users table
+          userId // Link to users table (UNIFIED)
         ]
       );
 
@@ -414,45 +481,10 @@ router.post('/trial/heartbeat', async (req, res) => {
       trialStatus = 'active';
 
       console.log(`✅ New trial agent registered: ${device_name} (${trial_id}) - Expires: ${trialEndDate.toISOString()}`);
+      console.log(`📧 Trial user: ${trial_email} - Business: ${businessId} (UNIFIED ARCHITECTURE)`);
 
-      // Auto-create user account for trial dashboard access (if access_code provided)
-      if (access_code) {
-        // Strip "trial-" prefix from trial_id if it exists to avoid double-prefix
-        const cleanTrialId = trial_id.startsWith('trial-') ? trial_id.substring(6) : trial_id;
-        const trialEmail = `trial-${cleanTrialId}@trial.romerotechsolutions.com`;
-
-        // Check if trial user account already exists for this trial ID
-        const existingUserResult = await query(
-          `SELECT id FROM users WHERE email = $1`,
-          [trialEmail]
-        );
-
-        if (existingUserResult.rows.length === 0) {
-          // Create user account with access_code as password
-          const passwordHash = await bcrypt.hash(access_code, 10);
-          const userId = uuidv4();
-
-          await query(
-            `INSERT INTO users (
-              id, email, password_hash, first_name, last_name,
-              role, is_active, email_verified, business_id, created_at
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
-            [
-              userId,
-              trialEmail,
-              passwordHash,
-              'Trial',
-              'User',
-              'customer',
-              true,
-              true, // Auto-verify trial accounts
-              null  // Trial users don't have business_id initially
-            ]
-          );
-
-          console.log(`✅ Auto-created trial user account for ${cleanTrialId} (access code: ${access_code})`);
-        }
-      }
+      // Note: User account already created by getOrCreateTrialUser() with proper business linkage
+      // No need for separate user creation - UNIFIED ARCHITECTURE handles this
     }
 
     // Generate magic-link token for auto-login (if access_code provided)
@@ -2688,6 +2720,76 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agent details',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Deactivate Agent
+ * DELETE /api/agents/:agent_id
+ *
+ * Deactivates an agent (sets is_active = false)
+ * Customers can only deactivate their own business's agents
+ */
+router.delete('/:agent_id', authMiddleware, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
+
+    // Verify ownership/access to this agent
+    let accessCheckQuery = `
+      SELECT ad.id, ad.business_id, ad.device_name, ad.trial_user_id, ad.is_trial
+      FROM agent_devices ad
+      WHERE ad.id = $1 AND ad.soft_delete = false AND ad.is_active = true
+    `;
+    const accessParams = [agent_id];
+
+    if (!isEmployee) {
+      // For clients: Check if this is a trial agent owned by the user OR a regular agent in their business
+      accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
+      accessParams.push(req.user.id);
+      accessParams.push(req.user.business_id);
+    }
+
+    const accessResult = await query(accessCheckQuery, accessParams);
+
+    if (accessResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or access denied',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    const agent = accessResult.rows[0];
+
+    // Deactivate the agent (soft delete - set is_active = false)
+    await query(
+      `UPDATE agent_devices
+       SET is_active = false,
+           status = 'offline',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [agent_id]
+    );
+
+    console.log(`🗑️  Agent deactivated: ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Agent deactivated successfully',
+      data: {
+        agent_id: agent_id,
+        device_name: agent.device_name
+      }
+    });
+
+  } catch (error) {
+    console.error('Deactivate agent error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to deactivate agent',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
