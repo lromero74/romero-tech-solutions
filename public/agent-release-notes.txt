@@ -1,0 +1,14 @@
+RTS Monitoring Agent - Version 1.16.18 Release Notes
+═══════════════════════════════════════════════════════════
+
+Release Date: 2025-10-19 23:44:56 UTC
+Previous Version: v1.16.16
+Git Commit: 30fc713
+
+Changes Since v1.16.16:
+───────────────────────────────────────────────────────────
+
+• feat: Add release notes section to download page (v1.101.55)
+
+───────────────────────────────────────────────────────────
+For full details, visit: https://romerotechsolutions.com/downloads

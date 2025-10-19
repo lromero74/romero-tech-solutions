@@ -26,6 +26,7 @@ const Download: React.FC = () => {
   const [detectedPlatform, setDetectedPlatform] = useState<DetectedPlatform | null>(null);
   const [agentVersion, setAgentVersion] = useState('Loading...');
   const [isDetecting, setIsDetecting] = useState(true);
+  const [releaseNotes, setReleaseNotes] = useState<string>('');
 
   // Get API base URL from environment
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -158,6 +159,14 @@ const Download: React.FC = () => {
     }
   }, [selectedPlatform, apiBaseUrl]);
 
+  // Fetch release notes
+  useEffect(() => {
+    fetch('/agent-release-notes.txt')
+      .then(res => res.ok ? res.text() : '')
+      .then(notes => setReleaseNotes(notes))
+      .catch(() => setReleaseNotes(''));
+  }, []);
+
   // Update architecture when platform changes
   useEffect(() => {
     if (selectedPlatform) {
@@ -246,34 +255,34 @@ const Download: React.FC = () => {
   const selectedArchData = selectedPlatformData?.architectures.find(a => a.id === selectedArch);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       {/* Hero Section */}
       <section className="py-20 px-4">
         <div className="max-w-6xl mx-auto text-center">
-          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 rounded-full mb-6">
-            <DownloadIcon className="w-10 h-10 text-blue-600" />
+          <div className="inline-flex items-center justify-center w-20 h-20 bg-blue-100 dark:bg-blue-900 rounded-full mb-6">
+            <DownloadIcon className="w-10 h-10 text-blue-600 dark:text-blue-400" />
           </div>
-          <h1 className="text-5xl font-bold text-gray-900 mb-6">
+          <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-6">
             Download RTS Monitoring Agent
           </h1>
-          <p className="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
+          <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
             Install our lightweight monitoring agent to enable 24/7 system health tracking,
             security monitoring, and proactive maintenance for your devices.
           </p>
 
           {/* Free Tier Notice */}
-          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 max-w-2xl mx-auto mb-12">
+          <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg p-6 max-w-2xl mx-auto mb-12">
             <div className="flex items-start gap-3">
-              <Check className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
+              <Check className="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
               <div className="text-left">
-                <h3 className="font-semibold text-green-900 mb-1">Start Free - No Credit Card Required</h3>
-                <p className="text-sm text-green-800">
+                <h3 className="font-semibold text-green-900 dark:text-green-100 mb-1">Start Free - No Credit Card Required</h3>
+                <p className="text-sm text-green-800 dark:text-green-200">
                   Monitor <span className="font-medium">2 devices at no cost</span> with no expiration.
                   Includes all core monitoring features, automatic updates, and dashboard access.
                 </p>
                 <a
                   href="/pricing"
-                  className="inline-flex items-center text-sm font-medium text-green-900 hover:text-green-700 mt-2"
+                  className="inline-flex items-center text-sm font-medium text-green-900 dark:text-green-300 hover:text-green-700 dark:hover:text-green-100 mt-2"
                 >
                   View Pricing Details →
                 </a>
@@ -284,38 +293,57 @@ const Download: React.FC = () => {
       </section>
 
       {/* Features Grid */}
-      <section className="py-12 px-4 bg-white">
+      <section className="py-12 px-4 bg-white dark:bg-gray-800">
         <div className="max-w-6xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
+          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
             What's Included
           </h2>
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
             {features.map((feature) => (
               <div key={feature.title} className="text-center">
-                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 rounded-full mb-4">
-                  <feature.icon className="w-8 h-8 text-blue-600" />
+                <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-full mb-4">
+                  <feature.icon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">{feature.title}</h3>
-                <p className="text-gray-600 text-sm">{feature.description}</p>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{feature.title}</h3>
+                <p className="text-gray-600 dark:text-gray-300 text-sm">{feature.description}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
+      {/* Release Notes */}
+      {releaseNotes && (
+        <section className="py-12 px-4">
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-6">
+              Release Notes - Version {agentVersion}
+            </h2>
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+              <div
+                className="max-h-96 overflow-y-auto font-mono text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap bg-gray-50 dark:bg-gray-900 rounded p-4 border border-gray-200 dark:border-gray-700"
+                style={{ scrollbarWidth: 'thin' }}
+              >
+                {releaseNotes}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Platform Selection & Download */}
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
+          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-2">
             Choose Your Platform
           </h2>
 
           {/* Detection Status */}
           {isDetecting && (
-            <p className="text-center text-gray-500 mb-8">Detecting your system...</p>
+            <p className="text-center text-gray-500 dark:text-gray-400 mb-8">Detecting your system...</p>
           )}
           {!isDetecting && detectedPlatform?.platform && (
-            <p className="text-center text-green-600 mb-8">
+            <p className="text-center text-green-600 dark:text-green-400 mb-8">
               ✓ Detected: {detectedPlatform.platform} ({detectedPlatform.architecture})
             </p>
           )}
@@ -328,8 +356,8 @@ const Download: React.FC = () => {
                 onClick={() => setSelectedPlatform(platform.id)}
                 className={`flex items-center gap-3 px-6 py-4 rounded-lg border-2 transition-all ${
                   selectedPlatform === platform.id
-                    ? 'border-blue-600 bg-blue-50 text-blue-900'
-                    : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
+                    : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                 }`}
               >
                 <platform.icon className="w-6 h-6" />
@@ -341,7 +369,7 @@ const Download: React.FC = () => {
           {/* Architecture Selection */}
           {selectedPlatformData && (
             <div className="mb-8">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 text-center">
                 Select Architecture
               </h3>
               <div className="flex justify-center gap-3 flex-wrap">
@@ -351,8 +379,8 @@ const Download: React.FC = () => {
                     onClick={() => setSelectedArch(arch.id)}
                     className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
                       selectedArch === arch.id
-                        ? 'border-blue-600 bg-blue-50 text-blue-900'
-                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                        ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                     }`}
                   >
                     <div className="font-medium">{arch.name}</div>
@@ -365,32 +393,32 @@ const Download: React.FC = () => {
 
           {/* Download Card */}
           {selectedPlatformData && selectedArchData && (
-            <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <selectedPlatformData.icon className="w-8 h-8 text-blue-600" />
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900 rounded-lg flex items-center justify-center">
+                  <selectedPlatformData.icon className="w-8 h-8 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div>
-                  <h3 className="text-2xl font-bold text-gray-900">
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
                     {selectedPlatformData.name}
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Version {agentVersion} - {selectedArchData.name}
                   </p>
                 </div>
               </div>
 
               <div className="space-y-3 mb-6">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Check className="w-5 h-5 text-green-600" />
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                   <span>File: {getFilename()}</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Check className="w-5 h-5 text-green-600" />
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                   <span>Size: {getFileSize()}</span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Check className="w-5 h-5 text-green-600" />
+                <div className="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                  <Check className="w-5 h-5 text-green-600 dark:text-green-400" />
                   <span>Requirements: {getRequirements()}</span>
                 </div>
               </div>
@@ -405,16 +433,16 @@ const Download: React.FC = () => {
               </button>
 
               {/* Installation Instructions - Platform Specific */}
-              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+              <div className="mt-6 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
                 <div className="flex items-start gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
                   <div className="text-sm">
-                    <h4 className="font-semibold text-yellow-900 mb-2">
+                    <h4 className="font-semibold text-yellow-900 dark:text-yellow-100 mb-2">
                       Installation Instructions (Unsigned Package)
                     </h4>
 
                     {selectedPlatform === 'macos' && (
-                      <div className="text-yellow-800 space-y-2">
+                      <div className="text-yellow-800 dark:text-yellow-200 space-y-2">
                         <p className="font-medium">If you see "Apple could not verify" warning:</p>
                         <ol className="list-decimal list-inside space-y-1 ml-2">
                           <li><strong>Right-click</strong> (or Control-click) the downloaded .pkg file</li>
@@ -429,7 +457,7 @@ const Download: React.FC = () => {
                     )}
 
                     {selectedPlatform === 'windows' && (
-                      <div className="text-yellow-800 space-y-2">
+                      <div className="text-yellow-800 dark:text-yellow-200 space-y-2">
                         <p className="font-medium">If you see "Windows protected your PC" (SmartScreen):</p>
                         <ol className="list-decimal list-inside space-y-1 ml-2">
                           <li>Click <strong>"More info"</strong></li>
@@ -442,9 +470,9 @@ const Download: React.FC = () => {
                     )}
 
                     {selectedPlatform === 'linux' && (
-                      <div className="text-yellow-800 space-y-2">
+                      <div className="text-yellow-800 dark:text-yellow-200 space-y-2">
                         <p className="font-medium">Installation commands:</p>
-                        <div className="bg-yellow-100 rounded p-2 font-mono text-xs mt-1">
+                        <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded p-2 font-mono text-xs mt-1">
                           {selectedArch === 'amd64' || selectedArch === 'arm64' ? (
                             <>
                               # Ubuntu/Debian (.deb)<br/>
@@ -468,13 +496,13 @@ const Download: React.FC = () => {
                 </div>
               </div>
 
-              <p className="text-sm text-gray-500 text-center mt-4">
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center mt-4">
                 By downloading, you agree to our{' '}
-                <a href="/terms" className="text-blue-600 hover:underline">
+                <a href="/terms" className="text-blue-600 dark:text-blue-400 hover:underline">
                   Terms of Service
                 </a>
                 {' '}and{' '}
-                <a href="/privacy" className="text-blue-600 hover:underline">
+                <a href="/privacy" className="text-blue-600 dark:text-blue-400 hover:underline">
                   Privacy Policy
                 </a>
               </p>
@@ -484,39 +512,39 @@ const Download: React.FC = () => {
       </section>
 
       {/* Installation Steps */}
-      <section className="py-16 px-4 bg-gray-50">
+      <section className="py-16 px-4 bg-gray-50 dark:bg-gray-900">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-12">
+          <h2 className="text-3xl font-bold text-center text-gray-900 dark:text-white mb-12">
             Quick Installation
           </h2>
 
           <div className="space-y-6">
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
                   1
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Download the Agent
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Download the agent installer for your operating system and architecture using the button above.
                   </p>
                 </div>
               </div>
             </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
                   2
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Run the Installer
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     Double-click the downloaded file and follow the on-screen instructions.
                     Administrator/sudo access may be required.
                   </p>
@@ -524,19 +552,19 @@ const Download: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
                   3
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Register Your Device
                   </h3>
-                  <p className="text-gray-600 mb-2">
+                  <p className="text-gray-600 dark:text-gray-300 mb-2">
                     Follow the setup wizard to register your device. Free tier users get 2 devices at no cost.
                   </p>
-                  <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-900 dark:text-blue-100">
                     <strong>New to RTS?</strong> The agent will guide you through creating a free account
                     and registering your first device.
                   </div>
@@ -544,16 +572,16 @@ const Download: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-lg p-6 shadow-sm border border-gray-200">
+            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
               <div className="flex items-start gap-4">
                 <div className="flex-shrink-0 w-8 h-8 bg-blue-600 text-white rounded-full flex items-center justify-center font-bold">
                   4
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
                     Start Monitoring
                   </h3>
-                  <p className="text-gray-600">
+                  <p className="text-gray-600 dark:text-gray-300">
                     The agent runs as a background service, automatically collecting system metrics
                     and sending them to your dashboard.
                   </p>
@@ -567,10 +595,10 @@ const Download: React.FC = () => {
       {/* Support Section */}
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto text-center">
-          <h2 className="text-3xl font-bold text-gray-900 mb-6">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
             Need Help?
           </h2>
-          <p className="text-lg text-gray-600 mb-8">
+          <p className="text-lg text-gray-600 dark:text-gray-300 mb-8">
             Our technical support team is available 24/7 to assist with installation,
             configuration, and troubleshooting.
           </p>
@@ -583,7 +611,7 @@ const Download: React.FC = () => {
             </a>
             <a
               href="/docs"
-              className="inline-flex items-center justify-center px-8 py-3 bg-white hover:bg-gray-50 text-blue-600 font-semibold rounded-lg border-2 border-blue-600 transition-colors"
+              className="inline-flex items-center justify-center px-8 py-3 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-blue-600 dark:text-blue-400 font-semibold rounded-lg border-2 border-blue-600 dark:border-blue-500 transition-colors"
             >
               View Documentation
             </a>
