@@ -9,7 +9,6 @@ import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
-import { calculateGraduatedPrice, getMaxDevicesForTier } from '../utils/pricingUtils.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
