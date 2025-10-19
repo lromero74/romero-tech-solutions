@@ -63,40 +63,85 @@ const Download: React.FC = () => {
     }
   ];
 
-  // Detect platform and architecture on mount
+  // Detect platform and architecture on mount (client-side for accuracy)
   useEffect(() => {
-    const detectPlatform = async () => {
-      try {
-        const response = await fetch(`${apiBaseUrl}/agent/detect`);
-        const data = await response.json();
+    const detectPlatform = () => {
+      const ua = navigator.userAgent.toLowerCase();
+      const platform = navigator.platform?.toLowerCase() || '';
 
-        if (data.success && data.detected) {
-          setDetectedPlatform(data.detected);
+      let detectedOS = 'windows';
+      let detectedArch = 'amd64';
 
-          // Auto-select detected platform and architecture
-          if (data.detected.platform) {
-            setSelectedPlatform(data.detected.platform);
+      // Detect OS
+      if (platform.includes('mac') || ua.includes('mac')) {
+        detectedOS = 'macos';
 
-            // Find the platform and validate architecture
-            const platform = platforms.find(p => p.id === data.detected.platform);
-            if (platform) {
-              const archExists = platform.architectures.some(a => a.id === data.detected.architecture);
-              setSelectedArch(archExists ? data.detected.architecture : platform.architectures[0].id);
+        // Detect macOS architecture
+        // Apple Silicon Macs report as "MacIntel" for compatibility, so we need to check canvas fingerprint
+        // or use maxTouchPoints as a heuristic (Apple Silicon Macs have this, Intel Macs don't in desktop Safari)
+        const isAppleSilicon = (
+          // Check if running on ARM64 via WebGL or other methods
+          navigator.maxTouchPoints > 0 || // Touch support suggests Apple Silicon
+          (window.screen && window.screen.height === 1117) || // Common M1/M2 resolution
+          // Try to detect via canvas fingerprint
+          (() => {
+            try {
+              const canvas = document.createElement('canvas');
+              const gl = canvas.getContext('webgl');
+              if (gl) {
+                const debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+                if (debugInfo) {
+                  const renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+                  return renderer.toLowerCase().includes('apple');
+                }
+              }
+            } catch (e) {
+              // Ignore errors
             }
-          }
+            return false;
+          })()
+        );
+
+        detectedArch = isAppleSilicon ? 'arm64' : 'amd64';
+      } else if (platform.includes('linux') || ua.includes('linux')) {
+        detectedOS = 'linux';
+
+        // Detect Linux architecture
+        if (platform.includes('arm') || platform.includes('aarch64')) {
+          detectedArch = 'arm64';
+        } else if (platform.includes('armv7')) {
+          detectedArch = 'armhf';
+        } else {
+          detectedArch = 'amd64';
         }
-      } catch (error) {
-        console.error('Platform detection failed:', error);
-        // Default to Windows amd64 if detection fails
-        setSelectedPlatform('windows');
-        setSelectedArch('amd64');
-      } finally {
-        setIsDetecting(false);
+      } else if (platform.includes('win') || ua.includes('windows')) {
+        detectedOS = 'windows';
+
+        // Detect Windows architecture
+        if (ua.includes('win64') || ua.includes('wow64') || platform.includes('win64')) {
+          detectedArch = 'amd64';
+        } else if (ua.includes('arm64') || platform.includes('arm')) {
+          detectedArch = 'arm64';
+        } else {
+          detectedArch = '386';
+        }
       }
+
+      setDetectedPlatform({ platform: detectedOS, architecture: detectedArch });
+      setSelectedPlatform(detectedOS);
+
+      // Validate and set architecture
+      const platformData = platforms.find(p => p.id === detectedOS);
+      if (platformData) {
+        const archExists = platformData.architectures.some(a => a.id === detectedArch);
+        setSelectedArch(archExists ? detectedArch : platformData.architectures[0].id);
+      }
+
+      setIsDetecting(false);
     };
 
     detectPlatform();
-  }, [apiBaseUrl]);
+  }, []);
 
   // Fetch current agent version
   useEffect(() => {
