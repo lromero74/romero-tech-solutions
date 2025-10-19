@@ -204,8 +204,9 @@ function AppContent() {
 
       // Route to appropriate dashboard based on user type
       if (isClient) {
-        // Check if this is a trial user (has trialAgentId)
-        const isTrial = authUser && (authUser as any).isTrial;
+        // Check if this is a trial user (has trialAgentId or isTrial flag)
+        const isTrial = authUser?.isTrial;
+        const trialAgentId = authUser?.trialAgentId;
         const hasAgentIdInAuth = authUser && (authUser as any).agentId;
 
         // CRITICAL: Check sessionStorage for pendingAgentId (set during agent magic-link login)
@@ -216,16 +217,18 @@ function AppContent() {
         // Debug: Log the routing decision for agent magic-link users
         console.log('🚦 Client dashboard routing:', {
           isTrial,
+          trialAgentId,
           hasAgentIdInAuth,
           hasAgentId,
           pendingAgentId,
           agentId: (authUser as any)?.agentId,
-          authUserKeys: authUser ? Object.keys(authUser) : []
+          authUserKeys: authUser ? Object.keys(authUser) : [],
+          authUserRaw: authUser
         });
 
-        if (isTrial) {
+        if (isTrial || trialAgentId) {
           // Show TrialDashboard for trial users
-          console.log('📊 Routing to TrialDashboard (trial user)');
+          console.log('📊 Routing to TrialDashboard (trial user with trialAgentId:', trialAgentId, ')');
           return <TrialDashboard onNavigate={setCurrentPage} />;
         }
 

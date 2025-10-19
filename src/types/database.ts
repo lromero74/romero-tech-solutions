@@ -348,6 +348,9 @@ export interface AuthUser {
   name: string;
   timeFormatPreference?: '12h' | '24h';
   isFirstAdmin?: boolean;
+  isTrial?: boolean; // Indicates if this is a trial user
+  trialAgentId?: string; // Agent ID for trial users
+  trialId?: string; // Trial ID for trial users
 }
 
 export interface LoginRequest {
