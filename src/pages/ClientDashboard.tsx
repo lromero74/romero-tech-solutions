@@ -14,6 +14,7 @@ import AddServiceLocationForm from '../components/client/AddServiceLocationForm'
 import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
 import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
 import TrialDevicesManager from '../components/client/TrialDevicesManager';
+import AgentDetails from '../components/admin/AgentDetails';
 import {
   Building2,
   MapPin,
@@ -36,7 +37,8 @@ import {
   X,
   Edit,
   Trash2,
-  DollarSign
+  DollarSign,
+  ArrowLeft
 } from 'lucide-react';
 
 interface User {
@@ -133,6 +135,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
   // State for navigating to specific service request
   const [serviceRequestIdToOpen, setServiceRequestIdToOpen] = useState<string | null>(null);
 
+  // State for viewing agent details (from magic link)
+  const [viewingAgentId, setViewingAgentId] = useState<string | null>(null);
+
   // Function to handle successful service location addition
   const handleServiceLocationAdded = (newLocation: any) => {
     // Update the client data with the new location
@@ -228,6 +233,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     setShowDeleteConfirmation(false);
     setDeletingLocation(null);
   };
+
+  // Check for pending agent ID from magic link login
+  useEffect(() => {
+    const pendingAgentId = sessionStorage.getItem('pendingAgentId');
+    if (pendingAgentId) {
+      console.log('🎯 Found pending agent ID from magic link:', pendingAgentId);
+      setViewingAgentId(pendingAgentId);
+      setActiveTab('devices'); // Also switch to devices tab
+      // Clear it so it doesn't persist across page reloads
+      sessionStorage.removeItem('pendingAgentId');
+    }
+  }, []);
 
   // Load client data from existing auth system or sessionStorage
   useEffect(() => {
@@ -470,6 +487,56 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
       ? t('dashboard.stats.business')
       : t('dashboard.stats.site');
   };
+
+  // If viewing specific agent details (from magic link), show AgentDetails component
+  if (viewingAgentId) {
+    return (
+      <div className={`h-screen flex flex-col transition-colors duration-200 ${
+        isDarkMode ? 'dark bg-gray-900' : 'bg-gray-50'
+      }`}>
+        {/* Header with back button */}
+        <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
+          <div className="px-4 sm:px-6 lg:px-8">
+            <div className="flex justify-between items-center h-16">
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={() => setViewingAgentId(null)}
+                  className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                  <span>Back to Dashboard</span>
+                </button>
+                <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
+                  Device Details
+                </h1>
+              </div>
+              <div className="flex items-center space-x-4">
+                <button
+                  onClick={toggleTheme}
+                  className="p-2 rounded-lg bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                  aria-label="Toggle theme"
+                >
+                  {isDarkMode ? (
+                    <Sun className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                  ) : (
+                    <Moon className="h-5 w-5 text-gray-600 dark:text-gray-300" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        {/* Agent Details Content */}
+        <div className="flex-1 overflow-auto">
+          <AgentDetails
+            agentId={viewingAgentId}
+            onBack={() => setViewingAgentId(null)}
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className={`h-screen flex flex-col transition-colors duration-200 ${
