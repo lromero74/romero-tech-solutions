@@ -395,6 +395,89 @@ res.json({
 
 ---
 
+### Issue #5: Trial Magic-Link Missing businessId
+
+**Status:** ✅ FIXED
+
+**Problem:**
+Trial users logging in via magic-link from their agent dashboard received "Permission Denied" error:
+```
+Permission Denied
+This agent does not belong to your business
+
+Action Attempted: View Agent Details
+Required Permission: view agents
+```
+
+**Root Cause:**
+The `/api/auth/trial-magic-login` endpoint was still querying the deprecated `trial_users` table and NOT including `businessId` in the userData response. The frontend permission check in `AgentDetails.tsx` compares:
+```javascript
+const canAccess = canViewAgents || (isClient && agentResponse.data.business_id === userBusinessId);
+```
+
+Since `userBusinessId` was undefined (no businessId in authUser), the check failed even though the user and agent had matching business_ids in the database.
+
+**Database Evidence:**
+```
+User:  { id: be4707de-..., business_id: 44849565-... }
+Agent: { id: f71fb666-..., business_id: 44849565-... } // SAME!
+```
+
+Backend logs showed successful authentication but frontend couldn't verify ownership.
+
+**Solution:**
+Updated `/api/auth/trial-magic-login` endpoint to use unified architecture:
+
+**Before (OLD - queried trial_users):**
+```javascript
+const agentResult = await query(`
+  SELECT ad.id as agent_id, ad.trial_access_code, ad.trial_user_id,
+         tu.id as user_id, tu.email, tu.contact_name, tu.email_verified
+  FROM agent_devices ad
+  INNER JOIN trial_users tu ON tu.id = ad.trial_user_id
+  WHERE ad.id = $1 AND ad.is_trial = true
+`, [trialUUID]);
+
+const userData = {
+  businessName: null,  // ❌ Missing businessId!
+  isTrial: true,
+  // ...
+};
+```
+
+**After (NEW - queries unified users):**
+```javascript
+const agentResult = await query(`
+  SELECT ad.id as agent_id, ad.trial_access_code, ad.business_id,
+         u.id as user_id, u.email, u.first_name, u.last_name,
+         u.email_verified, u.is_trial, u.trial_expires_at,
+         b.business_name
+  FROM agent_devices ad
+  LEFT JOIN users u ON u.business_id = ad.business_id AND u.is_trial = true
+  LEFT JOIN businesses b ON ad.business_id = b.id
+  WHERE ad.id = $1 AND ad.is_trial = true AND ad.is_active = true
+`, [trialUUID]);
+
+const userData = {
+  businessId: user.business_id,      // ✅ Now included!
+  businessName: user.business_name,  // ✅ Now included!
+  isTrial: user.is_trial || true,
+  trialExpiresAt: user.trial_expires_at,
+  agentId: agent.agent_id,
+  // ...
+};
+```
+
+**Testing:**
+After deployment, trial magic-link login now includes businessId, allowing frontend permission checks to pass.
+
+**Files Modified:**
+- `backend/routes/auth.js` - /api/auth/trial-magic-login endpoint (lines 2428-2533)
+
+**Version:** v1.101.28
+
+---
+
 ## ✅ TESTING CHECKLIST
 
 - [ ] Trial user can log in via ClientLogin
@@ -466,9 +549,9 @@ COMMIT;
 ### Files Modified:
 **Backend:**
 - `backend/migrations/unify_trial_user_architecture.sql` (NEW - migration script)
-- `backend/routes/auth.js` (3 login endpoints updated with trial fields)
-- `backend/routes/agents.js` (heartbeat endpoint unified + device limit + DELETE endpoint)
-- `backend/utils/trialEmailVerificationUtils.js` (getOrCreateTrialUser unified)
+- `backend/routes/auth.js` (4 login endpoints: client, verify-mfa, trial-magic-link, agent-magic-link)
+- `backend/routes/agents.js` (heartbeat, verify-email, device limit, DELETE endpoint)
+- `backend/utils/trialEmailVerificationUtils.js` (getOrCreateTrialUser, validation fixes)
 
 **Frontend:**
 - `src/types/database.ts` (AuthUser interface updated)
@@ -478,6 +561,9 @@ COMMIT;
 
 **Agent:**
 - `rts-monitoring-agent/internal/trial/trial.go` (device limit error handling)
+
+**Documentation:**
+- `TRIAL_USER_UNIFICATION_HANDOFF.md` (NEW - complete handoff documentation)
 
 ### Migration to Paid:
 When trial user converts to paid:
@@ -491,4 +577,7 @@ That's it! No complex data migration needed.
 
 ---
 
-**Last Updated:** 2025-10-19 [MAJOR PROGRESS]
+**Last Updated:** 2025-10-19 [ALL ISSUES RESOLVED - v1.101.28]
+
+**Status:** Ready for production testing
+**Latest Fix:** Trial magic-link now includes businessId (Issue #5)
