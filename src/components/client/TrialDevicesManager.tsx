@@ -155,7 +155,7 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
       {/* Header */}
       <div className="mb-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-2">
-          My Devices
+          Monitored Devices
         </h2>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-600 dark:text-gray-400">

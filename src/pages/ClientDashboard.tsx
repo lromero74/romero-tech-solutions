@@ -149,7 +149,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     return savedAgentId || '';
   });
 
-  // State for viewing device details from My Devices tab
+  // State for viewing device details from Monitored Devices tab
   const [viewingDeviceFromList, setViewingDeviceFromList] = useState<string | null>(null);
 
   // Function to handle successful service location addition
@@ -777,8 +777,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
-              // Show "My Devices" tab for all users with subscription tier (free, subscribed, enterprise)
-              ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
+              // Show "Monitored Devices" tab for all users with subscription tier (free, subscribed, enterprise)
+              ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'Monitored Devices', icon: HardDrive }] : []),
               { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
               { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
               { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -835,8 +835,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               <ul className="space-y-2">
                 {[
                   { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
-                  // Show "My Devices" tab for all users with subscription tier (free, subscribed, enterprise)
-                  ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
+                  // Show "Monitored Devices" tab for all users with subscription tier (free, subscribed, enterprise)
+                  ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'Monitored Devices', icon: HardDrive }] : []),
                   { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
                   { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
                   { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -1070,7 +1070,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               </div>
             )}
 
-            {/* My Devices Tab - Available for all subscription users */}
+            {/* Monitored Devices Tab - Available for all subscription users */}
             {activeTab === 'devices' && authUser?.subscriptionTier && (
               viewingDeviceFromList ? (
                 <div className="space-y-4">
@@ -1080,7 +1080,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     className="inline-flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to My Devices
+                    Back to Monitored Devices
                   </button>
                   {/* Device Details */}
                   <ThemeProvider>
