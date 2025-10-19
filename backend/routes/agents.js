@@ -417,10 +417,14 @@ router.post('/trial/heartbeat', async (req, res) => {
 
       // Auto-create user account for trial dashboard access (if access_code provided)
       if (access_code) {
+        // Strip "trial-" prefix from trial_id if it exists to avoid double-prefix
+        const cleanTrialId = trial_id.startsWith('trial-') ? trial_id.substring(6) : trial_id;
+        const trialEmail = `trial-${cleanTrialId}@trial.romerotechsolutions.com`;
+
         // Check if trial user account already exists for this trial ID
         const existingUserResult = await query(
           `SELECT id FROM users WHERE email = $1`,
-          [`trial-${trial_id}@trial.romerotechsolutions.com`]
+          [trialEmail]
         );
 
         if (existingUserResult.rows.length === 0) {
@@ -435,7 +439,7 @@ router.post('/trial/heartbeat', async (req, res) => {
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
             [
               userId,
-              `trial-${trial_id}@trial.romerotechsolutions.com`,
+              trialEmail,
               passwordHash,
               'Trial',
               'User',
@@ -446,7 +450,7 @@ router.post('/trial/heartbeat', async (req, res) => {
             ]
           );
 
-          console.log(`✅ Auto-created trial user account for ${trial_id} (access code: ${access_code})`);
+          console.log(`✅ Auto-created trial user account for ${cleanTrialId} (access code: ${access_code})`);
         }
       }
     }
@@ -454,10 +458,13 @@ router.post('/trial/heartbeat', async (req, res) => {
     // Generate magic-link token for auto-login (if access_code provided)
     let magicLinkUrl = null;
     if (access_code) {
+      // Strip "trial-" prefix from trial_id for consistent email format
+      const cleanTrialId = trial_id.startsWith('trial-') ? trial_id.substring(6) : trial_id;
+
       // Create short-lived magic-link token (valid for 10 minutes)
       const magicToken = jwt.sign(
         {
-          trial_id: trial_id,
+          trial_id: cleanTrialId,  // Use clean ID without prefix
           access_code: access_code,
           type: 'trial_magic_link'
         },
