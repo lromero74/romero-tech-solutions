@@ -478,6 +478,70 @@ After deployment, trial magic-link login now includes businessId, allowing front
 
 ---
 
+### Issue #6: Agent Magic-Link URL Routing Mismatch
+
+**Status:** ✅ FIXED
+
+**Problem:**
+Backend generated magic-link URLs with `/agent-magic-login` path, but frontend routing only recognized `/agent/login`, causing magic-links to fail to load the correct page.
+
+**Solution:**
+Updated `src/utils/routing.ts` to recognize both URL patterns:
+- `/agent/login` (original)
+- `/agent-magic-login` (backend generated)
+
+**Files Modified:**
+- `src/utils/routing.ts` - Added /agent-magic-login path recognition
+
+**Version:** v1.101.29
+
+---
+
+### Issue #7: Device Management Token Type Rejected
+
+**Status:** ✅ FIXED
+
+**Problem:**
+Device limit magic-link tokens were rejected with "Invalid token type" error. The device limit endpoint generated tokens with `type: 'device_management'`, but the agent-magic-login endpoint only accepted `type: 'agent_magic_link'`.
+
+**Root Cause:**
+Mismatch between token types:
+- Device limit tokens: `{ type: 'device_management', user_id, email }`
+- Expected by endpoint: `{ type: 'agent_magic_link', user_id, business_id, agent_id }`
+
+**Solution:**
+1. Updated `/api/auth/agent-magic-login` to accept both token types
+2. Made `agent_id` validation optional (not needed for device management)
+3. Added `business_id` lookup for device_management tokens when not provided
+4. Updated device limit token generation to include `business_id`
+
+**Code Changes:**
+```javascript
+// Accept both token types
+if (decoded.type !== 'agent_magic_link' && decoded.type !== 'device_management') {
+  return res.status(401).json({ message: 'Invalid token type' });
+}
+
+// Look up business_id for device_management tokens
+if (decoded.type === 'device_management' && !business_id) {
+  const userResult = await query(`SELECT business_id FROM users WHERE id = $1`, [user_id]);
+  effectiveBusinessId = userResult.rows[0].business_id;
+}
+
+// Make agent validation optional
+if (agent_id) {
+  // Only validate agent if agent_id is provided
+}
+```
+
+**Files Modified:**
+- `backend/routes/auth.js` - /api/auth/agent-magic-login endpoint (accept both token types)
+- `backend/routes/agents.js` - Device limit token generation (include business_id)
+
+**Version:** v1.101.30
+
+---
+
 ## ✅ TESTING CHECKLIST
 
 - [ ] Trial user can log in via ClientLogin
@@ -577,7 +641,7 @@ That's it! No complex data migration needed.
 
 ---
 
-**Last Updated:** 2025-10-19 [ALL ISSUES RESOLVED - v1.101.28]
+**Last Updated:** 2025-10-19 [ALL ISSUES RESOLVED - v1.101.30]
 
 **Status:** Ready for production testing
-**Latest Fix:** Trial magic-link now includes businessId (Issue #5)
+**Latest Fix:** Device management magic-link now works (Issue #7)
