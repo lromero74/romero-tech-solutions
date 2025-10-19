@@ -15,6 +15,7 @@ import AddServiceLocationForm from '../components/client/AddServiceLocationForm'
 import EditServiceLocationForm from '../components/client/EditServiceLocationForm';
 import SessionCountdownTimer from '../components/client/SessionCountdownTimer';
 import TrialDevicesManager from '../components/client/TrialDevicesManager';
+import DeviceSettingsModal from '../components/client/DeviceSettingsModal';
 import AgentDetails from '../components/admin/AgentDetails';
 import AgentSelector from '../components/trial/AgentSelector';
 import { agentService, AgentDevice } from '../services/agentService';
@@ -151,6 +152,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
   // State for viewing device details from Monitored Devices tab
   const [viewingDeviceFromList, setViewingDeviceFromList] = useState<string | null>(null);
+
+  // State for device settings modal
+  const [deviceSettingsModalOpen, setDeviceSettingsModalOpen] = useState(false);
+  const [editingDeviceId, setEditingDeviceId] = useState<string | null>(null);
+  const [editingDeviceName, setEditingDeviceName] = useState('');
+  const [editingDeviceType, setEditingDeviceType] = useState('');
 
   // Function to handle successful service location addition
   const handleServiceLocationAdded = (newLocation: any) => {
@@ -1101,9 +1108,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   onViewMetrics={(agentId) => {
                     setViewingDeviceFromList(agentId);
                   }}
-                  onEditSettings={(agentId) => {
-                    // TODO: Implement settings modal/page
-                    alert('Device settings coming soon! Contact support to update device settings.');
+                  onEditSettings={async (agentId) => {
+                    // Fetch agent details to get current device_name and device_type
+                    try {
+                      const response = await agentService.getAgent(agentId);
+                      if (response.success && response.data) {
+                        setEditingDeviceId(agentId);
+                        setEditingDeviceName(response.data.device_name);
+                        setEditingDeviceType(response.data.device_type);
+                        setDeviceSettingsModalOpen(true);
+                      }
+                    } catch (err) {
+                      console.error('Failed to load device details:', err);
+                    }
                   }}
                 />
               )
@@ -1335,6 +1352,32 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Device Settings Modal */}
+      {editingDeviceId && (
+        <DeviceSettingsModal
+          isOpen={deviceSettingsModalOpen}
+          onClose={() => {
+            setDeviceSettingsModalOpen(false);
+            setEditingDeviceId(null);
+            setEditingDeviceName('');
+            setEditingDeviceType('');
+          }}
+          agentId={editingDeviceId}
+          currentDeviceName={editingDeviceName}
+          currentDeviceType={editingDeviceType}
+          onUpdate={() => {
+            // Refresh agents list
+            if (authUser) {
+              agentService.listAgents().then((response) => {
+                if (response.success && response.data?.agents) {
+                  setAgents(response.data.agents);
+                }
+              });
+            }
+          }}
+        />
       )}
     </div>
   );

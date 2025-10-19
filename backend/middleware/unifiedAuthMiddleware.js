@@ -182,7 +182,7 @@ async function handleTraditionalSession(req, res, next, sessionToken) {
   } else {
     // Try client
     const clientResult = await pool.query(
-      'SELECT id, email, first_name, last_name FROM users WHERE id = $1',
+      'SELECT id, email, first_name, last_name, business_id FROM users WHERE id = $1',
       [session.userId]
     );
 
@@ -193,6 +193,7 @@ async function handleTraditionalSession(req, res, next, sessionToken) {
         email: client.email,
         firstName: client.first_name,
         lastName: client.last_name,
+        business_id: client.business_id,
         role: 'client',
         authType: 'traditional'
       };
