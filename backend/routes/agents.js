@@ -188,7 +188,7 @@ router.post('/trial/verify-email', async (req, res) => {
     const agentCountResult = await query(`
       SELECT COUNT(*) as count
       FROM agent_devices
-      WHERE business_id = $1 AND deleted_at IS NULL
+      WHERE business_id = $1 AND soft_delete = FALSE AND is_active = TRUE
     `, [businessId]);
 
     const currentAgentCount = parseInt(agentCountResult.rows[0].count) || 0;
