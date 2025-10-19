@@ -2694,8 +2694,9 @@ router.post('/agent-magic-login', async (req, res) => {
       businessName: user.business_name,
       businessId: effectiveBusinessId,
       timeFormatPreference: user.time_format_preference || '12h',
-      isTrial: user.is_trial || false,
-      trialExpiresAt: user.trial_expires_at,
+      subscriptionTier: user.subscription_tier || 'free',
+      devicesAllowed: user.devices_allowed || 2,
+      subscriptionExpiresAt: user.subscription_expires_at,
       isFirstAdmin: false,
       agentId: agent_id  // Link to the specific agent that opened dashboard
     };
