@@ -311,7 +311,60 @@ router.get('/business', authenticateClient, async (req, res) => {
 
     const clientId = req.user.clientId;
 
-    // Get business info with headquarters address from service_locations
+    // Check if this is a trial user
+    const trialCheck = await pool.query(`
+      SELECT id, email, contact_name FROM trial_users WHERE id = $1
+    `, [clientId]);
+
+    if (trialCheck.rows.length > 0) {
+      // This is a trial user - return trial-specific data
+      const trialUser = trialCheck.rows[0];
+
+      // Get trial agent device info
+      const agentResult = await pool.query(`
+        SELECT id, device_name, os_type, os_version, trial_end_date
+        FROM agent_devices
+        WHERE trial_user_id = $1 AND is_trial = true
+      `, [clientId]);
+
+      const trialAgent = agentResult.rows[0];
+
+      // Return trial user data in a format compatible with ClientDashboard
+      return res.json({
+        success: true,
+        data: {
+          business: {
+            id: clientId,
+            name: trialUser.contact_name || 'Trial User',
+            isIndividual: true,
+            address: {
+              street: 'N/A',
+              city: 'N/A',
+              state: 'N/A',
+              zipCode: 'N/A'
+            }
+          },
+          accessibleLocations: trialAgent ? [{
+            id: trialAgent.id,
+            name: `${trialAgent.device_name} (Trial Device)`,
+            address: {
+              street: 'Trial Device Location',
+              city: 'N/A',
+              state: 'N/A',
+              zipCode: 'N/A',
+              country: 'N/A'
+            },
+            contact: {
+              person: trialUser.contact_name || 'Trial User',
+              phone: '',
+              email: trialUser.email
+            }
+          }] : []
+        }
+      });
+    }
+
+    // Regular client user - get business info with headquarters address from service_locations
     const result = await pool.query(`
       SELECT
         b.id as id,
