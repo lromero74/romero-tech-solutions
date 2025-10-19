@@ -442,7 +442,7 @@ export async function getOrCreateTrialUser(email) {
         passwordHash,
         'Free',
         'User',
-        'customer',
+        'client',
         true,
         false, // Will be verified when they complete email verification
         businessId,
