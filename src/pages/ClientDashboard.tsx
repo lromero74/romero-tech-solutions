@@ -3,6 +3,7 @@ import { useClientTheme } from '../contexts/ClientThemeContext';
 import { useClientLanguage } from '../contexts/ClientLanguageContext';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
+import { ThemeProvider } from '../contexts/ThemeContext';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
 import ServiceScheduler from '../components/client/ServiceScheduler';
 import ServiceRequests from '../components/client/ServiceRequests';
@@ -529,10 +530,12 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
         {/* Agent Details Content */}
         <div className="flex-1 overflow-auto">
-          <AgentDetails
-            agentId={viewingAgentId}
-            onBack={() => setViewingAgentId(null)}
-          />
+          <ThemeProvider>
+            <AgentDetails
+              agentId={viewingAgentId}
+              onBack={() => setViewingAgentId(null)}
+            />
+          </ThemeProvider>
         </div>
       </div>
     );
