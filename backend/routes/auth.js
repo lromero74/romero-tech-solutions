@@ -2457,7 +2457,7 @@ router.post('/trial-magic-login', async (req, res) => {
       first_name: agent.contact_name || 'Trial',
       last_name: 'User',
       email_verified: agent.email_verified,
-      role: 'customer',
+      role: 'client',
       time_format_preference: '12h'
     };
 
@@ -2471,7 +2471,7 @@ router.post('/trial-magic-login', async (req, res) => {
         INSERT INTO users (id, email, first_name, last_name, password_hash, role, email_verified, is_active, created_at, updated_at)
         VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW())
         ON CONFLICT (id) DO NOTHING
-      `, [user.id, user.email, user.first_name, user.last_name, '', 'customer', user.email_verified]);
+      `, [user.id, user.email, user.first_name, user.last_name, '', 'client', user.email_verified]);
 
       console.log(`✅ Created users table entry for trial user: ${user.email}`);
     }
