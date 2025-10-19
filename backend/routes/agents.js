@@ -1411,7 +1411,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
         // Count active devices for this business
         const deviceCountResult = await query(
           `SELECT COUNT(*) as count FROM agent_devices
-           WHERE business_id = $1 AND deleted_at IS NULL`,
+           WHERE business_id = $1 AND soft_delete = false`,
           [businessId]
         );
 

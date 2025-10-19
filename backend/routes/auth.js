@@ -149,7 +149,7 @@ router.post('/login', async (req, res) => {
       userResult = await query(`
         SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
                b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
-               u.time_format_preference, u.is_trial, u.trial_expires_at, u.business_id
+               u.time_format_preference, u.is_trial, u.subscription_expires_at, u.business_id
         FROM users u
         LEFT JOIN businesses b ON u.business_id = b.id
         WHERE u.email = $1
@@ -331,7 +331,7 @@ router.post('/login', async (req, res) => {
       businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
       isTrial: user.is_trial || false,
-      trialExpiresAt: user.trial_expires_at,
+      trialExpiresAt: user.subscription_expires_at,
       isFirstAdmin: true // For now, default to true
     };
 
@@ -1043,7 +1043,7 @@ router.post('/verify-client-mfa', async (req, res) => {
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.email_verified,
              b.business_name, 'client' as user_type, u.time_format_preference,
-             u.is_trial, u.trial_expires_at, u.business_id
+             u.is_trial, u.subscription_expires_at, u.business_id
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1
@@ -1102,7 +1102,7 @@ router.post('/verify-client-mfa', async (req, res) => {
       businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
       isTrial: user.is_trial || false,
-      trialExpiresAt: user.trial_expires_at,
+      trialExpiresAt: user.subscription_expires_at,
       isFirstAdmin: false
     };
 
@@ -2438,7 +2438,7 @@ router.post('/trial-magic-login', async (req, res) => {
     const agentResult = await query(`
       SELECT ad.id as agent_id, ad.trial_access_code, ad.business_id,
              u.id as user_id, u.email, u.first_name, u.last_name,
-             u.email_verified, u.is_trial, u.trial_expires_at,
+             u.email_verified, u.is_trial, u.subscription_expires_at,
              u.subscription_tier, u.devices_allowed, u.profile_completed,
              b.business_name
       FROM agent_devices ad
@@ -2479,7 +2479,7 @@ router.post('/trial-magic-login', async (req, res) => {
       role: 'client',
       time_format_preference: '12h',
       is_trial: agent.is_trial,
-      trial_expires_at: agent.trial_expires_at,
+      trial_expires_at: agent.subscription_expires_at,
       subscription_tier: agent.subscription_tier || 'free',
       devices_allowed: agent.devices_allowed || 2,
       profile_completed: agent.profile_completed || false,
@@ -2540,7 +2540,7 @@ router.post('/trial-magic-login', async (req, res) => {
       isFirstAdmin: false,
       // Legacy trial fields (backward compatibility)
       isTrial: user.is_trial || true,
-      trialExpiresAt: user.trial_expires_at,
+      trialExpiresAt: user.subscription_expires_at,
       trialAgentId: agent.agent_id,  // Link to the trial agent device (legacy)
       trialId: trial_id,              // Original trial ID for reference (legacy)
       agentId: agent.agent_id,        // Current standard field name
