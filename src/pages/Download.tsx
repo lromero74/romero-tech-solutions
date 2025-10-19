@@ -1,20 +1,133 @@
 import React, { useState, useEffect } from 'react';
-import { Download as DownloadIcon, Server, Apple, Check, AlertCircle, Shield, Activity, Clock, BarChart, Laptop } from 'lucide-react';
+import { Download as DownloadIcon, Server, Apple, Check, AlertCircle, Shield, Activity, Clock, BarChart, Laptop, Monitor } from 'lucide-react';
+
+interface DetectedPlatform {
+  platform: string | null;
+  architecture: string;
+}
+
+interface PlatformOption {
+  id: string;
+  name: string;
+  icon: React.ElementType;
+  architectures: ArchOption[];
+}
+
+interface ArchOption {
+  id: string;
+  name: string;
+  bits: string;
+  recommended?: boolean;
+}
 
 const Download: React.FC = () => {
-  const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'macos' | 'linux'>('windows');
+  const [selectedPlatform, setSelectedPlatform] = useState<string>('');
+  const [selectedArch, setSelectedArch] = useState<string>('');
+  const [detectedPlatform, setDetectedPlatform] = useState<DetectedPlatform | null>(null);
   const [agentVersion, setAgentVersion] = useState('Loading...');
+  const [isDetecting, setIsDetecting] = useState(true);
 
   // Get API base URL from environment
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
+  // Platform configurations with architecture options
+  const platforms: PlatformOption[] = [
+    {
+      id: 'windows',
+      name: 'Windows',
+      icon: Laptop,
+      architectures: [
+        { id: 'amd64', name: 'x64 (64-bit)', bits: '64-bit', recommended: true },
+        { id: 'arm64', name: 'ARM64', bits: '64-bit ARM' },
+        { id: '386', name: 'x86 (32-bit)', bits: '32-bit' }
+      ]
+    },
+    {
+      id: 'macos',
+      name: 'macOS',
+      icon: Apple,
+      architectures: [
+        { id: 'arm64', name: 'Apple Silicon (M1/M2/M3)', bits: 'ARM64', recommended: true },
+        { id: 'amd64', name: 'Intel', bits: 'x86_64' }
+      ]
+    },
+    {
+      id: 'linux',
+      name: 'Linux',
+      icon: Server,
+      architectures: [
+        { id: 'amd64', name: 'x64 (64-bit)', bits: '64-bit', recommended: true },
+        { id: 'arm64', name: 'ARM64 (64-bit)', bits: '64-bit ARM' },
+        { id: 'armhf', name: 'ARMv7 (32-bit)', bits: '32-bit ARM' }
+      ]
+    }
+  ];
+
+  // Detect platform and architecture on mount
+  useEffect(() => {
+    const detectPlatform = async () => {
+      try {
+        const response = await fetch(`${apiBaseUrl}/agent/detect`);
+        const data = await response.json();
+
+        if (data.success && data.detected) {
+          setDetectedPlatform(data.detected);
+
+          // Auto-select detected platform and architecture
+          if (data.detected.platform) {
+            setSelectedPlatform(data.detected.platform);
+
+            // Find the platform and validate architecture
+            const platform = platforms.find(p => p.id === data.detected.platform);
+            if (platform) {
+              const archExists = platform.architectures.some(a => a.id === data.detected.architecture);
+              setSelectedArch(archExists ? data.detected.architecture : platform.architectures[0].id);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Platform detection failed:', error);
+        // Default to Windows amd64 if detection fails
+        setSelectedPlatform('windows');
+        setSelectedArch('amd64');
+      } finally {
+        setIsDetecting(false);
+      }
+    };
+
+    detectPlatform();
+  }, [apiBaseUrl]);
+
   // Fetch current agent version
   useEffect(() => {
-    fetch('https://api.romerotechsolutions.com/downloads/agent/version.json')
-      .then(res => res.json())
-      .then(data => setAgentVersion(data.current_version))
-      .catch(() => setAgentVersion('1.0.0')); // Fallback
-  }, []);
+    // Try to get version from versions endpoint
+    if (selectedPlatform) {
+      fetch(`${apiBaseUrl}/agent/versions/${selectedPlatform}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.success && data.latest) {
+            setAgentVersion(data.latest.replace(/^v/, ''));
+          }
+        })
+        .catch(() => setAgentVersion('1.16.14')); // Fallback to known version
+    }
+  }, [selectedPlatform, apiBaseUrl]);
+
+  // Update architecture when platform changes
+  useEffect(() => {
+    if (selectedPlatform) {
+      const platform = platforms.find(p => p.id === selectedPlatform);
+      if (platform && platform.architectures.length > 0) {
+        // If current arch is not available for this platform, select first available
+        const archExists = platform.architectures.some(a => a.id === selectedArch);
+        if (!archExists) {
+          // Prefer the recommended architecture
+          const recommended = platform.architectures.find(a => a.recommended);
+          setSelectedArch(recommended ? recommended.id : platform.architectures[0].id);
+        }
+      }
+    }
+  }, [selectedPlatform]);
 
   const features = [
     {
@@ -39,60 +152,53 @@ const Download: React.FC = () => {
     }
   ];
 
-  const platforms = [
-    {
-      id: 'windows' as const,
-      name: 'Windows',
-      icon: Laptop,
-      file: 'rts-agent-setup-windows.exe',
-      size: '12 MB',
-      requirements: 'Windows 10 or later',
-      downloadUrl: `${apiBaseUrl}/agent/download/windows`
-    },
-    {
-      id: 'macos' as const,
-      name: 'macOS',
-      icon: Apple,
-      file: 'rts-agent-setup-macos.dmg',
-      size: '15 MB',
-      requirements: 'macOS 12.0 (Monterey) or later',
-      downloadUrl: `${apiBaseUrl}/agent/download/macos`
-    },
-    {
-      id: 'linux' as const,
-      name: 'Linux',
-      icon: Server,
-      file: 'rts-agent-setup-linux.deb',
-      size: '10 MB',
-      requirements: 'Ubuntu 20.04+ / Debian 11+',
-      downloadUrl: `${apiBaseUrl}/agent/download/linux`
+  const getDownloadUrl = () => {
+    if (!selectedPlatform || !selectedArch) return null;
+    return `${apiBaseUrl}/agent/download/${selectedPlatform}?arch=${selectedArch}`;
+  };
+
+  const getFilename = () => {
+    if (!selectedPlatform || !selectedArch || !agentVersion) return 'agent-installer';
+
+    const version = agentVersion.replace(/^v/, '');
+
+    switch (selectedPlatform) {
+      case 'windows':
+        return `rts-agent-${version}-windows-${selectedArch}.zip`;
+      case 'macos':
+        return `RTS-Agent-${version}-${selectedArch}.pkg`;
+      case 'linux':
+        return `rts-agent_${version}_${selectedArch}.deb`;
+      default:
+        return `rts-agent-${version}-${selectedArch}`;
     }
-  ];
+  };
 
-  const selectedPlatformData = platforms.find(p => p.id === selectedPlatform);
+  const getFileSize = () => {
+    // Approximate sizes based on platform/arch
+    if (selectedPlatform === 'windows') return '7-8 MB';
+    if (selectedPlatform === 'macos') return '8-9 MB';
+    if (selectedPlatform === 'linux') return '6-7 MB';
+    return '~8 MB';
+  };
 
-  const handleDownload = async (platform: typeof selectedPlatform) => {
-    const platformData = platforms.find(p => p.id === platform);
-    if (!platformData) return;
+  const getRequirements = () => {
+    if (selectedPlatform === 'windows') return 'Windows 10 or later';
+    if (selectedPlatform === 'macos') return 'macOS 12.0 (Monterey) or later';
+    if (selectedPlatform === 'linux') return 'Ubuntu 20.04+ / Debian 11+';
+    return '';
+  };
 
-    // Track download
-    try {
-      await fetch(platformData.downloadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          platform,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent
-        })
-      });
-    } catch (error) {
-      console.error('Failed to track download:', error);
-    }
+  const handleDownload = () => {
+    const downloadUrl = getDownloadUrl();
+    if (!downloadUrl) return;
 
     // Trigger download
-    window.open(platformData.downloadUrl, '_blank');
+    window.location.href = downloadUrl;
   };
+
+  const selectedPlatformData = platforms.find(p => p.id === selectedPlatform);
+  const selectedArchData = selectedPlatformData?.architectures.find(a => a.id === selectedArch);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
@@ -110,20 +216,19 @@ const Download: React.FC = () => {
             security monitoring, and proactive maintenance for your devices.
           </p>
 
-          {/* Subscription Notice */}
-          <div className="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-6 max-w-2xl mx-auto mb-12">
+          {/* Free Tier Notice */}
+          <div className="bg-green-50 border-2 border-green-200 rounded-lg p-6 max-w-2xl mx-auto mb-12">
             <div className="flex items-start gap-3">
-              <AlertCircle className="w-6 h-6 text-yellow-600 flex-shrink-0 mt-0.5" />
+              <Check className="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" />
               <div className="text-left">
-                <h3 className="font-semibold text-yellow-900 mb-1">Subscription Required</h3>
-                <p className="text-sm text-yellow-800">
-                  A per-device subscription is required to participate in our 24x7 monitoring solution.
-                  <span className="font-medium"> $29.99/month per device</span> includes unlimited support,
-                  automatic updates, and priority incident response.
+                <h3 className="font-semibold text-green-900 mb-1">Start Free - No Credit Card Required</h3>
+                <p className="text-sm text-green-800">
+                  Monitor <span className="font-medium">2 devices at no cost</span> with no expiration.
+                  Includes all core monitoring features, automatic updates, and dashboard access.
                 </p>
                 <a
                   href="/pricing"
-                  className="inline-flex items-center text-sm font-medium text-yellow-900 hover:text-yellow-700 mt-2"
+                  className="inline-flex items-center text-sm font-medium text-green-900 hover:text-green-700 mt-2"
                 >
                   View Pricing Details →
                 </a>
@@ -156,9 +261,19 @@ const Download: React.FC = () => {
       {/* Platform Selection & Download */}
       <section className="py-16 px-4">
         <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center text-gray-900 mb-8">
+          <h2 className="text-3xl font-bold text-center text-gray-900 mb-2">
             Choose Your Platform
           </h2>
+
+          {/* Detection Status */}
+          {isDetecting && (
+            <p className="text-center text-gray-500 mb-8">Detecting your system...</p>
+          )}
+          {!isDetecting && detectedPlatform?.platform && (
+            <p className="text-center text-green-600 mb-8">
+              ✓ Detected: {detectedPlatform.platform} ({detectedPlatform.architecture})
+            </p>
+          )}
 
           {/* Platform Tabs */}
           <div className="flex justify-center gap-4 mb-8 flex-wrap">
@@ -178,8 +293,33 @@ const Download: React.FC = () => {
             ))}
           </div>
 
-          {/* Download Card */}
+          {/* Architecture Selection */}
           {selectedPlatformData && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 mb-3 text-center">
+                Select Architecture
+              </h3>
+              <div className="flex justify-center gap-3 flex-wrap">
+                {selectedPlatformData.architectures.map((arch) => (
+                  <button
+                    key={arch.id}
+                    onClick={() => setSelectedArch(arch.id)}
+                    className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
+                      selectedArch === arch.id
+                        ? 'border-blue-600 bg-blue-50 text-blue-900'
+                        : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    <div className="font-medium">{arch.name}</div>
+                    <div className="text-xs opacity-75">{arch.bits}</div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Download Card */}
+          {selectedPlatformData && selectedArchData && (
             <div className="bg-white rounded-xl shadow-lg p-8 border border-gray-200">
               <div className="flex items-center gap-4 mb-6">
                 <div className="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center">
@@ -189,31 +329,34 @@ const Download: React.FC = () => {
                   <h3 className="text-2xl font-bold text-gray-900">
                     {selectedPlatformData.name}
                   </h3>
-                  <p className="text-gray-600">Version {agentVersion}</p>
+                  <p className="text-gray-600">
+                    Version {agentVersion} - {selectedArchData.name}
+                  </p>
                 </div>
               </div>
 
               <div className="space-y-3 mb-6">
                 <div className="flex items-center gap-2 text-gray-700">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>File: {selectedPlatformData.file}</span>
+                  <span>File: {getFilename()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>Size: {selectedPlatformData.size}</span>
+                  <span>Size: {getFileSize()}</span>
                 </div>
                 <div className="flex items-center gap-2 text-gray-700">
                   <Check className="w-5 h-5 text-green-600" />
-                  <span>Requirements: {selectedPlatformData.requirements}</span>
+                  <span>Requirements: {getRequirements()}</span>
                 </div>
               </div>
 
               <button
-                onClick={() => handleDownload(selectedPlatform)}
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
+                onClick={handleDownload}
+                disabled={!selectedPlatform || !selectedArch}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-semibold py-4 px-6 rounded-lg transition-colors flex items-center justify-center gap-2"
               >
                 <DownloadIcon className="w-5 h-5" />
-                Download for {selectedPlatformData.name}
+                Download for {selectedPlatformData.name} ({selectedArchData.name})
               </button>
 
               <p className="text-sm text-gray-500 text-center mt-4">
@@ -249,7 +392,7 @@ const Download: React.FC = () => {
                     Download the Agent
                   </h3>
                   <p className="text-gray-600">
-                    Download the agent installer for your operating system using the button above.
+                    Download the agent installer for your operating system and architecture using the button above.
                   </p>
                 </div>
               </div>
@@ -282,12 +425,11 @@ const Download: React.FC = () => {
                     Register Your Device
                   </h3>
                   <p className="text-gray-600 mb-2">
-                    Enter your registration token (provided after subscription purchase) to
-                    connect your device to our monitoring platform.
+                    Follow the setup wizard to register your device. Free tier users get 2 devices at no cost.
                   </p>
                   <div className="bg-blue-50 border border-blue-200 rounded p-3 text-sm text-blue-900">
-                    <strong>Don't have a token?</strong> Sign up for a subscription first, then
-                    you'll receive your registration token via email.
+                    <strong>New to RTS?</strong> The agent will guide you through creating a free account
+                    and registering your first device.
                   </div>
                 </div>
               </div>
@@ -300,11 +442,11 @@ const Download: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                    Configure Startup
+                    Start Monitoring
                   </h3>
                   <p className="text-gray-600">
-                    Choose whether to run the agent on login or install it as a system service
-                    for continuous monitoring.
+                    The agent runs as a background service, automatically collecting system metrics
+                    and sending them to your dashboard.
                   </p>
                 </div>
               </div>
