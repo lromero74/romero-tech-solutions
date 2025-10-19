@@ -2421,7 +2421,7 @@ router.post('/trial-magic-login', async (req, res) => {
     // Find trial agent device and associated trial user
     const agentResult = await query(`
       SELECT ad.id as agent_id, ad.trial_access_code, ad.trial_user_id,
-             tu.id as user_id, tu.email, tu.first_name, tu.last_name,
+             tu.id as user_id, tu.email, tu.contact_name,
              tu.email_verified
       FROM agent_devices ad
       INNER JOIN trial_users tu ON tu.id = ad.trial_user_id
@@ -2450,12 +2450,12 @@ router.post('/trial-magic-login', async (req, res) => {
       });
     }
 
-    // Use trial user data
+    // Use trial user data (contact_name instead of first/last name)
     const user = {
       id: agent.user_id,
       email: agent.email,
-      first_name: agent.first_name,
-      last_name: agent.last_name,
+      first_name: agent.contact_name || 'Trial',
+      last_name: 'User',
       email_verified: agent.email_verified,
       role: 'customer',
       time_format_preference: '12h'
