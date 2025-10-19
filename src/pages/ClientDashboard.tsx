@@ -791,6 +791,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               <ul className="space-y-2">
                 {[
                   { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
+                  // Show "My Devices" tab for all users with subscription tier (free, subscribed, enterprise)
+                  ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
                   { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
                   { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
                   { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
