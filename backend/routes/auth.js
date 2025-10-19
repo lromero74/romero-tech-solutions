@@ -1,6 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { v5 as uuidv5 } from 'uuid';
 import { query } from '../config/database.js';
 import { sessionService } from '../services/sessionService.js';
 import { generateCsrfToken } from '../server.js';
@@ -2410,16 +2411,20 @@ router.post('/trial-magic-login', async (req, res) => {
 
     const { trial_id, access_code } = decoded;
 
-    // Find trial user account and associated agent device
-    const userResult = await query(`
-      SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role,
-             u.email_verified, u.time_format_preference, ad.id as agent_id
-      FROM users u
-      LEFT JOIN agent_devices ad ON ad.trial_access_code = $2 AND ad.is_trial = true
-      WHERE u.email = $1
-    `, [`trial-${trial_id}@trial.romerotechsolutions.com`, access_code]);
+    // Convert trial_id to UUID for database lookup
+    const trialUUID = uuidv5(`trial-${trial_id}`, 'a8f5f167-d5e9-4c91-a3d2-7e5c8f9b1c4a');
 
-    if (userResult.rows.length === 0) {
+    // Find trial agent device and associated trial user
+    const agentResult = await query(`
+      SELECT ad.id as agent_id, ad.trial_access_code, ad.trial_user_id,
+             tu.id as user_id, tu.email, tu.first_name, tu.last_name,
+             tu.email_verified
+      FROM agent_devices ad
+      INNER JOIN trial_users tu ON tu.id = ad.trial_user_id
+      WHERE ad.id = $1 AND ad.is_trial = true
+    `, [trialUUID]);
+
+    if (agentResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
         message: 'Trial account not found',
@@ -2427,17 +2432,27 @@ router.post('/trial-magic-login', async (req, res) => {
       });
     }
 
-    const user = userResult.rows[0];
+    const agent = agentResult.rows[0];
 
     // Verify access code matches
-    const isAccessCodeValid = await bcrypt.compare(access_code, user.password_hash);
-    if (!isAccessCodeValid) {
+    if (agent.trial_access_code !== access_code) {
       return res.status(401).json({
         success: false,
         message: 'Invalid access code',
         code: 'INVALID_ACCESS_CODE'
       });
     }
+
+    // Use trial user data
+    const user = {
+      id: agent.user_id,
+      email: agent.email,
+      first_name: agent.first_name,
+      last_name: agent.last_name,
+      email_verified: agent.email_verified,
+      role: 'customer',
+      time_format_preference: '12h'
+    };
 
     // Create session for trial user
     const userAgent = req.get('User-Agent');
