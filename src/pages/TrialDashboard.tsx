@@ -21,14 +21,29 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
   const [agents, setAgents] = useState<AgentDevice[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(true);
 
+  // CRITICAL: Fallback to localStorage if authUser hasn't loaded yet
+  let userDataForDashboard = authUser;
+  if (!authUser) {
+    try {
+      const storedUser = localStorage.getItem('client_authUser');
+      if (storedUser) {
+        userDataForDashboard = JSON.parse(storedUser);
+        console.log('📦 Using localStorage fallback for TrialDashboard');
+      }
+    } catch (e) {
+      console.error('Failed to parse client_authUser from localStorage:', e);
+    }
+  }
+
   // Support both trial users and regular users accessing via agent magic-link
-  const trialAgentId = (authUser as any)?.trialAgentId;
-  const trialId = (authUser as any)?.trialId;
+  const trialAgentId = (userDataForDashboard as any)?.trialAgentId;
+  const trialId = (userDataForDashboard as any)?.trialId;
+  const isTrial = (userDataForDashboard as any)?.isTrial || false;
 
   // CRITICAL: Check sessionStorage for pendingAgentId in case auth context hasn't updated yet
   // This handles the race condition where routing happens before React state updates
   const pendingAgentId = sessionStorage.getItem('pendingAgentId');
-  const initialAgentId = (authUser as any)?.agentId || trialAgentId || pendingAgentId;
+  const initialAgentId = (userDataForDashboard as any)?.agentId || trialAgentId || pendingAgentId;
 
   // Selected agent (can be different from the one opened via magic-link)
   const [selectedAgentId, setSelectedAgentId] = useState<string>(() => {
@@ -36,8 +51,6 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
     const savedAgentId = localStorage.getItem('selectedAgentId');
     return savedAgentId || initialAgentId || '';
   });
-
-  const isTrial = (authUser as any)?.isTrial || false;
 
   console.log('📊 TrialDashboard agentId resolution:', {
     authUserAgentId: (authUser as any)?.agentId,
@@ -67,8 +80,34 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
   useEffect(() => {
     const fetchAgents = async () => {
       try {
-        console.log('📋 Fetching agents for user:', authUser?.email);
+        console.log('📋 Fetching agents for user:', userDataForDashboard?.email, 'isTrial:', isTrial);
         setLoadingAgents(true);
+
+        // Trial users: Skip API call, just use the trialAgentId directly
+        if (isTrial && trialAgentId) {
+          console.log('📋 Trial user detected, using trialAgentId directly:', trialAgentId);
+          // Create a mock agent entry for the trial agent
+          const trialAgent: AgentDevice = {
+            id: trialAgentId,
+            device_name: userDataForDashboard?.name || 'Trial Device',
+            os_type: 'Unknown',
+            is_trial: true
+          } as AgentDevice;
+
+          setAgents([trialAgent]);
+
+          // Set the trial agent as selected
+          if (!selectedAgentId || selectedAgentId !== trialAgentId) {
+            console.log('📋 Setting trial agent as selected:', trialAgentId);
+            setSelectedAgentId(trialAgentId);
+            localStorage.setItem('selectedAgentId', trialAgentId);
+          }
+
+          setLoadingAgents(false);
+          return;
+        }
+
+        // Non-trial users: Fetch from API
         const response = await agentService.listAgents();
         console.log('📋 Agent list response:', response);
 
@@ -99,7 +138,7 @@ const TrialDashboard: React.FC<TrialDashboardProps> = ({ onNavigate }) => {
     // Fetch agents unconditionally (API will handle auth)
     // This ensures we fetch even if authUser loads after component mount
     fetchAgents();
-  }, [authUser]);
+  }, [authUser, isTrial, trialAgentId]);
 
   // Handle agent selection
   const handleSelectAgent = (agentId: string) => {
