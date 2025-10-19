@@ -3165,4 +3165,331 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
   }
 });
 
+/**
+ * Trial Agent Software Inventory Upload Endpoint
+ * POST /api/agents/trial/inventory/software
+ *
+ * Accepts software inventory from trial agents without authentication
+ */
+router.post('/trial/inventory/software', async (req, res) => {
+  try {
+    const { trial_id, software } = req.body;
+
+    if (!trial_id || !software) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, software',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Validate trial exists and is active
+    const trialResult = await query(
+      `SELECT id, is_trial, trial_end_date, trial_converted_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trial = trialResult.rows[0];
+
+    // Check if trial has been converted
+    if (trial.trial_converted_at) {
+      return res.status(403).json({
+        success: false,
+        message: 'Trial has been converted. Please use your registered agent.',
+        code: 'TRIAL_CONVERTED'
+      });
+    }
+
+    // Check if trial has expired
+    if (new Date(trial.trial_end_date) < new Date()) {
+      const daysExpired = Math.floor((new Date() - new Date(trial.trial_end_date)) / (1000 * 60 * 60 * 24));
+      return res.status(403).json({
+        success: false,
+        message: `Your trial expired ${daysExpired} day(s) ago. Subscribe at https://romerotechsolutions.com/pricing`,
+        code: 'TRIAL_EXPIRED'
+      });
+    }
+
+    // Delete existing software inventory for this agent
+    await query(
+      'DELETE FROM agent_software_inventory WHERE agent_device_id = $1',
+      [trialUUID]
+    );
+
+    // Insert new software inventory
+    const softwareArray = Array.isArray(software) ? software : [software];
+    for (const sw of softwareArray) {
+      await query(
+        `INSERT INTO agent_software_inventory (
+          id, agent_device_id, name, version, publisher,
+          package_manager, install_date, update_available,
+          security_update, last_updated
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())`,
+        [
+          uuidv4(),
+          trialUUID,
+          sw.name || 'Unknown',
+          sw.version || null,
+          sw.publisher || null,
+          sw.package_manager || null,
+          sw.install_date || null,
+          sw.update_available || false,
+          sw.security_update || false
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Software inventory received',
+      data: {
+        software_count: softwareArray.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial software inventory upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Software inventory upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Agent Storage Inventory Upload Endpoint
+ * POST /api/agents/trial/inventory/storage
+ *
+ * Accepts storage device inventory from trial agents without authentication
+ */
+router.post('/trial/inventory/storage', async (req, res) => {
+  try {
+    const { trial_id, storage } = req.body;
+
+    if (!trial_id || !storage) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, storage',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Validate trial exists and is active
+    const trialResult = await query(
+      `SELECT id, is_trial, trial_end_date, trial_converted_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trial = trialResult.rows[0];
+
+    // Check if trial has been converted
+    if (trial.trial_converted_at) {
+      return res.status(403).json({
+        success: false,
+        message: 'Trial has been converted. Please use your registered agent.',
+        code: 'TRIAL_CONVERTED'
+      });
+    }
+
+    // Check if trial has expired
+    if (new Date(trial.trial_end_date) < new Date()) {
+      const daysExpired = Math.floor((new Date() - new Date(trial.trial_end_date)) / (1000 * 60 * 60 * 24));
+      return res.status(403).json({
+        success: false,
+        message: `Your trial expired ${daysExpired} day(s) ago. Subscribe at https://romerotechsolutions.com/pricing`,
+        code: 'TRIAL_EXPIRED'
+      });
+    }
+
+    // Delete existing storage inventory for this agent
+    await query(
+      'DELETE FROM agent_storage_devices WHERE agent_device_id = $1',
+      [trialUUID]
+    );
+
+    // Insert new storage inventory
+    const storageArray = Array.isArray(storage) ? storage : [storage];
+    for (const device of storageArray) {
+      await query(
+        `INSERT INTO agent_storage_devices (
+          id, agent_device_id, device_name, device_type,
+          capacity_gb, used_gb, mount_point, file_system,
+          health_status, smart_status, smart_temperature_c,
+          smart_power_on_hours, last_updated
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())`,
+        [
+          uuidv4(),
+          trialUUID,
+          device.device_name || device.DeviceName || 'Unknown',
+          device.device_type || device.DeviceType || 'Unknown',
+          device.capacity_gb || device.CapacityGB || 0,
+          device.used_gb || device.UsedGB || 0,
+          device.mount_point || device.MountPoint || null,
+          device.file_system || device.FileSystem || null,
+          device.health_status || device.HealthStatus || 'Unknown',
+          device.smart_status || device.SMARTStatus || null,
+          device.smart_temperature_c || device.SMARTTemperatureC || null,
+          device.smart_power_on_hours || device.SMARTPowerOnHours || null
+        ]
+      );
+    }
+
+    res.json({
+      success: true,
+      message: 'Storage inventory received',
+      data: {
+        storage_count: storageArray.length
+      }
+    });
+
+  } catch (error) {
+    console.error('Trial storage inventory upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Storage inventory upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Agent Hardware Inventory Upload Endpoint
+ * POST /api/agents/trial/inventory/hardware
+ *
+ * Accepts hardware inventory from trial agents without authentication
+ */
+router.post('/trial/inventory/hardware', async (req, res) => {
+  try {
+    const { trial_id, hardware } = req.body;
+
+    if (!trial_id || !hardware) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required fields: trial_id, hardware',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Convert trial_id to UUID
+    const trialUUID = trialIdToUUID(trial_id);
+
+    // Validate trial exists and is active
+    const trialResult = await query(
+      `SELECT id, is_trial, trial_end_date, trial_converted_at
+       FROM agent_devices
+       WHERE id = $1 AND is_trial = true`,
+      [trialUUID]
+    );
+
+    if (trialResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Trial agent not found',
+        code: 'TRIAL_NOT_FOUND'
+      });
+    }
+
+    const trial = trialResult.rows[0];
+
+    // Check if trial has been converted
+    if (trial.trial_converted_at) {
+      return res.status(403).json({
+        success: false,
+        message: 'Trial has been converted. Please use your registered agent.',
+        code: 'TRIAL_CONVERTED'
+      });
+    }
+
+    // Check if trial has expired
+    if (new Date(trial.trial_end_date) < new Date()) {
+      const daysExpired = Math.floor((new Date() - new Date(trial.trial_end_date)) / (1000 * 60 * 60 * 24));
+      return res.status(403).json({
+        success: false,
+        message: `Your trial expired ${daysExpired} day(s) ago. Subscribe at https://romerotechsolutions.com/pricing`,
+        code: 'TRIAL_EXPIRED'
+      });
+    }
+
+    // Update hardware inventory for this agent
+    await query(
+      `INSERT INTO agent_hardware_inventory (
+        id, agent_device_id,
+        cpu_model, cpu_cores, cpu_threads, cpu_speed_mhz,
+        total_memory_gb, total_storage_gb, storage_type,
+        network_interface_count, has_battery,
+        battery_health_percent, battery_cycle_count,
+        last_updated
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+      ON CONFLICT (agent_device_id) DO UPDATE SET
+        cpu_model = EXCLUDED.cpu_model,
+        cpu_cores = EXCLUDED.cpu_cores,
+        cpu_threads = EXCLUDED.cpu_threads,
+        cpu_speed_mhz = EXCLUDED.cpu_speed_mhz,
+        total_memory_gb = EXCLUDED.total_memory_gb,
+        total_storage_gb = EXCLUDED.total_storage_gb,
+        storage_type = EXCLUDED.storage_type,
+        network_interface_count = EXCLUDED.network_interface_count,
+        has_battery = EXCLUDED.has_battery,
+        battery_health_percent = EXCLUDED.battery_health_percent,
+        battery_cycle_count = EXCLUDED.battery_cycle_count,
+        last_updated = NOW()`,
+      [
+        uuidv4(),
+        trialUUID,
+        hardware.cpu_model || hardware.CPUModel || 'Unknown',
+        hardware.cpu_cores || hardware.CPUCores || 0,
+        hardware.cpu_threads || hardware.CPUThreads || 0,
+        hardware.cpu_speed_mhz || hardware.CPUSpeedMhz || 0,
+        hardware.total_memory_gb || hardware.TotalMemoryGB || 0,
+        hardware.total_storage_gb || hardware.TotalStorageGB || 0,
+        hardware.storage_type || hardware.StorageType || 'Unknown',
+        hardware.network_interface_count || hardware.NetworkInterfaceCount || 0,
+        hardware.has_battery || hardware.HasBattery || false,
+        hardware.battery_health_percent || hardware.BatteryHealthPercent || null,
+        hardware.battery_cycle_count || hardware.BatteryCycleCount || null
+      ]
+    );
+
+    res.json({
+      success: true,
+      message: 'Hardware inventory received'
+    });
+
+  } catch (error) {
+    console.error('Trial hardware inventory upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Hardware inventory upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;
