@@ -2506,14 +2506,14 @@ router.post('/trial-magic-login', async (req, res) => {
     const userData = {
       id: user.id,
       email: user.email,
-      role: user.role || 'customer',
+      role: user.role || 'client',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: null,
       timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: false,
       isTrial: true,
-      trialAgentId: user.agent_id,  // Link to the trial agent device
-      trialId: trial_id             // Original trial ID for reference
+      trialAgentId: agent.agent_id,  // Link to the trial agent device
+      trialId: trial_id              // Original trial ID for reference
     };
 
     console.log(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);
