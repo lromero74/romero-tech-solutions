@@ -2411,8 +2411,12 @@ router.post('/trial-magic-login', async (req, res) => {
 
     const { trial_id, access_code } = decoded;
 
+    console.log('🔐 Trial magic-link login attempt:', { trial_id, access_code });
+
     // Convert trial_id to UUID for database lookup
     const trialUUID = uuidv5(`trial-${trial_id}`, 'a8f5f167-d5e9-4c91-a3d2-7e5c8f9b1c4a');
+
+    console.log('🔑 Looking for trial agent with UUID:', trialUUID);
 
     // Find trial agent device and associated trial user
     const agentResult = await query(`
@@ -2424,7 +2428,10 @@ router.post('/trial-magic-login', async (req, res) => {
       WHERE ad.id = $1 AND ad.is_trial = true
     `, [trialUUID]);
 
+    console.log('📊 Query result:', { rowCount: agentResult.rows.length, rows: agentResult.rows });
+
     if (agentResult.rows.length === 0) {
+      console.log('❌ Trial account not found for UUID:', trialUUID);
       return res.status(404).json({
         success: false,
         message: 'Trial account not found',
