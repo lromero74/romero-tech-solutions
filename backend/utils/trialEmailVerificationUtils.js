@@ -240,7 +240,7 @@ export async function confirmTrialEmailAndCreateUser(email, options = {}) {
  */
 export async function sendTrialVerificationEmail(email, verificationCode, deviceName = '') {
   try {
-    const subject = 'Email Verification - RTS Agent Trial';
+    const subject = 'Email Verification - RTS Agent Free Tier';
 
     const deviceText = deviceName ? ` for ${deviceName}` : '';
 
@@ -249,7 +249,7 @@ export async function sendTrialVerificationEmail(email, verificationCode, device
       <html>
       <head>
         <meta charset="UTF-8">
-        <title>Trial Email Verification</title>
+        <title>Free Tier Email Verification</title>
         <style>
           body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
           .container { max-width: 600px; margin: 0 auto; padding: 20px; }
@@ -258,42 +258,42 @@ export async function sendTrialVerificationEmail(email, verificationCode, device
           .code-box { background: white; border: 2px solid #10b981; border-radius: 8px; padding: 20px; margin: 20px 0; text-align: center; }
           .code { font-size: 32px; font-weight: bold; color: #059669; letter-spacing: 4px; font-family: 'Courier New', monospace; }
           .footer { margin-top: 20px; padding: 20px; background: #dcfce7; border-radius: 8px; font-size: 14px; color: #15803d; }
-          .trial-info { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .free-tier-info { background: #dbeafe; border-left: 4px solid #3b82f6; padding: 15px; margin: 20px 0; border-radius: 4px; }
         </style>
       </head>
       <body>
         <div class="container">
           <div class="header">
-            <h1>🔐 Trial Email Verification</h1>
+            <h1>🔐 Free Tier Email Verification</h1>
             <p>RTS Agent - Romero Tech Solutions</p>
           </div>
           <div class="content">
-            <h2>Welcome to RTS Agent Trial!</h2>
-            <p>Thank you for starting your 30-day free trial${deviceText}.</p>
-            <p>To verify your email address and activate your trial, please enter the following verification code:</p>
+            <h2>Welcome to RTS Agent Free Tier!</h2>
+            <p>Thank you for registering${deviceText}.</p>
+            <p>To verify your email address and activate your free tier account, please enter the following verification code:</p>
 
             <div class="code-box">
               <div class="code">${verificationCode}</div>
             </div>
 
-            <div class="trial-info">
-              <strong>📋 What's Next:</strong>
+            <div class="free-tier-info">
+              <strong>🎉 Your Free Tier Includes:</strong>
               <ul style="margin: 10px 0;">
-                <li>Enter the verification code in your agent installation</li>
-                <li>Your trial will be active for 30 days</li>
-                <li>You can install the agent on multiple devices using this email</li>
-                <li>Access your dashboard at: <a href="https://romerotechsolutions.com/trial">romerotechsolutions.com/trial</a></li>
+                <li><strong>2 devices free forever</strong> - no expiration, no credit card required</li>
+                <li>Full monitoring and management features</li>
+                <li>Easy upgrade to Pro or Enterprise anytime</li>
+                <li>Access your dashboard at: <a href="https://romerotechsolutions.com/clogin">romerotechsolutions.com/clogin</a></li>
               </ul>
             </div>
 
             <p><strong>Important:</strong></p>
             <ul>
-              <li>This code expires in 15 minutes</li>
+              <li>This verification code expires in 15 minutes</li>
               <li>It can only be used once</li>
               <li>Keep this email for your records</li>
             </ul>
 
-            <p>If you didn't request this trial, you can safely ignore this email.</p>
+            <p>If you didn't request this registration, you can safely ignore this email.</p>
 
             <div class="footer">
               <p><strong>Need help?</strong> Visit <a href="https://romerotechsolutions.com/support">romerotechsolutions.com/support</a></p>
@@ -307,19 +307,19 @@ export async function sendTrialVerificationEmail(email, verificationCode, device
     `;
 
     const textBody = `
-RTS Agent Trial - Email Verification
+RTS Agent Free Tier - Email Verification
 
 Your verification code is: ${verificationCode}
 
 This code expires in 15 minutes and can only be used once.
 
-What's Next:
-- Enter the verification code in your agent installation
-- Your trial will be active for 30 days
-- You can install the agent on multiple devices using this email
-- Access your dashboard at: https://romerotechsolutions.com/trial
+Your Free Tier Includes:
+- 2 devices free forever (no expiration, no credit card required)
+- Full monitoring and management features
+- Easy upgrade to Pro or Enterprise anytime
+- Access your dashboard at: https://romerotechsolutions.com/clogin
 
-If you didn't request this trial, you can safely ignore this email.
+If you didn't request this registration, you can safely ignore this email.
 
 © 2025 Romero Tech Solutions
     `.trim();
