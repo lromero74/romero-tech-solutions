@@ -352,12 +352,13 @@ export async function getOrCreateTrialUser(email) {
     const { v4: uuidv4 } = await import('uuid');
     const bcrypt = await import('bcrypt');
 
-    // First, check if trial user exists in unified users table
+    // First, check if user exists in unified users table
+    // Check for both is_trial flag (legacy) and subscription_tier = 'free'
     let result = await query(`
-      SELECT u.id, u.email_verified, u.business_id, b.business_name
+      SELECT u.id, u.email_verified, u.business_id, b.business_name, u.subscription_tier
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
-      WHERE u.email = $1 AND u.is_trial = true
+      WHERE u.email = $1 AND (u.is_trial = true OR u.subscription_tier = 'free')
     `, [email]);
 
     if (result.rows.length > 0) {
@@ -395,16 +396,23 @@ export async function getOrCreateTrialUser(email) {
       };
     }
 
-    // If not exists, create trial user with business (UNIFIED ARCHITECTURE)
+    // If not exists, create free tier user with business (FREEMIUM MODEL)
     const userId = uuidv4();
     const businessId = uuidv4();
-    const businessName = `Trial - ${email}`;
-    const trialExpiresAt = new Date();
-    trialExpiresAt.setDate(trialExpiresAt.getDate() + 30); // 30-day trial
+    const businessName = `Free - ${email}`;
 
     // Generate a random password (user will use magic-link to login)
     const randomPassword = crypto.randomBytes(32).toString('hex');
     const passwordHash = await bcrypt.default.hash(randomPassword, 10);
+
+    // Get default device limit for free tier from subscription_pricing
+    const pricingResult = await query(`
+      SELECT default_devices_allowed
+      FROM subscription_pricing
+      WHERE tier = 'free'::subscription_tier_type AND is_active = TRUE
+      LIMIT 1
+    `);
+    const defaultDevicesAllowed = pricingResult.rows[0]?.default_devices_allowed || 2; // Fallback to 2 if not found
 
     // Start transaction
     const pool = await import('../config/database.js').then(m => m.getPool());
@@ -419,31 +427,35 @@ export async function getOrCreateTrialUser(email) {
         VALUES ($1, $2, true, NOW())
       `, [businessId, businessName]);
 
-      // 2. Create user in users table with is_trial flag
+      // 2. Create user in users table with free subscription tier
       await client.query(`
         INSERT INTO users (
           id, email, password_hash, first_name, last_name,
           role, is_active, email_verified, business_id,
-          is_trial, trial_expires_at,
+          subscription_tier, devices_allowed, profile_completed,
+          is_trial, subscription_expires_at,
           created_at
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::subscription_tier_type, $11, $12, $13, $14, NOW())
       `, [
         userId,
         email,
         passwordHash,
-        'Trial',
+        'Free',
         'User',
         'customer',
         true,
         false, // Will be verified when they complete email verification
         businessId,
-        true, // is_trial = true
-        trialExpiresAt
+        'free', // subscription_tier = 'free' (perpetual free tier)
+        defaultDevicesAllowed, // devices_allowed from pricing config (default 2 for free tier)
+        false, // profile_completed = false (not completed yet)
+        true, // is_trial = true (backward compatibility)
+        null // subscription_expires_at = NULL (free tier never expires)
       ]);
 
       await client.query('COMMIT');
 
-      console.log(`✅ Created trial user ${email} with business ${businessId} (UNIFIED ARCHITECTURE)`);
+      console.log(`✅ Created free tier user ${email} with business ${businessId} (FREEMIUM MODEL)`);
 
       return {
         userId: userId,
