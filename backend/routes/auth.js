@@ -2643,7 +2643,7 @@ router.post('/agent-magic-login', async (req, res) => {
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.role,
              u.email_verified, u.time_format_preference, b.business_name,
-             u.is_trial, u.trial_expires_at, u.business_id
+             u.subscription_tier, u.devices_allowed, u.subscription_expires_at, u.business_id
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.email_verified = true
