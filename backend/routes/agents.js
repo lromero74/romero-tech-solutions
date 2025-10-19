@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
+import { calculateGraduatedPrice, getMaxDevicesForTier } from '../utils/pricingUtils.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
@@ -117,21 +118,32 @@ router.post('/trial/send-verification', async (req, res) => {
 });
 
 /**
- * Trial Email Verification - Verify Code
+ * Free Tier Registration - Verify Email and Create Agent
  * POST /api/agents/trial/verify-email
  *
- * Verifies the email code and marks user as verified (UNIFIED ARCHITECTURE)
- * Returns user_id and business_id for linking agents
+ * Verifies the email code, creates free tier user (if not exists),
+ * creates agent device, and returns full registration (agent_id + token)
+ *
+ * FREEMIUM MODEL: No trial mode, no expiration - just free tier with 2 devices
  */
 router.post('/trial/verify-email', async (req, res) => {
   try {
-    const { email, verificationCode, contactName, phone } = req.body;
+    const { email, verificationCode, contactName, phone, deviceName, osType, osVersion } = req.body;
 
     if (!email || !verificationCode) {
       return res.status(400).json({
         success: false,
         message: 'Email and verification code are required',
         code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Device info required for agent creation
+    if (!deviceName || !osType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Device name and OS type are required for registration',
+        code: 'MISSING_DEVICE_INFO'
       });
     }
 
@@ -145,7 +157,7 @@ router.post('/trial/verify-email', async (req, res) => {
       });
     }
 
-    // UNIFIED ARCHITECTURE: Get or create trial user in main users table
+    // UNIFIED ARCHITECTURE: Get or create free tier user in main users table
     const { userId, businessId, isVerified } = await getOrCreateTrialUser(email);
 
     // Mark verification code as used
@@ -162,25 +174,74 @@ router.post('/trial/verify-email', async (req, res) => {
       WHERE id = $1
     `, [userId]);
 
-    console.log(`✅ Trial email verified for ${email} (user_id: ${userId}, business_id: ${businessId})`);
+    console.log(`✅ Email verified for ${email} (user_id: ${userId}, business_id: ${businessId})`);
 
+    // FREEMIUM: Check device limit before creating agent
+    const userResult = await query(`
+      SELECT subscription_tier, devices_allowed
+      FROM users
+      WHERE id = $1
+    `, [userId]);
+
+    const devicesAllowed = userResult.rows[0]?.devices_allowed || 2;
+
+    // Count existing active agents
+    const agentCountResult = await query(`
+      SELECT COUNT(*) as count
+      FROM agent_devices
+      WHERE business_id = $1 AND deleted_at IS NULL
+    `, [businessId]);
+
+    const currentAgentCount = parseInt(agentCountResult.rows[0].count) || 0;
+
+    if (currentAgentCount >= devicesAllowed) {
+      return res.status(403).json({
+        success: false,
+        message: `Device limit reached (${devicesAllowed} devices on Free tier). Please remove a device or upgrade.`,
+        code: 'DEVICE_LIMIT_REACHED',
+        data: {
+          devices_used: currentAgentCount,
+          devices_allowed: devicesAllowed,
+          subscription_tier: 'free'
+        }
+      });
+    }
+
+    // Create agent device
+    const agentId = uuidv4();
+    const agentToken = crypto.randomBytes(32).toString('hex');
+
+    await query(`
+      INSERT INTO agent_devices (
+        id, business_id, device_name, os_type, os_version,
+        token, status, is_active, created_at, updated_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, 'online', true, NOW(), NOW())
+    `, [agentId, businessId, deviceName, osType, osVersion || null, agentToken]);
+
+    console.log(`✅ Free tier agent created: ${agentId} for ${email}`);
+
+    // Return full registration details
     res.json({
       success: true,
-      message: 'Email verified successfully',
+      message: 'Registration complete! Welcome to RTS Agent (Free tier - 2 devices)',
       data: {
-        trial_user_id: userId,  // Return user_id (agents expect this field name)
-        user_id: userId,
+        agent_id: agentId,
         business_id: businessId,
+        token: agentToken,
+        user_id: userId,
         email: email,
+        subscription_tier: 'free',
+        devices_allowed: devicesAllowed,
+        devices_used: currentAgentCount + 1,
         verified: true
       }
     });
 
   } catch (error) {
-    console.error('❌ Error verifying trial email:', error);
+    console.error('❌ Error in free tier registration:', error);
     res.status(500).json({
       success: false,
-      message: 'Failed to verify email',
+      message: 'Registration failed',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
@@ -381,22 +442,31 @@ router.post('/trial/heartbeat', async (req, res) => {
       // Get or create trial user and business (UNIFIED ARCHITECTURE)
       const { userId, businessId } = await getOrCreateTrialUser(trial_email);
 
-      // TRIAL DEVICE LIMIT: Check how many active agents this trial user already has
-      const TRIAL_DEVICE_LIMIT = 2;
+      // SUBSCRIPTION DEVICE LIMIT: Check subscription tier and devices allowed
+      // Query user's subscription tier and device limit
+      const userSubResult = await query(
+        `SELECT subscription_tier, devices_allowed
+         FROM users
+         WHERE id = $1`,
+        [userId]
+      );
+
+      const subscription_tier = userSubResult.rows[0]?.subscription_tier || 'free';
+      const devices_allowed = userSubResult.rows[0]?.devices_allowed || 2;
+
+      // Count active agents for this business
       const existingAgentsResult = await query(
         `SELECT COUNT(*) as agent_count
          FROM agent_devices
-         WHERE trial_user_id = $1
-           AND is_trial = true
-           AND is_active = true
-           AND (trial_end_date IS NULL OR trial_end_date > NOW())`,
-        [userId]
+         WHERE business_id = $1
+           AND is_active = true`,
+        [businessId]
       );
 
       const currentAgentCount = parseInt(existingAgentsResult.rows[0].agent_count);
 
-      if (currentAgentCount >= TRIAL_DEVICE_LIMIT) {
-        // Trial user has reached device limit - generate magic-link to manage devices
+      if (currentAgentCount >= devices_allowed) {
+        // User has reached device limit - generate magic-link to manage devices
         const managementToken = jwt.sign(
           {
             user_id: userId,
@@ -410,15 +480,88 @@ router.post('/trial/heartbeat', async (req, res) => {
 
         const managementUrl = `https://romerotechsolutions.com/agent-magic-login?token=${managementToken}`;
 
+        // Get pricing information for graduated pricing display in agent
+        const pricingResult = await query(
+          `SELECT tier, pricing_ranges FROM subscription_pricing WHERE tier = $1::subscription_tier_type AND is_active = TRUE`,
+          [subscription_tier]
+        );
+
+        let pricingInfo = null;
+        if (pricingResult.rows.length > 0 && pricingResult.rows[0].pricing_ranges) {
+          const pricingRanges = pricingResult.rows[0].pricing_ranges;
+          const maxDevices = getMaxDevicesForTier(pricingRanges);
+
+          // Calculate current monthly cost
+          const currentCost = calculateGraduatedPrice(currentAgentCount, pricingRanges);
+
+          // Determine if adding next device requires tier upgrade
+          const nextDeviceCount = currentAgentCount + 1;
+          const requiresTierUpgrade = nextDeviceCount > maxDevices;
+
+          // Determine next tier
+          let nextTier = null;
+          let nextDeviceCost = 0;
+          let newMonthlyCost = 0;
+          let nextDeviceBreakdown = [];
+
+          if (requiresTierUpgrade) {
+            // User needs to upgrade to next tier
+            const tierMap = { 'free': 'subscribed', 'subscribed': 'enterprise', 'enterprise': null };
+            nextTier = tierMap[subscription_tier];
+
+            if (nextTier) {
+              // Get pricing for next tier
+              const nextTierPricingResult = await query(
+                `SELECT pricing_ranges FROM subscription_pricing WHERE tier = $1::subscription_tier_type AND is_active = TRUE`,
+                [nextTier]
+              );
+
+              if (nextTierPricingResult.rows.length > 0) {
+                const nextTierRanges = nextTierPricingResult.rows[0].pricing_ranges;
+                const nextTierCost = calculateGraduatedPrice(nextDeviceCount, nextTierRanges);
+                newMonthlyCost = nextTierCost.totalCost;
+                nextDeviceCost = newMonthlyCost - currentCost.totalCost;
+                nextDeviceBreakdown = nextTierCost.breakdown;
+              }
+            }
+          } else {
+            // User can add device within current tier
+            const nextDeviceCostCalc = calculateGraduatedPrice(nextDeviceCount, pricingRanges);
+            newMonthlyCost = nextDeviceCostCalc.totalCost;
+            nextDeviceCost = newMonthlyCost - currentCost.totalCost;
+            nextDeviceBreakdown = nextDeviceCostCalc.breakdown;
+          }
+
+          pricingInfo = {
+            current_monthly_cost: currentCost.totalCost,
+            next_device_cost: nextDeviceCost,
+            new_monthly_cost: newMonthlyCost,
+            requires_tier_upgrade: requiresTierUpgrade,
+            next_tier: nextTier,
+            cost_breakdown: currentCost.breakdown,
+            next_device_breakdown: nextDeviceBreakdown
+          };
+        }
+
+        // Customize message based on subscription tier
+        let tierMessage = '';
+        if (subscription_tier === 'free') {
+          tierMessage = `Free accounts are limited to ${devices_allowed} devices. Upgrade to add more devices.`;
+        } else {
+          tierMessage = `Your subscription allows ${devices_allowed} devices. Upgrade to add more devices.`;
+        }
+
         return res.status(403).json({
           success: false,
-          message: `Trial accounts are limited to ${TRIAL_DEVICE_LIMIT} devices. Please remove an existing device to add this one.`,
-          code: 'TRIAL_DEVICE_LIMIT_REACHED',
+          message: tierMessage,
+          code: 'DEVICE_LIMIT_REACHED',
           data: {
             current_device_count: currentAgentCount,
-            device_limit: TRIAL_DEVICE_LIMIT,
-            management_url: managementUrl, // Magic-link to access dashboard and manage devices
-            message: `You currently have ${currentAgentCount} active trial devices. To add this device, please remove one of your existing devices first.`
+            device_limit: devices_allowed,
+            subscription_tier: subscription_tier,
+            management_url: managementUrl,
+            pricing_info: pricingInfo, // NEW: Graduated pricing information for agent display
+            message: `You currently have ${currentAgentCount} of ${devices_allowed} devices active. To add this device, please remove one of your existing devices or upgrade your subscription.`
           }
         });
       }
@@ -1235,10 +1378,58 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
       [agent_id, status || 'online']
     );
 
+    // Get subscription information for tray display
+    const agentResult = await query(
+      `SELECT business_id FROM agent_devices WHERE id = $1`,
+      [agent_id]
+    );
+
+    let subscriptionInfo = null;
+
+    if (agentResult.rows.length > 0 && agentResult.rows[0].business_id) {
+      const businessId = agentResult.rows[0].business_id;
+
+      // Get user subscription tier
+      const userResult = await query(
+        `SELECT subscription_tier, devices_allowed FROM users WHERE business_id = $1`,
+        [businessId]
+      );
+
+      if (userResult.rows.length > 0) {
+        const user = userResult.rows[0];
+
+        // Count active devices for this business
+        const deviceCountResult = await query(
+          `SELECT COUNT(*) as count FROM agent_devices
+           WHERE business_id = $1 AND deleted_at IS NULL`,
+          [businessId]
+        );
+
+        const devicesUsed = parseInt(deviceCountResult.rows[0].count) || 0;
+        const devicesAllowed = parseInt(user.devices_allowed) || 0;
+
+        // Map tier to display name
+        let tierDisplay = user.subscription_tier;
+        if (tierDisplay === 'free') tierDisplay = 'Free';
+        else if (tierDisplay === 'subscribed') tierDisplay = 'Pro';
+        else if (tierDisplay === 'enterprise') tierDisplay = 'Enterprise';
+
+        subscriptionInfo = {
+          tier: user.subscription_tier,
+          tier_display: tierDisplay,
+          devices_used: devicesUsed,
+          devices_allowed: devicesAllowed
+        };
+      }
+    }
+
     res.json({
       success: true,
       message: 'Heartbeat received',
-      timestamp: new Date().toISOString()
+      data: {
+        timestamp: new Date().toISOString(),
+        subscription: subscriptionInfo
+      }
     });
 
   } catch (error) {
