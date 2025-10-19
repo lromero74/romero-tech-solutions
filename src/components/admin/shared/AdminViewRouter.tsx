@@ -35,6 +35,7 @@ import AlertConfigurationManager from '../AlertConfigurationManager';
 import AlertHistoryDashboard from '../AlertHistoryDashboard';
 import PolicyAutomationDashboard from '../PolicyAutomationDashboard';
 import SoftwareDeploymentDashboard from '../SoftwareDeploymentDashboard';
+import SubscriptionPricing from '../../../pages/admin/SubscriptionPricing';
 import EditBusinessModal from '../AdminBusinesses_Modals/EditBusinessModal';
 import AddBusinessModal from '../AdminBusinesses_Modals/AddBusinessModal';
 import EditClientModal from '../AdminClients_Modals/EditClientModal';
@@ -56,7 +57,7 @@ import ConfirmationDialog from '../../common/ConfirmationDialog';
 // import { AdminModalManager } from './AdminModalManager';
 // import { useModalManager } from '../../../hooks/admin/useModalManager';
 
-export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
+export type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
 
 interface AdminViewRouterProps {
   currentView: AdminView;
@@ -1637,6 +1638,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             refreshRateCategories={refreshRateCategories}
           />
         );
+
+      case 'subscription-pricing':
+        return <SubscriptionPricing />;
 
       case 'password-complexity':
         return (

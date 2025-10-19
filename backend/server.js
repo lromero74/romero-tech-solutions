@@ -39,10 +39,12 @@ import serviceRatingsRoutes from './routes/serviceRatings.js';
 import adminTestimonialsRoutes from './routes/admin/testimonials.js';
 import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
 import adminAlertsRoutes from './routes/admin/alerts.js';
+import adminSubscriptionRoutes from './routes/admin/subscription.js';
 import agentRoutes from './routes/agents.js';
 import agentDownloadRoutes from './routes/agentDownloads.js';
 import automationRoutes from './routes/automation.js';
 import deploymentRoutes from './routes/deployment.js';
+import subscriptionRoutes from './routes/subscription.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -52,6 +54,12 @@ import { verificationCleanupService } from './services/verificationCleanupServic
 
 // Import metrics cleanup service
 import { metricsCleanupService } from './services/metricsCleanupService.js';
+
+// Import audit log cleanup service
+import { auditLogCleanupService } from './services/auditLogCleanupService.js';
+
+// Import alert cleanup service
+import { alertCleanupService } from './services/alertCleanupService.js';
 
 // Import WebSocket service
 import { websocketService } from './services/websocketService.js';
@@ -502,10 +510,12 @@ app.use('/api/ratings', generalLimiter, serviceRatingsRoutes); // Public rating 
 app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminTestimonialsRoutes); // Admin testimonials management
 app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
 app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminAlertsRoutes); // Admin alert management (confluence alerts)
+app.use('/api/admin/subscription', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminSubscriptionRoutes); // Admin subscription pricing & analytics
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
 app.use('/api/automation', generalLimiter, methodBasedCsrfProtection, automationRoutes); // Policy automation and script library
 app.use('/api/deployment', generalLimiter, methodBasedCsrfProtection, deploymentRoutes); // Software deployment and package management
+app.use('/api/subscription', generalLimiter, subscriptionRoutes); // Subscription management (mixed auth: pricing public, status/upgrade authenticated)
 
 // Pre-authentication trusted device check (no auth required)
 app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res) => {
@@ -657,6 +667,12 @@ const startServer = async () => {
     // Start metrics cleanup service
     metricsCleanupService.start();
 
+    // Start audit log cleanup service (SOC 2 / GDPR compliance)
+    auditLogCleanupService.start();
+
+    // Start alert cleanup service (resolved alerts retention)
+    alertCleanupService.start();
+
     // Load alert configurations
     console.log('⚙️  Loading alert configurations...');
     try {
@@ -702,6 +718,8 @@ process.on('SIGTERM', () => {
   stopSessionCleanup();
   stopAgentMonitoring();
   metricsCleanupService.stop();
+  auditLogCleanupService.stop();
+  alertCleanupService.stop();
   policySchedulerService.stop();
   process.exit(0);
 });
@@ -711,6 +729,8 @@ process.on('SIGINT', () => {
   stopSessionCleanup();
   stopAgentMonitoring();
   metricsCleanupService.stop();
+  auditLogCleanupService.stop();
+  alertCleanupService.stop();
   policySchedulerService.stop();
   process.exit(0);
 });

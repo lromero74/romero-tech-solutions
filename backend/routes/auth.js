@@ -2228,11 +2228,12 @@ router.post('/client-login', async (req, res) => {
       });
     }
 
-    // Only check users table for clients
+    // Only check users table for clients (FREEMIUM MODEL - include subscription fields)
     const userResult = await query(`
       SELECT u.id, u.email, u.first_name, u.last_name, u.password_hash, u.role, u.email_verified,
-             b.business_name, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
-             u.time_format_preference
+             b.business_name, b.id as business_id, 'client' as user_type, u.mfa_enabled, u.mfa_email, u.is_test_account,
+             u.time_format_preference, u.subscription_tier, u.devices_allowed, u.profile_completed,
+             u.is_trial, u.subscription_expires_at
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.email = $1
@@ -2349,15 +2350,23 @@ router.post('/client-login', async (req, res) => {
 
     res.cookie('sessionToken', session.sessionToken, cookieOptions);
 
-    // Return successful login response with session
+    // Return successful login response with session (FREEMIUM MODEL)
     const userData = {
       id: user.id,
       email: user.email,
       role: user.role || 'client',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
+      businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
-      isFirstAdmin: false
+      isFirstAdmin: false,
+      // Legacy trial fields (if applicable)
+      isTrial: user.is_trial || false,
+      trialExpiresAt: user.subscription_expires_at,
+      // NEW: Freemium subscription fields
+      subscriptionTier: user.subscription_tier || 'free',
+      devicesAllowed: user.devices_allowed || 2,
+      profileCompleted: user.profile_completed || false
     };
 
     console.log(`✅ Client login successful: ${user.email}`);
@@ -2425,11 +2434,12 @@ router.post('/trial-magic-login', async (req, res) => {
 
     console.log('🔑 Looking for trial agent with UUID:', trialUUID);
 
-    // Find trial agent device and associated user (UNIFIED ARCHITECTURE)
+    // Find trial agent device and associated user (UNIFIED ARCHITECTURE + FREEMIUM MODEL)
     const agentResult = await query(`
       SELECT ad.id as agent_id, ad.trial_access_code, ad.business_id,
              u.id as user_id, u.email, u.first_name, u.last_name,
              u.email_verified, u.is_trial, u.trial_expires_at,
+             u.subscription_tier, u.devices_allowed, u.profile_completed,
              b.business_name
       FROM agent_devices ad
       LEFT JOIN users u ON u.business_id = ad.business_id AND u.is_trial = true
@@ -2459,17 +2469,20 @@ router.post('/trial-magic-login', async (req, res) => {
       });
     }
 
-    // Use trial user data from unified users table
+    // Use trial user data from unified users table (FREEMIUM MODEL)
     const user = {
       id: agent.user_id,
       email: agent.email,
-      first_name: agent.first_name || 'Trial',
+      first_name: agent.first_name || 'Free',
       last_name: agent.last_name || 'User',
       email_verified: agent.email_verified,
       role: 'client',
       time_format_preference: '12h',
       is_trial: agent.is_trial,
       trial_expires_at: agent.trial_expires_at,
+      subscription_tier: agent.subscription_tier || 'free',
+      devices_allowed: agent.devices_allowed || 2,
+      profile_completed: agent.profile_completed || false,
       business_id: agent.business_id,
       business_name: agent.business_name
     };
@@ -2515,7 +2528,7 @@ router.post('/trial-magic-login', async (req, res) => {
 
     res.cookie('sessionToken', session.sessionToken, cookieOptions);
 
-    // Return successful login response (UNIFIED ARCHITECTURE)
+    // Return successful login response (FREEMIUM MODEL)
     const userData = {
       id: user.id,
       email: user.email,
@@ -2525,11 +2538,16 @@ router.post('/trial-magic-login', async (req, res) => {
       businessId: user.business_id,
       timeFormatPreference: user.time_format_preference || '12h',
       isFirstAdmin: false,
+      // Legacy trial fields (backward compatibility)
       isTrial: user.is_trial || true,
       trialExpiresAt: user.trial_expires_at,
       trialAgentId: agent.agent_id,  // Link to the trial agent device (legacy)
       trialId: trial_id,              // Original trial ID for reference (legacy)
-      agentId: agent.agent_id        // Current standard field name
+      agentId: agent.agent_id,        // Current standard field name
+      // NEW: Freemium subscription fields
+      subscriptionTier: user.subscription_tier || 'free',
+      devicesAllowed: user.devices_allowed || 2,
+      profileCompleted: user.profile_completed || false
     };
 
     console.log(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);

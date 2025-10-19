@@ -35,7 +35,7 @@ import {
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -115,6 +115,7 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
       title: 'Billing & Finance',
       items: [
         { id: 'invoices', label: 'Invoices', icon: Receipt, permission: 'view.invoices.enable' },
+        { id: 'subscription-pricing', label: 'Subscription Management', icon: Users, permission: 'view.settings.enable' },
         { id: 'service-hour-rates', label: 'Service Hour Rates', icon: Clock, permission: 'view.service_hour_rates.enable' },
         { id: 'pricing-settings', label: 'Pricing Settings', icon: DollarSign, permission: 'view.pricing_settings.enable' }
       ]

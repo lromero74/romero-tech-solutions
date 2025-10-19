@@ -1,3 +1,5 @@
+import { RoleBasedStorage } from '../utils/roleBasedStorage';
+
 // ApiResponse interface (commented out as unused)
 /*
 interface ApiResponse<T = any> {
@@ -120,7 +122,8 @@ class ApiService {
    * Get authorization headers with session token
    */
   private getAuthHeaders(): HeadersInit {
-    const sessionToken = localStorage.getItem('sessionToken');
+    // Use RoleBasedStorage to get session token (automatically determines role from URL)
+    const sessionToken = RoleBasedStorage.getItem('sessionToken');
     return sessionToken ? { 'Authorization': `Bearer ${sessionToken}` } : {};
   }
 
@@ -135,10 +138,10 @@ class ApiService {
       if (response.status === 401 && !this.skipUnauthorizedHandling) {
         console.warn('🔐 API call returned 401 - session expired or invalid');
 
-        // Clear local session data
-        localStorage.removeItem('sessionToken');
-        localStorage.removeItem('user');
-        localStorage.removeItem('sessionData');
+        // Clear local session data using RoleBasedStorage
+        RoleBasedStorage.removeItem('sessionToken');
+        RoleBasedStorage.removeItem('authUser');
+        RoleBasedStorage.removeItem('authTimestamp');
 
         // Call the unauthorized handler if set
         if (this.onUnauthorized) {

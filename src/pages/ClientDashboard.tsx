@@ -663,7 +663,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           <ul className="space-y-2">
             {[
               { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
-              ...(authUser?.isTrial ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
+              // Show "My Devices" tab for all users with subscription tier (free, subscribed, enterprise)
+              ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'My Devices', icon: HardDrive }] : []),
               { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
               { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
               { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -767,26 +768,50 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
           <main className="flex-1 overflow-y-auto lg:pr-2">
             {activeTab === 'dashboard' && (
               <div className="space-y-4 sm:space-y-6">
-                {/* Trial User Banner */}
-                {authUser?.isTrial && (
+                {/* Subscription Status Banner */}
+                {authUser?.subscriptionTier === 'free' && (
                   <div className="bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/30 dark:to-blue-800/30 rounded-lg shadow-sm border-2 border-blue-300 dark:border-blue-600 p-4 sm:p-6">
                     <div className="flex items-start space-x-3">
                       <HardDrive className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                          Welcome to Your 30-Day Trial!
+                          Free Plan - {authUser.devicesAllowed || 2} Devices Included
                         </h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-                          You have full access to monitor your device and explore all features.
-                          {authUser.trialExpiresAt && (
-                            <span className="block mt-1 font-medium">
-                              Trial expires: {new Date(authUser.trialExpiresAt).toLocaleDateString()}
-                            </span>
-                          )}
+                          You have full monitoring and alerting for up to {authUser.devicesAllowed || 2} devices.
+                          Want to monitor more devices? Upgrade starting at $9.99/month per additional device.
                         </p>
-                        <p className="text-xs text-blue-600 dark:text-blue-400">
-                          Contact us to upgrade to a full subscription and continue enjoying seamless monitoring!
+                        <button
+                          onClick={() => setActiveTab('devices')}
+                          className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          <HardDrive className="h-4 w-4 mr-2" />
+                          Manage Devices & Upgrade
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Subscribed/Enterprise Plan Banner */}
+                {(authUser?.subscriptionTier === 'subscribed' || authUser?.subscriptionTier === 'enterprise') && (
+                  <div className="bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/30 dark:to-green-800/30 rounded-lg shadow-sm border-2 border-green-300 dark:border-green-600 p-4 sm:p-6">
+                    <div className="flex items-start space-x-3">
+                      <HardDrive className="h-6 w-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                      <div className="flex-1">
+                        <h3 className="text-lg font-semibold text-green-900 dark:text-green-200 mb-1">
+                          {authUser.subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro'} Plan - {authUser.devicesAllowed || 2} Devices
+                        </h3>
+                        <p className="text-sm text-green-700 dark:text-green-300 mb-2">
+                          Full monitoring, alerting, and remote management for all your devices.
                         </p>
+                        <button
+                          onClick={() => setActiveTab('devices')}
+                          className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                        >
+                          <HardDrive className="h-4 w-4 mr-2" />
+                          Manage Devices
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -905,8 +930,8 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
               </div>
             )}
 
-            {/* Trial Devices Tab - Only for trial users */}
-            {activeTab === 'devices' && authUser?.isTrial && (
+            {/* My Devices Tab - Available for all subscription users */}
+            {activeTab === 'devices' && authUser?.subscriptionTier && (
               <TrialDevicesManager
                 authUser={authUser}
                 onDeviceRemoved={() => {

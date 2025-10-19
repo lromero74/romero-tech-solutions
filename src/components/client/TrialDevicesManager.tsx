@@ -18,8 +18,6 @@ interface TrialDevicesManagerProps {
   onDeviceRemoved?: () => void;
 }
 
-const TRIAL_DEVICE_LIMIT = 2;
-
 const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onDeviceRemoved }) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +25,10 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
   const [removingAgentId, setRemovingAgentId] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [agentToRemove, setAgentToRemove] = useState<Agent | null>(null);
+
+  // Get device limit from user's subscription tier
+  const deviceLimit = authUser.devicesAllowed || 2;
+  const subscriptionTier = authUser.subscriptionTier || 'free';
 
   const fetchAgents = async () => {
     try {
@@ -155,30 +157,61 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
         </h2>
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-600 dark:text-gray-400">
-            {agents.length} / {TRIAL_DEVICE_LIMIT} devices used
+            {agents.length} / {deviceLimit} devices used
           </span>
-          {authUser.trialExpiresAt && (
-            <span className="text-blue-600 dark:text-blue-400">
-              • Trial expires: {new Date(authUser.trialExpiresAt).toLocaleDateString()}
-            </span>
-          )}
+          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+            subscriptionTier === 'free' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300' :
+            subscriptionTier === 'enterprise' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
+            'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+          }`}>
+            {subscriptionTier === 'free' ? 'Free Plan' :
+             subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro Plan'}
+          </span>
         </div>
       </div>
 
-      {/* Device Limit Info */}
-      <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-        <div className="flex items-start gap-3">
-          <HardDrive className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
-          <div className="flex-1">
-            <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-1">
-              Trial Device Limit
-            </h3>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              Trial accounts can monitor up to {TRIAL_DEVICE_LIMIT} devices. To add more devices, please upgrade to a full subscription.
-            </p>
+      {/* Subscription Info and Upgrade CTA */}
+      {subscriptionTier === 'free' && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-blue-50 to-blue-100 dark:from-blue-900/20 dark:to-blue-800/20 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="flex items-start gap-3">
+            <HardDrive className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-1">
+                Free Plan - {deviceLimit} Devices Included
+              </h3>
+              <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
+                Monitor up to {deviceLimit} devices with full monitoring and alerting. Need more devices?
+              </p>
+              <button
+                onClick={() => {
+                  // TODO: Navigate to upgrade page or show upgrade modal
+                  alert('Upgrade feature coming soon! Contact support@romerotechsolutions.com for now.');
+                }}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                Upgrade - Starting at $9.99/month
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Paid Plan Info */}
+      {(subscriptionTier === 'subscribed' || subscriptionTier === 'enterprise') && (
+        <div className="mb-4 p-4 bg-gradient-to-r from-green-50 to-green-100 dark:from-green-900/20 dark:to-green-800/20 border border-green-200 dark:border-green-700 rounded-lg">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <h3 className="font-medium text-green-900 dark:text-green-200 mb-1">
+                {subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro'} Plan - {deviceLimit} Devices
+              </h3>
+              <p className="text-sm text-green-700 dark:text-green-300">
+                Full monitoring, alerting, and remote management for all your devices. Need more devices? Contact support to upgrade your plan.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Error Message */}
       {error && (

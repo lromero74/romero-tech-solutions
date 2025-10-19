@@ -350,12 +350,16 @@ export interface AuthUser {
   businessName?: string; // Business name for the user
   timeFormatPreference?: '12h' | '24h';
   isFirstAdmin?: boolean;
+  // Legacy trial fields (backward compatibility - deprecated)
   isTrial?: boolean; // Indicates if this is a trial user (unified approach)
   trialExpiresAt?: string; // When the trial expires (unified approach)
   agentId?: string; // Agent ID for users accessing via agent magic-link
-  // Legacy trial fields (deprecated, will be removed)
-  trialAgentId?: string;
-  trialId?: string;
+  trialAgentId?: string; // Legacy
+  trialId?: string; // Legacy
+  // NEW: Freemium subscription model fields
+  subscriptionTier?: 'free' | 'subscribed' | 'enterprise'; // Current subscription tier
+  devicesAllowed?: number; // Maximum devices allowed for this user
+  profileCompleted?: boolean; // Whether user has completed full profile (required for upgrades)
 }
 
 export interface LoginRequest {
