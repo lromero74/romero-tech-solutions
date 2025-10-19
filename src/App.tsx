@@ -204,10 +204,25 @@ function AppContent() {
 
       // Route to appropriate dashboard based on user type
       if (isClient) {
+        // CRITICAL: Fallback to localStorage if authUser hasn't loaded yet
+        // This handles the race condition where isClient is true but authUser is still undefined
+        let userDataForRouting = authUser;
+        if (!authUser) {
+          try {
+            const storedUser = localStorage.getItem('client_authUser');
+            if (storedUser) {
+              userDataForRouting = JSON.parse(storedUser);
+              console.log('📦 Using localStorage fallback for routing decision');
+            }
+          } catch (e) {
+            console.error('Failed to parse client_authUser from localStorage:', e);
+          }
+        }
+
         // Check if this is a trial user (has trialAgentId or isTrial flag)
-        const isTrial = authUser?.isTrial;
-        const trialAgentId = authUser?.trialAgentId;
-        const hasAgentIdInAuth = authUser && (authUser as any).agentId;
+        const isTrial = userDataForRouting?.isTrial;
+        const trialAgentId = userDataForRouting?.trialAgentId;
+        const hasAgentIdInAuth = userDataForRouting && (userDataForRouting as any).agentId;
 
         // CRITICAL: Check sessionStorage for pendingAgentId (set during agent magic-link login)
         // This ensures we can route to agent dashboard even if auth context hasn't updated yet
@@ -221,9 +236,10 @@ function AppContent() {
           hasAgentIdInAuth,
           hasAgentId,
           pendingAgentId,
-          agentId: (authUser as any)?.agentId,
-          authUserKeys: authUser ? Object.keys(authUser) : [],
-          authUserRaw: authUser
+          agentId: (userDataForRouting as any)?.agentId,
+          authUserKeys: userDataForRouting ? Object.keys(userDataForRouting) : [],
+          authUserRaw: userDataForRouting,
+          usedFallback: !authUser && !!userDataForRouting
         });
 
         if (isTrial || trialAgentId) {
