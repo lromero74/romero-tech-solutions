@@ -2461,6 +2461,21 @@ router.post('/trial-magic-login', async (req, res) => {
       time_format_preference: '12h'
     };
 
+    // Create or update user record in users table for trial user
+    // This allows trial users to work with the existing permission/settings infrastructure
+    const userCheck = await query('SELECT id FROM users WHERE id = $1', [user.id]);
+
+    if (userCheck.rows.length === 0) {
+      // Create minimal user record for trial user
+      await query(`
+        INSERT INTO users (id, email, first_name, last_name, password_hash, role, email_verified, is_active, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, true, NOW(), NOW())
+        ON CONFLICT (id) DO NOTHING
+      `, [user.id, user.email, user.first_name, user.last_name, '', 'customer', user.email_verified]);
+
+      console.log(`✅ Created users table entry for trial user: ${user.email}`);
+    }
+
     // Create session for trial user
     const userAgent = req.get('User-Agent');
     const ipAddress = req.ip || req.connection.remoteAddress || req.socket.remoteAddress ||
