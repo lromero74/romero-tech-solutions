@@ -213,7 +213,7 @@ router.post('/trial/verify-email', async (req, res) => {
     await query(`
       INSERT INTO agent_devices (
         id, business_id, device_name, os_type, os_version,
-        token, status, is_active, created_at, updated_at
+        agent_token, status, is_active, created_at, updated_at
       ) VALUES ($1, $2, $3, $4, $5, $6, 'online', true, NOW(), NOW())
     `, [agentId, businessId, deviceName, osType, osVersion || null, agentToken]);
 
