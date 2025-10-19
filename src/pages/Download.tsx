@@ -404,6 +404,70 @@ const Download: React.FC = () => {
                 Download for {selectedPlatformData.name} ({selectedArchData.name})
               </button>
 
+              {/* Installation Instructions - Platform Specific */}
+              <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="flex items-start gap-2">
+                  <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm">
+                    <h4 className="font-semibold text-yellow-900 mb-2">
+                      Installation Instructions (Unsigned Package)
+                    </h4>
+
+                    {selectedPlatform === 'macos' && (
+                      <div className="text-yellow-800 space-y-2">
+                        <p className="font-medium">If you see "Apple could not verify" warning:</p>
+                        <ol className="list-decimal list-inside space-y-1 ml-2">
+                          <li><strong>Right-click</strong> (or Control-click) the downloaded .pkg file</li>
+                          <li>Select <strong>"Open"</strong> from the menu</li>
+                          <li>Click <strong>"Open"</strong> again in the dialog that appears</li>
+                        </ol>
+                        <p className="mt-2 text-xs italic">
+                          Alternative: Open System Settings → Privacy & Security, scroll down to find
+                          the blocked installer, and click "Open Anyway"
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedPlatform === 'windows' && (
+                      <div className="text-yellow-800 space-y-2">
+                        <p className="font-medium">If you see "Windows protected your PC" (SmartScreen):</p>
+                        <ol className="list-decimal list-inside space-y-1 ml-2">
+                          <li>Click <strong>"More info"</strong></li>
+                          <li>Click <strong>"Run anyway"</strong></li>
+                        </ol>
+                        <p className="mt-2 text-xs italic">
+                          Extract the .zip file, then run the installer with administrator privileges
+                        </p>
+                      </div>
+                    )}
+
+                    {selectedPlatform === 'linux' && (
+                      <div className="text-yellow-800 space-y-2">
+                        <p className="font-medium">Installation commands:</p>
+                        <div className="bg-yellow-100 rounded p-2 font-mono text-xs mt-1">
+                          {selectedArch === 'amd64' || selectedArch === 'arm64' ? (
+                            <>
+                              # Ubuntu/Debian (.deb)<br/>
+                              sudo dpkg -i {getFilename()}<br/>
+                              sudo apt-get install -f  # Install dependencies<br/><br/>
+                              # Or double-click the .deb file in your file manager
+                            </>
+                          ) : (
+                            <>
+                              sudo dpkg -i {getFilename()}<br/>
+                              sudo apt-get install -f
+                            </>
+                          )}
+                        </div>
+                        <p className="mt-2 text-xs italic">
+                          After installation, the service starts automatically. Check status with: sudo systemctl status rts-agent
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
               <p className="text-sm text-gray-500 text-center mt-4">
                 By downloading, you agree to our{' '}
                 <a href="/terms" className="text-blue-600 hover:underline">
