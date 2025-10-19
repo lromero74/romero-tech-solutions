@@ -1524,10 +1524,50 @@ router.post('/:agent_id/inventory/software', authenticateAgent, requireAgentMatc
       [agent_id]
     );
 
-    // Insert all software packages
-    let insertedCount = 0;
+    // Deduplicate software array by creating a map keyed by name+version
+    const uniqueSoftware = new Map();
     for (const sw of software) {
-      await query(
+      const key = `${sw.software_name || 'Unknown'}|${sw.software_version || ''}`;
+      if (!uniqueSoftware.has(key)) {
+        uniqueSoftware.set(key, sw);
+      }
+    }
+
+    // Insert all unique software packages using batch insert with ON CONFLICT
+    let insertedCount = 0;
+    if (uniqueSoftware.size > 0) {
+      // Build batch insert query
+      const values = [];
+      const params = [];
+      let paramIndex = 1;
+
+      for (const sw of uniqueSoftware.values()) {
+        values.push(`(
+          gen_random_uuid(),
+          $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++},
+          $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++},
+          $${paramIndex++}, $${paramIndex++}, $${paramIndex++}, $${paramIndex++},
+          $${paramIndex++}, NOW()
+        )`);
+
+        params.push(
+          agent_id,
+          sw.software_name || 'Unknown',
+          sw.software_version || null,
+          sw.software_publisher || null,
+          sw.install_date || null,
+          sw.install_location || null,
+          sw.install_source || null,
+          sw.size_mb || null,
+          sw.requires_license || false,
+          sw.package_manager || null,
+          sw.package_name || null,
+          sw.software_category || null,
+          sw.is_system_software || false
+        );
+      }
+
+      const result = await query(
         `INSERT INTO asset_software_inventory (
           id,
           agent_device_id,
@@ -1544,30 +1584,27 @@ router.post('/:agent_id/inventory/software', authenticateAgent, requireAgentMatc
           software_category,
           is_system_software,
           last_seen_at
-        ) VALUES (
-          gen_random_uuid(),
-          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW()
-        )`,
-        [
-          agent_id,
-          sw.software_name || 'Unknown',
-          sw.software_version || null,
-          sw.software_publisher || null,
-          sw.install_date || null,
-          sw.install_location || null,
-          sw.install_source || null,
-          sw.size_mb || null,
-          sw.requires_license || false,
-          sw.package_manager || null,
-          sw.package_name || null,
-          sw.software_category || null,
-          sw.is_system_software || false
-        ]
+        ) VALUES ${values.join(', ')}
+        ON CONFLICT (agent_device_id, software_name, software_version)
+        DO UPDATE SET
+          software_publisher = EXCLUDED.software_publisher,
+          install_date = EXCLUDED.install_date,
+          install_location = EXCLUDED.install_location,
+          install_source = EXCLUDED.install_source,
+          size_mb = EXCLUDED.size_mb,
+          requires_license = EXCLUDED.requires_license,
+          package_manager = EXCLUDED.package_manager,
+          package_name = EXCLUDED.package_name,
+          software_category = EXCLUDED.software_category,
+          is_system_software = EXCLUDED.is_system_software,
+          last_seen_at = NOW()`,
+        params
       );
-      insertedCount++;
+
+      insertedCount = uniqueSoftware.size;
     }
 
-    console.log(`💿 Software inventory received for agent ${agent_id}: ${insertedCount} packages`);
+    console.log(`💿 Software inventory received for agent ${agent_id}: ${insertedCount} packages (${software.length - insertedCount} duplicates removed)`);
 
     res.json({
       success: true,
