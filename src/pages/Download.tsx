@@ -1,11 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Download as DownloadIcon, Server, Apple, Check, AlertCircle, Shield, Activity, Clock, BarChart, Laptop } from 'lucide-react';
 
 const Download: React.FC = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<'windows' | 'macos' | 'linux'>('windows');
+  const [agentVersion, setAgentVersion] = useState('Loading...');
 
   // Get API base URL from environment
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+
+  // Fetch current agent version
+  useEffect(() => {
+    fetch('https://api.romerotechsolutions.com/downloads/agent/version.json')
+      .then(res => res.json())
+      .then(data => setAgentVersion(data.current_version))
+      .catch(() => setAgentVersion('1.0.0')); // Fallback
+  }, []);
 
   const features = [
     {
@@ -180,7 +189,7 @@ const Download: React.FC = () => {
                   <h3 className="text-2xl font-bold text-gray-900">
                     {selectedPlatformData.name}
                   </h3>
-                  <p className="text-gray-600">Version 1.0.0</p>
+                  <p className="text-gray-600">Version {agentVersion}</p>
                 </div>
               </div>
 
