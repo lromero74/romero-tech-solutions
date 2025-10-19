@@ -9,6 +9,15 @@ import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
+import {
+  generateTrialVerificationCode,
+  checkEmailNotRegistered,
+  storeTrialEmailVerificationCode,
+  validateTrialEmailVerificationCode,
+  confirmTrialEmailAndCreateUser,
+  sendTrialVerificationEmail,
+  getOrCreateTrialUser
+} from '../utils/trialEmailVerificationUtils.js';
 
 const router = express.Router();
 
@@ -29,17 +38,211 @@ function trialIdToUUID(trialId) {
 // ═══════════════════════════════════════════════════════════════════════════
 
 /**
+ * Trial Email Verification - Send Code
+ * POST /api/agents/trial/send-verification
+ *
+ * Sends a verification code to the email address for trial registration
+ * Prevents registration with emails already used for full accounts
+ */
+router.post('/trial/send-verification', async (req, res) => {
+  try {
+    const { email, deviceName } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required',
+        code: 'MISSING_EMAIL'
+      });
+    }
+
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid email format',
+        code: 'INVALID_EMAIL'
+      });
+    }
+
+    // Check if email is already registered as non-trial user
+    const emailCheck = await checkEmailNotRegistered(email);
+    if (emailCheck.exists) {
+      return res.status(409).json({
+        success: false,
+        message: emailCheck.message,
+        code: 'EMAIL_ALREADY_REGISTERED'
+      });
+    }
+
+    // Generate and store verification code
+    const verificationCode = generateTrialVerificationCode();
+
+    // Store trial metadata
+    const trialData = {
+      deviceName,
+      requestedAt: new Date().toISOString(),
+      ipAddress: req.ip,
+      userAgent: req.get('User-Agent')
+    };
+
+    await storeTrialEmailVerificationCode(email, verificationCode, 15, trialData);
+
+    // Send verification email
+    await sendTrialVerificationEmail(email, verificationCode, deviceName);
+
+    res.json({
+      success: true,
+      message: 'Verification code sent to your email',
+      expiresIn: 15 // minutes
+    });
+
+  } catch (error) {
+    console.error('❌ Error sending trial verification email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to send verification code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Email Verification - Verify Code
+ * POST /api/agents/trial/verify-email
+ *
+ * Verifies the email code and creates/updates trial_users record
+ * Returns trial_user_id for linking agents
+ */
+router.post('/trial/verify-email', async (req, res) => {
+  try {
+    const { email, verificationCode, contactName, phone } = req.body;
+
+    if (!email || !verificationCode) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email and verification code are required',
+        code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Validate verification code
+    const verification = await validateTrialEmailVerificationCode(email, verificationCode);
+    if (!verification.valid) {
+      return res.status(400).json({
+        success: false,
+        message: verification.message || 'Invalid verification code',
+        code: 'INVALID_CODE'
+      });
+    }
+
+    // Create/update trial_users record and mark email as verified
+    const { trialUserId } = await confirmTrialEmailAndCreateUser(email, {
+      contactName,
+      phone
+    });
+
+    res.json({
+      success: true,
+      message: 'Email verified successfully',
+      data: {
+        trial_user_id: trialUserId,
+        email: email,
+        verified: true
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error verifying trial email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to verify email',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Trial Email Verification - Resend Code
+ * POST /api/agents/trial/resend-verification
+ *
+ * Resends verification code to the email address
+ */
+router.post('/trial/resend-verification', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email address is required',
+        code: 'MISSING_EMAIL'
+      });
+    }
+
+    // Get existing verification record to retrieve metadata
+    const result = await query(`
+      SELECT trial_data
+      FROM trial_email_verifications
+      WHERE email = $1 AND used = FALSE
+      ORDER BY created_at DESC
+      LIMIT 1
+    `, [email]);
+
+    if (result.rows.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'No pending verification found for this email',
+        code: 'NO_PENDING_VERIFICATION'
+      });
+    }
+
+    const trialData = typeof result.rows[0].trial_data === 'string'
+      ? JSON.parse(result.rows[0].trial_data || '{}')
+      : (result.rows[0].trial_data || {});
+
+    const deviceName = trialData.deviceName || '';
+
+    // Generate new verification code
+    const verificationCode = generateTrialVerificationCode();
+
+    // Update verification record with new code
+    await storeTrialEmailVerificationCode(email, verificationCode, 15, trialData);
+
+    // Send new verification email
+    await sendTrialVerificationEmail(email, verificationCode, deviceName);
+
+    res.json({
+      success: true,
+      message: 'New verification code sent to your email',
+      expiresIn: 15 // minutes
+    });
+
+  } catch (error) {
+    console.error('❌ Error resending trial verification email:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to resend verification code',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
  * Trial Agent Heartbeat Endpoint
  * POST /api/agents/trial/heartbeat
  *
  * Accepts heartbeat from trial agents without authentication
  * Trial agents use trial-{timestamp} as their ID
+ * NOW REQUIRES: trial_email to link agent to trial_users
  */
 router.post('/trial/heartbeat', async (req, res) => {
   try {
     const {
       trial_id,
       access_code,
+      trial_email,  // NEW: Required email for trial
       status,
       device_name,
       os_type,
@@ -48,12 +251,22 @@ router.post('/trial/heartbeat', async (req, res) => {
       system_info
     } = req.body;
 
-    // Validate required fields
-    if (!trial_id || !device_name || !os_type) {
+    // Validate required fields (now including trial_email)
+    if (!trial_id || !device_name || !os_type || !trial_email) {
       return res.status(400).json({
         success: false,
-        message: 'Missing required fields: trial_id, device_name, os_type',
+        message: 'Missing required fields: trial_id, device_name, os_type, trial_email',
         code: 'MISSING_FIELDS'
+      });
+    }
+
+    // Validate trial_email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trial_email)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid trial_email format',
+        code: 'INVALID_EMAIL'
       });
     }
 
@@ -117,15 +330,20 @@ router.post('/trial/heartbeat', async (req, res) => {
       const endDate = new Date(trial.trial_end_date);
       daysRemaining = Math.ceil((endDate - now) / (1000 * 60 * 60 * 24));
 
-      // Update heartbeat
+      // Get or create trial_user record for this email (in case email changed)
+      const { trialUserId } = await getOrCreateTrialUser(trial_email);
+
+      // Update heartbeat and trial_email/trial_user_id if changed
       await query(
         `UPDATE agent_devices
          SET last_heartbeat = NOW(),
              status = COALESCE($2, status),
              agent_version = COALESCE($3, agent_version),
+             trial_email = $4,
+             trial_user_id = $5,
              updated_at = NOW()
          WHERE id = $1`,
-        [trialUUID, status || 'online', agent_version]
+        [trialUUID, status || 'online', agent_version, trial_email, trialUserId]
       );
 
       trialStatus = 'active';
@@ -135,6 +353,9 @@ router.post('/trial/heartbeat', async (req, res) => {
       const trialStartDate = new Date();
       const trialEndDate = new Date(trialStartDate);
       trialEndDate.setDate(trialEndDate.getDate() + 30); // 30-day trial
+
+      // Get or create trial_user record for this email
+      const { trialUserId, isVerified } = await getOrCreateTrialUser(trial_email);
 
       // Extract system info
       const hostname = system_info?.hostname || null;
@@ -165,8 +386,10 @@ router.post('/trial/heartbeat', async (req, res) => {
           trial_start_date,
           trial_end_date,
           trial_original_id,
-          trial_access_code
-        ) VALUES ($1, NULL, NULL, $2, $3, 'desktop', $4, $5, $6, $7, $8, $9, $10, true, true, true, $11, $12, $13, $14)`,
+          trial_access_code,
+          trial_email,
+          trial_user_id
+        ) VALUES ($1, NULL, NULL, $2, $3, 'desktop', $4, $5, $6, $7, $8, $9, $10, true, true, true, $11, $12, $13, $14, $15, $16)`,
         [
           trialUUID,
           trialToken,
@@ -181,7 +404,9 @@ router.post('/trial/heartbeat', async (req, res) => {
           trialStartDate,
           trialEndDate,
           trial_id, // Store original trial-{timestamp} ID
-          access_code || null // Store access code for trial dashboard access
+          access_code || null, // Store access code for trial dashboard access
+          trial_email, // Store trial email
+          trialUserId // Link to trial_users table
         ]
       );
 

@@ -9,7 +9,7 @@ interface TrialLoginProps {
 const TrialLogin: React.FC<TrialLoginProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
-  const { setClientAuth } = useEnhancedAuth();
+  const { setUserFromTrustedDevice } = useEnhancedAuth();
 
   useEffect(() => {
     const performMagicLinkLogin = async () => {
@@ -38,8 +38,8 @@ const TrialLogin: React.FC<TrialLoginProps> = ({ onSuccess }) => {
         const result = await response.json();
 
         if (result.success && result.user) {
-          // Store user info in auth context
-          setClientAuth(result.user);
+          // Store user info and session token in auth context
+          await setUserFromTrustedDevice(result.user, result.session?.sessionToken);
 
           setStatus('success');
           setMessage('Welcome to your trial dashboard!');
@@ -60,7 +60,7 @@ const TrialLogin: React.FC<TrialLoginProps> = ({ onSuccess }) => {
     };
 
     performMagicLinkLogin();
-  }, [setClientAuth, onSuccess]);
+  }, [setUserFromTrustedDevice, onSuccess]);
 
   const renderLoadingState = () => (
     <div className="text-center">
