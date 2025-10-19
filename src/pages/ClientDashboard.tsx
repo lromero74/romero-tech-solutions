@@ -484,7 +484,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
       if (!authUser) return;
 
       try {
-        const response = await agentService.getMyAgents();
+        const response = await agentService.listAgents();
         if (response.success && response.data?.agents) {
           setAgents(response.data.agents);
 
