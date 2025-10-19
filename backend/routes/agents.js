@@ -2662,7 +2662,9 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
 
     // RBAC filtering
     if (!isEmployee) {
-      queryText += ' AND ad.business_id = $2';
+      // For clients: Check if this is a trial agent owned by the user OR a regular agent in their business
+      queryText += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
+      params.push(req.user.id);
       params.push(req.user.business_id);
     }
 
