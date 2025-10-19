@@ -400,6 +400,7 @@ router.post('/trial/heartbeat', async (req, res) => {
         const managementToken = jwt.sign(
           {
             user_id: userId,
+            business_id: businessId,
             email: trial_email,
             type: 'device_management'
           },

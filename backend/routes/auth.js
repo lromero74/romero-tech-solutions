@@ -2581,7 +2581,7 @@ router.post('/agent-magic-login', async (req, res) => {
     }
 
     // Validate token type
-    if (decoded.type !== 'agent_magic_link') {
+    if (decoded.type !== 'agent_magic_link' && decoded.type !== 'device_management') {
       return res.status(401).json({
         success: false,
         message: 'Invalid token type',
@@ -2591,19 +2591,34 @@ router.post('/agent-magic-login', async (req, res) => {
 
     const { agent_id, user_id, business_id } = decoded;
 
-    // Validate agent exists and belongs to the specified business
-    const agentResult = await query(`
-      SELECT ad.id, ad.device_name, ad.business_id, ad.is_active
-      FROM agent_devices ad
-      WHERE ad.id = $1 AND ad.business_id = $2 AND ad.is_active = true
-    `, [agent_id, business_id]);
+    // For device_management tokens, we need to look up business_id from the user
+    let effectiveBusinessId = business_id;
+    if (decoded.type === 'device_management' && !business_id) {
+      const userResult = await query(`
+        SELECT business_id FROM users WHERE id = $1
+      `, [user_id]);
 
-    if (agentResult.rows.length === 0) {
-      return res.status(404).json({
-        success: false,
-        message: 'Agent not found or inactive',
-        code: 'AGENT_NOT_FOUND'
-      });
+      if (userResult.rows.length > 0) {
+        effectiveBusinessId = userResult.rows[0].business_id;
+      }
+    }
+
+    // Validate agent exists and belongs to the specified business (if agent_id provided)
+    // For device_management tokens, agent_id may be null
+    if (agent_id) {
+      const agentResult = await query(`
+        SELECT ad.id, ad.device_name, ad.business_id, ad.is_active
+        FROM agent_devices ad
+        WHERE ad.id = $1 AND ad.business_id = $2 AND ad.is_active = true
+      `, [agent_id, effectiveBusinessId]);
+
+      if (agentResult.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Agent not found or inactive',
+          code: 'AGENT_NOT_FOUND'
+        });
+      }
     }
 
     // Get user account
@@ -2614,7 +2629,7 @@ router.post('/agent-magic-login', async (req, res) => {
       FROM users u
       LEFT JOIN businesses b ON u.business_id = b.id
       WHERE u.id = $1 AND u.business_id = $2 AND u.is_active = true AND u.email_verified = true
-    `, [user_id, business_id]);
+    `, [user_id, effectiveBusinessId]);
 
     if (userResult.rows.length === 0) {
       return res.status(404).json({
@@ -2659,7 +2674,7 @@ router.post('/agent-magic-login', async (req, res) => {
       role: user.role || 'customer',
       name: `${user.first_name} ${user.last_name}`.trim() || user.email,
       businessName: user.business_name,
-      businessId: business_id,
+      businessId: effectiveBusinessId,
       timeFormatPreference: user.time_format_preference || '12h',
       isTrial: user.is_trial || false,
       trialExpiresAt: user.trial_expires_at,
