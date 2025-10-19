@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader } from 'lucide-react';
+import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings } from 'lucide-react';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { AuthUser } from '../../types/database';
 
@@ -16,9 +16,11 @@ interface Agent {
 interface TrialDevicesManagerProps {
   authUser: AuthUser;
   onDeviceRemoved?: () => void;
+  onViewMetrics?: (agentId: string) => void;
+  onEditSettings?: (agentId: string) => void;
 }
 
-const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onDeviceRemoved }) => {
+const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onDeviceRemoved, onViewMetrics, onEditSettings }) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -239,8 +241,9 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
               key={agent.id}
               className="border border-gray-200 dark:border-gray-600 rounded-lg p-4 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
             >
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="space-y-4">
+                {/* Device Info */}
+                <div>
                   <div className="flex items-center gap-2 mb-2">
                     <HardDrive className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                     <h3 className="font-medium text-gray-900 dark:text-white">
@@ -265,18 +268,42 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRemoveClick(agent)}
-                  disabled={removingAgentId === agent.id}
-                  className="ml-4 text-gray-600 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Remove device"
-                >
-                  {removingAgentId === agent.id ? (
-                    <Loader className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <Trash2 className="h-5 w-5" />
-                  )}
-                </button>
+
+                {/* Action Buttons */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    onClick={() => onViewMetrics?.(agent.id)}
+                    className="inline-flex items-center px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <Activity className="h-4 w-4 mr-2" />
+                    View Metrics
+                  </button>
+                  <button
+                    onClick={() => onEditSettings?.(agent.id)}
+                    className="inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </button>
+                  <button
+                    onClick={() => handleRemoveClick(agent)}
+                    disabled={removingAgentId === agent.id}
+                    className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    title="Remove device"
+                  >
+                    {removingAgentId === agent.id ? (
+                      <>
+                        <Loader className="h-4 w-4 mr-2 animate-spin" />
+                        Removing...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Remove
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           ))

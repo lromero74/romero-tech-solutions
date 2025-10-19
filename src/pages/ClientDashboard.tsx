@@ -149,6 +149,9 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     return savedAgentId || '';
   });
 
+  // State for viewing device details from My Devices tab
+  const [viewingDeviceFromList, setViewingDeviceFromList] = useState<string | null>(null);
+
   // Function to handle successful service location addition
   const handleServiceLocationAdded = (newLocation: any) => {
     // Update the client data with the new location
@@ -1069,13 +1072,41 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
             {/* My Devices Tab - Available for all subscription users */}
             {activeTab === 'devices' && authUser?.subscriptionTier && (
-              <TrialDevicesManager
-                authUser={authUser}
-                onDeviceRemoved={() => {
-                  // Optionally refresh data or show notification
-                  console.log('Device removed successfully');
-                }}
-              />
+              viewingDeviceFromList ? (
+                <div className="space-y-4">
+                  {/* Back button */}
+                  <button
+                    onClick={() => setViewingDeviceFromList(null)}
+                    className="inline-flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to My Devices
+                  </button>
+                  {/* Device Details */}
+                  <ThemeProvider>
+                    <AgentDetails
+                      agentId={viewingDeviceFromList}
+                      hideHeader={true}
+                    />
+                  </ThemeProvider>
+                </div>
+              ) : (
+                <TrialDevicesManager
+                  authUser={authUser}
+                  onDeviceRemoved={() => {
+                    // Refresh agents list
+                    console.log('Device removed successfully');
+                    // Optionally trigger agent list refresh in dashboard
+                  }}
+                  onViewMetrics={(agentId) => {
+                    setViewingDeviceFromList(agentId);
+                  }}
+                  onEditSettings={(agentId) => {
+                    // TODO: Implement settings modal/page
+                    alert('Device settings coming soon! Contact support to update device settings.');
+                  }}
+                />
+              )
             )}
 
             {activeTab === 'locations' && (
