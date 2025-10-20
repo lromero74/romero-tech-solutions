@@ -249,7 +249,7 @@ router.get('/analytics', async (req, res) => {
     // Calculate average devices per user by tier
     const avgDevicesResult = await query(`
       SELECT
-        u.subscription_tier,
+        user_devices.subscription_tier,
         AVG(device_count) as avg_devices_per_user,
         MAX(device_count) as max_devices_per_user
       FROM (
@@ -263,9 +263,9 @@ router.get('/analytics', async (req, res) => {
         WHERE u.subscription_tier IS NOT NULL
         GROUP BY u.id, u.subscription_tier
       ) as user_devices
-      GROUP BY subscription_tier
+      GROUP BY user_devices.subscription_tier
       ORDER BY
-        CASE subscription_tier
+        CASE user_devices.subscription_tier
           WHEN 'free' THEN 1
           WHEN 'subscribed' THEN 2
           WHEN 'enterprise' THEN 3
