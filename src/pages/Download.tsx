@@ -543,14 +543,61 @@ const Download: React.FC = () => {
                     )}
 
                     {selectedPlatform === 'windows' && (
-                      <div className="text-yellow-800 dark:text-yellow-200 space-y-2">
-                        <p className="font-medium">If you see "Windows protected your PC" (SmartScreen):</p>
-                        <ol className="list-decimal list-inside space-y-1 ml-2">
-                          <li>Click <strong>"More info"</strong></li>
-                          <li>Click <strong>"Run anyway"</strong></li>
-                        </ol>
-                        <p className="mt-2 text-xs italic">
-                          Extract the .zip file, then run the installer with administrator privileges
+                      <div className="text-yellow-800 dark:text-yellow-200 space-y-3">
+                        <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded p-3 border-l-4 border-yellow-600">
+                          <p className="font-semibold text-sm flex items-start gap-2">
+                            <span className="text-lg">⚠️</span>
+                            <span>Windows may flag this installer as a threat (FALSE POSITIVE)</span>
+                          </p>
+                          <p className="text-xs mt-1 ml-7">
+                            The executable is not code-signed ($200-500/year for certificates). We are working on obtaining one.
+                          </p>
+                        </div>
+
+                        <div>
+                          <p className="font-medium mb-2">Safe Installation Methods:</p>
+
+                          <div className="space-y-2 text-sm">
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                              <p className="font-medium text-xs mb-1">✓ Method 1: Add Windows Defender Exclusion (Recommended)</p>
+                              <ol className="list-decimal list-inside space-y-0.5 ml-2 text-xs">
+                                <li>Extract .zip to: <code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">C:\Program Files\RTS-Agent\</code></li>
+                                <li>Open Windows Security → Virus & threat protection</li>
+                                <li>Click "Manage settings" → "Exclusions" → "Add an exclusion"</li>
+                                <li>Select "Folder" → Choose: <code className="bg-yellow-200 dark:bg-yellow-800 px-1 rounded">C:\Program Files\RTS-Agent\</code></li>
+                                <li>Right-click install.bat → "Run as Administrator"</li>
+                              </ol>
+                            </div>
+
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                              <p className="font-medium text-xs mb-1">✓ Method 2: SmartScreen Bypass</p>
+                              <ol className="list-decimal list-inside space-y-0.5 ml-2 text-xs">
+                                <li>If you see "Windows protected your PC" → Click <strong>"More info"</strong></li>
+                                <li>Click <strong>"Run anyway"</strong></li>
+                                <li>Run install.bat as Administrator</li>
+                              </ol>
+                            </div>
+
+                            <div className="bg-yellow-50 dark:bg-yellow-900/20 p-2 rounded">
+                              <p className="font-medium text-xs mb-1">✓ Method 3: PowerShell Unblock</p>
+                              <div className="bg-gray-800 text-green-400 p-2 rounded font-mono text-xs mt-1">
+                                Unblock-File -Path "C:\Path\To\rts-agent.exe"
+                              </div>
+                            </div>
+                          </div>
+
+                          <p className="mt-3 text-xs font-medium">
+                            Verify Authenticity:
+                          </p>
+                          <ul className="text-xs space-y-0.5 ml-4">
+                            <li>✓ Only download from this official site</li>
+                            <li>✓ Check SHA-256 checksum (included in .zip)</li>
+                            <li>✓ Scan with <a href="https://www.virustotal.com" target="_blank" rel="noopener noreferrer" className="underline hover:text-yellow-900 dark:hover:text-yellow-100">VirusTotal</a></li>
+                          </ul>
+                        </div>
+
+                        <p className="text-xs italic border-t border-yellow-300 dark:border-yellow-700 pt-2">
+                          The installer includes a comprehensive security notice (WINDOWS_SECURITY_NOTICE.txt) with full details.
                         </p>
                       </div>
                     )}

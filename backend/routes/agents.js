@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
+import { candleAggregationService } from '../services/candleAggregationService.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
@@ -3873,6 +3874,210 @@ router.post('/trial/inventory/hardware', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Hardware inventory upload failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AGGREGATION LEVEL CONFIGURATION ENDPOINTS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get Aggregation Level Information
+ * GET /api/agents/aggregation-levels
+ *
+ * Returns available aggregation levels with descriptions
+ */
+router.get('/aggregation-levels', authMiddleware, async (req, res) => {
+  try {
+    const levels = candleAggregationService.getAggregationLevelInfo();
+
+    res.json({
+      success: true,
+      data: levels
+    });
+
+  } catch (error) {
+    console.error('Get aggregation levels error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve aggregation levels',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Update Agent Aggregation Level
+ * PUT /api/agents/:agent_id/aggregation-level
+ *
+ * Sets the alert aggregation level for a specific agent device
+ * Clients can only update their own devices
+ * Pass null to remove override and use user default
+ */
+router.put('/:agent_id/aggregation-level', authMiddleware, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { aggregation_level } = req.body;
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
+
+    console.log(`⚙️  UPDATE aggregation level: agent=${agent_id}, level=${aggregation_level}, user=${req.user.email}`);
+
+    // Verify ownership/access to this agent
+    let accessCheckQuery = `
+      SELECT ad.id, ad.business_id, ad.device_name, ad.trial_user_id, ad.is_trial
+      FROM agent_devices ad
+      WHERE ad.id = $1 AND ad.soft_delete = false
+    `;
+    const accessParams = [agent_id];
+
+    if (!isEmployee) {
+      // For clients: Check if this is a trial agent owned by the user OR a regular agent in their business
+      accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
+      accessParams.push(req.user.id);
+      accessParams.push(req.user.business_id);
+    }
+
+    const accessResult = await query(accessCheckQuery, accessParams);
+
+    if (accessResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or access denied',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    // Update aggregation level
+    const updated = await candleAggregationService.updateAgentAggregationLevel(
+      agent_id,
+      aggregation_level
+    );
+
+    res.json({
+      success: true,
+      message: 'Aggregation level updated successfully',
+      data: updated
+    });
+
+  } catch (error) {
+    console.error('Update agent aggregation level error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update aggregation level',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Get Agent Aggregation Settings
+ * GET /api/agents/:agent_id/aggregation-settings
+ *
+ * Returns current aggregation settings for an agent
+ */
+router.get('/:agent_id/aggregation-settings', authMiddleware, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
+
+    // Verify ownership/access to this agent
+    let accessCheckQuery = `
+      SELECT
+        ad.id,
+        ad.device_name,
+        ad.alert_aggregation_level as device_override,
+        u.default_alert_aggregation_level as user_default,
+        COALESCE(ad.alert_aggregation_level, u.default_alert_aggregation_level, 'raw') as effective_level
+      FROM agent_devices ad
+      LEFT JOIN users u ON ad.trial_user_id = u.id OR (ad.business_id = u.business_id AND u.is_primary_contact = true)
+      WHERE ad.id = $1 AND ad.soft_delete = false
+    `;
+    const accessParams = [agent_id];
+
+    if (!isEmployee) {
+      // For clients: Check if this is a trial agent owned by the user OR a regular agent in their business
+      accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
+      accessParams.push(req.user.id);
+      accessParams.push(req.user.business_id);
+    }
+
+    const result = await query(accessCheckQuery, accessParams);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or access denied',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    const settings = result.rows[0];
+
+    res.json({
+      success: true,
+      data: {
+        agent_id: agent_id,
+        device_name: settings.device_name,
+        device_override: settings.device_override,
+        user_default: settings.user_default,
+        effective_level: settings.effective_level
+      }
+    });
+
+  } catch (error) {
+    console.error('Get agent aggregation settings error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to retrieve aggregation settings',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Backfill Candles for Agent
+ * POST /api/agents/:agent_id/backfill-candles
+ *
+ * Backfill historical candles for an agent (employee only)
+ * Used when enabling aggregated alerting for the first time
+ */
+router.post('/:agent_id/backfill-candles', authMiddleware, requireEmployee, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { days_back = 7 } = req.body;
+
+    console.log(`📦 BACKFILL CANDLES: agent=${agent_id}, days=${days_back}, user=${req.user.email}`);
+
+    // Verify agent exists
+    const agentResult = await query(
+      `SELECT id, device_name FROM agent_devices WHERE id = $1 AND soft_delete = false`,
+      [agent_id]
+    );
+
+    if (agentResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    // Trigger backfill
+    const summary = await candleAggregationService.backfillCandlesForAgent(agent_id, days_back);
+
+    res.json({
+      success: true,
+      message: 'Candle backfill completed',
+      data: summary
+    });
+
+  } catch (error) {
+    console.error('Backfill candles error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to backfill candles',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

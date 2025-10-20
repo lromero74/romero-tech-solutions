@@ -216,6 +216,10 @@
   - Replaced template literals (`border-${color}-300`) with helper functions
   - Added `getTierBorderClasses()`, `getTierTextClasses()`, `getTierButtonClasses()`
   - All classes now use full Tailwind class names for proper purging
+- ✅ Fixed CSRF token validation issue on localhost (Safari)
+  - Added `apiService.refreshCsrfToken()` call on component mount
+  - Ensures CSRF token is tied to authenticated session
+  - Resolves "invalid csrf token" 403 errors in localhost development
 
 ---
 

@@ -6,56 +6,63 @@
 import { query } from '../config/database.js';
 import { alertConfigService } from './alertConfigService.js';
 import { alertHistoryService } from './alertHistoryService.js';
+import { candleAggregationService } from './candleAggregationService.js';
 
 /**
  * Calculate technical indicators from metrics history
+ * Uses time-aggregated candles based on agent's configuration
  * @param {string} agentId - Agent device ID
  * @param {number} lookbackPeriods - Number of historical data points to fetch
+ * @param {string} metricType - Metric type to analyze ('cpu', 'memory', 'disk')
  * @returns {Promise<Object>} Technical indicators object
  */
-async function calculateIndicators(agentId, lookbackPeriods = 50) {
-  // Fetch recent metrics for this agent
-  const metricsResult = await query(
-    `SELECT
-      cpu_percent,
-      memory_percent,
-      disk_percent,
-      collected_at
-     FROM agent_metrics
-     WHERE agent_device_id = $1
-     ORDER BY collected_at DESC
-     LIMIT $2`,
-    [agentId, lookbackPeriods]
-  );
+async function calculateIndicators(agentId, lookbackPeriods = 50, metricType = 'cpu') {
+  // Get effective aggregation level for this agent
+  const aggregationLevel = await candleAggregationService.getEffectiveAggregationLevel(agentId);
 
-  const metrics = metricsResult.rows.reverse(); // Oldest first for calculations
+  // Fetch data based on aggregation level
+  const candles = await candleAggregationService.getCandles(agentId, aggregationLevel, lookbackPeriods);
 
-  if (metrics.length < 14) {
+  if (candles.length < 14) {
     // Not enough data for meaningful indicators
+    console.log(`⏭️  Insufficient data for agent ${agentId}: ${candles.length} candles (need 14+)`);
     return null;
   }
 
-  // Use CPU as the primary oscillator (can be extended to memory/disk)
-  const cpuValues = metrics.map(m => m.cpu_percent || 0);
-  const latestCpu = cpuValues[cpuValues.length - 1];
+  // Reverse to get oldest first for calculations
+  const metrics = candles.reverse();
+
+  // Extract values based on metric type and data format
+  let values;
+  if (aggregationLevel === 'raw') {
+    // Raw data points - use direct values
+    values = metrics.map(m => parseFloat(m[metricType] || 0));
+  } else {
+    // Candle data - use close prices
+    values = metrics.map(m => parseFloat(m[metricType]?.close || 0));
+  }
+
+  const latestValue = values[values.length - 1];
+
+  console.log(`📊 Calculating indicators for agent ${agentId} using ${aggregationLevel} aggregation (${values.length} data points)`);
 
   // Calculate RSI (Relative Strength Index)
-  const rsi = calculateRSI(cpuValues, 14);
+  const rsi = calculateRSI(values, 14);
 
   // Calculate Stochastic Oscillator
-  const stochastic = calculateStochastic(cpuValues, 14);
+  const stochastic = calculateStochastic(values, 14);
 
   // Calculate Williams %R
-  const williamsR = calculateWilliamsR(cpuValues, 14);
+  const williamsR = calculateWilliamsR(values, 14);
 
   // Calculate MACD
-  const macd = calculateMACD(cpuValues);
+  const macd = calculateMACD(values);
 
   // Calculate ROC (Rate of Change)
-  const roc = calculateROC(cpuValues, 10);
+  const roc = calculateROC(values, 10);
 
-  // Calculate ATR (Average True Range) - using CPU volatility as proxy
-  const atr = calculateATR(cpuValues, 14);
+  // Calculate ATR (Average True Range) - using metric volatility as proxy
+  const atr = calculateATR(values, 14);
 
   return {
     rsi: {
@@ -79,13 +86,16 @@ async function calculateIndicators(agentId, lookbackPeriods = 50) {
     },
     roc: {
       value: roc,
-      signal: determineROCSignal(roc, cpuValues)
+      signal: determineROCSignal(roc, values)
     },
     atr: {
       value: atr,
-      signal: determineATRSignal(atr, cpuValues)
+      signal: determineATRSignal(atr, values)
     },
-    rawMetric: latestCpu,
+    rawMetric: latestValue,
+    metricType: metricType,
+    aggregationLevel: aggregationLevel,
+    dataPointsUsed: values.length,
     timestamp: new Date()
   };
 }

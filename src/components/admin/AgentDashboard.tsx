@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building } from 'lucide-react';
+import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
@@ -7,6 +7,7 @@ import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import { websocketService } from '../../services/websocketService';
 import AgentEditModal from './AgentEditModal';
 import { useAdminData } from '../../contexts/AdminDataContext';
+import AgentAlertAggregationModal from './AgentAlertAggregationModal';
 
 interface AgentDashboardProps {
   onViewAgentDetails?: (agentId: string) => void;
@@ -34,6 +35,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   }>({ show: false });
   const [showEditModal, setShowEditModal] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<AgentDevice | null>(null);
+  const [showAggregationModal, setShowAggregationModal] = useState(false);
+  const [aggregationModalAgent, setAggregationModalAgent] = useState<AgentDevice | null>(null);
 
   // Get businesses and service locations for the edit modal
   const { businesses, serviceLocations } = useAdminData();
@@ -187,6 +190,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
   const handleAgentUpdated = () => {
     // Reload agents after edit
+    loadAgents();
+  };
+
+  // Open aggregation settings modal
+  const handleOpenAggregationModal = (agent: AgentDevice) => {
+    setAggregationModalAgent(agent);
+    setShowAggregationModal(true);
+  };
+
+  const handleCloseAggregationModal = () => {
+    setShowAggregationModal(false);
+    setAggregationModalAgent(null);
+  };
+
+  const handleAggregationUpdated = () => {
+    // Reload agents after aggregation update
     loadAgents();
   };
 
@@ -737,6 +756,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           {canManageAgents && (
                             <>
                               <button
+                                onClick={() => handleOpenAggregationModal(agent)}
+                                disabled={actionInProgress === agent.id}
+                                className="text-cyan-600 hover:text-cyan-900 dark:text-cyan-400 dark:hover:text-cyan-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Alert sensitivity settings"
+                              >
+                                <Settings className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleToggleMonitoring(agent)}
                                 disabled={actionInProgress === agent.id}
                                 className={`${
@@ -974,6 +1001,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         serviceLocations={serviceLocations}
         onUpdate={handleAgentUpdated}
       />
+
+      {/* Agent Aggregation Settings Modal */}
+      {aggregationModalAgent && (
+        <AgentAlertAggregationModal
+          isOpen={showAggregationModal}
+          onClose={handleCloseAggregationModal}
+          agentId={aggregationModalAgent.id}
+          agentName={aggregationModalAgent.device_name}
+          currentLevel={null}
+          onSuccess={handleAggregationUpdated}
+        />
+      )}
     </div>
   );
 };

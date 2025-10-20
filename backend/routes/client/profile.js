@@ -3,6 +3,7 @@ import bcrypt from 'bcryptjs';
 import { getPool } from '../../config/database.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware } from '../../middleware/clientMiddleware.js';
+import { candleAggregationService } from '../../services/candleAggregationService.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
@@ -828,6 +829,76 @@ router.delete('/delete-service-location/:locationId', authenticateClient, async 
     res.status(500).json({
       success: false,
       message: 'Failed to delete service location'
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERT AGGREGATION SETTINGS
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Get user default aggregation level
+router.get('/default-aggregation-level', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const clientId = req.user.clientId;
+
+    const result = await pool.query(`
+      SELECT
+        default_alert_aggregation_level as "defaultLevel"
+      FROM users
+      WHERE id = $1 AND soft_delete = false
+    `, [clientId]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        default_aggregation_level: result.rows[0].defaultLevel || 'raw'
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching default aggregation level:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to fetch default aggregation level'
+    });
+  }
+});
+
+// Update user default aggregation level
+router.put('/default-aggregation-level', authenticateClient, async (req, res) => {
+  try {
+    const clientId = req.user.clientId;
+    const { aggregation_level } = req.body;
+
+    console.log(`⚙️  UPDATE default aggregation level: user=${req.user.email}, level=${aggregation_level}`);
+
+    // Update using the service
+    const updated = await candleAggregationService.updateUserDefaultAggregationLevel(
+      clientId,
+      aggregation_level
+    );
+
+    res.json({
+      success: true,
+      message: 'Default aggregation level updated successfully',
+      data: updated
+    });
+
+  } catch (error) {
+    console.error('Error updating default aggregation level:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to update default aggregation level',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

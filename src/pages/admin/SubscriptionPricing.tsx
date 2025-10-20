@@ -47,7 +47,13 @@ const SubscriptionPricing: React.FC = () => {
   };
 
   useEffect(() => {
-    fetchData();
+    // Force CSRF token refresh when component mounts (fixes localhost Safari cookie issues)
+    const initPage = async () => {
+      console.log('🔄 Refreshing CSRF token for subscription pricing page...');
+      await apiService.refreshCsrfToken();
+      await fetchData();
+    };
+    initPage();
   }, []);
 
   const handleSave = async (tier: PricingTier) => {

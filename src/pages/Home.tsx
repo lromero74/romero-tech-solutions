@@ -3,6 +3,7 @@ import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, 
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
 import StructuredData from '../components/seo/StructuredData';
+import PainPointAnimation from '../components/common/PainPointAnimation';
 
 const Home: React.FC = () => {
   const { t } = useLanguage();
@@ -74,7 +75,23 @@ const Home: React.FC = () => {
               <p className="text-xl md:text-2xl text-slate-300 mb-12 leading-relaxed max-w-3xl mx-auto">
                 {t('home.hero.subtitle')}
               </p>
+            </div>
 
+            {/* Pain Point Animation Section - Featured at top */}
+            <div className="py-8 mb-8">
+              <div className="text-center mb-8">
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-3">
+                  {t('painPoints.title')}
+                </h2>
+                <p className="text-base md:text-lg text-blue-200 max-w-3xl mx-auto">
+                  {t('painPoints.subtitle')}
+                </p>
+              </div>
+              <PainPointAnimation />
+            </div>
+
+            {/* Hero CTAs */}
+            <div className="text-center">
               <div className="flex flex-col gap-4 items-center mb-16">
                 <a
                   href="/clogin"

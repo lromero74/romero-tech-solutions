@@ -686,6 +686,52 @@ class AgentService {
 
     return response;
   }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // ALERT AGGREGATION SETTINGS
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  /**
+   * Get aggregation settings for a specific agent
+   * Returns device override, user default, and effective level
+   */
+  async getAgentAggregationSettings(agentId: string): Promise<ApiResponse<{
+    agent_id: string;
+    device_name: string;
+    device_override: string | null;
+    user_default: string;
+    effective_level: string;
+  }>> {
+    return apiService.get(`/agents/${agentId}/aggregation-settings`);
+  }
+
+  /**
+   * Update aggregation level for a specific agent
+   * Pass null to remove device override and use user default
+   */
+  async updateAgentAggregationLevel(
+    agentId: string,
+    aggregationLevel: string | null
+  ): Promise<ApiResponse<{
+    agent_id: string;
+    device_override: string | null;
+    effective_level: string;
+  }>> {
+    return apiService.put(`/agents/${agentId}/aggregation-level`, {
+      aggregation_level: aggregationLevel
+    });
+  }
+
+  /**
+   * Get available aggregation levels with descriptions
+   */
+  async getAggregationLevels(): Promise<ApiResponse<Record<string, {
+    interval: string;
+    minutes: number;
+    description: string;
+  }>>> {
+    return apiService.get('/agents/aggregation-levels');
+  }
 }
 
 // Export singleton instance

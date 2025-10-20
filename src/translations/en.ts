@@ -13,7 +13,7 @@ export const enTranslations = {
   'home.hero.badge': '30 Years Experience at Your Service',
   'home.hero.title': 'Professional',
   'home.hero.titleHighlight': 'Tech Solutions',
-  'home.hero.subtitle': 'Expert computer repair, network setup, and IT support for homes and businesses in North County San Diego, CA',
+  'home.hero.subtitle': 'Remote monitoring and remote assistance available nationwide • On-site support, computer repair, and network setup in North County San Diego, CA',
   'home.hero.callButton': 'Call (619) 940-5550',
   'home.hero.quoteButton': 'E-mail Us',
   'home.hero.stat1': '30+',
@@ -273,7 +273,7 @@ export const enTranslations = {
   'contact.serviceArea.escondido': 'Escondido',
   'contact.serviceArea.primary': 'Primary',
   'contact.serviceArea.extended': 'Extended',
-  'contact.serviceArea.remote': 'Remote Support: Available within our San Diego County service areas',
+  'contact.serviceArea.remote': 'Remote Monitoring & Remote Assistance: Available nationwide across the United States',
 
   'contact.emergencyCta.title': 'Tech Crisis? We\'re Your 911!',
   'contact.emergencyCta.subtitle': "Don't panic when technology fails! Your neighborhood heroes are standing by to rescue you from any digital disaster. We'll have you back online faster than you can say \"help\"!",
@@ -302,7 +302,7 @@ export const enTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Professional IT Support',
-  'footer.description': 'Providing reliable PC, printer, and network support services in North County San Diego, CA with over 30 years of experience serving satisfied customers in Escondido, Carlsbad, Oceanside, Vista, and surrounding areas.',
+  'footer.description': 'Remote monitoring and remote assistance available nationwide. On-site PC repair, printer, and network support in North County San Diego, CA with over 30 years of experience serving Escondido, Carlsbad, Oceanside, Vista, and surrounding areas.',
   'footer.contactUs': 'Contact Us',
   'footer.services': 'Our Services',
   'footer.pcRepair': 'PC Repair & Maintenance',
@@ -442,10 +442,10 @@ export const enTranslations = {
   'registration.business.namePlaceholder': 'Enter your business name',
   'registration.business.zipLabel': 'Business ZIP Code *',
   'registration.business.zipPlaceholder': '12345',
-  'registration.business.zipHelper': 'We use this to verify we provide service in your area',
+  'registration.business.zipHelper': 'We use this to determine available service types in your area (remote monitoring available nationwide, on-site support in North San Diego County)',
   'registration.business.zipValidFormat': 'Please enter a valid 5-digit ZIP code',
   'registration.business.zipServiceAvailable': 'Great! We provide service in {city}, {state}',
-  'registration.business.zipServiceUnavailable': "We're sorry, but we don't currently provide service in the {zipCode} area. Please contact us directly to discuss your needs.",
+  'registration.business.zipServiceUnavailable': "On-site support is not available in the {zipCode} area (limited to North San Diego County). However, remote monitoring and remote assistance are available nationwide. Please contact us to discuss remote service options.",
 
   // Individual registration
   'registration.individual.title': 'Individual Information',
@@ -502,7 +502,7 @@ export const enTranslations = {
 
   'registration.errors.businessNameRequired': 'Business name is required',
   'registration.errors.zipCodeRequired': 'ZIP code is required',
-  'registration.errors.zipCodeInvalid': 'Please enter a valid ZIP code in our service area',
+  'registration.errors.zipCodeInvalid': 'Please enter a valid ZIP code (on-site service available in North San Diego County, remote services available nationwide)',
   'registration.errors.firstNameRequired': 'First name is required',
   'registration.errors.lastNameRequired': 'Last name is required',
   'registration.errors.emailRequired': 'Email address is required',
@@ -557,5 +557,263 @@ export const enTranslations = {
   'faq.a5': 'Yes! We provide full bilingual support in both English and Spanish. Our technicians are fluent in both languages to better serve our diverse San Diego County community.',
 
   'faq.q6': 'What are your rates for IT support?',
-  'faq.a6': 'We offer transparent, competitive pricing with standard hours (Mon-Fri 8am-6pm) and premium hours (evenings and weekends). Visit our pricing page or call us for a detailed quote based on your specific needs.'
+  'faq.a6': 'We offer transparent, competitive pricing with standard hours (Mon-Fri 8am-6pm) and premium hours (evenings and weekends). Visit our pricing page or call us for a detailed quote based on your specific needs.',
+
+  // Pain Points Section
+  'painPoints.title': 'We Understand Your Challenges',
+  'painPoints.subtitle': 'Real problems. Real solutions. See how we turn IT headaches into business advantages.',
+  'painPoints.cta.text': 'See how we transform IT challenges into business advantages',
+  'painPoints.cta.button': 'Schedule a Free Consultation',
+  'painPoints.label.problem': 'Your Pain Point',
+  'painPoints.label.solution': 'Our Solution',
+
+  // Pain Point 1
+  'painPoints.1.category': 'System Reliability',
+  'painPoints.1.problem': "I only find out my server crashed when my employees can't work.",
+  'painPoints.1.solution': 'Real-time alerts via email, SMS, and web push before systems fail completely.',
+
+  // Pain Point 2
+  'painPoints.2.category': 'Performance',
+  'painPoints.2.problem': "My computer has been running slow for weeks but I don't know why.",
+  'painPoints.2.solution': 'Continuous CPU, memory, and disk monitoring with performance trending to identify bottlenecks before they impact productivity.',
+
+  // Pain Point 3
+  'painPoints.3.category': 'Data Protection',
+  'painPoints.3.problem': 'Our backup failed last month and we had no idea until we needed it.',
+  'painPoints.3.solution': "Automatic backup status monitoring and failure alerts ensure you know immediately when backups aren't working.",
+
+  // Pain Point 4
+  'painPoints.4.category': 'Data Protection',
+  'painPoints.4.problem': 'I lost important data when my hard drive died without warning.',
+  'painPoints.4.solution': 'SMART disk health monitoring predicts drive failures days or weeks in advance, giving time to replace drives before data loss.',
+
+  // Pain Point 5
+  'painPoints.5.category': 'Security',
+  'painPoints.5.problem': "My antivirus stopped working and I didn't notice for months.",
+  'painPoints.5.solution': 'Security posture monitoring tracks antivirus, firewall, and patch status with immediate alerts when protection fails.',
+
+  // Pain Point 6
+  'painPoints.6.category': 'Proactive Support',
+  'painPoints.6.problem': 'I pay for IT support but they only fix things after they break.',
+  'painPoints.6.solution': 'Proactive monitoring prevents 80% of issues before they cause business disruption.',
+
+  // Pain Point 7
+  'painPoints.7.category': 'Cost Management',
+  'painPoints.7.problem': 'Every IT emergency costs me thousands in lost productivity and emergency service calls.',
+  'painPoints.7.solution': 'Early warning systems and automated service restarts resolve issues during off-hours before employees arrive.',
+
+  // Pain Point 8
+  'painPoints.8.category': 'Support Availability',
+  'painPoints.8.problem': 'I can never get help when I actually need it - only during business hours.',
+  'painPoints.8.solution': '24/7 automated monitoring with after-hours remote resolution capabilities.',
+
+  // Pain Point 9
+  'painPoints.9.category': 'Communication',
+  'painPoints.9.problem': 'I submit support tickets and then hear nothing for days.',
+  'painPoints.9.solution': 'Real-time ticket updates, automatic notifications, and transparent status tracking through the client portal.',
+
+  // Pain Point 10
+  'painPoints.10.category': 'Transparency',
+  'painPoints.10.problem': 'I never know what my IT company is actually doing for me.',
+  'painPoints.10.solution': 'Detailed monitoring reports, performance dashboards, and complete visibility into all IT activities.',
+
+  // Pain Point 11
+  'painPoints.11.category': 'Billing Transparency',
+  'painPoints.11.problem': 'IT bills me for 3 hours but I only saw them here for 90 minutes.',
+  'painPoints.11.solution': 'Automatic time tracking, transparent billing, and detailed work descriptions for every service request.',
+
+  // Pain Point 12
+  'painPoints.12.category': 'Business Continuity',
+  'painPoints.12.problem': 'When our main server goes down, our entire business stops.',
+  'painPoints.12.solution': 'Monitoring critical services with automatic restart capabilities and immediate escalation for server issues.',
+
+  // Pain Point 13
+  'painPoints.13.category': 'Network Reliability',
+  'painPoints.13.problem': "We lost a whole day's work when our network went down on Friday.",
+  'painPoints.13.solution': 'Network connectivity monitoring with alerts for internet and internal network failures.',
+
+  // Pain Point 14
+  'painPoints.14.category': 'Hardware Protection',
+  'painPoints.14.problem': 'Temperature fluctuations in our server room caused expensive hardware damage.',
+  'painPoints.14.solution': 'Environmental monitoring tracks CPU and system temperatures with alerts before hardware damage occurs.',
+
+  // Pain Point 15
+  'painPoints.15.category': 'Security',
+  'painPoints.15.problem': 'Someone tried to hack our systems and we had no idea it was happening.',
+  'painPoints.15.solution': 'Failed login detection and security event monitoring with immediate breach notifications.',
+
+  // Pain Point 16
+  'painPoints.16.category': 'Security Updates',
+  'painPoints.16.problem': "We're always behind on security updates and patches.",
+  'painPoints.16.solution': 'Automated patch status monitoring identifies missing security updates before they become vulnerabilities.',
+
+  // Pain Point 17
+  'painPoints.17.category': 'Compliance',
+  'painPoints.17.problem': "Our compliance audit found security gaps we didn't know existed.",
+  'painPoints.17.solution': 'Continuous compliance monitoring and security posture reports ensure audit readiness.',
+
+  // Pain Point 18
+  'painPoints.18.category': 'Resource Management',
+  'painPoints.18.problem': 'We keep buying new computers but they slow down within months.',
+  'painPoints.18.solution': 'Performance trending and capacity planning help optimize existing hardware and plan upgrades strategically.',
+
+  // Pain Point 19
+  'painPoints.19.category': 'License Management',
+  'painPoints.19.problem': "Software licenses are costing us a fortune but we don't know what we actually use.",
+  'painPoints.19.solution': 'Software inventory tracking identifies unused licenses and compliance gaps.',
+
+  // Pain Point 20
+  'painPoints.20.category': 'IT Value',
+  'painPoints.20.problem': "Our IT costs keep growing but we can't see the value.",
+  'painPoints.20.solution': 'ROI tracking, issue prevention metrics, and detailed reporting demonstrate IT value and cost savings.',
+
+  // Pain Point 21
+  'painPoints.21.category': 'User Productivity',
+  'painPoints.21.problem': 'My employees waste time troubleshooting IT problems instead of working.',
+  'painPoints.21.solution': 'Proactive issue resolution and automated fixes minimize end-user IT interruptions.',
+
+  // Pain Point 22
+  'painPoints.22.category': 'Recurring Issues',
+  'painPoints.22.problem': 'We have the same computer problems over and over again.',
+  'painPoints.22.solution': 'Pattern recognition and automated remediation prevent recurring issues.',
+
+  // Pain Point 23
+  'painPoints.23.category': 'Scalability',
+  'painPoints.23.problem': 'As we grow, IT management becomes more complex and expensive.',
+  'painPoints.23.solution': 'Centralized monitoring scales effortlessly from 2 to 200+ devices with the same management overhead.',
+
+  // Pain Point 24
+  'painPoints.24.category': 'Affordability',
+  'painPoints.24.problem': "We need IT support but can't afford a full-time IT person.",
+  'painPoints.24.solution': 'Professional-grade monitoring and support at a fraction of the cost of internal IT staff.',
+
+  // Pain Point 25
+  'painPoints.25.category': 'Remote Work',
+  'painPoints.25.problem': "Our remote employees have IT problems but we can't help them quickly.",
+  'painPoints.25.solution': 'Remote monitoring and management capabilities resolve issues on home and mobile devices without on-site visits.',
+
+  // Pain Point 26
+  'painPoints.26.category': 'OS Lifecycle',
+  'painPoints.26.problem': "I'm running an operating system that's no longer supported and I didn't even know it.",
+  'painPoints.26.solution': 'End-of-life tracking for Windows, macOS, and all major Linux distributions with 180-day advance warnings when OS security support ends.',
+
+  // Pain Point 27
+  'painPoints.27.category': 'OS Security',
+  'painPoints.27.problem': 'My OS security updates stopped months ago but everything seems fine, so I ignored it.',
+  'painPoints.27.solution': 'Distinguishes between general support and security-only support phases, alerting before you enter the danger zone.',
+
+  // Pain Point 28
+  'painPoints.28.category': 'Software Updates',
+  'painPoints.28.problem': "I have dozens of outdated packages on my Mac but don't know which ones matter.",
+  'painPoints.28.solution': 'Automated tracking of Homebrew, npm, pip, and Mac App Store updates with security priority flagging.',
+
+  // Pain Point 29
+  'painPoints.29.category': 'Developer Tools',
+  'painPoints.29.problem': 'My developer tools and package managers are outdated, creating compatibility nightmares.',
+  'painPoints.29.solution': 'Cross-platform package manager monitoring supports Homebrew, npm, pip, and Mac App Store with version conflict detection.',
+
+  // Pain Point 30
+  'painPoints.30.category': 'Affordability',
+  'painPoints.30.problem': "I can't afford enterprise MSP pricing but I need basic monitoring for my small business.",
+  'painPoints.30.solution': 'Free tier with 2 devices, no expiration, full monitoring features - try before you commit, no credit card required.',
+
+  // Pain Point 31
+  'painPoints.31.category': 'Pricing Surprises',
+  'painPoints.31.problem': 'My MSP surprised me with a huge price increase when I added one more computer.',
+  'painPoints.31.solution': 'Graduated pricing with transparent cost breakdown showing exactly what adding each device costs before you commit.',
+
+  // Pain Point 32
+  'painPoints.32.category': 'Pricing Clarity',
+  'painPoints.32.problem': 'MSP pricing is confusing - per device, per user, per service, plus hidden fees.',
+  'painPoints.32.solution': 'Simple per-device graduated pricing with complete cost breakdown shown upfront during agent registration.',
+
+  // Pain Point 33
+  'painPoints.33.category': 'Installation',
+  'painPoints.33.problem': "Installing monitoring agents requires technical expertise I don't have.",
+  'painPoints.33.solution': 'One-command installation script for all platforms plus GUI setup wizard with email verification.',
+
+  // Pain Point 34
+  'painPoints.34.category': 'Cross-Platform',
+  'painPoints.34.problem': 'Every MSP tool needs different setup steps for Windows vs Mac vs Linux.',
+  'painPoints.34.solution': 'Single cross-platform agent with identical user experience across Windows, macOS, and all major Linux distributions.',
+
+  // Pain Point 35
+  'painPoints.35.category': 'Try Before Buy',
+  'painPoints.35.problem': 'I want to try IT monitoring but MSPs require long-term contracts before I can test anything.',
+  'painPoints.35.solution': 'Instant free tier registration - 2 devices, no credit card, no expiration, upgrade only when ready.',
+
+  // Pain Point 36
+  'painPoints.36.category': 'Self-Service',
+  'painPoints.36.problem': 'I have to call my MSP just to check the status of my support ticket.',
+  'painPoints.36.solution': 'Client portal with real-time ticket tracking, service request management, and complete visibility into all activities.',
+
+  // Pain Point 37
+  'painPoints.37.category': 'Vendor Lock-in',
+  'painPoints.37.problem': "Switching MSPs is a nightmare - I'm locked into expensive contracts and proprietary tools.",
+  'painPoints.37.solution': 'No long-term contracts, free tier to test-drive, transparent pricing, and standard monitoring protocols.',
+
+  // Pain Point 38
+  'painPoints.38.category': 'Shadow IT',
+  'painPoints.38.problem': "I don't know what software is installed on my employees' computers.",
+  'painPoints.38.solution': 'Comprehensive software inventory tracking across all devices with version reporting to identify shadow IT.',
+
+  // Pain Point 39
+  'painPoints.39.category': 'Asset Management',
+  'painPoints.39.problem': "Planning hardware refresh cycles is guesswork - I don't have accurate hardware inventory.",
+  'painPoints.39.solution': 'Automated hardware inventory collection with centralized asset tracking and capacity planning.',
+
+  // Pain Point 40
+  'painPoints.40.category': 'Language Barrier',
+  'painPoints.40.problem': 'My team speaks Spanish but our IT support is English-only.',
+  'painPoints.40.solution': 'Fully bilingual platform with English and Spanish support for client portal, service requests, and all communications.',
+
+  // Pain Point 41
+  'painPoints.41.category': 'Backup Monitoring',
+  'painPoints.41.problem': 'I have no idea if my backups are actually running or just failing silently.',
+  'painPoints.41.solution': 'Backup monitoring detects Time Machine, Veeam, Acronis, and Windows Backup with immediate failure alerts and last-backup timestamps.',
+
+  // Pain Point 42
+  'painPoints.42.category': 'Service Management',
+  'painPoints.42.problem': 'Critical services stop running and I only notice when users complain.',
+  'painPoints.42.solution': 'Service monitoring tracks status, uptime, and memory usage with automatic restart capabilities for critical services.',
+
+  // Pain Point 43
+  'painPoints.43.category': 'Uptime Tracking',
+  'painPoints.43.problem': "I don't know when my system last rebooted or if it crashed unexpectedly.",
+  'painPoints.43.solution': 'Uptime tracking with unexpected reboot detection alerts you to system crashes versus planned restarts.',
+
+  // Pain Point 44
+  'painPoints.44.category': 'Remote Management',
+  'painPoints.44.problem': "I need to be on-site to fix problems - I can't help remotely.",
+  'painPoints.44.solution': 'Remote command execution lets you diagnose and resolve issues from anywhere without driving to the location.',
+
+  // Pain Point 45
+  'painPoints.45.category': 'Event Log Analysis',
+  'painPoints.45.problem': "Windows Event Viewer is overwhelming - thousands of entries and I don't know what's important.",
+  'painPoints.45.solution': 'Automated event log filtering identifies critical errors, security events, and warnings across Windows, macOS, and Linux.',
+
+  // Pain Point 46
+  'painPoints.46.category': 'Scheduling Flexibility',
+  'painPoints.46.problem': 'I want to schedule maintenance during off-hours but IT companies only work 9-5.',
+  'painPoints.46.solution': 'Service scheduling system lets you book appointments during evenings and weekends when convenient for your business.',
+
+  // Pain Point 47
+  'painPoints.47.category': 'Portal Access',
+  'painPoints.47.problem': "I can't access my IT dashboard when I'm traveling or away from the office.",
+  'painPoints.47.solution': 'Cloud-based web portal accessible from any device, anywhere with internet connection - no VPN required.',
+
+  // Pain Point 48
+  'painPoints.48.category': 'Configuration',
+  'painPoints.48.problem': "Setting up monitoring requires editing config files and command-line expertise I don't have.",
+  'painPoints.48.solution': 'GUI-based settings interface and visual setup wizard make configuration point-and-click simple.',
+
+  // Pain Point 49
+  'painPoints.49.category': 'Agent Maintenance',
+  'painPoints.49.problem': 'My monitoring agent breaks when I update my OS or needs manual updates.',
+  'painPoints.49.solution': 'Auto-update mechanism keeps the agent compatible with latest OS versions without manual intervention.',
+
+  // Pain Point 50
+  'painPoints.50.category': 'Multi-Site Management',
+  'painPoints.50.problem': 'I have multiple locations but my MSP treats each one separately with different portals.',
+  'painPoints.50.solution': 'Unified dashboard manages all locations, devices, and service requests from a single centralized interface.'
 };

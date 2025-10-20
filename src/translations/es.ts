@@ -13,7 +13,7 @@ export const esTranslations = {
   'home.hero.badge': '30 Años de Experiencia a Su Servicio',
   'home.hero.title': 'Soluciones',
   'home.hero.titleHighlight': 'Tecnológicas Profesionales',
-  'home.hero.subtitle': 'Reparación experta de computadoras, configuración de redes y soporte de TI para hogares y empresas en el Norte del Condado de San Diego, CA',
+  'home.hero.subtitle': 'Monitoreo remoto y asistencia remota disponibles a nivel nacional • Soporte en sitio, reparación de computadoras y configuración de redes en el Norte del Condado de San Diego, CA',
   'home.hero.callButton': 'Llamar (619) 940-5550',
   'home.hero.quoteButton': 'Envíenos un Correo',
   'home.hero.stat1': '30+',
@@ -273,7 +273,7 @@ export const esTranslations = {
   'contact.serviceArea.escondido': 'Escondido',
   'contact.serviceArea.primary': 'Primario',
   'contact.serviceArea.extended': 'Extendido',
-  'contact.serviceArea.remote': 'Soporte Remoto: Disponible dentro de nuestras áreas de servicio del Condado de San Diego',
+  'contact.serviceArea.remote': 'Monitoreo Remoto y Asistencia Remota: Disponibles a nivel nacional en todos los Estados Unidos',
 
   'contact.emergencyCta.title': '¿Crisis Tecnológica? ¡Somos Su 911!',
   'contact.emergencyCta.subtitle': '¡No entre en pánico cuando la tecnología falle! Sus héroes del vecindario están esperando para rescatarlo de cualquier desastre digital. ¡Lo tendremos en línea más rápido de lo que puede decir "ayuda"!',
@@ -302,7 +302,7 @@ export const esTranslations = {
   // Footer
   'footer.company': 'Romero Tech Solutions',
   'footer.tagline': 'Soporte Profesional de TI',
-  'footer.description': 'Proporcionando servicios confiables de soporte para PC, impresoras y redes en el Norte del Condado de San Diego, CA con más de 30 años de experiencia sirviendo a clientes satisfechos en Escondido, Carlsbad, Oceanside, Vista y áreas circundantes.',
+  'footer.description': 'Monitoreo remoto y asistencia remota disponibles a nivel nacional. Reparación de PC en sitio, impresoras y soporte de red en el Norte del Condado de San Diego, CA con más de 30 años de experiencia sirviendo a Escondido, Carlsbad, Oceanside, Vista y áreas circundantes.',
   'footer.contactUs': 'Contáctenos',
   'footer.services': 'Nuestros Servicios',
   'footer.pcRepair': 'Reparación y Mantenimiento de PC',
@@ -433,10 +433,10 @@ export const esTranslations = {
   'registration.business.namePlaceholder': 'Ingrese el nombre de su negocio',
   'registration.business.zipLabel': 'Código Postal del Negocio *',
   'registration.business.zipPlaceholder': '12345',
-  'registration.business.zipHelper': 'Usamos esto para verificar que brindamos servicio en su área',
+  'registration.business.zipHelper': 'Usamos esto para determinar los tipos de servicio disponibles en su área (monitoreo remoto disponible a nivel nacional, soporte en sitio en el Norte del Condado de San Diego)',
   'registration.business.zipValidFormat': 'Por favor ingrese un código postal válido de 5 dígitos',
   'registration.business.zipServiceAvailable': '¡Excelente! Brindamos servicio en {city}, {state}',
-  'registration.business.zipServiceUnavailable': 'Lo sentimos, pero actualmente no brindamos servicio en el área {zipCode}. Por favor contáctenos directamente para discutir sus necesidades.',
+  'registration.business.zipServiceUnavailable': 'El soporte en sitio no está disponible en el área {zipCode} (limitado al Norte del Condado de San Diego). Sin embargo, el monitoreo remoto y la asistencia remota están disponibles a nivel nacional. Por favor contáctenos para discutir opciones de servicio remoto.',
 
   // Individual registration
   'registration.individual.title': 'Información Individual',
@@ -493,7 +493,7 @@ export const esTranslations = {
 
   'registration.errors.businessNameRequired': 'El nombre del negocio es requerido',
   'registration.errors.zipCodeRequired': 'El código postal es requerido',
-  'registration.errors.zipCodeInvalid': 'Por favor ingrese un código postal válido en nuestra área de servicio',
+  'registration.errors.zipCodeInvalid': 'Por favor ingrese un código postal válido (servicio en sitio disponible en el Norte del Condado de San Diego, servicios remotos disponibles a nivel nacional)',
   'registration.errors.firstNameRequired': 'El nombre es requerido',
   'registration.errors.lastNameRequired': 'El apellido es requerido',
   'registration.errors.emailRequired': 'La dirección de correo es requerida',
@@ -548,5 +548,263 @@ export const esTranslations = {
   'faq.a5': '¡Sí! Proporcionamos soporte bilingüe completo tanto en inglés como en español. Nuestros técnicos hablan ambos idiomas con fluidez para servir mejor a nuestra diversa comunidad del Condado de San Diego.',
 
   'faq.q6': '¿Cuáles son sus tarifas para soporte de TI?',
-  'faq.a6': 'Ofrecemos precios transparentes y competitivos con horarios estándar (Lun-Vie 8am-6pm) y horarios premium (noches y fines de semana). Visite nuestra página de precios o llámenos para una cotización detallada según sus necesidades específicas.'
+  'faq.a6': 'Ofrecemos precios transparentes y competitivos con horarios estándar (Lun-Vie 8am-6pm) y horarios premium (noches y fines de semana). Visite nuestra página de precios o llámenos para una cotización detallada según sus necesidades específicas.',
+
+  // Pain Points Section
+  'painPoints.title': 'Entendemos Sus Desafíos',
+  'painPoints.subtitle': 'Problemas reales. Soluciones reales. Vea cómo convertimos los dolores de cabeza de TI en ventajas empresariales.',
+  'painPoints.cta.text': 'Vea cómo transformamos los desafíos de TI en ventajas empresariales',
+  'painPoints.cta.button': 'Programe una Consulta Gratuita',
+  'painPoints.label.problem': 'Su Punto de Dolor',
+  'painPoints.label.solution': 'Nuestra Solución',
+
+  // Pain Point 1
+  'painPoints.1.category': 'Confiabilidad del Sistema',
+  'painPoints.1.problem': 'Solo me entero de que mi servidor se cayó cuando mis empleados no pueden trabajar.',
+  'painPoints.1.solution': 'Alertas en tiempo real por correo electrónico, SMS y notificaciones web antes de que los sistemas fallen completamente.',
+
+  // Pain Point 2
+  'painPoints.2.category': 'Rendimiento',
+  'painPoints.2.problem': 'Mi computadora ha estado funcionando lenta durante semanas pero no sé por qué.',
+  'painPoints.2.solution': 'Monitoreo continuo de CPU, memoria y disco con tendencias de rendimiento para identificar cuellos de botella antes de que impacten la productividad.',
+
+  // Pain Point 3
+  'painPoints.3.category': 'Protección de Datos',
+  'painPoints.3.problem': 'Nuestro respaldo falló el mes pasado y no nos dimos cuenta hasta que lo necesitamos.',
+  'painPoints.3.solution': 'Monitoreo automático del estado de respaldos y alertas de fallas aseguran que sepa inmediatamente cuando los respaldos no están funcionando.',
+
+  // Pain Point 4
+  'painPoints.4.category': 'Protección de Datos',
+  'painPoints.4.problem': 'Perdí datos importantes cuando mi disco duro murió sin advertencia.',
+  'painPoints.4.solution': 'El monitoreo de salud de disco SMART predice fallas de unidades días o semanas por adelantado, dando tiempo para reemplazar discos antes de la pérdida de datos.',
+
+  // Pain Point 5
+  'painPoints.5.category': 'Seguridad',
+  'painPoints.5.problem': 'Mi antivirus dejó de funcionar y no me di cuenta durante meses.',
+  'painPoints.5.solution': 'El monitoreo de postura de seguridad rastrea antivirus, firewall y estado de parches con alertas inmediatas cuando falla la protección.',
+
+  // Pain Point 6
+  'painPoints.6.category': 'Soporte Proactivo',
+  'painPoints.6.problem': 'Pago por soporte de TI pero solo arreglan cosas después de que se rompen.',
+  'painPoints.6.solution': 'El monitoreo proactivo previene el 80% de los problemas antes de que causen interrupción del negocio.',
+
+  // Pain Point 7
+  'painPoints.7.category': 'Gestión de Costos',
+  'painPoints.7.problem': 'Cada emergencia de TI me cuesta miles en productividad perdida y llamadas de servicio de emergencia.',
+  'painPoints.7.solution': 'Sistemas de alerta temprana y reinicios automáticos de servicio resuelven problemas fuera de horas antes de que lleguen los empleados.',
+
+  // Pain Point 8
+  'painPoints.8.category': 'Disponibilidad de Soporte',
+  'painPoints.8.problem': 'Nunca puedo obtener ayuda cuando realmente la necesito - solo durante horas de oficina.',
+  'painPoints.8.solution': 'Monitoreo automatizado 24/7 con capacidades de resolución remota fuera de horas.',
+
+  // Pain Point 9
+  'painPoints.9.category': 'Comunicación',
+  'painPoints.9.problem': 'Envío tickets de soporte y luego no escucho nada durante días.',
+  'painPoints.9.solution': 'Actualizaciones de tickets en tiempo real, notificaciones automáticas y seguimiento de estado transparente a través del portal del cliente.',
+
+  // Pain Point 10
+  'painPoints.10.category': 'Transparencia',
+  'painPoints.10.problem': 'Nunca sé qué está haciendo realmente mi compañía de TI por mí.',
+  'painPoints.10.solution': 'Informes de monitoreo detallados, paneles de rendimiento y visibilidad completa de todas las actividades de TI.',
+
+  // Pain Point 11
+  'painPoints.11.category': 'Transparencia de Facturación',
+  'painPoints.11.problem': 'TI me factura 3 horas pero solo los vi aquí durante 90 minutos.',
+  'painPoints.11.solution': 'Seguimiento automático de tiempo, facturación transparente y descripciones detalladas de trabajo para cada solicitud de servicio.',
+
+  // Pain Point 12
+  'painPoints.12.category': 'Continuidad del Negocio',
+  'painPoints.12.problem': 'Cuando nuestro servidor principal se cae, todo nuestro negocio se detiene.',
+  'painPoints.12.solution': 'Monitoreo de servicios críticos con capacidades de reinicio automático y escalación inmediata para problemas de servidor.',
+
+  // Pain Point 13
+  'painPoints.13.category': 'Confiabilidad de Red',
+  'painPoints.13.problem': 'Perdimos el trabajo de todo un día cuando nuestra red se cayó el viernes.',
+  'painPoints.13.solution': 'Monitoreo de conectividad de red con alertas para fallas de internet y red interna.',
+
+  // Pain Point 14
+  'painPoints.14.category': 'Protección de Hardware',
+  'painPoints.14.problem': 'Las fluctuaciones de temperatura en nuestra sala de servidores causaron daños costosos al hardware.',
+  'painPoints.14.solution': 'El monitoreo ambiental rastrea las temperaturas de CPU y sistema con alertas antes de que ocurra daño al hardware.',
+
+  // Pain Point 15
+  'painPoints.15.category': 'Seguridad',
+  'painPoints.15.problem': 'Alguien intentó hackear nuestros sistemas y no teníamos idea de que estaba sucediendo.',
+  'painPoints.15.solution': 'Detección de intentos de inicio de sesión fallidos y monitoreo de eventos de seguridad con notificaciones inmediatas de violación.',
+
+  // Pain Point 16
+  'painPoints.16.category': 'Actualizaciones de Seguridad',
+  'painPoints.16.problem': 'Siempre estamos atrasados en actualizaciones de seguridad y parches.',
+  'painPoints.16.solution': 'El monitoreo automático del estado de parches identifica actualizaciones de seguridad faltantes antes de que se conviertan en vulnerabilidades.',
+
+  // Pain Point 17
+  'painPoints.17.category': 'Cumplimiento',
+  'painPoints.17.problem': 'Nuestra auditoría de cumplimiento encontró brechas de seguridad que no sabíamos que existían.',
+  'painPoints.17.solution': 'Monitoreo continuo de cumplimiento e informes de postura de seguridad aseguran preparación para auditorías.',
+
+  // Pain Point 18
+  'painPoints.18.category': 'Gestión de Recursos',
+  'painPoints.18.problem': 'Seguimos comprando computadoras nuevas pero se vuelven lentas en meses.',
+  'painPoints.18.solution': 'Tendencias de rendimiento y planificación de capacidad ayudan a optimizar el hardware existente y planificar actualizaciones estratégicamente.',
+
+  // Pain Point 19
+  'painPoints.19.category': 'Gestión de Licencias',
+  'painPoints.19.problem': 'Las licencias de software nos están costando una fortuna pero no sabemos qué usamos realmente.',
+  'painPoints.19.solution': 'El seguimiento de inventario de software identifica licencias no utilizadas y brechas de cumplimiento.',
+
+  // Pain Point 20
+  'painPoints.20.category': 'Valor de TI',
+  'painPoints.20.problem': 'Nuestros costos de TI siguen creciendo pero no podemos ver el valor.',
+  'painPoints.20.solution': 'Seguimiento de ROI, métricas de prevención de problemas e informes detallados demuestran el valor de TI y ahorros de costos.',
+
+  // Pain Point 21
+  'painPoints.21.category': 'Productividad del Usuario',
+  'painPoints.21.problem': 'Mis empleados pierden tiempo solucionando problemas de TI en lugar de trabajar.',
+  'painPoints.21.solution': 'Resolución proactiva de problemas y correcciones automatizadas minimizan las interrupciones de TI del usuario final.',
+
+  // Pain Point 22
+  'painPoints.22.category': 'Problemas Recurrentes',
+  'painPoints.22.problem': 'Tenemos los mismos problemas de computadora una y otra vez.',
+  'painPoints.22.solution': 'Reconocimiento de patrones y remediación automatizada previenen problemas recurrentes.',
+
+  // Pain Point 23
+  'painPoints.23.category': 'Escalabilidad',
+  'painPoints.23.problem': 'A medida que crecemos, la gestión de TI se vuelve más compleja y costosa.',
+  'painPoints.23.solution': 'El monitoreo centralizado escala sin esfuerzo de 2 a más de 200 dispositivos con la misma sobrecarga de gestión.',
+
+  // Pain Point 24
+  'painPoints.24.category': 'Asequibilidad',
+  'painPoints.24.problem': 'Necesitamos soporte de TI pero no podemos pagar una persona de TI a tiempo completo.',
+  'painPoints.24.solution': 'Monitoreo y soporte de grado profesional a una fracción del costo del personal interno de TI.',
+
+  // Pain Point 25
+  'painPoints.25.category': 'Trabajo Remoto',
+  'painPoints.25.problem': 'Nuestros empleados remotos tienen problemas de TI pero no podemos ayudarlos rápidamente.',
+  'painPoints.25.solution': 'Capacidades de monitoreo y gestión remota resuelven problemas en dispositivos domésticos y móviles sin visitas en sitio.',
+
+  // Pain Point 26
+  'painPoints.26.category': 'Ciclo de Vida del SO',
+  'painPoints.26.problem': 'Estoy ejecutando un sistema operativo que ya no tiene soporte y ni siquiera lo sabía.',
+  'painPoints.26.solution': 'Seguimiento de fin de vida para Windows, macOS y todas las distribuciones principales de Linux con alertas 180 días antes de que termine el soporte de seguridad.',
+
+  // Pain Point 27
+  'painPoints.27.category': 'Seguridad del SO',
+  'painPoints.27.problem': 'Las actualizaciones de seguridad de mi SO se detuvieron hace meses pero todo parece bien, así que lo ignoré.',
+  'painPoints.27.solution': 'Distingue entre fases de soporte general y solo seguridad, alertando antes de que entre en la zona de peligro.',
+
+  // Pain Point 28
+  'painPoints.28.category': 'Actualizaciones de Software',
+  'painPoints.28.problem': 'Tengo docenas de paquetes desactualizados en mi Mac pero no sé cuáles importan.',
+  'painPoints.28.solution': 'Seguimiento automatizado de actualizaciones de Homebrew, npm, pip y Mac App Store con marcación de prioridad de seguridad.',
+
+  // Pain Point 29
+  'painPoints.29.category': 'Herramientas de Desarrollo',
+  'painPoints.29.problem': 'Mis herramientas de desarrollo y gestores de paquetes están desactualizados, creando pesadillas de compatibilidad.',
+  'painPoints.29.solution': 'Monitoreo de gestores de paquetes multiplataforma soporta Homebrew, npm, pip y Mac App Store con detección de conflictos de versión.',
+
+  // Pain Point 30
+  'painPoints.30.category': 'Asequibilidad',
+  'painPoints.30.problem': 'No puedo pagar precios empresariales de MSP pero necesito monitoreo básico para mi pequeño negocio.',
+  'painPoints.30.solution': 'Nivel gratuito con 2 dispositivos, sin expiración, características de monitoreo completas - pruebe antes de comprometerse, sin tarjeta de crédito.',
+
+  // Pain Point 31
+  'painPoints.31.category': 'Sorpresas de Precios',
+  'painPoints.31.problem': 'Mi MSP me sorprendió con un gran aumento de precio cuando agregué una computadora más.',
+  'painPoints.31.solution': 'Precios graduados con desglose de costos transparente que muestra exactamente cuánto cuesta agregar cada dispositivo antes de comprometerse.',
+
+  // Pain Point 32
+  'painPoints.32.category': 'Claridad de Precios',
+  'painPoints.32.problem': 'Los precios de MSP son confusos - por dispositivo, por usuario, por servicio, más tarifas ocultas.',
+  'painPoints.32.solution': 'Precios simples por dispositivo graduados con desglose de costos completo mostrado por adelantado durante el registro del agente.',
+
+  // Pain Point 33
+  'painPoints.33.category': 'Instalación',
+  'painPoints.33.problem': 'Instalar agentes de monitoreo requiere experiencia técnica que no tengo.',
+  'painPoints.33.solution': 'Script de instalación de un comando para todas las plataformas más asistente de configuración GUI con verificación de correo electrónico.',
+
+  // Pain Point 34
+  'painPoints.34.category': 'Multiplataforma',
+  'painPoints.34.problem': 'Cada herramienta MSP necesita diferentes pasos de configuración para Windows vs Mac vs Linux.',
+  'painPoints.34.solution': 'Agente multiplataforma único con experiencia de usuario idéntica en Windows, macOS y todas las distribuciones principales de Linux.',
+
+  // Pain Point 35
+  'painPoints.35.category': 'Prueba Antes de Comprar',
+  'painPoints.35.problem': 'Quiero probar el monitoreo de TI pero los MSP requieren contratos a largo plazo antes de poder probar nada.',
+  'painPoints.35.solution': 'Registro instantáneo de nivel gratuito - 2 dispositivos, sin tarjeta de crédito, sin expiración, actualice solo cuando esté listo.',
+
+  // Pain Point 36
+  'painPoints.36.category': 'Autoservicio',
+  'painPoints.36.problem': 'Tengo que llamar a mi MSP solo para verificar el estado de mi ticket de soporte.',
+  'painPoints.36.solution': 'Portal del cliente con seguimiento de tickets en tiempo real, gestión de solicitudes de servicio y visibilidad completa de todas las actividades.',
+
+  // Pain Point 37
+  'painPoints.37.category': 'Dependencia del Proveedor',
+  'painPoints.37.problem': 'Cambiar de MSP es una pesadilla - estoy atrapado en contratos costosos y herramientas propietarias.',
+  'painPoints.37.solution': 'Sin contratos a largo plazo, nivel gratuito para probar, precios transparentes y protocolos de monitoreo estándar.',
+
+  // Pain Point 38
+  'painPoints.38.category': 'TI en la Sombra',
+  'painPoints.38.problem': 'No sé qué software está instalado en las computadoras de mis empleados.',
+  'painPoints.38.solution': 'Seguimiento integral de inventario de software en todos los dispositivos con informes de versión para identificar TI en la sombra.',
+
+  // Pain Point 39
+  'painPoints.39.category': 'Gestión de Activos',
+  'painPoints.39.problem': 'Planificar ciclos de actualización de hardware es una adivinanza - no tengo inventario preciso de hardware.',
+  'painPoints.39.solution': 'Recopilación automatizada de inventario de hardware con seguimiento centralizado de activos y planificación de capacidad.',
+
+  // Pain Point 40
+  'painPoints.40.category': 'Barrera del Idioma',
+  'painPoints.40.problem': 'Mi equipo habla español pero nuestro soporte de TI es solo en inglés.',
+  'painPoints.40.solution': 'Plataforma completamente bilingüe con soporte en inglés y español para portal del cliente, solicitudes de servicio y todas las comunicaciones.',
+
+  // Pain Point 41
+  'painPoints.41.category': 'Monitoreo de Respaldos',
+  'painPoints.41.problem': 'No tengo idea si mis respaldos están funcionando realmente o solo fallando silenciosamente.',
+  'painPoints.41.solution': 'Monitoreo de respaldos detecta Time Machine, Veeam, Acronis y Windows Backup con alertas inmediatas de fallas y marcas de tiempo del último respaldo.',
+
+  // Pain Point 42
+  'painPoints.42.category': 'Gestión de Servicios',
+  'painPoints.42.problem': 'Los servicios críticos dejan de funcionar y solo me doy cuenta cuando los usuarios se quejan.',
+  'painPoints.42.solution': 'Monitoreo de servicios rastrea estado, tiempo de actividad y uso de memoria con capacidades de reinicio automático para servicios críticos.',
+
+  // Pain Point 43
+  'painPoints.43.category': 'Seguimiento de Tiempo Activo',
+  'painPoints.43.problem': 'No sé cuándo mi sistema se reinició por última vez o si se bloqueó inesperadamente.',
+  'painPoints.43.solution': 'Seguimiento de tiempo activo con detección de reinicios inesperados le alerta sobre bloqueos del sistema versus reinicios planificados.',
+
+  // Pain Point 44
+  'painPoints.44.category': 'Gestión Remota',
+  'painPoints.44.problem': 'Necesito estar en el sitio para solucionar problemas - no puedo ayudar remotamente.',
+  'painPoints.44.solution': 'Ejecución remota de comandos le permite diagnosticar y resolver problemas desde cualquier lugar sin conducir a la ubicación.',
+
+  // Pain Point 45
+  'painPoints.45.category': 'Análisis de Registros de Eventos',
+  'painPoints.45.problem': 'El Visor de Eventos de Windows es abrumador - miles de entradas y no sé qué es importante.',
+  'painPoints.45.solution': 'Filtrado automático de registros de eventos identifica errores críticos, eventos de seguridad y advertencias en Windows, macOS y Linux.',
+
+  // Pain Point 46
+  'painPoints.46.category': 'Flexibilidad de Programación',
+  'painPoints.46.problem': 'Quiero programar mantenimiento fuera de horas pero las compañías de TI solo trabajan de 9 a 5.',
+  'painPoints.46.solution': 'Sistema de programación de servicios le permite reservar citas durante noches y fines de semana cuando sea conveniente para su negocio.',
+
+  // Pain Point 47
+  'painPoints.47.category': 'Acceso al Portal',
+  'painPoints.47.problem': 'No puedo acceder a mi panel de TI cuando estoy viajando o fuera de la oficina.',
+  'painPoints.47.solution': 'Portal web basado en la nube accesible desde cualquier dispositivo, en cualquier lugar con conexión a internet - no se requiere VPN.',
+
+  // Pain Point 48
+  'painPoints.48.category': 'Configuración',
+  'painPoints.48.problem': 'Configurar el monitoreo requiere editar archivos de configuración y experiencia en línea de comandos que no tengo.',
+  'painPoints.48.solution': 'Interfaz de configuración basada en GUI y asistente de configuración visual hacen que la configuración sea simple con apuntar y hacer clic.',
+
+  // Pain Point 49
+  'painPoints.49.category': 'Mantenimiento del Agente',
+  'painPoints.49.problem': 'Mi agente de monitoreo se rompe cuando actualizo mi SO o necesita actualizaciones manuales.',
+  'painPoints.49.solution': 'Mecanismo de actualización automática mantiene el agente compatible con las últimas versiones de SO sin intervención manual.',
+
+  // Pain Point 50
+  'painPoints.50.category': 'Gestión Multi-Sitio',
+  'painPoints.50.problem': 'Tengo múltiples ubicaciones pero mi MSP trata cada una por separado con diferentes portales.',
+  'painPoints.50.solution': 'Panel unificado gestiona todas las ubicaciones, dispositivos y solicitudes de servicio desde una interfaz centralizada única.'
 };
