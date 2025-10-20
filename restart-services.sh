@@ -122,8 +122,8 @@ fi
 # Update AWS RDS Security Group to allow current IP
 echo ""
 echo "🔐 Updating AWS RDS Security Group..."
-RDS_SG_ID="YOUR_RDS_SECURITY_GROUP_ID"  # e.g., sg-xxxxxxxxxxxxx
-EC2_BACKEND_IP="YOUR_EC2_BACKEND_IP/32"  # e.g., 1.2.3.4/32
+RDS_SG_ID="sg-033c0c1f0983cb799"
+EC2_BACKEND_IP="44.211.124.33/32"
 AWS_REGION="us-east-1"
 
 # Get current public IP for outbound connections (for when not on local network)
@@ -183,6 +183,53 @@ else
     fi
 fi
 
+# Update ~/.pgpass with current password from AWS Secrets Manager
+echo ""
+echo "🔐 Updating ~/.pgpass with current database password..."
+DB_SECRET_NAME="rds!cluster-9e81a628-84ff-470b-be3c-30cbeb7a3b98"
+DB_HOST="database-1.cluster-c4n0ok80kvqh.us-east-1.rds.amazonaws.com"
+DB_PORT="5432"
+DB_NAME="romerotechsolutions"
+DB_USER="postgres"
+
+# Fetch secret from AWS Secrets Manager
+SECRET_JSON=$(aws secretsmanager get-secret-value \
+    --secret-id "$DB_SECRET_NAME" \
+    --region "$AWS_REGION" \
+    --query SecretString \
+    --output text 2>/dev/null)
+
+if [ $? -eq 0 ] && [ ! -z "$SECRET_JSON" ]; then
+    # Extract password from secret JSON
+    DB_PASSWORD=$(echo "$SECRET_JSON" | grep -o '"password":"[^"]*"' | sed 's/"password":"\(.*\)"/\1/')
+
+    if [ ! -z "$DB_PASSWORD" ]; then
+        # Escape special characters in password (: and \) for .pgpass format
+        DB_PASSWORD_ESCAPED=$(echo "$DB_PASSWORD" | sed 's/\\/\\\\/g' | sed 's/:/\\:/g')
+
+        # Create or update ~/.pgpass file
+        PGPASS_ENTRY="${DB_HOST}:${DB_PORT}:${DB_NAME}:${DB_USER}:${DB_PASSWORD_ESCAPED}"
+
+        # Remove old entry for this host/database if it exists
+        if [ -f ~/.pgpass ]; then
+            grep -v "^${DB_HOST}:${DB_PORT}:${DB_NAME}:${DB_USER}:" ~/.pgpass > ~/.pgpass.tmp 2>/dev/null || true
+            mv ~/.pgpass.tmp ~/.pgpass
+        fi
+
+        # Add new entry
+        echo "$PGPASS_ENTRY" >> ~/.pgpass
+
+        # Set proper permissions (required by psql)
+        chmod 600 ~/.pgpass
+
+        echo "✅ Updated ~/.pgpass with current database password"
+    else
+        echo "⚠️  Warning: Could not extract password from secret"
+    fi
+else
+    echo "⚠️  Warning: Could not fetch database secret from AWS Secrets Manager"
+fi
+
 # Step 3: Wait for cleanup
 echo ""
 echo "⏳ Step 3: Waiting for cleanup..."
@@ -219,11 +266,11 @@ if [ ! -d "backend" ]; then
     exit 1
 fi
 
-# Start backend in background with nohup
+# Start backend in background with nohup (fully detached)
 cd backend
 echo "📂 Changed to backend directory: $(pwd)"
 echo "🚀 Starting backend server with nohup..."
-nohup npm run dev > ../nohup_backend.out 2>&1 &
+nohup npm run dev > ../nohup_backend.out 2>&1 </dev/null &
 backend_pid=$!
 echo "✅ Backend started with nohup (PID: $backend_pid)"
 echo "📋 Backend logs: nohup_backend.out"
@@ -247,8 +294,8 @@ if [ ! -f "package.json" ]; then
 fi
 
 echo "📂 Starting frontend from: $(pwd)"
-echo "🚀 Starting frontend server with nohup..."
-nohup npm run dev > nohup_frontend.out 2>&1 &
+echo "🚀 Starting frontend server with nohup (fully detached)..."
+nohup npm run dev > nohup_frontend.out 2>&1 </dev/null &
 frontend_pid=$!
 echo "✅ Frontend started with nohup (PID: $frontend_pid)"
 echo "📋 Frontend logs: nohup_frontend.out"

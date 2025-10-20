@@ -9,7 +9,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
-restart-services.sh
 
 node_modules
 dist
@@ -62,7 +61,6 @@ amplify/backend/amplify-meta.json
 amplify/backend/.temp
 build/
 .amplifyrc
-CLAUDE.md
 
 # Runtime log files
 nohup*.out
