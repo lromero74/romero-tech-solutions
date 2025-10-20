@@ -211,18 +211,27 @@ router.get('/analytics', async (req, res) => {
     // Get revenue projections (subscribed and enterprise tiers only)
     const revenueResult = await query(`
       SELECT
-        u.subscription_tier,
-        COUNT(DISTINCT u.id) as paying_users,
+        user_tier_data.subscription_tier,
+        COUNT(DISTINCT user_tier_data.user_id) as paying_users,
         SUM(
-          GREATEST(0, COUNT(ad.id) - u.devices_allowed) *
-          sp.price_per_additional_device
+          GREATEST(0, user_tier_data.device_count - user_tier_data.devices_allowed) *
+          user_tier_data.price_per_additional_device
         ) as projected_monthly_revenue
-      FROM users u
-      LEFT JOIN businesses b ON u.business_id = b.id
-      LEFT JOIN agent_devices ad ON ad.business_id = b.id AND ad.is_active = true
-      LEFT JOIN subscription_pricing sp ON sp.tier = u.subscription_tier AND sp.is_active = true
-      WHERE u.subscription_tier IN ('subscribed', 'enterprise')
-      GROUP BY u.subscription_tier, sp.price_per_additional_device, u.devices_allowed
+      FROM (
+        SELECT
+          u.id as user_id,
+          u.subscription_tier,
+          u.devices_allowed,
+          COUNT(ad.id) as device_count,
+          sp.price_per_additional_device
+        FROM users u
+        LEFT JOIN businesses b ON u.business_id = b.id
+        LEFT JOIN agent_devices ad ON ad.business_id = b.id AND ad.is_active = true
+        LEFT JOIN subscription_pricing sp ON sp.tier = u.subscription_tier AND sp.is_active = true
+        WHERE u.subscription_tier IN ('subscribed', 'enterprise')
+        GROUP BY u.id, u.subscription_tier, u.devices_allowed, sp.price_per_additional_device
+      ) as user_tier_data
+      GROUP BY user_tier_data.subscription_tier
     `);
 
     // Get total users and devices
