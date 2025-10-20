@@ -2929,11 +2929,85 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
 
 /**
  * Deactivate Agent
- * DELETE /api/agents/:agent_id
+ * PUT /api/agents/:agent_id/deactivate
  *
  * Deactivates an agent (sets is_active = false)
- * Customers can deactivate their own business's agents (both active and inactive)
- * This allows cleanup of devices that were previously deactivated
+ * Device remains in the client's device list but shows as inactive
+ * Inactive devices do not count toward subscription device limits
+ */
+router.put('/:agent_id/deactivate', authMiddleware, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
+
+    console.log(`⏸️  DEACTIVATE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}`);
+
+    // Verify ownership/access to this agent
+    let accessCheckQuery = `
+      SELECT ad.id, ad.business_id, ad.device_name, ad.trial_user_id, ad.is_trial, ad.is_active
+      FROM agent_devices ad
+      WHERE ad.id = $1 AND ad.soft_delete = false
+    `;
+    const accessParams = [agent_id];
+
+    if (!isEmployee) {
+      // For clients: Check if this is a trial agent owned by the user OR a regular agent in their business
+      accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
+      accessParams.push(req.user.id);
+      accessParams.push(req.user.business_id);
+    }
+
+    const accessResult = await query(accessCheckQuery, accessParams);
+
+    if (accessResult.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'Agent not found or access denied',
+        code: 'AGENT_NOT_FOUND'
+      });
+    }
+
+    const agent = accessResult.rows[0];
+
+    // Deactivate the agent (set is_active = false, but keep soft_delete = false so it stays in list)
+    await query(
+      `UPDATE agent_devices
+       SET is_active = false,
+           status = 'offline',
+           updated_at = NOW()
+       WHERE id = $1`,
+      [agent_id]
+    );
+
+    console.log(`⏸️  Agent deactivated: ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Agent deactivated successfully',
+      data: {
+        agent_id: agent_id,
+        device_name: agent.device_name
+      }
+    });
+
+  } catch (error) {
+    console.error('Deactivate agent error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to deactivate agent',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Remove Agent (Soft Delete)
+ * DELETE /api/agents/:agent_id
+ *
+ * Soft deletes an agent (sets is_active = false AND soft_delete = true)
+ * This hides the device from the client's device list but preserves all records
+ * Clients can only soft delete their own business's agents
+ * Employees can access admin tools for permanent deletion if needed
  */
 router.delete('/:agent_id', authMiddleware, async (req, res) => {
   try {
@@ -2971,21 +3045,22 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
 
     const agent = accessResult.rows[0];
 
-    // Deactivate the agent (soft delete - set is_active = false)
+    // Remove the agent (soft delete - set is_active = false AND soft_delete = true)
     await query(
       `UPDATE agent_devices
        SET is_active = false,
+           soft_delete = true,
            status = 'offline',
            updated_at = NOW()
        WHERE id = $1`,
       [agent_id]
     );
 
-    console.log(`🗑️  Agent deactivated: ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+    console.log(`🗑️  Agent removed (soft deleted): ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
 
     res.json({
       success: true,
-      message: 'Agent deactivated successfully',
+      message: 'Agent removed successfully',
       data: {
         agent_id: agent_id,
         device_name: agent.device_name

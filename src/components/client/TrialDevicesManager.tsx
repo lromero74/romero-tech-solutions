@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings } from 'lucide-react';
+import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings, Pause, Play } from 'lucide-react';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { AuthUser } from '../../types/database';
 import apiService from '../../services/apiService';
@@ -10,6 +10,7 @@ interface Agent {
   os_type: string;
   os_version?: string;
   status: string;
+  is_active: boolean;
   last_heartbeat: string;
   created_at: string;
 }
@@ -26,8 +27,10 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [removingAgentId, setRemovingAgentId] = useState<string | null>(null);
+  const [deactivatingAgentId, setDeactivatingAgentId] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [agentToRemove, setAgentToRemove] = useState<Agent | null>(null);
+  const [actionType, setActionType] = useState<'deactivate' | 'remove'>('remove');
 
   // Get device limit from user's subscription tier
   const deviceLimit = authUser.devicesAllowed || 2;
@@ -70,8 +73,56 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
   }, []);
 
   const handleRemoveClick = (agent: Agent) => {
+    setActionType('remove');
     setAgentToRemove(agent);
     setShowConfirmDialog(true);
+  };
+
+  const handleDeactivateClick = (agent: Agent) => {
+    setActionType('deactivate');
+    setAgentToRemove(agent);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmAction = async () => {
+    if (!agentToRemove) return;
+
+    if (actionType === 'deactivate') {
+      await confirmDeactivateDevice();
+    } else {
+      await confirmRemoveDevice();
+    }
+  };
+
+  const confirmDeactivateDevice = async () => {
+    if (!agentToRemove) return;
+
+    try {
+      setDeactivatingAgentId(agentToRemove.id);
+      setError(null);
+
+      const result = await apiService.put<{ success: boolean; message?: string }>(`/agents/${agentToRemove.id}/deactivate`);
+
+      if (result.success) {
+        // Update agent in local state to show as inactive
+        setAgents(prev => prev.map(a =>
+          a.id === agentToRemove.id ? { ...a, is_active: false, status: 'offline' } : a
+        ));
+        setShowConfirmDialog(false);
+        setAgentToRemove(null);
+
+        if (onDeviceRemoved) {
+          onDeviceRemoved();
+        }
+      } else {
+        setError(result.message || 'Failed to deactivate device');
+      }
+    } catch (err) {
+      console.error('Error deactivating agent:', err);
+      setError('Failed to deactivate device. Please try again.');
+    } finally {
+      setDeactivatingAgentId(null);
+    }
   };
 
   const confirmRemoveDevice = async () => {
@@ -275,6 +326,33 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                     Settings
                   </button>
                   <button
+                    onClick={() => handleDeactivateClick(agent)}
+                    disabled={deactivatingAgentId === agent.id}
+                    className={`inline-flex items-center px-3 py-2 border text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      agent.is_active
+                        ? 'border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-400 bg-white dark:bg-gray-800 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                        : 'border-green-300 dark:border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/20'
+                    }`}
+                    title={agent.is_active ? 'Deactivate device' : 'Reactivate device'}
+                  >
+                    {deactivatingAgentId === agent.id ? (
+                      <>
+                        <Loader className="h-4 w-4 mr-2 animate-spin" />
+                        {agent.is_active ? 'Deactivating...' : 'Reactivating...'}
+                      </>
+                    ) : agent.is_active ? (
+                      <>
+                        <Pause className="h-4 w-4 mr-2" />
+                        Deactivate
+                      </>
+                    ) : (
+                      <>
+                        <Play className="h-4 w-4 mr-2" />
+                        Reactivate
+                      </>
+                    )}
+                  </button>
+                  <button
                     onClick={() => handleRemoveClick(agent)}
                     disabled={removingAgentId === agent.id}
                     className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -304,11 +382,30 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              Remove Device?
+              {actionType === 'deactivate'
+                ? (agentToRemove.is_active ? 'Deactivate Device?' : 'Reactivate Device?')
+                : 'Remove Device?'}
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-6">
-              Are you sure you want to remove <strong>{agentToRemove.device_name}</strong>?
-              This device will stop being monitored immediately.
+              {actionType === 'deactivate' ? (
+                agentToRemove.is_active ? (
+                  <>
+                    Are you sure you want to deactivate <strong>{agentToRemove.device_name}</strong>?
+                    This device will stop being monitored but will remain in your list.
+                    Inactive devices do not count toward your device limit.
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to reactivate <strong>{agentToRemove.device_name}</strong>?
+                    This device will resume monitoring and will count toward your device limit.
+                  </>
+                )
+              ) : (
+                <>
+                  Are you sure you want to remove <strong>{agentToRemove.device_name}</strong>?
+                  This device will be removed from your list. All historical data will be preserved.
+                </>
+              )}
             </p>
             <div className="flex gap-3 justify-end">
               <button
@@ -321,11 +418,21 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                 Cancel
               </button>
               <button
-                onClick={confirmRemoveDevice}
-                disabled={removingAgentId !== null}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={confirmAction}
+                disabled={removingAgentId !== null || deactivatingAgentId !== null}
+                className={`px-4 py-2 text-white rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition-colors ${
+                  actionType === 'deactivate'
+                    ? (agentToRemove.is_active ? 'bg-yellow-600 hover:bg-yellow-700' : 'bg-green-600 hover:bg-green-700')
+                    : 'bg-red-600 hover:bg-red-700'
+                }`}
               >
-                {removingAgentId ? 'Removing...' : 'Remove Device'}
+                {deactivatingAgentId !== null
+                  ? (agentToRemove.is_active ? 'Deactivating...' : 'Reactivating...')
+                  : removingAgentId !== null
+                    ? 'Removing...'
+                    : actionType === 'deactivate'
+                      ? (agentToRemove.is_active ? 'Deactivate' : 'Reactivate')
+                      : 'Remove Device'}
               </button>
             </div>
           </div>
