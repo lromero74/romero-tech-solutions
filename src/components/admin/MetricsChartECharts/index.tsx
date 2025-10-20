@@ -38,6 +38,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
 }) => {
   const { isDark } = useTheme();
   const [containerWidth, setContainerWidth] = React.useState<number>(0);
+  const chartRef = React.useRef<ReactECharts>(null);
 
   // Initialize all state (with persistence if agentId and resourceType are provided)
   const chartState = useChartState({ initialHeight: height, agentId, resourceType });
@@ -114,6 +115,22 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
 
     return () => resizeObserver.disconnect();
   }, [chartState.chartContainerRef]);
+
+  // Force ECharts resize when oscillator heights change (critical for 4+ indicators)
+  React.useEffect(() => {
+    const activeIndicatorCount = Object.values(chartState.activeIndicators).filter(Boolean).length;
+
+    // When there are multiple indicators (especially 4+), ECharts needs explicit resize
+    if (activeIndicatorCount > 0 && chartRef.current) {
+      const echartsInstance = chartRef.current.getEchartsInstance();
+      if (echartsInstance) {
+        // Use requestAnimationFrame to ensure DOM has updated before resize
+        requestAnimationFrame(() => {
+          echartsInstance.resize();
+        });
+      }
+    }
+  }, [chartState.oscillatorHeights, chartState.activeIndicators]);
 
   // Handle navigation context (scroll to timestamp, highlight range, enable indicator)
   React.useEffect(() => {
@@ -235,6 +252,7 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
   // Memoize the chart element
   const chartElement = useMemo(() => (
     <ReactECharts
+      ref={chartRef}
       option={option}
       style={{ height: `${chartState.chartHeight}px` }}
       opts={{ renderer: 'canvas' }}
