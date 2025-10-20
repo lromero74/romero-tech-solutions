@@ -9,6 +9,85 @@ router.use(authMiddleware);
 router.use(requireEmployee);
 
 /**
+ * Helper function to rebuild pricing_ranges for a tier
+ * Includes inherited pricing from lower tiers
+ */
+async function rebuildPricingRanges(tier) {
+  // Get all pricing tiers
+  const allTiers = await query(`
+    SELECT tier, base_devices, default_devices_allowed, price_per_additional_device
+    FROM subscription_pricing
+    ORDER BY
+      CASE tier
+        WHEN 'free' THEN 1
+        WHEN 'subscribed' THEN 2
+        WHEN 'enterprise' THEN 3
+      END
+  `);
+
+  const tiers = allTiers.rows;
+  const freeTier = tiers.find(t => t.tier === 'free');
+  const subscribedTier = tiers.find(t => t.tier === 'subscribed');
+  const enterpriseTier = tiers.find(t => t.tier === 'enterprise');
+
+  let pricingRanges = [];
+
+  switch (tier) {
+    case 'free':
+      pricingRanges = [{
+        start: 1,
+        end: parseInt(freeTier.default_devices_allowed),
+        price: 0,
+        description: 'Free tier devices'
+      }];
+      break;
+
+    case 'subscribed':
+      // Inherit free tier range
+      pricingRanges.push({
+        start: 1,
+        end: parseInt(freeTier.base_devices),
+        price: 0,
+        description: 'Free tier devices (inherited)'
+      });
+      // Add subscribed tier range
+      pricingRanges.push({
+        start: parseInt(freeTier.base_devices) + 1,
+        end: parseInt(subscribedTier.default_devices_allowed),
+        price: parseFloat(subscribedTier.price_per_additional_device),
+        description: 'Pro tier devices'
+      });
+      break;
+
+    case 'enterprise':
+      // Inherit free tier range
+      pricingRanges.push({
+        start: 1,
+        end: parseInt(freeTier.base_devices),
+        price: 0,
+        description: 'Free tier devices (inherited)'
+      });
+      // Inherit subscribed tier range
+      pricingRanges.push({
+        start: parseInt(freeTier.base_devices) + 1,
+        end: parseInt(subscribedTier.default_devices_allowed),
+        price: parseFloat(subscribedTier.price_per_additional_device),
+        description: 'Pro tier devices (inherited)'
+      });
+      // Add enterprise tier range
+      pricingRanges.push({
+        start: parseInt(subscribedTier.default_devices_allowed) + 1,
+        end: parseInt(enterpriseTier.default_devices_allowed),
+        price: parseFloat(enterpriseTier.price_per_additional_device),
+        description: 'Enterprise tier devices'
+      });
+      break;
+  }
+
+  return pricingRanges;
+}
+
+/**
  * GET /api/admin/subscription/pricing
  * Get all subscription pricing configurations (including inactive)
  */
@@ -152,10 +231,35 @@ router.put('/pricing/:tier', async (req, res) => {
       });
     }
 
+    // Recalculate pricing_ranges for this tier and any higher tiers that inherit from it
+    const tiersToUpdate = [];
+    if (tier === 'free') {
+      tiersToUpdate.push('free', 'subscribed', 'enterprise');
+    } else if (tier === 'subscribed') {
+      tiersToUpdate.push('subscribed', 'enterprise');
+    } else {
+      tiersToUpdate.push('enterprise');
+    }
+
+    // Update pricing_ranges for each affected tier
+    for (const tierToUpdate of tiersToUpdate) {
+      const pricingRanges = await rebuildPricingRanges(tierToUpdate);
+      await query(`
+        UPDATE subscription_pricing
+        SET pricing_ranges = $1::jsonb
+        WHERE tier = $2::subscription_tier_type
+      `, [JSON.stringify(pricingRanges), tierToUpdate]);
+    }
+
+    // Fetch the updated pricing to return to client
+    const updatedResult = await query(`
+      SELECT * FROM subscription_pricing WHERE tier = $1::subscription_tier_type
+    `, [tier]);
+
     res.json({
       success: true,
       message: 'Pricing configuration updated successfully',
-      pricing: result.rows[0]
+      pricing: updatedResult.rows[0]
     });
   } catch (error) {
     console.error('❌ Error updating pricing:', error);
