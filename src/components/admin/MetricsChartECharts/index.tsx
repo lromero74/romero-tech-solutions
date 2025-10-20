@@ -124,13 +124,17 @@ const MetricsChartECharts: React.FC<MetricsChartEChartsProps> = ({
     if (activeIndicatorCount > 0 && chartRef.current) {
       const echartsInstance = chartRef.current.getEchartsInstance();
       if (echartsInstance) {
-        // Use requestAnimationFrame to ensure DOM has updated before resize
-        requestAnimationFrame(() => {
-          echartsInstance.resize();
-        });
+        // Debounce resize calls during drag operations to avoid null value errors
+        const timeoutId = setTimeout(() => {
+          requestAnimationFrame(() => {
+            echartsInstance.resize();
+          });
+        }, chartState.isDragging ? 50 : 0); // 50ms debounce while dragging, immediate otherwise
+
+        return () => clearTimeout(timeoutId);
       }
     }
-  }, [chartState.oscillatorHeights, chartState.activeIndicators]);
+  }, [chartState.oscillatorHeights, chartState.activeIndicators, chartState.isDragging]);
 
   // Handle navigation context (scroll to timestamp, highlight range, enable indicator)
   React.useEffect(() => {

@@ -226,7 +226,7 @@ export const buildChartOption = ({
       axisLabel: {
         color: isDark ? '#9ca3af' : '#6b7280',
         fontSize: 12,
-        formatter: (value: number) => `${value.toFixed(1)}${unit}`,
+        formatter: (value: number) => value != null ? `${value.toFixed(1)}${unit}` : '',
       },
       splitLine: {
         lineStyle: {
@@ -265,11 +265,11 @@ export const buildChartOption = ({
     if (osc.key === 'rsi' || osc.key === 'stochastic') {
       config.min = 0;
       config.max = 100;
-      config.axisLabel.formatter = (value: number) => `${value.toFixed(0)}`;
+      config.axisLabel.formatter = (value: number) => value != null ? `${value.toFixed(0)}` : '';
     } else if (osc.key === 'williamsR') {
       config.min = -100;
       config.max = 0;
-      config.axisLabel.formatter = (value: number) => `${value.toFixed(0)}`;
+      config.axisLabel.formatter = (value: number) => value != null ? `${value.toFixed(0)}` : '';
     } else {
       // For MACD, ROC, ATR - use scale but with strict bounds
       config.scale = true;
