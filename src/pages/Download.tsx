@@ -116,6 +116,19 @@ const Download: React.FC = () => {
         } else {
           detectedArch = 'amd64';
         }
+
+        // Detect Linux distribution and set package format
+        let detectedDistro = 'deb'; // Default to .deb
+        if (ua.includes('fedora') || ua.includes('redhat') || ua.includes('red hat') ||
+            ua.includes('rhel') || ua.includes('centos') || ua.includes('rocky') ||
+            ua.includes('alma')) {
+          detectedDistro = 'rpm';
+        } else if (ua.includes('arch') || ua.includes('manjaro')) {
+          detectedDistro = 'pkg.tar.zst';
+        } else if (ua.includes('ubuntu') || ua.includes('debian') || ua.includes('mint')) {
+          detectedDistro = 'deb';
+        }
+        setSelectedLinuxDistro(detectedDistro);
       } else if (platform.includes('win') || ua.includes('windows')) {
         detectedOS = 'windows';
 
