@@ -2,10 +2,10 @@ import React from 'react';
 import { Wifi, Circle, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   if (!latestMetrics || (latestMetrics.internet_connected === undefined && latestMetrics.connectivity_issues_count === undefined)) {
     return null;
   }

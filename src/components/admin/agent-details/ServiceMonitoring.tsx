@@ -2,10 +2,10 @@ import React from 'react';
 import { Activity, Circle, AlertTriangle, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   if (!latestMetrics || latestMetrics.services_monitored === null || latestMetrics.services_monitored === undefined || latestMetrics.services_monitored === 0) {
     return null;
   }

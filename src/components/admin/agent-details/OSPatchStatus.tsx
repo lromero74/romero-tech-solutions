@@ -2,10 +2,10 @@ import React from 'react';
 import { Shield, Download, RefreshCw, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   if (!latestMetrics || latestMetrics.patches_available === undefined) return null;
 
   return (

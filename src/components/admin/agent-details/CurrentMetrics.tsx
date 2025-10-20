@@ -3,10 +3,10 @@ import { Cpu, Activity, HardDrive, Wifi, TrendingUp } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { getMetricColor, getMetricBarColor, formatBytes } from './utils';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
 
   if (!latestMetrics) return null;
 

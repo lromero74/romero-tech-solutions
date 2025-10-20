@@ -2,10 +2,10 @@ import React from 'react';
 import { Disc, HardDrive, Thermometer, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const DiskHealthStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
 
   if (!latestMetrics || !latestMetrics.disk_health_status) return null;
 

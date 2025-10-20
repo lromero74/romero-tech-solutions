@@ -1,7 +1,7 @@
 import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import { themeClasses } from '../../../../contexts/ThemeContext';
-import { useClientLanguage } from '../../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../../contexts/ClientLanguageContext';
 import type { ChartDisplayType, ActiveIndicators, DropdownPosition } from '../types';
 
 interface ChartToolbarProps {
@@ -31,7 +31,7 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   onToggleIndicatorsMenu,
   indicatorsButtonRef,
 }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
 
   const TIME_WINDOWS = [
     { label: t('agentDetails.timeframes.1H', undefined, '1H'), value: 1 },

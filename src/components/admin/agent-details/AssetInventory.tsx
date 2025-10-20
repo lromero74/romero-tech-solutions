@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { themeClasses } from '../../../contexts/ThemeContext';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 import agentService, {
   HardwareInventory as HardwareInventoryType,
   SoftwareInventory,
@@ -14,7 +14,7 @@ interface AssetInventoryProps {
 type TabType = 'hardware' | 'software' | 'storage';
 
 const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('hardware');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

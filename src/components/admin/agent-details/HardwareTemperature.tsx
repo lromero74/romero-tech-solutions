@@ -2,10 +2,10 @@ import React from 'react';
 import { Thermometer, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const HardwareTemperature: React.FC<AgentDetailsComponentProps> = ({ latestMetrics, agent }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   if (!latestMetrics || (latestMetrics.highest_temperature_c === undefined && !latestMetrics.sensor_data)) {
     return null;
   }

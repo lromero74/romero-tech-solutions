@@ -268,4 +268,40 @@ export const useClientLanguage = (): LanguageContextType => {
   return context;
 };
 
+// Optional version that returns fallback behavior when provider is missing
+// Use this in components that are shared between client and admin contexts
+export const useOptionalClientLanguage = (): LanguageContextType => {
+  const context = useContext(ClientLanguageContext);
+
+  // If no provider, return a fallback implementation
+  if (context === undefined) {
+    return {
+      language: 'en',
+      setLanguage: () => {},
+      t: (key: string, variables?: { [key: string]: string }, fallback?: string): string => {
+        // Return fallback if provided, otherwise extract key name
+        if (fallback) {
+          let interpolatedFallback = fallback;
+          if (variables) {
+            Object.keys(variables).forEach(varKey => {
+              const placeholder = `{{${varKey}}}`;
+              interpolatedFallback = interpolatedFallback.replace(new RegExp(placeholder, 'g'), variables[varKey]);
+            });
+          }
+          return interpolatedFallback;
+        }
+        return key.split('.').pop()?.replace(/([A-Z])/g, ' $1').trim() || key;
+      },
+      loading: false,
+      availableLanguages: [
+        { code: 'en', name: 'English', nativeName: 'English' },
+        { code: 'es', name: 'Spanish', nativeName: 'Español' }
+      ],
+      clearTranslationCache: () => {}
+    };
+  }
+
+  return context;
+};
+
 export default ClientLanguageProvider;

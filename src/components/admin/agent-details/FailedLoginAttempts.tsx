@@ -2,10 +2,10 @@ import React from 'react';
 import { AlertOctagon, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const FailedLoginAttempts: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
   if (!latestMetrics || latestMetrics.failed_login_last_24h === null || latestMetrics.failed_login_last_24h === undefined) {
     return null;
   }

@@ -9,7 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
-import { useClientLanguage } from '../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../contexts/ClientLanguageContext';
 import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, AgentPolicy } from '../../services/agentService';
 import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
@@ -82,8 +82,8 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   // Get current user info to check if they're a client viewing their own agent
   const { authUser } = useEnhancedAuth();
 
-  // Translation hook
-  const { t } = useClientLanguage();
+  // Translation hook (optional - works in both client and admin contexts)
+  const { t } = useOptionalClientLanguage();
 
   // Permission checks
   const { checkPermission } = usePermission();

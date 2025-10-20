@@ -3,11 +3,11 @@ import { FileWarning, AlertTriangle, CheckCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { themeClasses } from '../../../contexts/ThemeContext';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 import { AgentDetailsComponentProps } from './types';
 
 export const SystemEventLogs: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t, language } = useClientLanguage();
+  const { t, language } = useOptionalClientLanguage();
 
   if (!latestMetrics || ((latestMetrics.critical_events_count || 0) + (latestMetrics.error_events_count || 0)) === 0) {
     return null;

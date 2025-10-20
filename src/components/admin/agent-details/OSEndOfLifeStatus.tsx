@@ -2,7 +2,7 @@ import React from 'react';
 import { Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
-import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 /**
  * Format days into human-readable time units (Years, Weeks, Days)
@@ -44,7 +44,7 @@ const formatTimeRemaining = (
 };
 
 export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
-  const { t } = useClientLanguage();
+  const { t } = useOptionalClientLanguage();
 
   if (!latestMetrics || !latestMetrics.eol_status) {
     return null;
