@@ -22,6 +22,23 @@ interface TrialDevicesManagerProps {
   onEditSettings?: (agentId: string) => void;
 }
 
+interface PricingRange {
+  start: number;
+  end: number;
+  price: number;
+  description?: string;
+}
+
+interface SubscriptionPricing {
+  tier: string;
+  base_devices: number;
+  default_devices_allowed: number;
+  price_per_additional_device: number;
+  pricing_ranges: PricingRange[];
+  currency: string;
+  billing_period: string;
+}
+
 const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onDeviceRemoved, onViewMetrics, onEditSettings }) => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
@@ -31,6 +48,8 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [agentToRemove, setAgentToRemove] = useState<Agent | null>(null);
   const [actionType, setActionType] = useState<'deactivate' | 'remove'>('remove');
+  const [pricing, setPricing] = useState<SubscriptionPricing[]>([]);
+  const [startingPrice, setStartingPrice] = useState<string>('9.99'); // Default fallback
 
   // Get device limit from user's subscription tier
   const deviceLimit = authUser.devicesAllowed || 2;
@@ -68,8 +87,40 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
     }
   };
 
+  const fetchPricing = async () => {
+    try {
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      const response = await fetch(`${apiBaseUrl}/subscription/pricing`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const result = await response.json();
+
+      if (result.success && result.pricing) {
+        setPricing(result.pricing);
+
+        // Find the 'subscribed' tier and extract starting price
+        const subscribedTier = result.pricing.find((p: SubscriptionPricing) => p.tier === 'subscribed');
+        if (subscribedTier && subscribedTier.pricing_ranges && subscribedTier.pricing_ranges.length > 0) {
+          // Find the first non-zero price in the pricing ranges
+          const firstPaidRange = subscribedTier.pricing_ranges.find((range: PricingRange) => range.price > 0);
+          if (firstPaidRange) {
+            setStartingPrice(firstPaidRange.price.toFixed(2));
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching pricing:', err);
+      // Keep default fallback price
+    }
+  };
+
   useEffect(() => {
     fetchAgents();
+    fetchPricing();
   }, []);
 
   const handleRemoveClick = (agent: Agent) => {
@@ -231,7 +282,7 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                 }}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Upgrade - Starting at $9.99/month
+                Upgrade - Starting at ${startingPrice}/month
               </button>
             </div>
           </div>
