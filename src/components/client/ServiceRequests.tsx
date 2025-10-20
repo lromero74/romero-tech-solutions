@@ -1103,6 +1103,7 @@ const ServiceRequests: React.FC<ServiceRequestsProps> = ({
           themeClasses={themeClasses}
           t={t}
           onFiltersChange={setFilters}
+          isDarkMode={isDarkMode}
         />
       </div>
 

@@ -2,8 +2,10 @@ import React from 'react';
 import { Wifi, Circle, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
   if (!latestMetrics || (latestMetrics.internet_connected === undefined && latestMetrics.connectivity_issues_count === undefined)) {
     return null;
   }
@@ -12,7 +14,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <Wifi className="w-5 h-5 mr-2" />
-        Network Connectivity & Latency
+        {t('agentDetails.networkConnectivity.title', undefined, 'Network Connectivity & Latency')}
       </h3>
 
       {/* Summary Statistics */}
@@ -20,16 +22,16 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
         {/* Internet Connection */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Internet:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.networkConnectivity.internet', undefined, 'Internet:')}</span>
             <span className={`text-lg font-bold ${
               latestMetrics.internet_connected ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}>
-              {latestMetrics.internet_connected ? 'Connected' : 'Offline'}
+              {latestMetrics.internet_connected ? t('agentDetails.networkConnectivity.connected', undefined, 'Connected') : t('agentDetails.networkConnectivity.offline', undefined, 'Offline')}
             </span>
           </div>
           {!latestMetrics.internet_connected && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              No internet connectivity
+              {t('agentDetails.networkConnectivity.noInternet', undefined, 'No internet connectivity')}
             </p>
           )}
         </div>
@@ -37,16 +39,16 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
         {/* Gateway Reachability */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Gateway:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.networkConnectivity.gateway', undefined, 'Gateway:')}</span>
             <span className={`text-lg font-bold ${
               latestMetrics.gateway_reachable ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}>
-              {latestMetrics.gateway_reachable ? 'Reachable' : 'Unreachable'}
+              {latestMetrics.gateway_reachable ? t('agentDetails.networkConnectivity.reachable', undefined, 'Reachable') : t('agentDetails.networkConnectivity.unreachable', undefined, 'Unreachable')}
             </span>
           </div>
           {!latestMetrics.gateway_reachable && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              Router not accessible
+              {t('agentDetails.networkConnectivity.routerNotAccessible', undefined, 'Router not accessible')}
             </p>
           )}
         </div>
@@ -54,16 +56,16 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
         {/* DNS Status */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>DNS:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.networkConnectivity.dns', undefined, 'DNS:')}</span>
             <span className={`text-lg font-bold ${
               latestMetrics.dns_working ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
             }`}>
-              {latestMetrics.dns_working ? 'Working' : 'Failed'}
+              {latestMetrics.dns_working ? t('agentDetails.networkConnectivity.working', undefined, 'Working') : t('agentDetails.networkConnectivity.failed', undefined, 'Failed')}
             </span>
           </div>
           {!latestMetrics.dns_working && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              DNS resolution failed
+              {t('agentDetails.networkConnectivity.dnsResolutionFailed', undefined, 'DNS resolution failed')}
             </p>
           )}
         </div>
@@ -71,7 +73,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
         {/* Average Latency */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Avg Latency:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.networkConnectivity.avgLatency', undefined, 'Avg Latency:')}</span>
             <span className={`text-lg font-bold ${
               !latestMetrics.avg_latency_ms ? themeClasses.text.muted :
               latestMetrics.avg_latency_ms < 50 ? 'text-green-600 dark:text-green-400' :
@@ -83,7 +85,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
           </div>
           {latestMetrics.avg_latency_ms && latestMetrics.avg_latency_ms > 200 && (
             <p className="text-xs text-red-600 dark:text-red-400">
-              High latency detected
+              {t('agentDetails.networkConnectivity.highLatencyDetected', undefined, 'High latency detected')}
             </p>
           )}
         </div>
@@ -93,7 +95,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
       {latestMetrics.packet_loss_percent !== null && latestMetrics.packet_loss_percent !== undefined && (
         <div className="mb-6">
           <div className="flex items-center justify-between mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Packet Loss</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.networkConnectivity.packetLoss', undefined, 'Packet Loss')}</span>
             <span className={`${Number(latestMetrics.packet_loss_percent) >= 5 ? 'text-lg' : 'text-sm'} font-bold ${
               latestMetrics.packet_loss_percent === 0 ? 'text-green-600 dark:text-green-400' :
               latestMetrics.packet_loss_percent < 5 ? 'text-yellow-600 dark:text-yellow-400' :
@@ -119,7 +121,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
       {latestMetrics.connectivity_data && Array.isArray(latestMetrics.connectivity_data) && latestMetrics.connectivity_data.length > 0 && (
         <div className="space-y-3">
           <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>
-            Test Results ({latestMetrics.connectivity_data.length} tests)
+            {t('agentDetails.networkConnectivity.testResults', { count: latestMetrics.connectivity_data.length }, `Test Results (${latestMetrics.connectivity_data.length} tests)`)}
           </h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {latestMetrics.connectivity_data.map((test, index) => (
@@ -159,7 +161,7 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
                   </span>
                   {test.packet_loss !== null && test.packet_loss !== undefined && test.packet_loss > 0 && (
                     <span className="text-red-600 dark:text-red-400 font-medium">
-                      {test.packet_loss.toFixed(0)}% loss
+                      {test.packet_loss.toFixed(0)}% {t('agentDetails.networkConnectivity.loss', undefined, 'loss')}
                     </span>
                   )}
                 </div>
@@ -181,15 +183,15 @@ export const NetworkConnectivity: React.FC<AgentDetailsComponentProps> = ({ late
             <AlertTriangle className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mr-3 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
-                {latestMetrics.connectivity_issues_count} connectivity issue{latestMetrics.connectivity_issues_count !== 1 ? 's' : ''} detected
+                {t('agentDetails.networkConnectivity.issuesDetected', { count: latestMetrics.connectivity_issues_count }, `${latestMetrics.connectivity_issues_count} connectivity issue(s) detected`)}
               </p>
               <p className="text-xs mt-1 text-yellow-700 dark:text-yellow-300">
-                {!latestMetrics.internet_connected && 'No internet connectivity. '}
-                {!latestMetrics.gateway_reachable && 'Gateway unreachable. '}
-                {!latestMetrics.dns_working && 'DNS not working. '}
-                {latestMetrics.packet_loss_percent && Number(latestMetrics.packet_loss_percent) > 10 && `High packet loss (${Number(latestMetrics.packet_loss_percent).toFixed(1)}%). `}
-                {latestMetrics.avg_latency_ms && latestMetrics.avg_latency_ms > 200 && `High latency (${latestMetrics.avg_latency_ms}ms). `}
-                Check network configuration and connectivity.
+                {!latestMetrics.internet_connected && t('agentDetails.networkConnectivity.noInternetMsg', undefined, 'No internet connectivity. ')}
+                {!latestMetrics.gateway_reachable && t('agentDetails.networkConnectivity.gatewayUnreachableMsg', undefined, 'Gateway unreachable. ')}
+                {!latestMetrics.dns_working && t('agentDetails.networkConnectivity.dnsNotWorkingMsg', undefined, 'DNS not working. ')}
+                {latestMetrics.packet_loss_percent && Number(latestMetrics.packet_loss_percent) > 10 && t('agentDetails.networkConnectivity.highPacketLossMsg', { percent: Number(latestMetrics.packet_loss_percent).toFixed(1) }, `High packet loss (${Number(latestMetrics.packet_loss_percent).toFixed(1)}%). `)}
+                {latestMetrics.avg_latency_ms && latestMetrics.avg_latency_ms > 200 && t('agentDetails.networkConnectivity.highLatencyMsg', { latency: latestMetrics.avg_latency_ms }, `High latency (${latestMetrics.avg_latency_ms}ms). `)}
+                {t('agentDetails.networkConnectivity.checkNetworkConfig', undefined, 'Check network configuration and connectivity.')}
               </p>
             </div>
           </div>

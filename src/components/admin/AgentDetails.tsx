@@ -9,6 +9,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { useEnhancedAuth } from '../../contexts/EnhancedAuthContext';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, AgentPolicy } from '../../services/agentService';
 import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
@@ -81,6 +82,9 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   // Get current user info to check if they're a client viewing their own agent
   const { authUser } = useEnhancedAuth();
 
+  // Translation hook
+  const { t } = useClientLanguage();
+
   // Permission checks
   const { checkPermission } = usePermission();
   const canViewAgents = checkPermission('view.agents.enable');
@@ -139,11 +143,11 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
           setPermissionDenied({
             show: true,
-            action: 'View Agent Details',
+            action: t('agentDetails.actions.viewAgentDetails', undefined, 'View Agent Details'),
             requiredPermission: 'view.agents.enable',
             message: isClient
-              ? 'This agent does not belong to your business'
-              : 'You do not have permission to view agent details'
+              ? t('agentDetails.messages.agentNotYourBusiness', undefined, 'This agent does not belong to your business')
+              : t('agentDetails.messages.noPermissionToView', undefined, 'You do not have permission to view agent details')
           });
           setLoading(false);
           return;
@@ -231,7 +235,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
       // Provide more helpful error message for ServiceWorker issues
       if (err instanceof DOMException && err.name === 'AbortError') {
-        setError('Unable to load metrics history. Please try refreshing the page or clearing your browser cache.');
+        setError(t('agentDetails.messages.metricsLoadError', undefined, 'Unable to load metrics history. Please try refreshing the page or clearing your browser cache.'));
       } else {
         setError(errorMessage);
       }
@@ -448,62 +452,62 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           color: 'text-green-600',
           bgColor: 'bg-green-100 dark:bg-green-900/20',
           icon: <Circle className="w-4 h-4 fill-current" />,
-          label: 'Online'
+          label: t('agentDetails.status.online', undefined, 'Online')
         };
       case 'offline':
         return {
           color: 'text-gray-600',
           bgColor: 'bg-gray-100 dark:bg-gray-700',
           icon: <Circle className="w-4 h-4 fill-current" />,
-          label: 'Offline'
+          label: t('agentDetails.status.offline', undefined, 'Offline')
         };
       case 'warning':
         return {
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
           icon: <AlertTriangle className="w-4 h-4" />,
-          label: 'Warning'
+          label: t('agentDetails.status.warning', undefined, 'Warning')
         };
       case 'critical':
         return {
           color: 'text-red-600',
           bgColor: 'bg-red-100 dark:bg-red-900/20',
           icon: <AlertTriangle className="w-4 h-4" />,
-          label: 'Critical'
+          label: t('agentDetails.status.critical', undefined, 'Critical')
         };
       default:
         return {
           color: 'text-gray-600',
           bgColor: 'bg-gray-100',
           icon: <Circle className="w-4 h-4" />,
-          label: 'Unknown'
+          label: t('agentDetails.status.unknown', undefined, 'Unknown')
         };
     }
   };
 
   // Format timestamp
   const formatTimestamp = (timestamp: string | null): string => {
-    if (!timestamp) return 'Never';
+    if (!timestamp) return t('agentDetails.messages.never', undefined, 'Never');
     return new Date(timestamp).toLocaleString();
   };
 
   // Format relative time
   const formatRelativeTime = (timestamp: string | null): string => {
-    if (!timestamp) return 'Never';
+    if (!timestamp) return t('agentDetails.messages.never', undefined, 'Never');
 
     const now = new Date();
     const date = new Date(timestamp);
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffMins < 1) return t('agentDetails.time.justNow', undefined, 'Just now');
+    if (diffMins < 60) return t('agentDetails.time.minutesAgo', { minutes: diffMins }, `${diffMins}m ago`);
 
     const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffHours < 24) return t('agentDetails.time.hoursAgo', { hours: diffHours }, `${diffHours}h ago`);
 
     const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    return t('agentDetails.time.daysAgo', { days: diffDays }, `${diffDays}d ago`);
   };
 
   // Get metric color based on value
@@ -574,35 +578,35 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           color: 'text-green-600',
           bgColor: 'bg-green-100 dark:bg-green-900/20',
           icon: <CheckCircle className="w-3 h-3" />,
-          label: 'Completed'
+          label: t('agentDetails.executionStatus.completed', undefined, 'Completed')
         };
       case 'failed':
         return {
           color: 'text-red-600',
           bgColor: 'bg-red-100 dark:bg-red-900/20',
           icon: <XCircle className="w-3 h-3" />,
-          label: 'Failed'
+          label: t('agentDetails.executionStatus.failed', undefined, 'Failed')
         };
       case 'running':
         return {
           color: 'text-blue-600',
           bgColor: 'bg-blue-100 dark:bg-blue-900/20',
           icon: <Activity className="w-3 h-3 animate-spin" />,
-          label: 'Running'
+          label: t('agentDetails.executionStatus.running', undefined, 'Running')
         };
       case 'timeout':
         return {
           color: 'text-yellow-600',
           bgColor: 'bg-yellow-100 dark:bg-yellow-900/20',
           icon: <Clock className="w-3 h-3" />,
-          label: 'Timeout'
+          label: t('agentDetails.executionStatus.timeout', undefined, 'Timeout')
         };
       default:
         return {
           color: 'text-gray-600',
           bgColor: 'bg-gray-100 dark:bg-gray-800',
           icon: <Activity className="w-3 h-3" />,
-          label: 'Unknown'
+          label: t('agentDetails.executionStatus.unknown', undefined, 'Unknown')
         };
     }
   };
@@ -771,12 +775,12 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             >
               <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
             </button>
-            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>{t('agentDetails.titles.agentDetails', undefined, 'Agent Details')}</h1>
           </div>
         )}
         <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
           <Activity className={`w-8 h-8 mx-auto mb-4 animate-spin ${themeClasses.text.muted}`} />
-          <p className={`${themeClasses.text.secondary}`}>Loading agent details...</p>
+          <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.loading', undefined, 'Loading agent details...')}</p>
         </div>
       </div>
     );
@@ -794,13 +798,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             >
               <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
             </button>
-            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>{t('agentDetails.titles.agentDetails', undefined, 'Agent Details')}</h1>
           </div>
         )}
         <div className={`${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary} p-8 text-center`}>
           <AlertTriangle className={`w-16 w-16 mx-auto mb-4 ${themeClasses.text.muted}`} />
           <p className={`text-lg ${themeClasses.text.secondary}`}>
-            {permissionDenied.message || 'You do not have permission to view agent details'}
+            {permissionDenied.message || t('agentDetails.messages.noPermissionToView', undefined, 'You do not have permission to view agent details')}
           </p>
         </div>
         <PermissionDeniedModal
@@ -825,11 +829,11 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             >
               <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
             </button>
-            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>{t('agentDetails.titles.agentDetails', undefined, 'Agent Details')}</h1>
           </div>
         )}
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4">
-          <p className="text-red-800 dark:text-red-200">{error || 'Agent not found'}</p>
+          <p className="text-red-800 dark:text-red-200">{error || t('agentDetails.messages.agentNotFound', undefined, 'Agent not found')}</p>
         </div>
       </div>
     );
@@ -846,20 +850,20 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <button
               onClick={onBack}
               className={`mr-4 p-2 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} hover:${themeClasses.bg.card}`}
-              title="Back to agent list"
+              title={t('agentDetails.actions.backToAgentList', undefined, 'Back to agent list')}
             >
               <ArrowLeft className={`w-5 h-5 ${themeClasses.text.primary}`} />
             </button>
-            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>Agent Details</h1>
+            <h1 className={`text-3xl font-bold ${themeClasses.text.primary}`}>{t('agentDetails.titles.agentDetails', undefined, 'Agent Details')}</h1>
           </div>
           <div className="flex gap-3">
             <button
               onClick={loadAgentDetails}
               className="inline-flex items-center px-4 py-2 border border-gray-300 dark:border-gray-600 text-sm font-medium rounded-md text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700"
-              title="Refresh"
+              title={t('agentDetails.actions.refresh', undefined, 'Refresh')}
             >
               <RefreshCw className="w-4 h-4 mr-2" />
-              Refresh
+              {t('agentDetails.actions.refresh', undefined, 'Refresh')}
             </button>
             {canSendCommands ? (
               <button
@@ -867,22 +871,22 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-purple-600 hover:bg-purple-700"
               >
                 <Terminal className="w-4 h-4 mr-2" />
-                Send Command
+                {t('agentDetails.actions.sendCommand', undefined, 'Send Command')}
               </button>
             ) : (
               <button
                 onClick={() => setPermissionDenied({
                   show: true,
-                  action: 'Send Command',
+                  action: t('agentDetails.actions.sendCommand', undefined, 'Send Command'),
                   requiredPermission: 'send.agent_commands.enable',
-                  message: 'You do not have permission to send commands'
+                  message: t('agentDetails.messages.noPermissionToSendCommands', undefined, 'You do not have permission to send commands')
                 })}
                 disabled
                 className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-gray-400 cursor-not-allowed opacity-50"
-                title="Permission required"
+                title={t('agentDetails.messages.permissionRequired', undefined, 'Permission required')}
               >
                 <Terminal className="w-4 h-4 mr-2" />
-                Send Command
+                {t('agentDetails.actions.sendCommand', undefined, 'Send Command')}
               </button>
             )}
           </div>
@@ -918,13 +922,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-6">
           <div>
-            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Business</p>
+            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.business', undefined, 'Business')}</p>
             <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
-              {agent.business_name || 'N/A'}
+              {agent.business_name || t('agentDetails.messages.notAvailable', undefined, 'N/A')}
             </p>
           </div>
           <div>
-            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Service Location</p>
+            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.serviceLocation', undefined, 'Service Location')}</p>
             {agent.location_street && agent.location_city ? (
               <button
                 onClick={() => {
@@ -935,13 +939,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   window.open(mapsUrl, '_blank', 'noopener,noreferrer');
                 }}
                 className={`text-sm ${themeClasses.text.primary} hover:text-blue-600 transition-colors text-left group`}
-                title="Click to open in maps"
+                title={t('agentDetails.actions.openInMaps', undefined, 'Click to open in maps')}
               >
                 <div className="flex items-start">
                   <MapPin className={`w-4 h-4 ${themeClasses.text.muted} group-hover:text-blue-600 mr-1 mt-0.5 flex-shrink-0 transition-colors`} />
                   <div>
                     <div className="font-medium group-hover:text-blue-600 transition-colors">
-                      {agent.location_name || 'Location'}
+                      {agent.location_name || t('agentDetails.labels.location', undefined, 'Location')}
                     </div>
                     <div className="group-hover:text-blue-600 transition-colors">
                       {agent.location_street}
@@ -955,12 +959,12 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               </button>
             ) : (
               <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                {agent.location_name || 'N/A'}
+                {agent.location_name || t('agentDetails.messages.notAvailable', undefined, 'N/A')}
               </p>
             )}
           </div>
           <div>
-            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Last Seen</p>
+            <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.lastSeen', undefined, 'Last Seen')}</p>
             <p className={`text-sm font-medium ${themeClasses.text.primary}`}>
               {formatRelativeTime(agent.last_heartbeat)}
             </p>
@@ -979,7 +983,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           <div className="flex items-center justify-between">
             <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
               <TrendingUp className="w-6 h-6 mr-2" />
-              Metrics Trends
+              {t('agentDetails.titles.metricsTrends', undefined, 'Metrics Trends')}
             </h3>
             <div className="flex items-center gap-3">
               {/* Chart Settings Controls */}
@@ -991,20 +995,24 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                       ? 'text-blue-600 dark:text-blue-400'
                       : `${themeClasses.text.secondary}`
                   }`}
-                  title={linkSettings ? 'Settings are linked across all metrics' : 'Settings are independent per metric'}
+                  title={linkSettings
+                    ? t('agentDetails.messages.settingsLinked', undefined, 'Settings are linked across all metrics')
+                    : t('agentDetails.messages.settingsIndependent', undefined, 'Settings are independent per metric')}
                 >
                   {linkSettings ? (
                     <Link className="w-3.5 h-3.5" />
                   ) : (
                     <Unlink className="w-3.5 h-3.5" />
                   )}
-                  <span>{linkSettings ? 'Linked' : 'Independent'}</span>
+                  <span>{linkSettings
+                    ? t('agentDetails.labels.linked', undefined, 'Linked')
+                    : t('agentDetails.labels.independent', undefined, 'Independent')}</span>
                 </button>
                 {hasUserDefaults() && (
                   <button
                     onClick={revertToSystemDefaults}
                     className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${themeClasses.text.secondary} hover:text-orange-600 transition-colors`}
-                    title="Revert to system defaults"
+                    title={t('agentDetails.actions.revertToDefaults', undefined, 'Revert to system defaults')}
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                   </button>
@@ -1012,7 +1020,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 <button
                   onClick={() => saveAsUserDefaults(activeResourceTab)}
                   className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-medium ${themeClasses.text.secondary} hover:text-green-600 transition-colors`}
-                  title="Save current settings as your personal default"
+                  title={t('agentDetails.actions.saveAsDefault', undefined, 'Save current settings as your personal default')}
                 >
                   <Save className="w-3.5 h-3.5" />
                 </button>
@@ -1029,7 +1037,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   }`}
                 >
                   <Cpu className="w-4 h-4 inline mr-2" />
-                  CPU
+                  {t('agentDetails.resources.cpu', undefined, 'CPU')}
                 </button>
                 <button
                   onClick={() => setActiveResourceTab('memory')}
@@ -1040,7 +1048,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   }`}
                 >
                   <Activity className="w-4 h-4 inline mr-2" />
-                  Memory
+                  {t('agentDetails.resources.memory', undefined, 'Memory')}
                 </button>
                 <button
                   onClick={() => setActiveResourceTab('disk')}
@@ -1051,7 +1059,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   }`}
                 >
                   <HardDrive className="w-4 h-4 inline mr-2" />
-                  Disk
+                  {t('agentDetails.resources.disk', undefined, 'Disk')}
                 </button>
               </div>
             </div>
@@ -1063,7 +1071,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <div style={{ display: activeResourceTab === 'cpu' ? 'block' : 'none' }}>
               <MetricsChartECharts
                 data={cpuChartData}
-                title="CPU Usage"
+                title={t('agentDetails.titles.cpuUsage', undefined, 'CPU Usage')}
                 dataKey="CPU"
                 unit="%"
                 color="#3b82f6"
@@ -1092,7 +1100,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <div style={{ display: activeResourceTab === 'memory' ? 'block' : 'none' }}>
               <MetricsChartECharts
                 data={memoryChartData}
-                title="Memory Usage"
+                title={t('agentDetails.titles.memoryUsage', undefined, 'Memory Usage')}
                 dataKey="Memory"
                 unit="%"
                 color="#8b5cf6"
@@ -1121,7 +1129,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <div style={{ display: activeResourceTab === 'disk' ? 'block' : 'none' }}>
               <MetricsChartECharts
                 data={diskChartData}
-                title="Disk Usage"
+                title={t('agentDetails.titles.diskUsage', undefined, 'Disk Usage')}
                 dataKey="Disk"
                 unit="%"
                 color="#f59e0b"
@@ -1201,7 +1209,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             }`}
           >
             <Calendar className="w-4 h-4 inline mr-2" />
-            Overview
+            {t('agentDetails.tabs.overview', undefined, 'Overview')}
           </button>
           <button
             onClick={() => setActiveTab('alerts')}
@@ -1212,7 +1220,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             }`}
           >
             <Bell className="w-4 h-4 inline mr-2" />
-            Alerts ({alerts.length})
+            {t('agentDetails.tabs.alerts', undefined, 'Alerts')} ({alerts.length})
           </button>
           <button
             onClick={() => setActiveTab('commands')}
@@ -1223,7 +1231,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             }`}
           >
             <Terminal className="w-4 h-4 inline mr-2" />
-            Commands ({commands.length})
+            {t('agentDetails.tabs.commands', undefined, 'Commands')} ({commands.length})
           </button>
           <button
             onClick={() => setActiveTab('inventory')}
@@ -1234,7 +1242,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             }`}
           >
             <Disc className="w-4 h-4 inline mr-2" />
-            Inventory
+            {t('agentDetails.tabs.inventory', undefined, 'Inventory')}
           </button>
           <button
             onClick={() => setActiveTab('policies')}
@@ -1245,7 +1253,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             }`}
           >
             <Shield className="w-4 h-4 inline mr-2" />
-            Policies ({policies.length})
+            {t('agentDetails.tabs.policies', undefined, 'Policies')} ({policies.length})
           </button>
         </div>
 
@@ -1255,23 +1263,27 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Agent ID</p>
+                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.agentId', undefined, 'Agent ID')}</p>
                   <p className={`text-sm font-mono ${themeClasses.text.primary}`}>{agent.id}</p>
                 </div>
                 <div>
-                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Created</p>
+                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.created', undefined, 'Created')}</p>
                   <p className={`text-sm ${themeClasses.text.primary}`}>{formatTimestamp(agent.created_at)}</p>
                 </div>
                 <div>
-                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Monitoring</p>
+                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.monitoring', undefined, 'Monitoring')}</p>
                   <p className={`text-sm ${themeClasses.text.primary}`}>
-                    {agent.monitoring_enabled ? '✓ Enabled' : '✗ Disabled'}
+                    {agent.monitoring_enabled
+                      ? `✓ ${t('agentDetails.status.enabled', undefined, 'Enabled')}`
+                      : `✗ ${t('agentDetails.status.disabled', undefined, 'Disabled')}`}
                   </p>
                 </div>
                 <div>
-                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>Status</p>
+                  <p className={`text-xs ${themeClasses.text.muted} mb-1`}>{t('agentDetails.labels.status', undefined, 'Status')}</p>
                   <p className={`text-sm ${themeClasses.text.primary}`}>
-                    {agent.is_active ? '✓ Active' : '✗ Inactive'}
+                    {agent.is_active
+                      ? `✓ ${t('agentDetails.status.active', undefined, 'Active')}`
+                      : `✗ ${t('agentDetails.status.inactive', undefined, 'Inactive')}`}
                   </p>
                 </div>
               </div>
@@ -1284,7 +1296,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               {alerts.length === 0 ? (
                 <div className="text-center py-8">
                   <Bell className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-                  <p className={`${themeClasses.text.secondary}`}>No active alerts</p>
+                  <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noActiveAlerts', undefined, 'No active alerts')}</p>
                 </div>
               ) : (
                 alerts.map((alert) => (
@@ -1304,7 +1316,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                         </div>
                         <p className={`text-sm ${themeClasses.text.primary} mb-2`}>{alert.message}</p>
                         <p className={`text-xs ${themeClasses.text.secondary}`}>
-                          Type: {alert.alert_type}
+                          {t('agentDetails.labels.type', undefined, 'Type')}: {alert.alert_type}
                         </p>
                       </div>
                       {canManageAgents && alert.status === 'active' && (
@@ -1312,7 +1324,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                           onClick={() => handleAcknowledgeAlert(alert.id)}
                           className="ml-4 px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800"
                         >
-                          Acknowledge
+                          {t('agentDetails.actions.acknowledge', undefined, 'Acknowledge')}
                         </button>
                       )}
                     </div>
@@ -1328,7 +1340,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               {commands.length === 0 ? (
                 <div className="text-center py-8">
                   <Terminal className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-                  <p className={`${themeClasses.text.secondary}`}>No commands yet</p>
+                  <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noCommands', undefined, 'No commands yet')}</p>
                 </div>
               ) : (
                 commands.slice(0, 10).map((command) => (
@@ -1355,13 +1367,13 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                       {command.status === 'completed' && command.executed_at && (
                         <span className="flex items-center text-green-600">
                           <CheckCircle className="w-3 h-3 mr-1" />
-                          Completed {formatRelativeTime(command.executed_at)}
+                          {t('agentDetails.messages.completed', undefined, 'Completed')} {formatRelativeTime(command.executed_at)}
                         </span>
                       )}
                       {command.status === 'failed' && (
                         <span className="flex items-center text-red-600">
                           <XCircle className="w-3 h-3 mr-1" />
-                          Failed
+                          {t('agentDetails.messages.failed', undefined, 'Failed')}
                         </span>
                       )}
                     </div>
@@ -1387,7 +1399,9 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
               {/* Assign Policy Button */}
               <div className="flex items-center justify-between">
                 <p className={`text-sm ${themeClasses.text.secondary}`}>
-                  {policies.length} {policies.length === 1 ? 'policy' : 'policies'} assigned to this agent
+                  {policies.length} {policies.length === 1
+                    ? t('agentDetails.labels.policy', undefined, 'policy')
+                    : t('agentDetails.labels.policies', undefined, 'policies')} {t('agentDetails.messages.assignedToAgent', undefined, 'assigned to this agent')}
                 </p>
                 {canManageAgents && (
                   <button
@@ -1395,7 +1409,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4 mr-1.5" />
-                    Assign Policy
+                    {t('agentDetails.actions.assignPolicy', undefined, 'Assign Policy')}
                   </button>
                 )}
               </div>
@@ -1405,14 +1419,14 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 {policies.length === 0 ? (
                   <div className="text-center py-8">
                     <Shield className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-                    <p className={`${themeClasses.text.secondary}`}>No policies assigned to this agent</p>
+                    <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noPolicies', undefined, 'No policies assigned to this agent')}</p>
                     {canManageAgents && (
                       <button
                         onClick={() => setShowAssignModal(true)}
                         className="mt-4 inline-flex items-center px-4 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg transition-colors"
                       >
                         <Plus className="w-4 h-4 mr-2" />
-                        Assign Your First Policy
+                        {t('agentDetails.actions.assignFirstPolicy', undefined, 'Assign Your First Policy')}
                       </button>
                     )}
                   </div>
@@ -1439,7 +1453,9 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                               ? 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200'
                               : 'bg-purple-100 text-purple-800 dark:bg-purple-900/20 dark:text-purple-200'
                           }`}>
-                            {policy.assignment_type === 'direct' ? 'Direct Assignment' : 'Business-Wide'}
+                            {policy.assignment_type === 'direct'
+                              ? t('agentDetails.labels.directAssignment', undefined, 'Direct Assignment')
+                              : t('agentDetails.labels.businessWide', undefined, 'Business-Wide')}
                           </span>
                           {/* Only show remove button for direct assignments */}
                           {canManageAgents && policy.assignment_type === 'direct' && (
@@ -1447,7 +1463,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                               onClick={() => handleRemovePolicy(policy.id, policy.assignment_id, policy.policy_name)}
                               disabled={removingAssignment === policy.assignment_id}
                               className="p-1.5 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors disabled:opacity-50"
-                              title="Remove policy assignment"
+                              title={t('agentDetails.actions.removePolicyAssignment', undefined, 'Remove policy assignment')}
                             >
                               {removingAssignment === policy.assignment_id ? (
                                 <Activity className="w-4 h-4 animate-spin" />
@@ -1460,41 +1476,43 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                       </div>
                       <div className="grid grid-cols-2 gap-2 text-xs mt-3">
                         <div>
-                          <span className={`${themeClasses.text.muted}`}>Type:</span>
+                          <span className={`${themeClasses.text.muted}`}>{t('agentDetails.labels.type', undefined, 'Type')}:</span>
                           <span className={`ml-1 ${themeClasses.text.primary} capitalize`}>
                             {policy.policy_type.replace(/_/g, ' ')}
                           </span>
                         </div>
                         <div>
-                          <span className={`${themeClasses.text.muted}`}>Mode:</span>
+                          <span className={`${themeClasses.text.muted}`}>{t('agentDetails.labels.mode', undefined, 'Mode')}:</span>
                           <span className={`ml-1 ${themeClasses.text.primary} capitalize`}>
                             {policy.execution_mode}
                           </span>
                         </div>
                         {policy.script_name && (
                           <div className="col-span-2">
-                            <span className={`${themeClasses.text.muted}`}>Script:</span>
+                            <span className={`${themeClasses.text.muted}`}>{t('agentDetails.labels.script', undefined, 'Script')}:</span>
                             <span className={`ml-1 ${themeClasses.text.primary}`}>{policy.script_name}</span>
                           </div>
                         )}
                         {policy.schedule_cron && (
                           <div className="col-span-2">
-                            <span className={`${themeClasses.text.muted}`}>Schedule:</span>
+                            <span className={`${themeClasses.text.muted}`}>{t('agentDetails.labels.schedule', undefined, 'Schedule')}:</span>
                             <span className={`ml-1 font-mono text-xs ${themeClasses.text.primary}`}>
                               {policy.schedule_cron}
                             </span>
                           </div>
                         )}
                         <div className="col-span-2">
-                          <span className={`${themeClasses.text.muted}`}>Status:</span>
+                          <span className={`${themeClasses.text.muted}`}>{t('agentDetails.labels.status', undefined, 'Status')}:</span>
                           <span className={`ml-1 ${policy.enabled ? 'text-green-600 dark:text-green-400' : 'text-gray-600'}`}>
-                            {policy.enabled ? '✓ Enabled' : '✗ Disabled'}
+                            {policy.enabled
+                              ? `✓ ${t('agentDetails.status.enabled', undefined, 'Enabled')}`
+                              : `✗ ${t('agentDetails.status.disabled', undefined, 'Disabled')}`}
                           </span>
                         </div>
                       </div>
                       <div className={`text-xs ${themeClasses.text.muted} mt-3 pt-2 border-t ${themeClasses.border.primary}`}>
-                        Assigned {formatRelativeTime(policy.assigned_at)}
-                        {policy.assigned_by_name && ` by ${policy.assigned_by_name}`}
+                        {t('agentDetails.messages.assigned', undefined, 'Assigned')} {formatRelativeTime(policy.assigned_at)}
+                        {policy.assigned_by_name && ` ${t('agentDetails.messages.by', undefined, 'by')} ${policy.assigned_by_name}`}
                       </div>
                     </div>
                   ))
@@ -1506,28 +1524,28 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 <div className="flex items-center justify-between">
                   <h4 className={`text-lg font-semibold ${themeClasses.text.primary} flex items-center`}>
                     <Play className="w-5 h-5 mr-2" />
-                    Recent Executions
+                    {t('agentDetails.titles.recentExecutions', undefined, 'Recent Executions')}
                   </h4>
                   <button
                     onClick={loadExecutionHistory}
                     className="inline-flex items-center px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-lg transition-colors"
                   >
                     <RefreshCw className="w-4 h-4 mr-1.5" />
-                    Refresh
+                    {t('agentDetails.actions.refresh', undefined, 'Refresh')}
                   </button>
                 </div>
 
                 {loadingExecutions ? (
                   <div className="text-center py-8">
                     <Activity className={`w-8 h-8 mx-auto mb-3 animate-spin ${themeClasses.text.muted}`} />
-                    <p className={`${themeClasses.text.secondary}`}>Loading execution history...</p>
+                    <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.loadingExecutionHistory', undefined, 'Loading execution history...')}</p>
                   </div>
                 ) : executions.length === 0 ? (
                   <div className={`${themeClasses.bg.secondary} rounded-lg p-6 text-center border ${themeClasses.border.primary}`}>
                     <Play className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-                    <p className={`${themeClasses.text.secondary}`}>No executions yet</p>
+                    <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noExecutions', undefined, 'No executions yet')}</p>
                     <p className={`text-sm ${themeClasses.text.muted} mt-1`}>
-                      Policy executions will appear here
+                      {t('agentDetails.messages.executionsWillAppear', undefined, 'Policy executions will appear here')}
                     </p>
                   </div>
                 ) : (
@@ -1537,19 +1555,19 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                         <thead className={themeClasses.bg.secondary}>
                           <tr>
                             <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
-                              Policy / Script
+                              {t('agentDetails.labels.policyScript', undefined, 'Policy / Script')}
                             </th>
                             <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
-                              Status
+                              {t('agentDetails.labels.status', undefined, 'Status')}
                             </th>
                             <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
-                              Duration
+                              {t('agentDetails.labels.duration', undefined, 'Duration')}
                             </th>
                             <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
-                              Started At
+                              {t('agentDetails.labels.startedAt', undefined, 'Started At')}
                             </th>
                             <th className={`px-4 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
-                              Actions
+                              {t('agentDetails.labels.actions', undefined, 'Actions')}
                             </th>
                           </tr>
                         </thead>
@@ -1564,7 +1582,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                                   </div>
                                   {execution.triggered_by && (
                                     <div className={`text-xs ${themeClasses.text.muted} capitalize`}>
-                                      Triggered by: {execution.triggered_by}
+                                      {t('agentDetails.labels.triggeredBy', undefined, 'Triggered by')}: {execution.triggered_by}
                                     </div>
                                   )}
                                 </td>
@@ -1577,7 +1595,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                                 <td className={`px-4 py-3 text-sm ${themeClasses.text.primary}`}>
                                   {execution.execution_duration_seconds
                                     ? `${execution.execution_duration_seconds}s`
-                                    : 'N/A'}
+                                    : t('agentDetails.messages.notAvailable', undefined, 'N/A')}
                                 </td>
                                 <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
                                   {formatRelativeTime(execution.started_at)}
@@ -1586,10 +1604,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                                   <button
                                     onClick={() => setSelectedExecutionId(execution.id)}
                                     className="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300 inline-flex items-center"
-                                    title="View execution details"
+                                    title={t('agentDetails.actions.viewExecutionDetails', undefined, 'View execution details')}
                                   >
                                     <Terminal className="w-4 h-4 mr-1" />
-                                    View
+                                    {t('agentDetails.actions.view', undefined, 'View')}
                                   </button>
                                 </td>
                               </tr>
@@ -1601,7 +1619,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     {executions.length > 10 && (
                       <div className={`px-4 py-3 ${themeClasses.bg.secondary} border-t ${themeClasses.border.primary} text-center`}>
                         <p className={`text-sm ${themeClasses.text.muted}`}>
-                          Showing 10 of {executions.length} executions
+                          {t('agentDetails.messages.showingExecutions', { count: executions.length }, `Showing 10 of ${executions.length} executions`)}
                         </p>
                       </div>
                     )}
@@ -1616,7 +1634,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                     {/* Modal Header */}
                     <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
                       <h3 className={`text-lg font-semibold ${themeClasses.text.primary}`}>
-                        Assign Policy to {agent?.device_name}
+                        {t('agentDetails.titles.assignPolicyTo', { deviceName: agent?.device_name }, `Assign Policy to ${agent?.device_name}`)}
                       </h3>
                       <button
                         onClick={() => setShowAssignModal(false)}
@@ -1631,12 +1649,12 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                       {loadingPolicies ? (
                         <div className="text-center py-8">
                           <Activity className={`w-8 h-8 mx-auto mb-3 animate-spin ${themeClasses.text.muted}`} />
-                          <p className={`${themeClasses.text.secondary}`}>Loading compatible policies...</p>
+                          <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.loadingCompatiblePolicies', undefined, 'Loading compatible policies...')}</p>
                         </div>
                       ) : (
                         <>
                           <p className={`text-sm ${themeClasses.text.secondary} mb-4`}>
-                            Showing only policies compatible with <strong>{agent?.os_type}</strong> ({availablePolicies.filter(p => !policies.find(ap => ap.id === p.id)).length} available)
+                            {t('agentDetails.messages.showingCompatiblePolicies', { osType: agent?.os_type, count: availablePolicies.filter(p => !policies.find(ap => ap.id === p.id)).length }, `Showing only policies compatible with ${agent?.os_type} (${availablePolicies.filter(p => !policies.find(ap => ap.id === p.id)).length} available)`)}
                           </p>
 
                           <div className="space-y-3">
@@ -1659,14 +1677,14 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                                       )}
                                       <div className="flex items-center gap-3 mt-2 text-xs">
                                         <span className={`${themeClasses.text.muted}`}>
-                                          Type: <span className="capitalize">{policy.policy_type.replace(/_/g, ' ')}</span>
+                                          {t('agentDetails.labels.type', undefined, 'Type')}: <span className="capitalize">{policy.policy_type.replace(/_/g, ' ')}</span>
                                         </span>
                                         <span className={`${themeClasses.text.muted}`}>
-                                          Mode: <span className="capitalize">{policy.execution_mode}</span>
+                                          {t('agentDetails.labels.mode', undefined, 'Mode')}: <span className="capitalize">{policy.execution_mode}</span>
                                         </span>
                                         {policy.script_name && (
                                           <span className={`${themeClasses.text.muted}`}>
-                                            Script: {policy.script_name}
+                                            {t('agentDetails.labels.script', undefined, 'Script')}: {policy.script_name}
                                           </span>
                                         )}
                                       </div>
@@ -1679,10 +1697,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                                       {assigningPolicy === policy.id ? (
                                         <>
                                           <Activity className="w-4 h-4 inline mr-1 animate-spin" />
-                                          Assigning...
+                                          {t('agentDetails.messages.assigning', undefined, 'Assigning...')}
                                         </>
                                       ) : (
-                                        'Assign'
+                                        t('agentDetails.actions.assign', undefined, 'Assign')
                                       )}
                                     </button>
                                   </div>
@@ -1693,10 +1711,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                               <div className="text-center py-8">
                                 <Shield className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
                                 <p className={`${themeClasses.text.secondary}`}>
-                                  No compatible policies available to assign
+                                  {t('agentDetails.messages.noPoliciesAvailable', undefined, 'No compatible policies available to assign')}
                                 </p>
                                 <p className={`text-xs ${themeClasses.text.muted} mt-2`}>
-                                  All compatible policies for {agent?.os_type} are already assigned
+                                  {t('agentDetails.messages.allPoliciesAssigned', { osType: agent?.os_type }, `All compatible policies for ${agent?.os_type} are already assigned`)}
                                 </p>
                               </div>
                             )}
@@ -1711,7 +1729,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                         onClick={() => setShowAssignModal(false)}
                         className={`px-4 py-2 text-sm font-medium ${themeClasses.text.secondary} hover:${themeClasses.bg.hover} rounded-lg transition-colors`}
                       >
-                        Close
+                        {t('agentDetails.actions.close', undefined, 'Close')}
                       </button>
                     </div>
                   </div>

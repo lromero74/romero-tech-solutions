@@ -111,24 +111,40 @@ cd romero-tech-solutions
 
 ### 2. Database Setup
 
-Create a PostgreSQL database and run the setup script:
+Create a PostgreSQL database:
 
 ```bash
 createdb your_database_name
-psql -d your_database_name -f database_setup.sql
 ```
 
-The `database_setup.sql` file includes:
-- Complete table schemas (77 tables)
-- Foreign key relationships
-- Indexes and views
-- Reference data (statuses, roles, permissions, translations)
+Then run the fresh install script to initialize the database with all schema and essential system data:
 
-**Note:** If you need to regenerate the database setup script from your current database:
 ```bash
-./scripts/generate-database-setup.sh
+cd scripts
+./fresh-install-db.sh
 ```
-This will create an updated `database_setup.sql` with the latest schema and reference data.
+
+This will create:
+- ✅ Complete database schema (all tables, indexes, constraints)
+- ✅ Translation system (English + Spanish)
+- ✅ Service types and descriptions
+- ✅ Roles and permissions
+- ✅ Rate categories and pricing tiers
+- ✅ RMM automation defaults (scripts, policies, software packages)
+- ✅ System configuration and templates
+
+**What's NOT included** (you'll add these as you use the app):
+- ❌ Businesses and service locations
+- ❌ Users, clients, and employees
+- ❌ Any production-specific data
+
+**Alternative:** If you prefer running all migrations non-interactively:
+```bash
+cd scripts
+./run-all-migrations.sh
+```
+
+See [`docs/DATABASE_SETUP.md`](docs/DATABASE_SETUP.md) for detailed database setup documentation.
 
 ### 3. Backend Configuration
 
@@ -494,16 +510,41 @@ docker-compose up -d
 - **HTTPS Enforcement**: SSL/TLS for all connections
 - **Content Security Policy**: XSS prevention headers
 
-## 📊 Database Migrations
+## 📊 Database Setup & Migrations
 
-Run migrations for schema updates:
+### Fresh Installation
+
+For a clean database setup (new developers, testing, etc.):
 
 ```bash
-cd backend
-node run-migration.js
+cd scripts
+./fresh-install-db.sh
 ```
 
-Migration files are in `backend/migrations/` and run automatically on deployment.
+This creates a complete database with all schema and system data, but no production-specific information. Perfect for:
+- New developers cloning the repository
+- Development and testing environments
+- Resetting your local database
+
+### Applying New Migrations
+
+When new schema changes are added:
+
+```bash
+cd scripts
+./run-all-migrations.sh
+```
+
+### Verifying Database Cleanliness
+
+To check if your database contains only seed data (no production data):
+
+```bash
+cd scripts
+./verify-clean-db.sh
+```
+
+Migration files are located in `backend/migrations/` and are run in alphabetical order. See [`docs/DATABASE_SETUP.md`](docs/DATABASE_SETUP.md) for detailed information about the database setup system.
 
 ## 🧪 Testing
 
@@ -560,10 +601,12 @@ Version is tracked in:
 
 ## 📚 Additional Documentation
 
-- **CLAUDE.md**: Project-specific instructions and architecture notes
-- **LOGGING.md**: Logging configuration and best practices
-- **CACHE-BUSTING.md**: Cache management strategies
-- **AMPLIFY-CACHE-SETUP.md**: AWS Amplify cache configuration
+- **[DATABASE_SETUP.md](docs/DATABASE_SETUP.md)**: Database setup, migrations, and fresh install guide
+- **[scripts/README.md](scripts/README.md)**: Utility scripts documentation and workflows
+- **[CLAUDE.md](CLAUDE.md)**: Project-specific instructions and architecture notes
+- **[LOGGING.md](docs/LOGGING.md)**: Logging configuration and best practices
+- **[CACHE-BUSTING.md](docs/CACHE-BUSTING.md)**: Cache management strategies
+- **[AMPLIFY-CACHE-SETUP.md](docs/AMPLIFY-CACHE-SETUP.md)**: AWS Amplify cache configuration
 
 ## 🎯 Key Features in Detail
 

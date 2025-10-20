@@ -154,52 +154,62 @@ router.get('/:businessId/folders',
 );
 
 /**
- * GET /api/admin/client-files/:businessId/folder/:folderId?
+ * GET /api/admin/client-files/:businessId/folder/:folderId
  * Get files in a specific folder (or root if folderId is null)
  * Permission: view.client_files.enable
  */
-router.get('/:businessId/folder/:folderId?',
-  requirePermission('view.client_files.enable'),
-  async (req, res) => {
-    try {
-      const { businessId, folderId } = req.params;
-      const { page, limit, search, sortBy, sortOrder } = req.query;
+// Handler function for both routes (Express 5 requires separate routes instead of optional params)
+const getFolderFilesHandler = async (req, res) => {
+  try {
+    const { businessId, folderId } = req.params;
+    const { page, limit, search, sortBy, sortOrder } = req.query;
 
-      if (!businessId) {
-        return res.status(400).json({
-          success: false,
-          message: 'Business ID is required'
-        });
-      }
-
-      const options = {
-        page: parseInt(page) || 1,
-        limit: parseInt(limit) || 50,
-        search: search || '',
-        sortBy: sortBy || 'created_at',
-        sortOrder: sortOrder || 'DESC'
-      };
-
-      const result = await clientFileBrowserService.getFilesInFolder(
-        businessId,
-        folderId === 'null' || !folderId ? null : folderId,
-        options
-      );
-
-      return res.status(200).json({
-        success: true,
-        data: result
-      });
-
-    } catch (error) {
-      console.error('❌ Error fetching files in folder:', error);
-      return res.status(500).json({
+    if (!businessId) {
+      return res.status(400).json({
         success: false,
-        message: 'Failed to fetch files',
-        error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        message: 'Business ID is required'
       });
     }
+
+    const options = {
+      page: parseInt(page) || 1,
+      limit: parseInt(limit) || 50,
+      search: search || '',
+      sortBy: sortBy || 'created_at',
+      sortOrder: sortOrder || 'DESC'
+    };
+
+    const result = await clientFileBrowserService.getFilesInFolder(
+      businessId,
+      folderId === 'null' || !folderId ? null : folderId,
+      options
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: result
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching files in folder:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to fetch files',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
+};
+
+// Route with folderId
+router.get('/:businessId/folder/:folderId',
+  requirePermission('view.client_files.enable'),
+  getFolderFilesHandler
+);
+
+// Route without folderId (root folder)
+router.get('/:businessId/folder',
+  requirePermission('view.client_files.enable'),
+  getFolderFilesHandler
 );
 
 /**

@@ -42,6 +42,27 @@ export const ServiceRequestsList: React.FC<ServiceRequestsListProps> = ({
   onViewRequest,
   onCancelRequest
 }) => {
+  // Helper function to translate service types
+  const translateServiceType = (serviceType: string): string => {
+    // Map service type names to their type_code for translation keys
+    const serviceTypeMap: Record<string, string> = {
+      'Backup Solutions': 'serviceTypes.backup-solutions.name',
+      'Data Recovery': 'serviceTypes.data-recovery.name',
+      'Email Configuration': 'serviceTypes.email-configuration.name',
+      'Hardware Repair': 'serviceTypes.hardware-repair.name',
+      'Network Troubleshooting': 'serviceTypes.network-troubleshooting.name',
+      'Other': 'serviceTypes.other.name',
+      'Printer Installation': 'serviceTypes.printer-installation.name',
+      'Security Assessment': 'serviceTypes.security-assessment.name',
+      'Software Installation': 'serviceTypes.software-installation.name',
+      'System Maintenance': 'serviceTypes.system-maintenance.name',
+      'Wi-Fi Setup': 'serviceTypes.wi-fi-setup.name',
+    };
+
+    const translationKey = serviceTypeMap[serviceType];
+    return translationKey ? t(translationKey, undefined, serviceType) : serviceType;
+  };
+
   if (requests.length === 0) {
     return (
       <div className="px-6 py-12 text-center">
@@ -165,7 +186,7 @@ export const ServiceRequestsList: React.FC<ServiceRequestsListProps> = ({
                 {request.serviceType && (
                   <div className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    <span>{request.serviceType}</span>
+                    <span>{translateServiceType(request.serviceType)}</span>
                   </div>
                 )}
                 <div className="flex items-center gap-1">

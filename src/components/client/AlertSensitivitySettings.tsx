@@ -143,7 +143,7 @@ const AlertSensitivitySettings: React.FC = () => {
       <div className={`${themeClasses.container} rounded-lg shadow-md border p-6`}>
         <div className="flex items-center justify-center py-8">
           <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-          <span className={`ml-2 ${themeClasses.text}`}>Loading settings...</span>
+          <span className={`ml-2 ${themeClasses.text}`}>{t('settings.loadingSettings', undefined, 'Loading settings...')}</span>
         </div>
       </div>
     );
@@ -170,9 +170,11 @@ const AlertSensitivitySettings: React.FC = () => {
             How Alert Sensitivity Works
           </h4>
           <p className={`text-sm ${themeClasses.textSecondary}`}>
-            Alert sensitivity controls how metric data is analyzed before triggering alerts.
-            <strong className="font-medium"> Finer granularity</strong> means alerts respond faster but may have more false alarms.
-            <strong className="font-medium"> Coarser granularity</strong> reduces false alarms but delays notification.
+            {t('alerts.sensitivityExplanation', undefined, 'Alert sensitivity controls how metric data is analyzed before triggering alerts.')}
+            {' '}
+            <strong className="font-medium">{t('alerts.finerGranularity', undefined, 'Finer granularity means alerts respond faster but may have more false alarms.')}</strong>
+            {' '}
+            <strong className="font-medium">{t('alerts.coarserGranularity', undefined, 'Coarser granularity reduces false alarms but delays notification.')}</strong>
           </p>
         </div>
 
@@ -238,8 +240,7 @@ const AlertSensitivitySettings: React.FC = () => {
         {/* Device Override Note */}
         <div className={`mt-6 p-4 rounded-lg ${themeClasses.card} border ${themeClasses.border}`}>
           <p className={`text-sm ${themeClasses.textSecondary}`}>
-            <strong className="font-medium">Note:</strong> You can override this default setting for individual devices
-            in the Devices tab by configuring device-specific alert sensitivity.
+            {t('alerts.deviceOverrideNote', undefined, 'Note: You can override this default setting for individual devices in the Devices tab by configuring device-specific alert sensitivity.')}
           </p>
         </div>
       </div>

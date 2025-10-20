@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { themeClasses } from '../../../contexts/ThemeContext';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 import agentService, {
   HardwareInventory as HardwareInventoryType,
   SoftwareInventory,
@@ -13,6 +14,7 @@ interface AssetInventoryProps {
 type TabType = 'hardware' | 'software' | 'storage';
 
 const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
+  const { t } = useClientLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('hardware');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,8 +149,8 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
     if (!hasHardwareData || !hardware) {
       return (
         <div className={`text-center py-12 ${themeClasses.text.secondary}`}>
-          <p>No hardware inventory data available.</p>
-          <p className="text-sm mt-2">Data will be collected on the next inventory scan (runs every 24 hours).</p>
+          <p>{t('agentDetails.assetInventory.hardware.noData', undefined, 'No hardware inventory data available.')}</p>
+          <p className="text-sm mt-2">{t('agentDetails.assetInventory.hardware.noDataHelp', undefined, 'Data will be collected on the next inventory scan (runs every 24 hours).')}</p>
         </div>
       );
     }
@@ -157,28 +159,28 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
       <div className="space-y-6">
         {/* CPU Information */}
         <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>Processor (CPU)</h3>
+          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>{t('agentDetails.assetInventory.hardware.cpu', undefined, 'Processor (CPU)')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Model:</span>
-              <p className={themeClasses.text.primary}>{hardware.cpu_model || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.cpu.model', undefined, 'Model:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.cpu_model || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Architecture:</span>
-              <p className={themeClasses.text.primary}>{hardware.cpu_architecture || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.cpu.architecture', undefined, 'Architecture:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.cpu_architecture || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Cores:</span>
-              <p className={themeClasses.text.primary}>{hardware.cpu_cores || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.cpu.cores', undefined, 'Cores:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.cpu_cores || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Threads:</span>
-              <p className={themeClasses.text.primary}>{hardware.cpu_threads || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.cpu.threads', undefined, 'Threads:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.cpu_threads || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Speed:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.cpu.speed', undefined, 'Speed:')}</span>
               <p className={themeClasses.text.primary}>
-                {hardware.cpu_speed_mhz ? `${hardware.cpu_speed_mhz} MHz` : 'N/A'}
+                {hardware.cpu_speed_mhz ? `${hardware.cpu_speed_mhz} MHz` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
           </div>
@@ -186,29 +188,29 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
 
         {/* Memory Information */}
         <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>Memory (RAM)</h3>
+          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>{t('agentDetails.assetInventory.hardware.memory', undefined, 'Memory (RAM)')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Total Memory:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.memory.total', undefined, 'Total Memory:')}</span>
               <p className={themeClasses.text.primary}>
-                {hardware.total_memory_gb ? `${Number(hardware.total_memory_gb).toFixed(2)} GB` : 'N/A'}
+                {hardware.total_memory_gb ? `${Number(hardware.total_memory_gb).toFixed(2)} GB` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Memory Type:</span>
-              <p className={themeClasses.text.primary}>{hardware.memory_type || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.memory.type', undefined, 'Memory Type:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.memory_type || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Memory Speed:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.memory.speed', undefined, 'Memory Speed:')}</span>
               <p className={themeClasses.text.primary}>
-                {hardware.memory_speed_mhz ? `${hardware.memory_speed_mhz} MHz` : 'N/A'}
+                {hardware.memory_speed_mhz ? `${hardware.memory_speed_mhz} MHz` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Slots Used:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.memory.slots', undefined, 'Slots Used:')}</span>
               <p className={themeClasses.text.primary}>
-                {hardware.memory_slots_used || 'N/A'}
-                {hardware.memory_slots_total ? ` of ${hardware.memory_slots_total}` : ''}
+                {hardware.memory_slots_used || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
+                {hardware.memory_slots_total ? ` ${t('agentDetails.assetInventory.hardware.memory.slotsOf', undefined, 'of')} ${hardware.memory_slots_total}` : ''}
               </p>
             </div>
           </div>
@@ -216,51 +218,51 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
 
         {/* System Information */}
         <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>System Information</h3>
+          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>{t('agentDetails.assetInventory.hardware.systemInfo', undefined, 'System Information')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Manufacturer:</span>
-              <p className={themeClasses.text.primary}>{hardware.manufacturer || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.manufacturer', undefined, 'Manufacturer:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.manufacturer || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Model:</span>
-              <p className={themeClasses.text.primary}>{hardware.model || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.model', undefined, 'Model:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.model || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Serial Number:</span>
-              <p className={themeClasses.text.primary}>{hardware.serial_number || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.serialNumber', undefined, 'Serial Number:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.serial_number || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Chassis Type:</span>
-              <p className={themeClasses.text.primary}>{hardware.chassis_type || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.chassisType', undefined, 'Chassis Type:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.chassis_type || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Motherboard:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.motherboard', undefined, 'Motherboard:')}</span>
               <p className={themeClasses.text.primary}>
-                {hardware.motherboard_manufacturer || ''} {hardware.motherboard_model || 'N/A'}
+                {hardware.motherboard_manufacturer || ''} {hardware.motherboard_model || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>BIOS Version:</span>
-              <p className={themeClasses.text.primary}>{hardware.bios_version || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.system.biosVersion', undefined, 'BIOS Version:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.bios_version || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
           </div>
         </div>
 
         {/* Display & Network */}
         <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>Display & Network</h3>
+          <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>{t('agentDetails.assetInventory.hardware.displayNetwork', undefined, 'Display & Network')}</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Display Count:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.display.count', undefined, 'Display Count:')}</span>
               <p className={themeClasses.text.primary}>{hardware.display_count || 0}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Primary Resolution:</span>
-              <p className={themeClasses.text.primary}>{hardware.primary_display_resolution || 'N/A'}</p>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.display.resolution', undefined, 'Primary Resolution:')}</span>
+              <p className={themeClasses.text.primary}>{hardware.primary_display_resolution || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
             </div>
             <div>
-              <span className={`text-sm ${themeClasses.text.secondary}`}>Network Interfaces:</span>
+              <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.network.interfaces', undefined, 'Network Interfaces:')}</span>
               <p className={themeClasses.text.primary}>{hardware.network_interface_count || 0}</p>
             </div>
           </div>
@@ -269,17 +271,17 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         {/* Battery (if applicable) */}
         {hardware.has_battery && (
           <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-            <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>Battery</h3>
+            <h3 className={`text-lg font-semibold mb-3 ${themeClasses.text.primary}`}>{t('agentDetails.assetInventory.hardware.battery', undefined, 'Battery')}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <span className={`text-sm ${themeClasses.text.secondary}`}>Health:</span>
+                <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.battery.health', undefined, 'Health:')}</span>
                 <p className={themeClasses.text.primary}>
-                  {hardware.battery_health_percent ? `${hardware.battery_health_percent}%` : 'N/A'}
+                  {hardware.battery_health_percent ? `${hardware.battery_health_percent}%` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                 </p>
               </div>
               <div>
-                <span className={`text-sm ${themeClasses.text.secondary}`}>Cycle Count:</span>
-                <p className={themeClasses.text.primary}>{hardware.battery_cycle_count || 'N/A'}</p>
+                <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.hardware.battery.cycleCount', undefined, 'Cycle Count:')}</span>
+                <p className={themeClasses.text.primary}>{hardware.battery_cycle_count || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
               </div>
             </div>
           </div>
@@ -287,7 +289,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
 
         {/* Last Updated */}
         <div className={`text-sm ${themeClasses.text.secondary} text-right`}>
-          Last updated: {formatDate(hardware.last_updated_at)}
+          {t('agentDetails.assetInventory.hardware.lastUpdated', undefined, 'Last updated:')} {formatDate(hardware.last_updated_at)}
         </div>
       </div>
     );
@@ -309,29 +311,29 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         {softwareStats && (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Total Packages</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.software.stats.totalPackages', undefined, 'Total Packages')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {softwareStats.total_packages || 0}
               </p>
             </div>
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Package Managers</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.software.stats.packageManagers', undefined, 'Package Managers')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {softwareStats.package_managers_count || 0}
               </p>
             </div>
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Categories</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.software.stats.categories', undefined, 'Categories')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {softwareStats.categories_count || 0}
               </p>
             </div>
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Total Size</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.software.stats.totalSize', undefined, 'Total Size')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {softwareStats.total_size_mb
                   ? `${(Number(softwareStats.total_size_mb) / 1024).toFixed(1)} GB`
-                  : 'N/A'}
+                  : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
           </div>
@@ -341,7 +343,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         <div className="flex flex-col md:flex-row gap-4">
           <input
             type="text"
-            placeholder="Search software..."
+            placeholder={t('agentDetails.assetInventory.software.searchPlaceholder', undefined, 'Search software...')}
             value={softwareSearch}
             onChange={(e) => setSoftwareSearch(e.target.value)}
             className={`flex-1 px-4 py-2 rounded-lg ${themeClasses.input}`}
@@ -353,7 +355,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
             }
             className={`px-4 py-2 rounded-lg ${themeClasses.input}`}
           >
-            <option value="">All Package Managers</option>
+            <option value="">{t('agentDetails.assetInventory.software.filter.allPackageManagers', undefined, 'All Package Managers')}</option>
             <option value="brew">Homebrew</option>
             <option value="apt">APT</option>
             <option value="yum">YUM/DNF</option>
@@ -365,7 +367,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         {/* Software Table */}
         {software.length === 0 ? (
           <div className={`text-center py-12 ${themeClasses.text.secondary}`}>
-            <p>No software packages found.</p>
+            <p>{t('agentDetails.assetInventory.software.noPackages', undefined, 'No software packages found.')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -373,22 +375,22 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
               <thead className={themeClasses.bg.card}>
                 <tr>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Name
+                    {t('agentDetails.assetInventory.software.table.name', undefined, 'Name')}
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Version
+                    {t('agentDetails.assetInventory.software.table.version', undefined, 'Version')}
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Publisher
+                    {t('agentDetails.assetInventory.software.table.publisher', undefined, 'Publisher')}
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Package Manager
+                    {t('agentDetails.assetInventory.software.table.packageManager', undefined, 'Package Manager')}
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Category
+                    {t('agentDetails.assetInventory.software.table.category', undefined, 'Category')}
                   </th>
                   <th className={`px-4 py-3 text-left text-xs font-medium uppercase tracking-wider ${themeClasses.text.secondary}`}>
-                    Size
+                    {t('agentDetails.assetInventory.software.table.size', undefined, 'Size')}
                   </th>
                 </tr>
               </thead>
@@ -397,19 +399,19 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
                   <tr key={sw.id} className={themeClasses.bg.card}>
                     <td className={`px-4 py-3 ${themeClasses.text.primary}`}>{sw.software_name}</td>
                     <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
-                      {sw.software_version || 'N/A'}
+                      {sw.software_version || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </td>
                     <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
-                      {sw.software_publisher || 'N/A'}
+                      {sw.software_publisher || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </td>
                     <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
-                      {sw.package_manager || 'N/A'}
+                      {sw.package_manager || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </td>
                     <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
-                      {sw.software_category || 'N/A'}
+                      {sw.software_category || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </td>
                     <td className={`px-4 py-3 text-sm ${themeClasses.text.secondary}`}>
-                      {sw.size_mb ? `${Number(sw.size_mb).toFixed(1)} MB` : 'N/A'}
+                      {sw.size_mb ? `${Number(sw.size_mb).toFixed(1)} MB` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </td>
                   </tr>
                 ))}
@@ -437,21 +439,21 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         {storageStats && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Total Devices</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.stats.totalDevices', undefined, 'Total Devices')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {storageStats.total_devices || 0}
               </p>
             </div>
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Total Capacity</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.stats.totalCapacity', undefined, 'Total Capacity')}</p>
               <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
                 {storageStats.total_capacity_gb
                   ? `${Number(storageStats.total_capacity_gb).toFixed(1)} GB`
-                  : 'N/A'}
+                  : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
               </p>
             </div>
             <div className={`${themeClasses.bg.card} p-4 rounded-lg`}>
-              <p className={`text-sm ${themeClasses.text.secondary}`}>Devices with Issues</p>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.stats.devicesWithIssues', undefined, 'Devices with Issues')}</p>
               <p className={`text-2xl font-bold ${storageStats.devices_with_issues > 0 ? 'text-red-500 dark:text-red-400' : themeClasses.text.primary}`}>
                 {storageStats.devices_with_issues || 0}
               </p>
@@ -462,7 +464,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
         {/* Storage Devices */}
         {storage.length === 0 ? (
           <div className={`text-center py-12 ${themeClasses.text.secondary}`}>
-            <p>No storage devices found.</p>
+            <p>{t('agentDetails.assetInventory.storage.noDevices', undefined, 'No storage devices found.')}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -474,7 +476,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
                       {device.device_name}
                     </h4>
                     <p className={`text-sm ${themeClasses.text.secondary}`}>
-                      {device.model || 'Unknown Model'}
+                      {device.model || t('agentDetails.assetInventory.storage.device.unknownModel', undefined, 'Unknown Model')}
                     </p>
                   </div>
                   <span
@@ -484,24 +486,24 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
                         : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                     }`}
                   >
-                    {device.health_status}
+                    {device.health_status === 'Healthy' ? t('agentDetails.assetInventory.storage.health.healthy', undefined, 'Healthy') : device.health_status}
                   </span>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <span className={`text-sm ${themeClasses.text.secondary}`}>Type:</span>
-                    <p className={themeClasses.text.primary}>{device.device_type || 'N/A'}</p>
+                    <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.device.type', undefined, 'Type:')}</span>
+                    <p className={themeClasses.text.primary}>{device.device_type || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
                   </div>
                   <div>
-                    <span className={`text-sm ${themeClasses.text.secondary}`}>Capacity:</span>
+                    <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.device.capacity', undefined, 'Capacity:')}</span>
                     <p className={themeClasses.text.primary}>
-                      {device.capacity_gb ? `${Number(device.capacity_gb).toFixed(1)} GB` : 'N/A'}
+                      {device.capacity_gb ? `${Number(device.capacity_gb).toFixed(1)} GB` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                     </p>
                   </div>
                   <div>
-                    <span className={`text-sm ${themeClasses.text.secondary}`}>Interface:</span>
-                    <p className={themeClasses.text.primary}>{device.interface_type || 'N/A'}</p>
+                    <span className={`text-sm ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.device.interface', undefined, 'Interface:')}</span>
+                    <p className={themeClasses.text.primary}>{device.interface_type || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}</p>
                   </div>
                 </div>
 
@@ -509,27 +511,27 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
                 {device.smart_status && (
                   <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
                     <h5 className={`text-sm font-semibold mb-2 ${themeClasses.text.primary}`}>
-                      SMART Status
+                      {t('agentDetails.assetInventory.storage.smart.title', undefined, 'SMART Status')}
                     </h5>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                       <div>
-                        <span className={`text-xs ${themeClasses.text.secondary}`}>Status:</span>
+                        <span className={`text-xs ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.smart.status', undefined, 'Status:')}</span>
                         <p className={`text-sm ${themeClasses.text.primary}`}>{device.smart_status}</p>
                       </div>
                       <div>
-                        <span className={`text-xs ${themeClasses.text.secondary}`}>Temperature:</span>
+                        <span className={`text-xs ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.smart.temperature', undefined, 'Temperature:')}</span>
                         <p className={`text-sm ${themeClasses.text.primary}`}>
-                          {device.smart_temperature_c ? `${device.smart_temperature_c}°C` : 'N/A'}
+                          {device.smart_temperature_c ? `${device.smart_temperature_c}°C` : t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                         </p>
                       </div>
                       <div>
-                        <span className={`text-xs ${themeClasses.text.secondary}`}>Power-On Hours:</span>
+                        <span className={`text-xs ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.smart.powerOnHours', undefined, 'Power-On Hours:')}</span>
                         <p className={`text-sm ${themeClasses.text.primary}`}>
-                          {device.smart_power_on_hours?.toLocaleString() || 'N/A'}
+                          {device.smart_power_on_hours?.toLocaleString() || t('agentDetails.assetInventory.common.na', undefined, 'N/A')}
                         </p>
                       </div>
                       <div>
-                        <span className={`text-xs ${themeClasses.text.secondary}`}>Reallocated Sectors:</span>
+                        <span className={`text-xs ${themeClasses.text.secondary}`}>{t('agentDetails.assetInventory.storage.smart.reallocatedSectors', undefined, 'Reallocated Sectors:')}</span>
                         <p className={`text-sm ${themeClasses.text.primary}`}>
                           {device.smart_reallocated_sectors || 0}
                         </p>
@@ -557,7 +559,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
               : themeClasses.text.secondary
           }`}
         >
-          Hardware
+          {t('agentDetails.assetInventory.tabs.hardware', undefined, 'Hardware')}
         </button>
         <button
           onClick={() => setActiveTab('software')}
@@ -567,7 +569,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
               : themeClasses.text.secondary
           }`}
         >
-          Software
+          {t('agentDetails.assetInventory.tabs.software', undefined, 'Software')}
         </button>
         <button
           onClick={() => setActiveTab('storage')}
@@ -577,7 +579,7 @@ const AssetInventory: React.FC<AssetInventoryProps> = ({ agentId }) => {
               : themeClasses.text.secondary
           }`}
         >
-          Storage
+          {t('agentDetails.assetInventory.tabs.storage', undefined, 'Storage')}
         </button>
       </div>
 

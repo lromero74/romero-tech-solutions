@@ -551,7 +551,12 @@ const ClientSettings: React.FC = () => {
                 <select
                   value={contactInfo.timeFormatPreference}
                   onChange={(e) => setContactInfo(prev => ({ ...prev, timeFormatPreference: e.target.value as '12h' | '24h' }))}
-                  className={`w-full px-3 py-2 border rounded-md ${themeClasses.input}`}
+                  className={`w-full px-3 py-2 border rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '1.5em 1.5em'
+                  }}
                 >
                   <option value="12h">{t('settings.profile.timeFormat12h')}</option>
                   <option value="24h">{t('settings.profile.timeFormat24h')}</option>
@@ -567,7 +572,12 @@ const ClientSettings: React.FC = () => {
                   <select
                     value={contactInfo.timezonePreference}
                     onChange={(e) => setContactInfo(prev => ({ ...prev, timezonePreference: e.target.value }))}
-                    className={`flex-1 px-3 py-2 border rounded-md ${themeClasses.input}`}
+                    className={`flex-1 px-3 py-2 border rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.5rem center',
+                      backgroundSize: '1.5em 1.5em'
+                    }}
                   >
                     {Object.entries(getGroupedTimezones()).map(([region, timezones]) => (
                       <optgroup key={region} label={region}>

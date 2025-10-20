@@ -753,9 +753,22 @@ const ServiceScheduler: React.FC = () => {
                       ? (() => {
                           const monthKey = getMonthShortTranslationKey(currentDate.getMonth());
                           const translation = t(monthKey);
-                          // If translation returns the month index (like "8"), use fallback month names
+                          // If translation returns the month index (like "8"), use fallback month names with translations
                           if (translation === currentDate.getMonth().toString()) {
-                            const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                            const monthNames = [
+                              t('scheduler.months.jan', undefined, 'Jan'),
+                              t('scheduler.months.feb', undefined, 'Feb'),
+                              t('scheduler.months.mar', undefined, 'Mar'),
+                              t('scheduler.months.apr', undefined, 'Apr'),
+                              t('scheduler.months.may', undefined, 'May'),
+                              t('scheduler.months.jun', undefined, 'Jun'),
+                              t('scheduler.months.jul', undefined, 'Jul'),
+                              t('scheduler.months.aug', undefined, 'Aug'),
+                              t('scheduler.months.sep', undefined, 'Sep'),
+                              t('scheduler.months.oct', undefined, 'Oct'),
+                              t('scheduler.months.nov', undefined, 'Nov'),
+                              t('scheduler.months.dec', undefined, 'Dec')
+                            ];
                             return `${monthNames[currentDate.getMonth()]} ${currentDate.getFullYear()}`;
                           }
                           return `${translation} ${currentDate.getFullYear()}`;
@@ -881,11 +894,16 @@ const ServiceScheduler: React.FC = () => {
                 <select
                   value={selectedDuration}
                   onChange={(e) => setSelectedDuration(parseFloat(e.target.value))}
-                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right ${
                     isDarkMode
                       ? 'bg-gray-700 border-gray-600 text-white'
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '1.5em 1.5em'
+                  }}
                 >
                   {[1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map(hours => (
                     <option key={hours} value={hours}>
@@ -903,11 +921,16 @@ const ServiceScheduler: React.FC = () => {
                 <select
                   value={tierPreference}
                   onChange={(e) => setTierPreference(e.target.value as 'any' | 'standard' | 'premium' | 'emergency')}
-                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right ${
                     isDarkMode
                       ? 'bg-gray-700 border-gray-600 text-white'
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '1.5em 1.5em'
+                  }}
                 >
                   <option value="any">{t('scheduler.tierAny', undefined, 'Any Rate')}</option>
                   <option value="standard">{t('scheduler.tierStandard', undefined, 'Standard')}</option>
@@ -924,11 +947,16 @@ const ServiceScheduler: React.FC = () => {
                 <select
                   value={minDaysFromNow}
                   onChange={(e) => setMinDaysFromNow(parseInt(e.target.value))}
-                  className={`px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                  className={`px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right ${
                     isDarkMode
                       ? 'bg-gray-700 border-gray-600 text-white'
                       : 'bg-white border-gray-300 text-gray-900'
                   }`}
+                  style={{
+                    backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                    backgroundPosition: 'right 0.5rem center',
+                    backgroundSize: '1.5em 1.5em'
+                  }}
                 >
                   <option value="0">{t('scheduler.daysFromNow.today', undefined, 'Today')}</option>
                   <option value="1">{t('scheduler.daysFromNow.tomorrow', undefined, 'Tomorrow')}</option>
@@ -1055,11 +1083,16 @@ const ServiceScheduler: React.FC = () => {
             <select
               value={selectedLocation}
               onChange={(e) => setSelectedLocation(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right ${
                 isDarkMode
                   ? 'bg-gray-700 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-900'
               }`}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '1.5em 1.5em'
+              }}
               required
             >
               <option value="">{t('schedule.selectLocation')}</option>
@@ -1079,11 +1112,16 @@ const ServiceScheduler: React.FC = () => {
             <select
               value={selectedServiceType}
               onChange={(e) => setSelectedServiceType(e.target.value)}
-              className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+              className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 appearance-none bg-no-repeat bg-right ${
                 isDarkMode
                   ? 'bg-gray-700 border-gray-600 text-white'
                   : 'bg-white border-gray-300 text-gray-900'
               }`}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${isDarkMode ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '1.5em 1.5em'
+              }}
               required
             >
               <option value="">{t('schedule.selectServiceType')}</option>

@@ -2,15 +2,17 @@ import React from 'react';
 import { Download, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
   if (!latestMetrics || latestMetrics.package_managers_outdated === undefined) return null;
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <Download className="w-5 h-5 mr-2" />
-        Package Manager Status
+        {t('agentDetails.packageManagerStatus.title', undefined, 'Package Manager Status')}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-6">
         {/* Total Outdated */}
@@ -18,7 +20,7 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Download className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Total Outdated:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.packageManagerStatus.totalOutdatedLabel', undefined, 'Total Outdated:')}</span>
             </div>
             <span className={`text-lg font-bold ${
               latestMetrics.package_managers_outdated === 0 ? 'text-green-600 dark:text-green-400' :
@@ -29,10 +31,12 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
             </span>
           </div>
           {latestMetrics.package_managers_outdated === 0 ? (
-            <p className={`text-xs ${themeClasses.text.muted}`}>All packages are up to date</p>
+            <p className={`text-xs ${themeClasses.text.muted}`}>{t('agentDetails.packageManagerStatus.allUpToDate', undefined, 'All packages are up to date')}</p>
           ) : (
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.package_managers_outdated} package{latestMetrics.package_managers_outdated !== 1 ? 's' : ''} outdated
+              {latestMetrics.package_managers_outdated} {latestMetrics.package_managers_outdated === 1
+                ? t('agentDetails.packageManagerStatus.packageOutdated', undefined, 'package outdated')
+                : t('agentDetails.packageManagerStatus.packagesOutdated', undefined, 'packages outdated')}
             </p>
           )}
         </div>
@@ -52,7 +56,9 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.homebrew_outdated === 0 ? 'Up to date' : `${latestMetrics.homebrew_outdated} outdated`}
+              {latestMetrics.homebrew_outdated === 0
+                ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
+                : `${latestMetrics.homebrew_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -72,7 +78,9 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.npm_outdated === 0 ? 'Up to date' : `${latestMetrics.npm_outdated} outdated`}
+              {latestMetrics.npm_outdated === 0
+                ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
+                : `${latestMetrics.npm_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -92,7 +100,9 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.pip_outdated === 0 ? 'Up to date' : `${latestMetrics.pip_outdated} outdated`}
+              {latestMetrics.pip_outdated === 0
+                ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
+                : `${latestMetrics.pip_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -112,7 +122,9 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.mas_outdated === 0 ? 'Up to date' : `${latestMetrics.mas_outdated} outdated`}
+              {latestMetrics.mas_outdated === 0
+                ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
+                : `${latestMetrics.mas_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -125,17 +137,19 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
             <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className={`text-sm font-medium text-blue-800 dark:text-blue-200 mb-2`}>
-                {latestMetrics.package_managers_outdated} outdated package{latestMetrics.package_managers_outdated !== 1 ? 's' : ''} detected
+                {latestMetrics.package_managers_outdated} {latestMetrics.package_managers_outdated === 1
+                  ? t('agentDetails.packageManagerStatus.outdatedDetected', undefined, 'outdated package detected')
+                  : t('agentDetails.packageManagerStatus.outdatedDetectedPlural', undefined, 'outdated packages detected')}
               </p>
               {latestMetrics.outdated_packages_data && Array.isArray(latestMetrics.outdated_packages_data) && latestMetrics.outdated_packages_data.length > 0 && (
                 <div className="mt-2 max-h-40 overflow-y-auto">
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-blue-200 dark:border-blue-700">
-                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">Package</th>
-                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">Installed</th>
-                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">Latest</th>
-                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">Manager</th>
+                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderPackage', undefined, 'Package')}</th>
+                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderInstalled', undefined, 'Installed')}</th>
+                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderLatest', undefined, 'Latest')}</th>
+                        <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderManager', undefined, 'Manager')}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -151,7 +165,7 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
                   </table>
                   {latestMetrics.outdated_packages_data.length > 10 && (
                     <p className="text-xs text-blue-600 dark:text-blue-300 mt-2">
-                      ...and {latestMetrics.outdated_packages_data.length - 10} more
+                      {t('agentDetails.packageManagerStatus.andMore', { count: latestMetrics.outdated_packages_data.length - 10 }, `...and ${latestMetrics.outdated_packages_data.length - 10} more`)}
                     </p>
                   )}
                 </div>

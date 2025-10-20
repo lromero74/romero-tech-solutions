@@ -4,6 +4,7 @@ import { loadStripe, StripeElementsOptions } from '@stripe/stripe-js';
 import { Elements } from '@stripe/react-stripe-js';
 import { StripePaymentForm } from './StripePaymentForm';
 import { apiService } from '../../services/apiService';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 
 // Initialize Stripe
 const stripePromise = loadStripe(
@@ -33,6 +34,7 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
   onClose,
   onPaymentSuccess,
 }) => {
+  const { t } = useClientLanguage();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -102,7 +104,7 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
           <button
             onClick={onClose}
             className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-            aria-label="Close"
+            aria-label={t('accessibility.close', undefined, 'Close')}
           >
             <X className="w-5 h-5 text-gray-500" />
           </button>
@@ -112,7 +114,7 @@ export const InvoicePaymentModal: React.FC<InvoicePaymentModalProps> = ({
           {isLoading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader className="w-12 h-12 text-blue-600 animate-spin mb-4" />
-              <p className="text-gray-600">Initializing secure payment...</p>
+              <p className="text-gray-600">{t('payment.initializingPayment', undefined, 'Initializing secure payment...')}</p>
             </div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12">

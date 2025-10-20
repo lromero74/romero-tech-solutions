@@ -2,12 +2,16 @@ import React from 'react';
 import { Calendar, AlertTriangle, CheckCircle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 /**
  * Format days into human-readable time units (Years, Weeks, Days)
  * Omits zero values and properly pluralizes
  */
-const formatTimeRemaining = (days: number): string => {
+const formatTimeRemaining = (
+  days: number,
+  t: (key: string, params?: any, fallback?: string) => string
+): string => {
   if (days < 0) return '';
 
   const years = Math.floor(days / 365);
@@ -18,19 +22,30 @@ const formatTimeRemaining = (days: number): string => {
   const parts: string[] = [];
 
   if (years > 0) {
-    parts.push(`${years} ${years === 1 ? 'Year' : 'Years'}`);
+    const yearUnit = years === 1
+      ? t('agentDetails.osEndOfLifeStatus.timeUnit.year', undefined, 'Year')
+      : t('agentDetails.osEndOfLifeStatus.timeUnit.years', undefined, 'Years');
+    parts.push(`${years} ${yearUnit}`);
   }
   if (weeks > 0) {
-    parts.push(`${weeks} ${weeks === 1 ? 'Week' : 'Weeks'}`);
+    const weekUnit = weeks === 1
+      ? t('agentDetails.osEndOfLifeStatus.timeUnit.week', undefined, 'Week')
+      : t('agentDetails.osEndOfLifeStatus.timeUnit.weeks', undefined, 'Weeks');
+    parts.push(`${weeks} ${weekUnit}`);
   }
   if (remainingDays > 0) {
-    parts.push(`${remainingDays} ${remainingDays === 1 ? 'Day' : 'Days'}`);
+    const dayUnit = remainingDays === 1
+      ? t('agentDetails.osEndOfLifeStatus.timeUnit.day', undefined, 'Day')
+      : t('agentDetails.osEndOfLifeStatus.timeUnit.days', undefined, 'Days');
+    parts.push(`${remainingDays} ${dayUnit}`);
   }
 
-  return parts.join(', ') || '0 Days';
+  return parts.join(', ') || `0 ${t('agentDetails.osEndOfLifeStatus.timeUnit.days', undefined, 'Days')}`;
 };
 
 export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
+
   if (!latestMetrics || !latestMetrics.eol_status) {
     return null;
   }
@@ -39,13 +54,15 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <Calendar className="w-5 h-5 mr-2" />
-        OS End-of-Life Status
+        {t('agentDetails.osEndOfLifeStatus.title', undefined, 'OS End-of-Life Status')}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {/* EOL Status */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Support Status:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+              {t('agentDetails.osEndOfLifeStatus.supportStatus', undefined, 'Support Status:')}
+            </span>
             <span className={`text-lg font-bold ${
               latestMetrics.eol_status === 'active' ? 'text-green-600 dark:text-green-400' :
               latestMetrics.eol_status === 'approaching_eol' ? 'text-yellow-600 dark:text-yellow-400' :
@@ -53,12 +70,12 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
               latestMetrics.eol_status === 'unsupported' ? 'text-red-600 dark:text-red-400' :
               'text-gray-600'
             }`}>
-              {latestMetrics.eol_status === 'active' ? 'Active' :
-               latestMetrics.eol_status === 'approaching_eol' ? 'Approaching EOL' :
-               latestMetrics.eol_status === 'eol' ? 'EOL' :
-               latestMetrics.eol_status === 'security_only' ? 'Security Only' :
-               latestMetrics.eol_status === 'unsupported' ? 'Unsupported' :
-               'Unknown'}
+              {latestMetrics.eol_status === 'active' ? t('agentDetails.osEndOfLifeStatus.status.active', undefined, 'Active') :
+               latestMetrics.eol_status === 'approaching_eol' ? t('agentDetails.osEndOfLifeStatus.status.approachingEol', undefined, 'Approaching EOL') :
+               latestMetrics.eol_status === 'eol' ? t('agentDetails.osEndOfLifeStatus.status.eol', undefined, 'EOL') :
+               latestMetrics.eol_status === 'security_only' ? t('agentDetails.osEndOfLifeStatus.status.securityOnly', undefined, 'Security Only') :
+               latestMetrics.eol_status === 'unsupported' ? t('agentDetails.osEndOfLifeStatus.status.unsupported', undefined, 'Unsupported') :
+               t('agentDetails.osEndOfLifeStatus.status.unknown', undefined, 'Unknown')}
             </span>
           </div>
         </div>
@@ -67,19 +84,25 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
         {latestMetrics.days_until_sec_eol !== null && latestMetrics.days_until_sec_eol !== undefined && (
           <div>
             <div className="flex items-baseline gap-2 mb-2">
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Security Updates:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+                {t('agentDetails.osEndOfLifeStatus.securityUpdates', undefined, 'Security Updates:')}
+              </span>
               <span className={`text-lg font-bold ${
                 latestMetrics.days_until_sec_eol < 0 ? 'text-red-600 dark:text-red-400' :
                 latestMetrics.days_until_sec_eol <= 180 ? 'text-yellow-600 dark:text-yellow-400' :
                 'text-green-600 dark:text-green-400'
               }`}>
-                {latestMetrics.days_until_sec_eol < 0 ? 'Ended' :
-                 formatTimeRemaining(latestMetrics.days_until_sec_eol)}
+                {latestMetrics.days_until_sec_eol < 0
+                  ? t('agentDetails.osEndOfLifeStatus.ended', undefined, 'Ended')
+                  : formatTimeRemaining(latestMetrics.days_until_sec_eol, t)}
               </span>
             </div>
             {latestMetrics.security_eol_date && (
               <p className={`text-xs ${themeClasses.text.muted}`}>
-                {latestMetrics.days_until_sec_eol < 0 ? 'Ended: ' : 'Ends: '}
+                {latestMetrics.days_until_sec_eol < 0
+                  ? t('agentDetails.osEndOfLifeStatus.endedPast', undefined, 'Ended:')
+                  : t('agentDetails.osEndOfLifeStatus.ends', undefined, 'Ends:')}
+                {' '}
                 {new Date(latestMetrics.security_eol_date).toLocaleDateString()}
               </p>
             )}
@@ -90,19 +113,23 @@ export const OSEndOfLifeStatus: React.FC<AgentDetailsComponentProps> = ({ latest
         {latestMetrics.days_until_eol !== null && latestMetrics.days_until_eol !== undefined && (
           <div>
             <div className="flex items-baseline gap-2 mb-2">
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Full EOL:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+                {t('agentDetails.osEndOfLifeStatus.fullEol', undefined, 'Full EOL:')}
+              </span>
               <span className={`text-lg font-bold ${
                 latestMetrics.days_until_eol < 0 ? 'text-red-600 dark:text-red-400' :
                 latestMetrics.days_until_eol <= 180 ? 'text-yellow-600 dark:text-yellow-400' :
                 'text-green-600 dark:text-green-400'
               }`}>
-                {latestMetrics.days_until_eol < 0 ? 'Past EOL' :
-                 formatTimeRemaining(latestMetrics.days_until_eol)}
+                {latestMetrics.days_until_eol < 0
+                  ? t('agentDetails.osEndOfLifeStatus.pastEol', undefined, 'Past EOL')
+                  : formatTimeRemaining(latestMetrics.days_until_eol, t)}
               </span>
             </div>
             {latestMetrics.eol_date && (
               <p className={`text-xs ${themeClasses.text.muted}`}>
-                {latestMetrics.days_until_eol < 0 ? 'EOL Date: ' : 'EOL Date: '}
+                {t('agentDetails.osEndOfLifeStatus.eolDate', undefined, 'EOL Date:')}
+                {' '}
                 {new Date(latestMetrics.eol_date).toLocaleDateString()}
               </p>
             )}

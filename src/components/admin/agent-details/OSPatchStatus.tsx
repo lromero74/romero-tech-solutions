@@ -2,15 +2,17 @@ import React from 'react';
 import { Shield, Download, RefreshCw, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
   if (!latestMetrics || latestMetrics.patches_available === undefined) return null;
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <Shield className="w-5 h-5 mr-2" />
-        OS Patch Status
+        {t('agentDetails.osPatchStatus.title', undefined, 'OS Patch Status')}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {/* Total Patches */}
@@ -18,7 +20,7 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Download className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Updates Available:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.osPatchStatus.updatesAvailable', undefined, 'Updates Available:')}</span>
             </div>
             <span className={`text-lg font-bold ${
               latestMetrics.patches_available === 0 ? 'text-green-600 dark:text-green-400' :
@@ -29,10 +31,10 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
             </span>
           </div>
           {latestMetrics.patches_available === 0 ? (
-            <p className={`text-xs ${themeClasses.text.muted}`}>System is up to date</p>
+            <p className={`text-xs ${themeClasses.text.muted}`}>{t('agentDetails.osPatchStatus.systemUpToDate', undefined, 'System is up to date')}</p>
           ) : (
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.patches_available} update{latestMetrics.patches_available !== 1 ? 's' : ''} available
+              {latestMetrics.patches_available} {latestMetrics.patches_available !== 1 ? t('agentDetails.osPatchStatus.updatesAvailablePlural', undefined, 'updates available') : t('agentDetails.osPatchStatus.updateAvailable', undefined, 'update available')}
             </p>
           )}
         </div>
@@ -42,7 +44,7 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Shield className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Security Updates:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.osPatchStatus.securityUpdates', undefined, 'Security Updates:')}</span>
             </div>
             <span className={`text-lg font-bold ${
               (latestMetrics.security_patches_available || 0) === 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
@@ -51,10 +53,10 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
             </span>
           </div>
           {(latestMetrics.security_patches_available || 0) === 0 ? (
-            <p className={`text-xs ${themeClasses.text.muted}`}>No security updates pending</p>
+            <p className={`text-xs ${themeClasses.text.muted}`}>{t('agentDetails.osPatchStatus.noSecurityUpdates', undefined, 'No security updates pending')}</p>
           ) : (
             <p className={`text-xs text-red-600 dark:text-red-400`}>
-              {latestMetrics.security_patches_available} security update{latestMetrics.security_patches_available !== 1 ? 's' : ''} required
+              {latestMetrics.security_patches_available} {latestMetrics.security_patches_available !== 1 ? t('agentDetails.osPatchStatus.securityUpdatesRequired', undefined, 'security updates required') : t('agentDetails.osPatchStatus.securityUpdateRequired', undefined, 'security update required')}
             </p>
           )}
         </div>
@@ -64,18 +66,18 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <RefreshCw className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Reboot Status:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.osPatchStatus.rebootStatus', undefined, 'Reboot Status:')}</span>
             </div>
             <span className={`text-lg font-bold ${
               latestMetrics.patches_require_reboot ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
             }`}>
-              {latestMetrics.patches_require_reboot ? 'Required' : 'Not Required'}
+              {latestMetrics.patches_require_reboot ? t('agentDetails.osPatchStatus.required', undefined, 'Required') : t('agentDetails.osPatchStatus.notRequired', undefined, 'Not Required')}
             </span>
           </div>
           {latestMetrics.patches_require_reboot ? (
-            <p className={`text-xs text-red-600 dark:text-red-400`}>System restart needed for updates</p>
+            <p className={`text-xs text-red-600 dark:text-red-400`}>{t('agentDetails.osPatchStatus.restartNeeded', undefined, 'System restart needed for updates')}</p>
           ) : (
-            <p className={`text-xs ${themeClasses.text.muted}`}>No restart needed</p>
+            <p className={`text-xs ${themeClasses.text.muted}`}>{t('agentDetails.osPatchStatus.noRestartNeeded', undefined, 'No restart needed')}</p>
           )}
         </div>
       </div>
@@ -88,10 +90,10 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetr
             <div className="flex-1">
               <p className={`text-sm font-medium text-yellow-800 dark:text-yellow-200`}>
                 {(latestMetrics.security_patches_available || 0) > 0 && latestMetrics.patches_require_reboot
-                  ? 'Security updates available and system reboot required'
+                  ? t('agentDetails.osPatchStatus.securityAndReboot', undefined, 'Security updates available and system reboot required')
                   : (latestMetrics.security_patches_available || 0) > 0
-                  ? 'Security updates available - please install as soon as possible'
-                  : 'System reboot required to complete updates'}
+                  ? t('agentDetails.osPatchStatus.securityAvailable', undefined, 'Security updates available - please install as soon as possible')
+                  : t('agentDetails.osPatchStatus.rebootRequired', undefined, 'System reboot required to complete updates')}
               </p>
             </div>
           </div>

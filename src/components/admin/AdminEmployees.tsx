@@ -771,9 +771,14 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Department</label>
             <select
-              className={`w-full rounded-md ${themeClasses.input}`}
+              className={`w-full rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
               value={employeeDepartmentFilter || 'all'}
               onChange={(e) => setEmployeeDepartmentFilter && setEmployeeDepartmentFilter(e.target.value)}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${theme === 'dark' ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '1.5em 1.5em'
+              }}
             >
               <option value="all">All Departments</option>
               <option value="administration">Administration</option>
@@ -787,9 +792,14 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Role</label>
             <select
-              className={`w-full rounded-md ${themeClasses.input}`}
+              className={`w-full rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
               value={employeeRoleFilter}
               onChange={(e) => setEmployeeRoleFilter(e.target.value)}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${theme === 'dark' ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '1.5em 1.5em'
+              }}
             >
               <option value="all">All Roles</option>
               <option value="admin">Admin</option>
@@ -801,9 +811,14 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Status</label>
             <select
-              className={`w-full rounded-md ${themeClasses.input}`}
+              className={`w-full rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
               value={employeeStatusFilter}
               onChange={(e) => setEmployeeStatusFilter(e.target.value)}
+              style={{
+                backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${theme === 'dark' ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                backgroundPosition: 'right 0.5rem center',
+                backgroundSize: '1.5em 1.5em'
+              }}
             >
               <option value="all">All Status</option>
               <option value="active">Active</option>
@@ -819,9 +834,14 @@ const AdminEmployees: React.FC<AdminEmployeesProps> = ({
             <label className={`block text-sm font-medium ${themeClasses.text.secondary} mb-1`}>Online Status</label>
             <div className="flex items-center justify-between">
               <select
-                className={`w-full rounded-md ${themeClasses.input}`}
+                className={`w-full rounded-md ${themeClasses.input} pr-10 appearance-none bg-no-repeat bg-right`}
                 value={employeeOnlineFilter || 'all'}
                 onChange={(e) => setEmployeeOnlineFilter && setEmployeeOnlineFilter(e.target.value)}
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='${theme === 'dark' ? '%23D1D5DB' : '%236B7280'}' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                  backgroundPosition: 'right 0.5rem center',
+                  backgroundSize: '1.5em 1.5em'
+                }}
               >
                 <option value="all">All</option>
                 <option value="online">Online</option>

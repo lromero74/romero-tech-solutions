@@ -545,10 +545,10 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   className="flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                 >
                   <ArrowLeft className="h-5 w-5" />
-                  <span>Back to Dashboard</span>
+                  <span>{t('dashboard.actions.backToDashboard', undefined, 'Back to Dashboard')}</span>
                 </button>
                 <h1 className="text-xl font-semibold text-gray-800 dark:text-white">
-                  Device Details
+                  {t('dashboard.titles.deviceDetails', undefined, 'Device Details')}
                 </h1>
               </div>
               <div className="flex items-center space-x-4">
@@ -775,7 +775,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
             {[
               { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
               // Show "Monitored Devices" tab for all users with subscription tier (free, subscribed, enterprise)
-              ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'Monitored Devices', icon: HardDrive }] : []),
+              ...(authUser?.subscriptionTier ? [{ id: 'devices', label: t('dashboard.nav.devices', undefined, 'Monitored Devices'), icon: HardDrive }] : []),
               { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
               { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
               { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -833,7 +833,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                 {[
                   { id: 'dashboard', label: t('dashboard.nav.dashboard', 'Dashboard'), icon: Building2 },
                   // Show "Monitored Devices" tab for all users with subscription tier (free, subscribed, enterprise)
-                  ...(authUser?.subscriptionTier ? [{ id: 'devices', label: 'Monitored Devices', icon: HardDrive }] : []),
+                  ...(authUser?.subscriptionTier ? [{ id: 'devices', label: t('dashboard.nav.devices', undefined, 'Monitored Devices'), icon: HardDrive }] : []),
                   { id: 'locations', label: t('dashboard.nav.locations', 'Service Locations'), icon: MapPin },
                   { id: 'schedule', label: t('dashboard.nav.schedule', 'Schedule Service'), icon: Calendar },
                   { id: 'requests', label: t('dashboard.nav.requests', 'View Requests'), icon: Clock },
@@ -888,18 +888,19 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       <HardDrive className="h-6 w-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-blue-900 dark:text-blue-200 mb-1">
-                          Free Plan - {authUser.devicesAllowed || 2} Devices Included
+                          {t('dashboard.subscriptionBanner.freePlan.title', { count: authUser.devicesAllowed || 2 }, 'Free Plan - {count} Devices Included')}
                         </h3>
                         <p className="text-sm text-blue-700 dark:text-blue-300 mb-2">
-                          You have full monitoring and alerting for up to {authUser.devicesAllowed || 2} devices.
-                          Want to monitor more devices? Upgrade starting at $9.99/month per additional device.
+                          {t('dashboard.subscriptionBanner.freePlan.description', { count: authUser.devicesAllowed || 2 }, 'You have full monitoring and alerting for up to {count} devices.')}
+                          {' '}
+                          {t('dashboard.subscriptionBanner.freePlan.upgradeMessage', undefined, 'Want to monitor more devices? Upgrade starting at $9.99/month per additional device.')}
                         </p>
                         <button
                           onClick={() => setActiveTab('devices')}
                           className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
                         >
                           <HardDrive className="h-4 w-4 mr-2" />
-                          Manage Devices & Upgrade
+                          {t('dashboard.subscriptionBanner.freePlan.upgradeButton', undefined, 'Manage Devices & Upgrade')}
                         </button>
                       </div>
                     </div>
@@ -913,32 +914,25 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                       <HardDrive className="h-6 w-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
                         <h3 className="text-lg font-semibold text-green-900 dark:text-green-200 mb-1">
-                          {authUser.subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro'} Plan - {authUser.devicesAllowed || 2} Devices
+                          {t('dashboard.subscriptionBanner.paidPlan.title', {
+                            planType: authUser.subscriptionTier === 'enterprise'
+                              ? t('dashboard.subscriptionBanner.enterprisePlan.label', undefined, 'Enterprise')
+                              : t('dashboard.subscriptionBanner.proPlan.label', undefined, 'Pro'),
+                            count: authUser.devicesAllowed || 2
+                          }, '{planType} Plan - {count} Devices')}
                         </h3>
                         <p className="text-sm text-green-700 dark:text-green-300 mb-2">
-                          Full monitoring, alerting, and remote management for all your devices.
+                          {t('dashboard.subscriptionBanner.paidPlan.description', undefined, 'Full monitoring, alerting, and remote management for all your devices.')}
                         </p>
                         <button
                           onClick={() => setActiveTab('devices')}
                           className="inline-flex items-center px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
                         >
                           <HardDrive className="h-4 w-4 mr-2" />
-                          Manage Devices
+                          {t('dashboard.subscriptionBanner.paidPlan.manageButton', undefined, 'Manage Devices')}
                         </button>
                       </div>
                     </div>
-                  </div>
-                )}
-
-                {/* Device Selector - Show if user has devices */}
-                {agents.length > 0 && (
-                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
-                    <AgentSelector
-                      agents={agents}
-                      selectedAgentId={selectedAgentId}
-                      onSelectAgent={handleSelectAgent}
-                      isDarkMode={isDarkMode}
-                    />
                   </div>
                 )}
 
@@ -1053,6 +1047,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                   </div>
                 </div>
 
+                {/* Device Selector - Show if user has devices */}
+                {agents.length > 0 && (
+                  <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+                    <AgentSelector
+                      agents={agents}
+                      selectedAgentId={selectedAgentId}
+                      onSelectAgent={handleSelectAgent}
+                      isDarkMode={isDarkMode}
+                    />
+                  </div>
+                )}
+
                 {/* Device Metrics - Show if a device is selected */}
                 {selectedAgentId && (
                   <div className="mt-6">
@@ -1077,7 +1083,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
                     className="inline-flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
                   >
                     <ArrowLeft className="h-4 w-4 mr-2" />
-                    Back to Monitored Devices
+                    {t('dashboard.actions.backToDevices', undefined, 'Back to Monitored Devices')}
                   </button>
                   {/* Device Details */}
                   <ThemeProvider>

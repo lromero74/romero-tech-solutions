@@ -2,8 +2,10 @@ import React from 'react';
 import { Activity, Circle, AlertTriangle, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
   if (!latestMetrics || latestMetrics.services_monitored === null || latestMetrics.services_monitored === undefined || latestMetrics.services_monitored === 0) {
     return null;
   }
@@ -19,13 +21,15 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <Activity className="w-5 h-5 mr-2" />
-        Service & Process Monitoring
+        {t('agentDetails.serviceMonitoring.title', undefined, 'Service & Process Monitoring')}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6 mb-6">
         {/* Services Monitored */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Services Monitored:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+              {t('agentDetails.serviceMonitoring.servicesMonitored', undefined, 'Services Monitored:')}
+            </span>
             <span className={`text-lg font-bold ${themeClasses.text.primary}`}>
               {latestMetrics.services_monitored}
             </span>
@@ -35,7 +39,9 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
         {/* Services Running */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Running:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+              {t('agentDetails.serviceMonitoring.running', undefined, 'Running:')}
+            </span>
             <span className={`text-lg font-bold text-green-600 dark:text-green-400`}>
               {latestMetrics.services_running}
             </span>
@@ -45,7 +51,9 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
         {/* Services Failed (Critical Only) */}
         <div>
           <div className="flex items-baseline gap-2 mb-2">
-            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Failed/Stopped:</span>
+            <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>
+              {t('agentDetails.serviceMonitoring.failedStopped', undefined, 'Failed/Stopped:')}
+            </span>
             <span className={`text-lg font-bold ${
               criticalFailedCount > 0 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'
             }`}>
@@ -54,7 +62,10 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
           </div>
           {criticalFailedCount > 0 && (
             <p className={`text-xs text-red-600 dark:text-red-400`}>
-              {criticalFailedCount} service{criticalFailedCount !== 1 ? 's' : ''} require attention
+              {criticalFailedCount} {criticalFailedCount !== 1
+                ? t('agentDetails.serviceMonitoring.requireAttentionPlural', undefined, 'services require attention')
+                : t('agentDetails.serviceMonitoring.requireAttentionSingular', undefined, 'service requires attention')
+              }
             </p>
           )}
         </div>
@@ -64,7 +75,7 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
       {latestMetrics.services_data && Array.isArray(latestMetrics.services_data) && latestMetrics.services_data.length > 0 && (
         <div className="space-y-2">
           <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>
-            Service Status
+            {t('agentDetails.serviceMonitoring.serviceStatus', undefined, 'Service Status')}
           </h4>
           {latestMetrics.services_data.map((service, index) => {
             // Determine styling based on severity (context-aware)
@@ -97,7 +108,7 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
                         {service.display_name}
                         {service.description && (
                           <span className={`ml-2 font-normal ${themeClasses.text.secondary}`}>
-                            - {service.description}
+                            - {t(`agentDetails.serviceMonitoring.description.${service.name}`, undefined, service.description)}
                           </span>
                         )}
                       </p>
@@ -105,8 +116,8 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
                         <div className="relative group">
                           <Info className={`w-4 h-4 ${themeClasses.text.tertiary} cursor-help`} />
                           <div className="absolute left-0 top-6 w-80 p-3 bg-gray-900 dark:bg-gray-800 text-white text-xs rounded-lg shadow-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none">
-                            <p className="font-semibold mb-1">Why is this stopped?</p>
-                            <p>{service.why_stopped_help}</p>
+                            <p className="font-semibold mb-1">{t('agentDetails.serviceMonitoring.whyStoppedTitle', undefined, 'Why is this stopped?')}</p>
+                            <p>{t(`agentDetails.serviceMonitoring.help.${service.name}`, undefined, service.why_stopped_help)}</p>
                             <div className="absolute -top-1 left-4 w-2 h-2 bg-gray-900 dark:bg-gray-800 transform rotate-45"></div>
                           </div>
                         </div>
@@ -122,7 +133,7 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
                 <div className="flex items-center gap-2">
                   {service.enabled && (
                     <span className="px-2 py-1 bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-200 rounded text-xs">
-                      Auto-start
+                      {t('agentDetails.serviceMonitoring.autoStart', undefined, 'Auto-start')}
                     </span>
                   )}
                   <span className={`px-2 py-1 rounded text-xs font-medium ${
@@ -131,7 +142,11 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
                     service.status === 'failed' ? 'bg-red-100 text-red-800 dark:bg-red-900/20' :
                     'bg-gray-100 text-gray-800 dark:bg-gray-700'
                   }`}>
-                    {service.status.toUpperCase()}
+                    {service.status === 'running' ? t('agentDetails.serviceMonitoring.status.running', undefined, 'RUNNING') :
+                     service.status === 'stopped' ? t('agentDetails.serviceMonitoring.status.stopped', undefined, 'STOPPED') :
+                     service.status === 'failed' ? t('agentDetails.serviceMonitoring.status.failed', undefined, 'FAILED') :
+                     t('agentDetails.serviceMonitoring.status.disabled', undefined, 'DISABLED')
+                    }
                   </span>
                 </div>
               </div>
@@ -148,10 +163,13 @@ export const ServiceMonitoring: React.FC<AgentDetailsComponentProps> = ({ latest
             <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 mr-2 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm font-medium text-red-800 dark:text-red-200">
-                {criticalFailedCount} critical service{criticalFailedCount !== 1 ? 's are' : ' is'} not running
+                {criticalFailedCount} {criticalFailedCount !== 1
+                  ? t('agentDetails.serviceMonitoring.criticalNotRunningPlural', undefined, 'critical services are not running')
+                  : t('agentDetails.serviceMonitoring.criticalNotRunningSingular', undefined, 'critical service is not running')
+                }
               </p>
               <p className="text-xs mt-1 text-red-700 dark:text-red-300">
-                Review failed services and restart them to ensure system stability
+                {t('agentDetails.serviceMonitoring.reviewAndRestart', undefined, 'Review failed services and restart them to ensure system stability')}
               </p>
             </div>
           </div>

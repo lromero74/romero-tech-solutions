@@ -226,6 +226,8 @@ export class AuthService {
         email: data.user.email,
         role: data.user.role || 'admin',
         name: data.user.name || data.user.email,
+        businessName: data.user.businessName,
+        businessId: data.user.businessId,
         isFirstAdmin: data.user.isFirstAdmin || true
       };
 
@@ -333,6 +335,8 @@ export class AuthService {
         email: data.user.email,
         role: data.user.role || 'admin',
         name: data.user.name || data.user.email,
+        businessName: data.user.businessName,
+        businessId: data.user.businessId,
         isFirstAdmin: data.user.isFirstAdmin || true
       };
 
@@ -415,6 +419,7 @@ export class AuthService {
         role: data.user.role || 'client',
         name: data.user.name || data.user.email,
         businessName: data.user.businessName,
+        businessId: data.user.businessId,
         isFirstAdmin: data.user.isFirstAdmin || false
       };
 

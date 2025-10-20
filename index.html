@@ -73,7 +73,10 @@
     <link rel="apple-touch-icon" href="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" />
 
-    <!-- Dynamic Web App Manifest - Selected based on current path -->
+    <!-- Web App Manifest - Default, updated by script based on path -->
+    <link rel="manifest" href="/site.webmanifest" id="app-manifest" />
+
+    <!-- Dynamic Web App Manifest - Update based on current path -->
     <script>
       (function() {
         const path = window.location.pathname;
@@ -89,14 +92,11 @@
           appTitle = 'RTS Client';
         }
 
-        // Create and insert the manifest link
-        const manifestLink = document.createElement('link');
-        manifestLink.rel = 'manifest';
-        manifestLink.href = manifestPath;
-        manifestLink.onerror = function() {
-          console.warn('Failed to load manifest:', manifestPath);
-        };
-        document.head.appendChild(manifestLink);
+        // Update the manifest link
+        const manifestLink = document.getElementById('app-manifest');
+        if (manifestLink && manifestLink.href !== manifestPath) {
+          manifestLink.href = manifestPath;
+        }
 
         // Add iOS-specific meta tags
         const metaTitle = document.createElement('meta');

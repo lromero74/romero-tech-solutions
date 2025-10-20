@@ -3,15 +3,18 @@ import { Cpu, Activity, HardDrive, Wifi, TrendingUp } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { getMetricColor, getMetricBarColor, formatBytes } from './utils';
+import { useClientLanguage } from '../../../contexts/ClientLanguageContext';
 
 export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+  const { t } = useClientLanguage();
+
   if (!latestMetrics) return null;
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
       <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
         <TrendingUp className="w-5 h-5 mr-2" />
-        Current Performance
+        {t('agentDetails.titles.currentPerformance', undefined, 'Current Performance')}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         {/* CPU Usage */}
@@ -19,7 +22,7 @@ export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMet
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Cpu className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>CPU Usage:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.titles.cpuUsage', undefined, 'CPU Usage')}:</span>
             </div>
             <span className={`${latestMetrics.cpu_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.cpu_percent)}`}>
               {latestMetrics.cpu_percent.toFixed(1)}%
@@ -38,7 +41,7 @@ export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMet
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <Activity className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Memory Usage:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.titles.memoryUsage', undefined, 'Memory Usage')}:</span>
             </div>
             <span className={`${latestMetrics.memory_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.memory_percent)}`}>
               {latestMetrics.memory_percent.toFixed(1)}%
@@ -57,7 +60,7 @@ export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMet
           <div className="flex items-baseline gap-2 mb-2">
             <div className="flex items-center gap-2">
               <HardDrive className={`w-4 h-4 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Disk Usage:</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.titles.diskUsage', undefined, 'Disk Usage')}:</span>
             </div>
             <span className={`${latestMetrics.disk_percent >= 50 ? 'text-lg' : 'text-sm'} font-bold ${getMetricColor(latestMetrics.disk_percent)}`}>
               {latestMetrics.disk_percent.toFixed(1)}%
@@ -78,7 +81,7 @@ export const CurrentMetrics: React.FC<AgentDetailsComponentProps> = ({ latestMet
           <div className="flex items-center justify-between">
             <div className="flex items-center">
               <Wifi className={`w-4 h-4 mr-2 ${themeClasses.text.muted}`} />
-              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Network</span>
+              <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.labels.network', undefined, 'Network')}</span>
             </div>
             <div className="flex gap-4">
               {latestMetrics.network_rx_bytes !== null && (

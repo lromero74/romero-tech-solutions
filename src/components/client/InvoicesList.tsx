@@ -91,7 +91,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
       }
     } catch (err) {
       console.error('❌ [InvoicesList] Error fetching invoices:', err);
-      setError('Failed to load invoices. Please try again.');
+      setError(t('invoices.errors.loadFailed', undefined, 'Failed to load invoices. Please try again.'));
     } finally {
       setIsLoading(false);
     }
@@ -444,7 +444,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
             {loadingDetail ? (
               <div className="p-8 text-center">
                 <Loader className={`w-12 h-12 animate-spin mx-auto ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`} />
-                <p className={`mt-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>Loading invoice details...</p>
+                <p className={`mt-4 ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>{t('invoices.loadingDetails', undefined, 'Loading invoice details...')}</p>
               </div>
             ) : invoiceDetail ? (
               <div className="p-6">
@@ -532,25 +532,25 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                   {/* Service Information */}
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Service Request</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.serviceRequest', undefined, 'Service Request')}</p>
                       <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {invoiceDetail.invoice.request_number}
                       </p>
                     </div>
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>SR Title</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.srTitle', undefined, 'SR Title')}</p>
                       <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {invoiceDetail.invoice.service_title}
                       </p>
                     </div>
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Service Type</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.serviceType', undefined, 'Service Type')}</p>
                       <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {invoiceDetail.invoice.service_type || 'N/A'}
                       </p>
                     </div>
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Payment Status</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.paymentStatus', undefined, 'Payment Status')}</p>
                       <div className="mt-1">
                         {(() => {
                           const status = invoiceDetail.invoice.payment_status;
@@ -581,13 +581,13 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                       </div>
                     </div>
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Issue Date</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.issueDate', undefined, 'Issue Date')}</p>
                       <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {formatDate(invoiceDetail.invoice.issue_date)}
                       </p>
                     </div>
                     <div>
-                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>Due Date</p>
+                      <p className={`text-sm ${isDarkMode ? 'text-gray-400' : 'text-gray-600'}`}>{t('invoices.dueDate', undefined, 'Due Date')}</p>
                       <p className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {formatDate(invoiceDetail.invoice.due_date)}
                       </p>
@@ -753,7 +753,10 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                             Original Cost Estimate
                           </h4>
                           <div className={`text-xs mb-1 ${isDarkMode ? 'text-green-300' : 'text-green-700'}`}>
-                            Base Rate ({invoiceDetail.costEstimate.rateCategoryName || 'Standard'}): ${invoiceDetail.costEstimate.baseRate}/hr
+                            {t('invoices.baseRate', {
+                              category: invoiceDetail.costEstimate.rateCategoryName || 'Standard',
+                              rate: `$${invoiceDetail.costEstimate.baseRate}`
+                            }, 'Base Rate ({category}): {rate}/hr')}
                           </div>
                           {/* Tier Breakdown */}
                           {invoiceDetail.costEstimate.breakdown && invoiceDetail.costEstimate.breakdown.map((block, idx) => (
@@ -770,7 +773,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                                 Subtotal: ${invoiceDetail.costEstimate.subtotal?.toFixed(2)}
                               </div>
                               <div className={`text-xs font-medium mb-1 ${isDarkMode ? 'text-green-300' : 'text-green-700'}`}>
-                                🎁 First Hour Comp (New Client):
+                                {t('invoices.firstHourComp', undefined, '🎁 First Hour Comp (New Client):')}
                               </div>
                               {invoiceDetail.costEstimate.firstHourCompBreakdown?.map((compBlock, idx) => (
                                 <div key={idx} className={`text-xs ml-4 ${isDarkMode ? 'text-green-300' : 'text-green-700'}`}>
@@ -811,31 +814,33 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                     {invoiceDetail.invoice.is_first_service_request && parseFloat(invoiceDetail.invoice.waived_hours || 0) > 0 && (
                       <div className={`mb-3 pb-3 border-b ${isDarkMode ? 'border-purple-700' : 'border-purple-300'}`}>
                         <p className={`text-xs mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>
-                          First Service Request Discount:
+                          {t('invoices.firstServiceDiscount', undefined, 'First Service Request Discount:')}
                         </p>
                         <p className={`text-sm font-medium ${isDarkMode ? 'text-green-400' : 'text-green-600'}`}>
-                          New Client Assessment - Waived: {parseFloat(invoiceDetail.invoice.waived_hours).toFixed(2)} hours
+                          {t('invoices.newClientWaived', {
+                            hours: parseFloat(invoiceDetail.invoice.waived_hours).toFixed(2)
+                          }, 'New Client Assessment - Waived: {hours} hours')}
                         </p>
                       </div>
                     )}
 
                     <div className="grid grid-cols-3 gap-2 text-xs">
                       <div className="text-center">
-                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Standard</div>
+                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{t('invoices.rateLabels.standard', undefined, 'Standard')}</div>
                         <div className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                           {parseFloat(invoiceDetail.invoice.standard_hours || 0).toFixed(2)} hrs
                         </div>
                         <div className={`text-xs ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>1.0x rate</div>
                       </div>
                       <div className="text-center">
-                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Premium</div>
+                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{t('invoices.rateLabels.premium', undefined, 'Premium')}</div>
                         <div className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                           {parseFloat(invoiceDetail.invoice.premium_hours || 0).toFixed(2)} hrs
                         </div>
                         <div className={`text-xs ${isDarkMode ? 'text-purple-400' : 'text-purple-600'}`}>1.5x rate</div>
                       </div>
                       <div className="text-center">
-                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Emergency</div>
+                        <div className={`mb-1 ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{t('invoices.rateLabels.emergency', undefined, 'Emergency')}</div>
                         <div className={`font-bold text-lg ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                           {parseFloat(invoiceDetail.invoice.emergency_hours || 0).toFixed(2)} hrs
                         </div>
@@ -843,7 +848,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                       </div>
                     </div>
                     <div className={`mt-2 pt-2 border-t text-center ${isDarkMode ? 'border-purple-700' : 'border-purple-300'}`}>
-                      <span className={`text-xs ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>Total Billable: </span>
+                      <span className={`text-xs ${isDarkMode ? 'text-purple-300' : 'text-purple-700'}`}>{t('invoices.totalBillable', undefined, 'Total Billable:')} </span>
                       <span className={`text-sm font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                         {(parseFloat(invoiceDetail.invoice.standard_hours || 0) +
                           parseFloat(invoiceDetail.invoice.premium_hours || 0) +
@@ -894,7 +899,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                               <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                                 Standard (1.0x)
                                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  Mon-Fri 8am-5pm
+                                  {t('invoices.rateDescriptions.standard', undefined, 'Mon-Fri 8am-5pm')}
                                 </div>
                               </td>
                               <td className={`px-4 py-3 text-sm text-right ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -917,7 +922,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                               <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                                 Premium (1.5x)
                                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  Weekends
+                                  {t('invoices.rateDescriptions.weekend', undefined, 'Weekends')}
                                 </div>
                               </td>
                               <td className={`px-4 py-3 text-sm text-right ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -940,7 +945,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                               <td className={`px-4 py-3 text-sm ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                                 Emergency (2.0x)
                                 <div className={`text-xs ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                                  Late night/overnight
+                                  {t('invoices.rateDescriptions.emergency', undefined, 'Late night/overnight')}
                                 </div>
                               </td>
                               <td className={`px-4 py-3 text-sm text-right ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
@@ -969,7 +974,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                   <div className="mb-6">
                     <div className="max-w-sm ml-auto space-y-2 text-sm">
                       <div className="flex justify-between">
-                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>Subtotal:</span>
+                        <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>{t('invoices.subtotal', undefined, 'Subtotal:')}</span>
                         <span className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                           ${parseFloat(invoiceDetail.invoice.subtotal).toFixed(2)}
                         </span>
@@ -977,7 +982,9 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                       {invoiceDetail.invoice.tax_rate > 0 && (
                         <div className="flex justify-between">
                           <span className={isDarkMode ? 'text-gray-400' : 'text-gray-600'}>
-                            Tax ({(invoiceDetail.invoice.tax_rate * 100).toFixed(2)}%):
+                            {t('invoices.tax', {
+                              percentage: (invoiceDetail.invoice.tax_rate * 100).toFixed(2)
+                            }, 'Tax ({percentage}%):')}
                           </span>
                           <span className={`font-semibold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                             ${parseFloat(invoiceDetail.invoice.tax_amount).toFixed(2)}
@@ -985,7 +992,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                         </div>
                       )}
                       <div className={`flex justify-between pt-2 border-t-2 ${isDarkMode ? 'border-gray-600' : 'border-gray-300'}`}>
-                        <span className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Total Due:</span>
+                        <span className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('invoices.totalDue', undefined, 'Total Due:')}</span>
                         <span className={`text-lg font-bold ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>
                           ${parseFloat(invoiceDetail.invoice.total_amount).toFixed(2)}
                         </span>
@@ -995,14 +1002,14 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
 
                   {/* Payment Terms */}
                   <div className={`text-xs text-center ${isDarkMode ? 'text-gray-400' : 'text-gray-500'}`}>
-                    <p>Payment due within 30 days of invoice date.</p>
-                    <p className="mt-1">Thank you for your business!</p>
+                    <p>{t('invoices.paymentTerms', undefined, 'Payment due within 30 days of invoice date.')}</p>
+                    <p className="mt-1">{t('invoices.thankYou', undefined, 'Thank you for your business!')}</p>
                   </div>
 
                   {/* Payment Status - Bottom Left */}
                   <div className="mt-6">
                     <div className="flex items-center gap-2">
-                      <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Payment Status:</span>
+                      <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('invoices.paymentStatus', undefined, 'Payment Status')}:</span>
                       <span
                         className={`px-2 py-0.5 rounded text-xs font-semibold ${
                           invoiceDetail.invoice.payment_status === 'paid' || invoiceDetail.invoice.payment_status === 'comped'
@@ -1017,7 +1024,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
                     </div>
                     {invoiceDetail.invoice.payment_date && (
                       <div className="flex items-center gap-2 mt-2">
-                        <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>Payment Date:</span>
+                        <span className={`font-medium ${isDarkMode ? 'text-white' : 'text-gray-900'}`}>{t('invoices.paymentDate', undefined, 'Payment Date:')}</span>
                         <span className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>
                           {formatDate(invoiceDetail.invoice.payment_date)}
                         </span>
@@ -1028,7 +1035,7 @@ export const InvoicesList: React.FC<InvoicesListProps> = ({ refreshTrigger = 0 }
               </div>
             ) : (
               <div className="p-8 text-center">
-                <p className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>Failed to load invoice details</p>
+                <p className={isDarkMode ? 'text-gray-300' : 'text-gray-600'}>{t('invoices.failedToLoad', undefined, 'Failed to load invoice details')}</p>
               </div>
             )}
           </div>

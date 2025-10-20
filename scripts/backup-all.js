@@ -7,13 +7,13 @@ import path from 'path';
 import os from 'os';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import secretsManager from './backend/utils/secrets.js';
+import secretsManager from '../backend/utils/secrets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Load environment variables from backend directory (where actual DB config is)
-dotenv.config({ path: path.join(__dirname, 'backend', '.env') });
+dotenv.config({ path: path.join(__dirname, '..', 'backend', '.env') });
 
 const execAsync = promisify(exec);
 
@@ -140,7 +140,7 @@ async function createBackup(options = {}) {
     console.log('\n📦 Step 2: Creating project files backup...');
     console.log('===========================================');
 
-    const projectRoot = process.cwd();
+    const projectRoot = path.join(__dirname, '..');
     const projectName = path.basename(projectRoot);
     const projectBackupFileName = `project_${projectName}_${timestamp}.tar.gz`;
     const projectBackupPath = path.join(timestampedBackupDir, projectBackupFileName);

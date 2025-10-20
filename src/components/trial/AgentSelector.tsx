@@ -2,6 +2,8 @@ import React from 'react';
 import { Monitor, Server, Laptop, Smartphone, Circle, Clock, HardDrive } from 'lucide-react';
 import { AgentDevice } from '../../services/agentService';
 import { formatDistanceToNow } from 'date-fns';
+import { es } from 'date-fns/locale';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 
 interface AgentSelectorProps {
   agents: AgentDevice[];
@@ -16,6 +18,7 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
   onSelectAgent,
   isDarkMode
 }) => {
+  const { t, language } = useClientLanguage();
   const getDeviceIcon = (deviceType: string) => {
     switch (deviceType?.toLowerCase()) {
       case 'server':
@@ -46,16 +49,19 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
   };
 
   const formatLastSeen = (timestamp: string | null): string => {
-    if (!timestamp) return 'Never';
+    if (!timestamp) return t('devices.selector.lastSeen.never', {}, 'Never');
     try {
-      return formatDistanceToNow(new Date(timestamp), { addSuffix: true });
+      return formatDistanceToNow(new Date(timestamp), {
+        addSuffix: true,
+        locale: language === 'es' ? es : undefined
+      });
     } catch {
-      return 'Unknown';
+      return t('devices.selector.lastSeen.unknown', {}, 'Unknown');
     }
   };
 
   const formatOsDisplay = (osType: string, osVersion: string | null): string => {
-    if (!osType) return 'Unknown OS';
+    if (!osType) return t('devices.selector.unknownOS', {}, 'Unknown OS');
 
     const type = osType.toLowerCase();
     const version = osVersion?.trim();
@@ -101,7 +107,7 @@ const AgentSelector: React.FC<AgentSelectorProps> = ({
   return (
     <div className="mb-6">
       <h3 className={`text-sm font-semibold mb-3 ${isDarkMode ? 'text-gray-200' : 'text-gray-700'}`}>
-        Your Devices ({agents.length})
+        {t('devices.selector.title', { count: agents.length }, `Your Devices ({count})`).replace('{count}', agents.length.toString())}
       </h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {agents.map((agent) => {

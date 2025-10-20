@@ -89,12 +89,13 @@ fi
 if [ -f ".env.local" ]; then
     echo "📝 Updating .env.local with API base URL..."
     # Use sed to replace the VITE_API_BASE_URL line
+    # NOTE: Using localhost instead of IP to avoid CSRF cookie cross-origin issues
     if [[ "$OSTYPE" == "darwin"* ]]; then
         # macOS sed
-        sed -i '' "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://${CURRENT_IP}:3001/api|" .env.local
+        sed -i '' "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://localhost:3001/api|" .env.local
     else
         # Linux sed
-        sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://${CURRENT_IP}:3001/api|" .env.local
+        sed -i "s|^VITE_API_BASE_URL=.*|VITE_API_BASE_URL=http://localhost:3001/api|" .env.local
     fi
     echo "✅ Updated .env.local"
 else

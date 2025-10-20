@@ -588,8 +588,8 @@ app.post('/api/trusted-devices/check-pre-auth', generalLimiter, async (req, res)
 
 app.use('/api/trusted-devices', generalLimiter, authMiddleware, trustedDevicesRoutes); // Trusted device management
 
-// 404 handler
-app.use('*', (req, res) => {
+// 404 handler (Express 5: removed path to match all unmatched routes)
+app.use((req, res) => {
   res.status(404).json({
     success: false,
     message: `Route ${req.originalUrl} not found`,

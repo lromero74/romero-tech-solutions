@@ -9,9 +9,17 @@
 # - Database initialization
 # - AWS service setup
 # - Initial admin user creation
+#
+# For database-only setup, use:
+#   ./fresh-install-db.sh (interactive with progress)
+#   ./run-all-migrations.sh (non-interactive)
 # =============================================
 
 set -e  # Exit on error
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 # Color codes for output
 RED='\033[0;31m'
@@ -423,7 +431,7 @@ print_header "Step 11: Generating Configuration Files"
 # Backend .env
 print_info "Creating backend/.env file..."
 
-cat > backend/.env << EOF
+cat > "$PROJECT_ROOT/backend/.env" << EOF
 # =============================================
 # Romero Tech Solutions - Backend Configuration
 # Generated: $(date)
@@ -494,7 +502,7 @@ print_success "Backend .env file created"
 # Frontend .env
 print_info "Creating frontend .env file..."
 
-cat > .env << EOF
+cat > "$PROJECT_ROOT/.env" << EOF
 # =============================================
 # Romero Tech Solutions - Frontend Configuration
 # Generated: $(date)
@@ -527,12 +535,13 @@ print_header "Step 12: Installing Dependencies"
 
 if confirm_action "Install Node.js dependencies now?"; then
     print_info "Installing frontend dependencies..."
+    cd "$PROJECT_ROOT"
     npm install
 
     print_info "Installing backend dependencies..."
-    cd backend
+    cd "$PROJECT_ROOT/backend"
     npm install
-    cd ..
+    cd "$PROJECT_ROOT"
 
     print_success "Dependencies installed!"
 else
@@ -542,24 +551,33 @@ fi
 # =============================================
 # STEP 13: Database Initialization
 # =============================================
+# Note: This uses run-all-migrations.sh (non-interactive)
+# Alternative: fresh-install-db.sh (interactive with progress tracking)
+# Both create the same clean database with schema + seed data
+# =============================================
 print_header "Step 13: Database Initialization"
 
-if confirm_action "Initialize database with schema now?"; then
-    print_info "Running database setup script..."
+if confirm_action "Initialize database with all migrations now?"; then
+    print_info "Running all database migrations..."
+    print_info "This creates a clean database with:"
+    echo "  ✅ Complete schema (all tables, indexes, constraints)"
+    echo "  ✅ Translation system (English + Spanish)"
+    echo "  ✅ Service types, roles, permissions"
+    echo "  ✅ RMM automation defaults"
+    echo "  ❌ NO production data (businesses, users, etc.)"
+    echo ""
 
-    export PGPASSWORD="$DB_PASSWORD"
-
-    if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -f database_setup.sql; then
-        print_success "Database schema initialized!"
+    if "$SCRIPT_DIR/run-all-migrations.sh"; then
+        print_success "Database schema initialized with all migrations!"
     else
         print_error "Database initialization failed. You may need to run it manually:"
-        echo "  psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f database_setup.sql"
+        echo "  $SCRIPT_DIR/run-all-migrations.sh"
+        echo "  OR for interactive setup: $SCRIPT_DIR/fresh-install-db.sh"
     fi
-
-    unset PGPASSWORD
 else
     print_warning "Skipping database initialization. Run manually later:"
-    echo "  psql -h $DB_HOST -p $DB_PORT -U $DB_USER -d $DB_NAME -f database_setup.sql"
+    echo "  $SCRIPT_DIR/run-all-migrations.sh (non-interactive)"
+    echo "  $SCRIPT_DIR/fresh-install-db.sh (interactive with progress)"
 fi
 
 # =============================================
@@ -606,10 +624,10 @@ print_header "Setup Complete!"
 
 echo -e "${GREEN}✓ Configuration files generated${NC}"
 echo -e "${GREEN}✓ Environment variables set${NC}"
-if [ -f "backend/.env" ]; then
+if [ -f "$PROJECT_ROOT/backend/.env" ]; then
     echo -e "${GREEN}✓ Backend configured${NC}"
 fi
-if [ -f ".env" ]; then
+if [ -f "$PROJECT_ROOT/.env" ]; then
     echo -e "${GREEN}✓ Frontend configured${NC}"
 fi
 

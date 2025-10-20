@@ -90,14 +90,14 @@ export const formatFileSize = (bytes: number) => {
 /**
  * Format file timestamp (converts UTC to user's timezone)
  */
-export const formatFileTimestamp = (timestamp: string, locale?: string) => {
+export const formatFileTimestamp = (timestamp: string, locale?: string, t?: (key: string, variables?: any, fallback?: string) => string) => {
   try {
     const dateObj = new Date(timestamp);
     const userTimezone = getUserTimezone();
     const userTimeFormat = getUserTimeFormat();
 
     if (isNaN(dateObj.getTime())) {
-      return 'Invalid date';
+      return t ? t('common.invalidDate', undefined, 'Invalid date') : 'Invalid date';
     }
 
     const formattedDate = dateObj.toLocaleDateString('en-US', {
@@ -118,7 +118,7 @@ export const formatFileTimestamp = (timestamp: string, locale?: string) => {
     return `${formattedDate} ${formattedTime}`;
   } catch (error) {
     console.error('formatFileTimestamp error:', error);
-    return 'Invalid date';
+    return t ? t('common.invalidDate', undefined, 'Invalid date') : 'Invalid date';
   }
 };
 

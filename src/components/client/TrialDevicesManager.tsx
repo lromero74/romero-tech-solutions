@@ -3,6 +3,7 @@ import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { AuthUser } from '../../types/database';
 import apiService from '../../services/apiService';
+import { useClientLanguage } from '../../contexts/ClientLanguageContext';
 
 interface Agent {
   id: string;
@@ -40,6 +41,7 @@ interface SubscriptionPricing {
 }
 
 const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onDeviceRemoved, onViewMetrics, onEditSettings }) => {
+  const { t } = useClientLanguage();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -81,7 +83,7 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
       }
     } catch (err) {
       console.error('Error fetching agents:', err);
-      setError('Failed to load devices. Please try again.');
+      setError(t('devices.errors.loadFailed', undefined, 'Failed to load devices. Please try again.'));
     } finally {
       setLoading(false);
     }
@@ -166,11 +168,11 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
           onDeviceRemoved();
         }
       } else {
-        setError(result.message || 'Failed to deactivate device');
+        setError(result.message || t('devices.errors.deactivateFailed', undefined, 'Failed to deactivate device'));
       }
     } catch (err) {
       console.error('Error deactivating agent:', err);
-      setError('Failed to deactivate device. Please try again.');
+      setError(t('devices.errors.deactivateFailedRetry', undefined, 'Failed to deactivate device. Please try again.'));
     } finally {
       setDeactivatingAgentId(null);
     }
@@ -195,11 +197,11 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
           onDeviceRemoved();
         }
       } else {
-        setError(result.message || 'Failed to remove device');
+        setError(result.message || t('devices.errors.removeFailed', undefined, 'Failed to remove device'));
       }
     } catch (err) {
       console.error('Error removing agent:', err);
-      setError('Failed to remove device. Please try again.');
+      setError(t('devices.errors.removeFailedRetry', undefined, 'Failed to remove device. Please try again.'));
     } finally {
       setRemovingAgentId(null);
     }
@@ -235,7 +237,7 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-8">
         <div className="flex items-center justify-center">
           <Loader className="h-8 w-8 animate-spin text-blue-600 dark:text-blue-400" />
-          <span className="ml-3 text-gray-600 dark:text-gray-400">Loading devices...</span>
+          <span className="ml-3 text-gray-600 dark:text-gray-400">{t('trialDevices.loading', undefined, 'Loading devices...')}</span>
         </div>
       </div>
     );
@@ -257,8 +259,8 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
             subscriptionTier === 'enterprise' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300' :
             'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
           }`}>
-            {subscriptionTier === 'free' ? 'Free Plan' :
-             subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro Plan'}
+            {subscriptionTier === 'free' ? t('devices.plans.free', undefined, 'Free Plan') :
+             subscriptionTier === 'enterprise' ? t('devices.plans.enterprise', undefined, 'Enterprise') : t('devices.plans.pro', undefined, 'Pro Plan')}
           </span>
         </div>
       </div>
@@ -270,19 +272,19 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
             <HardDrive className="h-5 w-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="font-medium text-blue-900 dark:text-blue-200 mb-1">
-                Free Plan - {deviceLimit} Devices Included
+                {t('devices.trialManager.freePlanHeader', { count: deviceLimit }, `Free Plan - ${deviceLimit} Devices Included`)}
               </h3>
               <p className="text-sm text-blue-700 dark:text-blue-300 mb-3">
-                Monitor up to {deviceLimit} devices with full monitoring and alerting. Need more devices?
+                {t('devices.trialManager.freePlanDescription', { deviceLimit }, `Monitor up to ${deviceLimit} devices with full monitoring and alerting. Need more devices?`)}
               </p>
               <button
                 onClick={() => {
                   // TODO: Navigate to upgrade page or show upgrade modal
-                  alert('Upgrade feature coming soon! Contact support@romerotechsolutions.com for now.');
+                  alert(t('devices.trialManager.upgradeComingSoon', {}, 'Upgrade feature coming soon! Contact support@romerotechsolutions.com for now.'));
                 }}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
               >
-                Upgrade - Starting at ${startingPrice}/month
+                {t('devices.trialManager.upgradeButton', { price: startingPrice }, `Upgrade - Starting at $${startingPrice}/month`)}
               </button>
             </div>
           </div>
@@ -296,10 +298,13 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
             <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <h3 className="font-medium text-green-900 dark:text-green-200 mb-1">
-                {subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro'} Plan - {deviceLimit} Devices
+                {t('devices.trialManager.paidPlanHeader', {
+                  planName: subscriptionTier === 'enterprise' ? t('devices.plans.enterprise', undefined, 'Enterprise') : t('devices.plans.pro', undefined, 'Pro'),
+                  deviceLimit
+                }, `${subscriptionTier === 'enterprise' ? 'Enterprise' : 'Pro'} Plan - ${deviceLimit} Devices`)}
               </h3>
               <p className="text-sm text-green-700 dark:text-green-300">
-                Full monitoring, alerting, and remote management for all your devices. Need more devices? Contact support to upgrade your plan.
+                {t('devices.trialManager.paidPlanDescription', undefined, 'Full monitoring, alerting, and remote management for all your devices. Need more devices? Contact support to upgrade your plan.')}
               </p>
             </div>
           </div>
@@ -321,9 +326,9 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
         {agents.length === 0 ? (
           <div className="text-center py-12">
             <HardDrive className="h-16 w-16 text-gray-400 dark:text-gray-600 mx-auto mb-4" />
-            <p className="text-gray-500 dark:text-gray-400">No devices connected yet</p>
+            <p className="text-gray-500 dark:text-gray-400">{t('trialDevices.noDevices', undefined, 'No devices connected yet')}</p>
             <p className="text-sm text-gray-400 dark:text-gray-500 mt-2">
-              Install the RTS Agent on your device to get started
+              {t('trialDevices.installAgent', undefined, 'Install the RTS Agent on your device to get started')}
             </p>
           </div>
         ) : (
@@ -384,12 +389,12 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                         ? 'border-yellow-300 dark:border-yellow-600 text-yellow-700 dark:text-yellow-400 bg-white dark:bg-gray-800 hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
                         : 'border-green-300 dark:border-green-600 text-green-700 dark:text-green-400 bg-white dark:bg-gray-800 hover:bg-green-50 dark:hover:bg-green-900/20'
                     }`}
-                    title={agent.is_active ? 'Deactivate device' : 'Reactivate device'}
+                    title={agent.is_active ? t('devices.trialManager.deactivateDevice', {}, 'Deactivate device') : t('devices.trialManager.reactivateDevice', {}, 'Reactivate device')}
                   >
                     {deactivatingAgentId === agent.id ? (
                       <>
                         <Loader className="h-4 w-4 mr-2 animate-spin" />
-                        {agent.is_active ? 'Deactivating...' : 'Reactivating...'}
+                        {agent.is_active ? t('devices.trialManager.deactivating', {}, 'Deactivating...') : t('devices.trialManager.reactivating', {}, 'Reactivating...')}
                       </>
                     ) : agent.is_active ? (
                       <>
@@ -407,12 +412,12 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                     onClick={() => handleRemoveClick(agent)}
                     disabled={removingAgentId === agent.id}
                     className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 text-red-600 dark:text-red-400 bg-white dark:bg-gray-800 hover:bg-red-50 dark:hover:bg-red-900/20 text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    title="Remove device"
+                    title={t('devices.trialManager.removeDevice', {}, 'Remove device')}
                   >
                     {removingAgentId === agent.id ? (
                       <>
                         <Loader className="h-4 w-4 mr-2 animate-spin" />
-                        Removing...
+                        {t('devices.trialManager.removing', {}, 'Removing...')}
                       </>
                     ) : (
                       <>
@@ -478,12 +483,12 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                 }`}
               >
                 {deactivatingAgentId !== null
-                  ? (agentToRemove.is_active ? 'Deactivating...' : 'Reactivating...')
+                  ? (agentToRemove.is_active ? t('devices.actions.deactivating', undefined, 'Deactivating...') : t('devices.actions.reactivating', undefined, 'Reactivating...'))
                   : removingAgentId !== null
-                    ? 'Removing...'
+                    ? t('devices.actions.removing', undefined, 'Removing...')
                     : actionType === 'deactivate'
-                      ? (agentToRemove.is_active ? 'Deactivate' : 'Reactivate')
-                      : 'Remove Device'}
+                      ? (agentToRemove.is_active ? t('devices.actions.deactivate', undefined, 'Deactivate') : t('devices.actions.reactivate', undefined, 'Reactivate'))
+                      : t('devices.actions.removeDevice', undefined, 'Remove Device')}
               </button>
             </div>
           </div>

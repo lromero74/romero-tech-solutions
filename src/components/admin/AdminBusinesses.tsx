@@ -322,7 +322,12 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   <select
                     value={businessNameFilter}
                     onChange={(e) => setBusinessNameFilter(e.target.value)}
-                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:border-blue-500 focus:ring-blue-500`}
+                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} pr-6 appearance-none bg-no-repeat bg-right focus:border-blue-500 focus:ring-blue-500`}
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.25rem center',
+                      backgroundSize: '1.25em 1.25em'
+                    }}
                   >
                     <option value="all">All Businesses</option>
                     {[...new Set(businesses.map(b => b.businessName))].sort().map(businessName => (
@@ -345,7 +350,12 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   <select
                     value={businessClientCountFilter}
                     onChange={(e) => setBusinessClientCountFilter(e.target.value)}
-                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:border-blue-500 focus:ring-blue-500`}
+                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} pr-6 appearance-none bg-no-repeat bg-right focus:border-blue-500 focus:ring-blue-500`}
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.25rem center',
+                      backgroundSize: '1.25em 1.25em'
+                    }}
                   >
                     <option value="all">All Clients</option>
                     <option value="0">0 clients</option>
@@ -358,7 +368,12 @@ const AdminBusinesses: React.FC<AdminBusinessesProps> = ({
                   <select
                     value={businessStatusFilter}
                     onChange={(e) => setBusinessStatusFilter(e.target.value)}
-                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} focus:border-blue-500 focus:ring-blue-500`}
+                    className={`block w-full text-xs rounded border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} pr-6 appearance-none bg-no-repeat bg-right focus:border-blue-500 focus:ring-blue-500`}
+                    style={{
+                      backgroundImage: `url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236B7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e")`,
+                      backgroundPosition: 'right 0.25rem center',
+                      backgroundSize: '1.25em 1.25em'
+                    }}
                   >
                     <option value="all">All Status</option>
                     <option value="active">Active</option>

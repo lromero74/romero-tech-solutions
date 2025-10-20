@@ -178,7 +178,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                           onClick={() => onSaveFileName(file.id)}
                           disabled={savingEdit || !newFileName.trim()}
                           className="p-1 text-green-600 hover:text-green-700 disabled:opacity-50"
-                          title="Save"
+                          title={t('accessibility.save', undefined, 'Save')}
                         >
                           {savingEdit ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                         </button>
@@ -186,7 +186,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                           onClick={onCancelRename}
                           disabled={savingEdit}
                           className="p-1 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                          title="Cancel"
+                          title={t('accessibility.cancel', undefined, 'Cancel')}
                         >
                           <X className="h-4 w-4" />
                         </button>
@@ -197,7 +197,7 @@ const ServiceRequestFilesSection: React.FC<ServiceRequestFilesSectionProps> = ({
                           {file.originalFilename}
                         </p>
                         <p className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatFileSize(file.fileSizeBytes)} • {formatFileTimestamp(file.createdAt)}
+                          {formatFileSize(file.fileSizeBytes)} • {formatFileTimestamp(file.createdAt, undefined, t)}
                         </p>
                         {file.uploadedByEmail && (
                           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">

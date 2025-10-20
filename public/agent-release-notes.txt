@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.20 Release Notes
+RTS Monitoring Agent - Version 1.16.21 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2025-10-20 03:44:07 UTC
-Previous Version: v1.16.18
-Git Commit: 32fe6fe
+Release Date: 2025-10-20 06:23:38 UTC
+Previous Version: v1.16.20
+Git Commit: 53a026a
 
-Changes Since v1.16.18:
+Changes Since v1.16.20:
 ───────────────────────────────────────────────────────────
 
-• security: Remove test-registration.sh with exposed token
+• docs: Add comprehensive Windows security documentation and signing guide (v1.16.20)
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

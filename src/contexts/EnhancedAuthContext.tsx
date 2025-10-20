@@ -427,6 +427,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const user = await authService.signIn({ email, password, loginType });
       setUser(user);
 
+      // Store authentication state in localStorage for persistence
+      RoleBasedStorage.setItem('authUser', JSON.stringify(user));
+      RoleBasedStorage.setItem('authTimestamp', Date.now().toString());
+      console.log('💾 [Sign In] Stored authUser and authTimestamp in localStorage');
+
       // Update sessionToken from localStorage after successful sign in
       const newSessionToken = RoleBasedStorage.getItem('sessionToken', user.role);
       setSessionToken(newSessionToken);
@@ -468,6 +473,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const result = await clientRegistrationService.confirmClientEmail(token, email);
       if (result.success && result.user) {
         setUser(result.user);
+
+        // Store authentication state in localStorage for persistence
+        RoleBasedStorage.setItem('authUser', JSON.stringify(result.user));
+        RoleBasedStorage.setItem('authTimestamp', Date.now().toString());
+        console.log('💾 [Email Confirmation] Stored authUser and authTimestamp in localStorage');
       }
       return result;
     } catch (error: unknown) {
@@ -644,6 +654,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const user = await authService.verifyAdminMfaCode(email, mfaCode);
       setUser(user);
 
+      // Store authentication state in localStorage for persistence
+      RoleBasedStorage.setItem('authUser', JSON.stringify(user));
+      RoleBasedStorage.setItem('authTimestamp', Date.now().toString());
+      console.log('💾 [Admin MFA] Stored authUser and authTimestamp in localStorage');
+
       // Update sessionToken from localStorage after successful MFA
       const newSessionToken = RoleBasedStorage.getItem('sessionToken');
       setSessionToken(newSessionToken);
@@ -719,6 +734,11 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     try {
       const user = await authService.verifyClientMfaCode(email, mfaCode);
       setUser(user);
+
+      // Store authentication state in localStorage for persistence (including businessId)
+      RoleBasedStorage.setItem('authUser', JSON.stringify(user));
+      RoleBasedStorage.setItem('authTimestamp', Date.now().toString());
+      console.log('💾 [Client MFA] Stored authUser and authTimestamp in localStorage (businessId:', user.businessId, ')');
 
       // PERFORMANCE OPTIMIZATION: Mark MFA as verified for this session
       RoleBasedStorage.setItem('mfaVerified', 'true');

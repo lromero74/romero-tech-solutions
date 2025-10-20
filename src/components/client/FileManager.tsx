@@ -100,6 +100,15 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
   const { isDarkMode } = useClientTheme();
   const { isAuthenticated, isLoading } = useEnhancedAuth();
   const { t } = useClientLanguage();
+
+  // Helper function to translate system folder names
+  const translateFolderName = (folderName: string): string => {
+    if (folderName === 'Service Requests') {
+      return t('serviceRequests.title', undefined, 'Service Requests');
+    }
+    return folderName;
+  };
+
   const [files, setFiles] = useState<ClientFile[]>([]);
   const [folders, setFolders] = useState<ClientFolder[]>([]);
   const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
@@ -152,7 +161,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       return <Shield className="h-4 w-4 text-green-500" title={t('client.scanClean')} />;
     }
     if (status === 'infected') {
-      return <ShieldAlert className="h-4 w-4 text-red-500" title="Infected" />;
+      return <ShieldAlert className="h-4 w-4 text-red-500" title={t('files.virusScan.infected', 'Infected')} />;
     }
     return null;
   };
@@ -310,11 +319,11 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
         invalidateCache();
         await loadFolders();
       } else {
-        alert(result.message || 'Failed to create folder');
+        alert(result.message || t('files.errors.createFolderFailed', undefined, 'Failed to create folder'));
       }
     } catch (error) {
       console.error('Create folder error:', error);
-      alert('Failed to create folder');
+      alert(t('files.errors.createFolderFailed', undefined, 'Failed to create folder'));
     }
   };
 
@@ -332,7 +341,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
       await loadFolders();
     } catch (error) {
       console.error('Delete folder error:', error);
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete folder';
+      const errorMessage = error instanceof Error ? error.message : t('files.errors.deleteFolderFailed', undefined, 'Failed to delete folder');
       alert(errorMessage);
     }
   };
@@ -353,11 +362,11 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
         invalidateCache();
         await loadData(true);
       } else {
-        alert(result.message || 'Failed to move files');
+        alert(result.message || t('files.errors.moveFilesFailed', undefined, 'Failed to move files'));
       }
     } catch (error) {
       console.error('Move files error:', error);
-      alert('Failed to move files');
+      alert(t('files.errors.moveFilesFailed', undefined, 'Failed to move files'));
     }
   };
 
@@ -520,7 +529,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
             )}
             {!hasChildren && <span className="w-5" />}
             <Folder className="h-4 w-4 mr-2" style={{ color: folder.folderColor }} />
-            <span className={`text-sm ${themeClasses.text}`}>{folder.folderName}</span>
+            <span className={`text-sm ${themeClasses.text}`}>{translateFolderName(folder.folderName)}</span>
             <span className={`ml-2 text-xs ${themeClasses.textSecondary}`}>({totalFileCount})</span>
           </div>
           {!folder.isSystemFolder && (
@@ -648,7 +657,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
               <div className="flex items-center gap-2">
                 <h2 className={`text-xl font-semibold ${themeClasses.text}`}>{t('files.title')}</h2>
                 {isBackgroundLoading && (
-                  <RefreshCw className="h-4 w-4 animate-spin text-blue-500" title="Refreshing..." />
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-500" title={t('accessibility.refreshing', undefined, 'Refreshing...')} />
                 )}
               </div>
               <div className="flex gap-2">
@@ -709,8 +718,8 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                     <AlertTriangle className="h-4 w-4 mr-1 text-yellow-600" />
                     <span className="text-yellow-600">
                       {quotaInfo.usagePercentage > 95
-                        ? 'Storage almost full!'
-                        : 'Approaching storage limit'}
+                        ? t('files.storage.almostFull', undefined, 'Storage almost full!')
+                        : t('files.storage.approachingLimit', undefined, 'Approaching storage limit')}
                     </span>
                   </div>
                 )}
@@ -791,7 +800,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                                   }}
                                 >
                                   <Folder className="h-3 w-3 mr-1" />
-                                  {file.folderName}
+                                  {translateFolderName(file.folderName)}
                                 </span>
                               )}
                             </div>
@@ -892,7 +901,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                               }}
                             >
                               <Folder className="h-3 w-3 mr-1" />
-                              {file.folderName}
+                              {translateFolderName(file.folderName)}
                             </span>
                           )}
                         </div>
@@ -1009,7 +1018,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
                   className={`w-full px-3 py-2 rounded-md border ${themeClasses.input}`}
-                  placeholder="My Documents"
+                  placeholder={t('files.placeholder.myDocuments', 'My Documents')}
                   autoFocus
                 />
               </div>
@@ -1023,7 +1032,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                   value={newFolderDescription}
                   onChange={(e) => setNewFolderDescription(e.target.value)}
                   className={`w-full px-3 py-2 rounded-md border ${themeClasses.input}`}
-                  placeholder="Important documents"
+                  placeholder={t('files.placeholder.importantDocuments', 'Important documents')}
                 />
               </div>
 
@@ -1050,14 +1059,14 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                   onClick={() => setShowCreateFolder(false)}
                   className="px-4 py-2 border rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
-                  Cancel
+                  {t('files.modal.cancel', 'Cancel')}
                 </button>
                 <button
                   onClick={createFolder}
                   disabled={!newFolderName.trim()}
                   className={`px-4 py-2 rounded-md ${themeClasses.button} disabled:opacity-50`}
                 >
-                  Create
+                  {t('files.modal.create', 'Create')}
                 </button>
               </div>
             </div>
@@ -1103,7 +1112,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
                         style={{ paddingLeft: `${0.75 + level * 1.5}rem` }}
                       >
                         <Folder className="h-5 w-5 mr-2" style={{ color: folder.folderColor }} />
-                        <span className={themeClasses.text}>{folder.folderName}</span>
+                        <span className={themeClasses.text}>{translateFolderName(folder.folderName)}</span>
                         <span className={`ml-auto text-xs ${themeClasses.textSecondary}`}>
                           ({totalFileCount} files)
                         </span>

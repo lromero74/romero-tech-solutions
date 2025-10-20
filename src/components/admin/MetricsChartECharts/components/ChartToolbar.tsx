@@ -1,6 +1,7 @@
 import React from 'react';
 import { TrendingUp } from 'lucide-react';
 import { themeClasses } from '../../../../contexts/ThemeContext';
+import { useClientLanguage } from '../../../../contexts/ClientLanguageContext';
 import type { ChartDisplayType, ActiveIndicators, DropdownPosition } from '../types';
 
 interface ChartToolbarProps {
@@ -16,23 +17,7 @@ interface ChartToolbarProps {
   indicatorsButtonRef: React.RefObject<HTMLButtonElement>;
 }
 
-const TIME_WINDOWS = [
-  { label: '1H', value: 1 },
-  { label: '4H', value: 4 },
-  { label: '12H', value: 12 },
-  { label: '1D', value: 24 },
-  { label: '2D', value: 48 },
-  { label: '1W', value: 168 },
-];
-
-const CANDLESTICK_PERIODS = [
-  { label: '15m', value: 15 },
-  { label: '30m', value: 30 },
-  { label: '1h', value: 60 },
-  { label: '4h', value: 240 },
-  { label: '8h', value: 480 },
-  { label: '1d', value: 1440 },
-];
+// TIME_WINDOWS and CANDLESTICK_PERIODS moved inside component to access t() function
 
 export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   chartDisplayType,
@@ -46,6 +31,26 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
   onToggleIndicatorsMenu,
   indicatorsButtonRef,
 }) => {
+  const { t } = useClientLanguage();
+
+  const TIME_WINDOWS = [
+    { label: t('agentDetails.timeframes.1H', undefined, '1H'), value: 1 },
+    { label: t('agentDetails.timeframes.4H', undefined, '4H'), value: 4 },
+    { label: t('agentDetails.timeframes.12H', undefined, '12H'), value: 12 },
+    { label: t('agentDetails.timeframes.1D', undefined, '1D'), value: 24 },
+    { label: t('agentDetails.timeframes.2D', undefined, '2D'), value: 48 },
+    { label: t('agentDetails.timeframes.1W', undefined, '1W'), value: 168 },
+  ];
+
+  const CANDLESTICK_PERIODS = [
+    { label: t('agentDetails.periods.15m', undefined, '15m'), value: 15 },
+    { label: t('agentDetails.periods.30m', undefined, '30m'), value: 30 },
+    { label: t('agentDetails.periods.1h', undefined, '1h'), value: 60 },
+    { label: t('agentDetails.periods.4h', undefined, '4h'), value: 240 },
+    { label: t('agentDetails.periods.8h', undefined, '8h'), value: 480 },
+    { label: t('agentDetails.periods.1d', undefined, '1d'), value: 1440 },
+  ];
+
   return (
     <div className={`flex items-center justify-between px-4 py-2 border-b ${themeClasses.border.primary} ${themeClasses.bg.hover}`}>
       {/* Left: Chart Type Selector */}
@@ -58,7 +63,7 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
               : `${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
           }`}
         >
-          Line
+          {t('agentDetails.chart.line', undefined, 'Line')}
         </button>
         <button
           onClick={() => onChartTypeChange('candlestick')}
@@ -68,7 +73,7 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
               : `${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
           }`}
         >
-          Candles
+          {t('agentDetails.chart.candles', undefined, 'Candles')}
         </button>
         <button
           onClick={() => onChartTypeChange('heiken-ashi')}
@@ -78,7 +83,7 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
               : `${themeClasses.text.secondary} hover:${themeClasses.bg.card}`
           }`}
         >
-          Heikin
+          {t('agentDetails.chart.heikin', undefined, 'Heikin')}
         </button>
 
         {/* Candlestick period selector */}
@@ -127,7 +132,7 @@ export const ChartToolbar: React.FC<ChartToolbarProps> = ({
           }`}
         >
           <TrendingUp className="w-3.5 h-3.5" />
-          Indicators
+          {t('agentDetails.chart.indicators', undefined, 'Indicators')}
         </button>
       </div>
     </div>

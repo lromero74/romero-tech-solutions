@@ -240,21 +240,21 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
 
     const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
     if (!emailRegex.test(email)) {
-      return { valid: false, message: 'Invalid email format. Please use a valid email address.' };
+      return { valid: false, message: t('locations.errors.invalidEmailFormat') };
     }
 
     if (email.includes('..')) {
-      return { valid: false, message: 'Email cannot contain consecutive dots.' };
+      return { valid: false, message: t('locations.errors.emailConsecutiveDots') };
     }
 
     const [localPart] = email.split('@');
     if (localPart.startsWith('.') || localPart.endsWith('.')) {
-      return { valid: false, message: 'Email cannot start or end with a dot.' };
+      return { valid: false, message: t('locations.errors.emailStartEndDot') };
     }
 
     const invalidChars = email.match(/[^a-zA-Z0-9._%+-@]/g);
     if (invalidChars) {
-      return { valid: false, message: `Email contains invalid characters: ${invalidChars.join(', ')}` };
+      return { valid: false, message: t('locations.errors.emailInvalidChars', { chars: invalidChars.join(', ') }) };
     }
 
     return { valid: true };
@@ -639,7 +639,7 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
                 {zipValidating && (
                   <div className="flex items-center mt-2 text-blue-600 dark:text-blue-400 text-sm">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Validating ZIP code...
+                    {t('locations.validation.validatingZip')}
                   </div>
                 )}
                 {zipCodeValidation && zipCodeValidation.valid && (
@@ -713,7 +713,7 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
                       tabIndex={7}
                     />
                     {emailDomainValidating && (
-                      <p className="text-blue-500 text-sm mt-1">Validating email domain...</p>
+                      <p className="text-blue-500 text-sm mt-1">{t('locations.validation.validatingEmail')}</p>
                     )}
                     {emailDomainError && (
                       <p className="text-red-500 text-sm mt-1">{emailDomainError}</p>
@@ -732,7 +732,7 @@ const EditServiceLocationForm: React.FC<EditServiceLocationFormProps> = ({
                   onClick={onClose}
                   className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
                 >
-                  Cancel
+                  {t('locations.ui.cancel')}
                 </button>
                 <button
                   type="submit"

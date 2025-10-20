@@ -103,6 +103,27 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
 }) => {
   const getLocale = () => language === 'es' ? 'es-ES' : 'en-US';
 
+  // Helper function to translate service types
+  const translateServiceType = (serviceType: string): string => {
+    // Map service type names to their type_code for translation keys
+    const serviceTypeMap: Record<string, string> = {
+      'Backup Solutions': 'serviceTypes.backup-solutions.name',
+      'Data Recovery': 'serviceTypes.data-recovery.name',
+      'Email Configuration': 'serviceTypes.email-configuration.name',
+      'Hardware Repair': 'serviceTypes.hardware-repair.name',
+      'Network Troubleshooting': 'serviceTypes.network-troubleshooting.name',
+      'Other': 'serviceTypes.other.name',
+      'Printer Installation': 'serviceTypes.printer-installation.name',
+      'Security Assessment': 'serviceTypes.security-assessment.name',
+      'Software Installation': 'serviceTypes.software-installation.name',
+      'System Maintenance': 'serviceTypes.system-maintenance.name',
+      'Wi-Fi Setup': 'serviceTypes.wi-fi-setup.name',
+    };
+
+    const translationKey = serviceTypeMap[serviceType];
+    return translationKey ? t(translationKey, undefined, serviceType) : serviceType;
+  };
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       <div className="flex items-center justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
@@ -130,7 +151,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                       onClick={onSaveTitle}
                       disabled={savingEdit || !editedTitle.trim()}
                       className="p-2 text-green-600 hover:text-green-700 disabled:opacity-50"
-                      title="Save"
+                      title={t('accessibility.save', undefined, 'Save')}
                     >
                       {savingEdit ? <RefreshCw className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
                     </button>
@@ -138,7 +159,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                       onClick={onCancelEditTitle}
                       disabled={savingEdit}
                       className="p-2 text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                      title="Cancel"
+                      title={t('accessibility.cancel', undefined, 'Cancel')}
                     >
                       <X className="h-5 w-5" />
                     </button>
@@ -151,7 +172,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                     <button
                       onClick={onStartEditTitle}
                       className="p-1 text-gray-400 hover:text-blue-600"
-                      title="Edit title"
+                      title={t('accessibility.editTitle', undefined, 'Edit title')}
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
@@ -196,7 +217,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                 {selectedRequest.serviceType && (
                   <div>
                     <span className="font-medium text-gray-700 dark:text-gray-300">{t('serviceRequests.serviceType', undefined, 'Service Type')}:</span>
-                    <p className="text-gray-900 dark:text-white">{selectedRequest.serviceType}</p>
+                    <p className="text-gray-900 dark:text-white">{translateServiceType(selectedRequest.serviceType)}</p>
                   </div>
                 )}
                 <div>
@@ -387,7 +408,7 @@ const ServiceRequestDetailModal: React.FC<ServiceRequestDetailModalProps> = ({
                     <button
                       onClick={onStartEditDescription}
                       className="p-1 text-gray-400 hover:text-blue-600"
-                      title="Edit description"
+                      title={t('accessibility.editDescription', undefined, 'Edit description')}
                     >
                       <Edit2 className="h-4 w-4" />
                     </button>
