@@ -43,3 +43,8 @@ customHeaders:
     headers:
       - key: Cache-Control
         value: public, max-age=31536000, immutable
+# SPA Routing - redirect all routes to index.html for React Router
+redirects:
+  - source: '/<*>'
+    target: /index.html
+    status: 200
