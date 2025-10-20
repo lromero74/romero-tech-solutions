@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { DollarSign, TrendingUp, Users, HardDrive, Save, AlertCircle, CheckCircle } from 'lucide-react';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
+import apiService from '../../services/apiService';
 
 interface PricingTier {
   id: string;
@@ -26,26 +27,14 @@ const SubscriptionPricing: React.FC = () => {
   const [saving, setSaving] = useState<string | null>(null);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-
   const fetchData = async () => {
     try {
       setLoading(true);
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
 
-      const [pricingRes, analyticsRes] = await Promise.all([
-        fetch(`${apiBaseUrl}/admin/subscription/pricing`, {
-          headers: { 'Authorization': `Bearer ${sessionToken}` },
-          credentials: 'include'
-        }),
-        fetch(`${apiBaseUrl}/admin/subscription/analytics`, {
-          headers: { 'Authorization': `Bearer ${sessionToken}` },
-          credentials: 'include'
-        })
+      const [pricingData, analyticsData] = await Promise.all([
+        apiService.get('/admin/subscription/pricing'),
+        apiService.get('/admin/subscription/analytics')
       ]);
-
-      const pricingData = await pricingRes.json();
-      const analyticsData = await analyticsRes.json();
 
       if (pricingData.success) setPricing(pricingData.pricing);
       if (analyticsData.success) setAnalytics(analyticsData.analytics);
@@ -65,26 +54,16 @@ const SubscriptionPricing: React.FC = () => {
     try {
       setSaving(tier.tier);
       setMessage(null);
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
 
-      const response = await fetch(`${apiBaseUrl}/admin/subscription/pricing/${tier.tier}`, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include',
-        body: JSON.stringify({
-          base_devices: tier.base_devices,
-          default_devices_allowed: tier.default_devices_allowed,
-          price_per_additional_device: parseFloat(tier.price_per_additional_device),
-          currency: tier.currency,
-          billing_period: tier.billing_period,
-          is_active: tier.is_active
-        })
+      const result = await apiService.put(`/admin/subscription/pricing/${tier.tier}`, {
+        base_devices: tier.base_devices,
+        default_devices_allowed: tier.default_devices_allowed,
+        price_per_additional_device: parseFloat(tier.price_per_additional_device),
+        currency: tier.currency,
+        billing_period: tier.billing_period,
+        is_active: tier.is_active
       });
 
-      const result = await response.json();
       if (result.success) {
         setMessage({ type: 'success', text: `${tier.tier} tier updated successfully` });
         fetchData();
