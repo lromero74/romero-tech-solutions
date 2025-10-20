@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings } from 'lucide-react';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
 import { AuthUser } from '../../types/database';
+import apiService from '../../services/apiService';
 
 interface Agent {
   id: string;
@@ -80,19 +81,7 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
       setRemovingAgentId(agentToRemove.id);
       setError(null);
 
-      const sessionToken = RoleBasedStorage.getItem('sessionToken');
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-
-      const response = await fetch(`${apiBaseUrl}/agents/${agentToRemove.id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${sessionToken}`,
-          'Content-Type': 'application/json'
-        },
-        credentials: 'include'
-      });
-
-      const result = await response.json();
+      const result = await apiService.delete<{ success: boolean; message?: string }>(`/agents/${agentToRemove.id}`);
 
       if (result.success) {
         // Remove from local state
