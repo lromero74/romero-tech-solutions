@@ -1,7 +1,7 @@
-RTS Monitoring Agent - Version 1.16.19 Release Notes
+RTS Monitoring Agent - Version 1.16.20 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2025-10-20 02:58:35 UTC
+Release Date: 2025-10-20 03:44:07 UTC
 Previous Version: v1.16.18
 Git Commit: 32fe6fe
 
