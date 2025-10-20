@@ -2932,18 +2932,21 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
  * DELETE /api/agents/:agent_id
  *
  * Deactivates an agent (sets is_active = false)
- * Customers can only deactivate their own business's agents
+ * Customers can deactivate their own business's agents (both active and inactive)
+ * This allows cleanup of devices that were previously deactivated
  */
 router.delete('/:agent_id', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
     const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
+    console.log(`🗑️  DELETE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}, business_id=${req.user.business_id}`);
+
     // Verify ownership/access to this agent
     let accessCheckQuery = `
-      SELECT ad.id, ad.business_id, ad.device_name, ad.trial_user_id, ad.is_trial
+      SELECT ad.id, ad.business_id, ad.device_name, ad.trial_user_id, ad.is_trial, ad.is_active
       FROM agent_devices ad
-      WHERE ad.id = $1 AND ad.soft_delete = false AND ad.is_active = true
+      WHERE ad.id = $1 AND ad.soft_delete = false
     `;
     const accessParams = [agent_id];
 
@@ -2952,9 +2955,11 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
       accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
       accessParams.push(req.user.id);
       accessParams.push(req.user.business_id);
+      console.log(`🔍 Client access check: trial_user_id=${req.user.id}, business_id=${req.user.business_id}`);
     }
 
     const accessResult = await query(accessCheckQuery, accessParams);
+    console.log(`🔍 Access check result: found ${accessResult.rows.length} agents`, accessResult.rows.length > 0 ? accessResult.rows[0] : 'none');
 
     if (accessResult.rows.length === 0) {
       return res.status(404).json({
