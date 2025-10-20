@@ -96,8 +96,8 @@ const getLatestVersion = async (platform) => {
   }
 };
 
-// Get binary filename for platform, architecture, and version
-const getBinaryFilename = (platform, arch, version) => {
+// Get binary filename for platform, architecture, version, and format
+const getBinaryFilename = (platform, arch, version, format = null) => {
   // Remove 'v' prefix from version if present
   const versionNumber = version.replace(/^v/, '');
 
@@ -107,7 +107,21 @@ const getBinaryFilename = (platform, arch, version) => {
     case 'macos':
       return `RTS-Agent-${versionNumber}-${arch}.pkg`;
     case 'linux':
-      return `rts-agent_${versionNumber}_${arch}.deb`;
+      // Support multiple Linux package formats
+      const linuxFormat = format || 'deb'; // Default to .deb
+      switch (linuxFormat) {
+        case 'deb':
+          return `rts-agent_${versionNumber}_${arch}.deb`;
+        case 'rpm':
+          // For ARM64, use aarch64 naming convention
+          const rpmArch = arch === 'arm64' ? 'aarch64' : 'x86_64';
+          return `rts-agent-${versionNumber}-1.${rpmArch}.rpm`;
+        case 'pkg.tar.zst':
+          // Arch Linux package (only ARM64 for now)
+          return `rts-agent-${versionNumber}-1-aarch64.pkg.tar.zst`;
+        default:
+          return `rts-agent_${versionNumber}_${arch}.deb`;
+      }
     default:
       return `rts-agent-${versionNumber}-${arch}`;
   }
@@ -119,15 +133,17 @@ const getBinaryFilename = (platform, arch, version) => {
  * Query params:
  *   - version: specific version (optional, defaults to latest)
  *   - arch: architecture (optional, auto-detected from user-agent)
+ *   - format: Linux package format (optional, defaults to 'deb'). Options: deb, rpm, pkg.tar.zst
  */
 router.get('/download/:platform', async (req, res) => {
   try {
     let { platform } = req.params;
     const requestedVersion = req.query.version;
     const requestedArch = req.query.arch;
+    const requestedFormat = req.query.format; // Linux package format
     const userAgent = req.get('user-agent');
 
-    console.log(`📥 Agent download request: platform=${platform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, UA=${userAgent}`);
+    console.log(`📥 Agent download request: platform=${platform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, format=${requestedFormat || 'default'}, UA=${userAgent}`);
 
     // Normalize platform name (darwin -> macos for directory lookup)
     const platformMap = {
@@ -166,7 +182,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Build binary path
     const binariesDir = getAgentBinariesDir();
-    const filename = getBinaryFilename(platform, arch, version);
+    const filename = getBinaryFilename(platform, arch, version, requestedFormat);
     const binaryPath = path.join(binariesDir, platform, version, filename);
 
     console.log(`📂 Binary path: ${binaryPath}`);

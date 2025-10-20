@@ -23,6 +23,7 @@ interface ArchOption {
 const Download: React.FC = () => {
   const [selectedPlatform, setSelectedPlatform] = useState<string>('');
   const [selectedArch, setSelectedArch] = useState<string>('');
+  const [selectedLinuxDistro, setSelectedLinuxDistro] = useState<string>('deb'); // Linux package format
   const [detectedPlatform, setDetectedPlatform] = useState<DetectedPlatform | null>(null);
   const [agentVersion, setAgentVersion] = useState('Loading...');
   const [isDetecting, setIsDetecting] = useState(true);
@@ -208,7 +209,11 @@ const Download: React.FC = () => {
 
   const getDownloadUrl = () => {
     if (!selectedPlatform || !selectedArch) return null;
-    return `${apiBaseUrl}/agent/download/${selectedPlatform}?arch=${selectedArch}`;
+    let url = `${apiBaseUrl}/agent/download/${selectedPlatform}?arch=${selectedArch}`;
+    if (selectedPlatform === 'linux' && selectedLinuxDistro) {
+      url += `&format=${selectedLinuxDistro}`;
+    }
+    return url;
   };
 
   const getFilename = () => {
@@ -222,7 +227,18 @@ const Download: React.FC = () => {
       case 'macos':
         return `RTS-Agent-${version}-${selectedArch}.pkg`;
       case 'linux':
-        return `rts-agent_${version}_${selectedArch}.deb`;
+        // Return filename based on selected distro format
+        switch (selectedLinuxDistro) {
+          case 'deb':
+            return `rts-agent_${version}_${selectedArch}.deb`;
+          case 'rpm':
+            const rpmArch = selectedArch === 'arm64' ? 'aarch64' : 'x86_64';
+            return `rts-agent-${version}-1.${rpmArch}.rpm`;
+          case 'pkg.tar.zst':
+            return `rts-agent-${version}-1-aarch64.pkg.tar.zst`;
+          default:
+            return `rts-agent_${version}_${selectedArch}.deb`;
+        }
       default:
         return `rts-agent-${version}-${selectedArch}`;
     }
@@ -239,7 +255,18 @@ const Download: React.FC = () => {
   const getRequirements = () => {
     if (selectedPlatform === 'windows') return 'Windows 10 or later';
     if (selectedPlatform === 'macos') return 'macOS 12.0 (Monterey) or later';
-    if (selectedPlatform === 'linux') return 'Ubuntu 20.04+ / Debian 11+';
+    if (selectedPlatform === 'linux') {
+      switch (selectedLinuxDistro) {
+        case 'deb':
+          return 'Ubuntu 20.04+ / Debian 11+ / Linux Mint 20+';
+        case 'rpm':
+          return 'Red Hat 8+ / Fedora 35+ / CentOS Stream 8+';
+        case 'pkg.tar.zst':
+          return 'Arch Linux / Manjaro (ARM64 only)';
+        default:
+          return 'Ubuntu 20.04+ / Debian 11+';
+      }
+    }
     return '';
   };
 
@@ -391,6 +418,52 @@ const Download: React.FC = () => {
             </div>
           )}
 
+          {/* Linux Distribution Selection */}
+          {selectedPlatform === 'linux' && (
+            <div className="mb-8">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 text-center">
+                Select Package Format
+              </h3>
+              <div className="flex justify-center gap-3 flex-wrap">
+                <button
+                  onClick={() => setSelectedLinuxDistro('deb')}
+                  className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
+                    selectedLinuxDistro === 'deb'
+                      ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <div className="font-medium">.deb</div>
+                  <div className="text-xs opacity-75">Ubuntu / Debian</div>
+                </button>
+                <button
+                  onClick={() => setSelectedLinuxDistro('rpm')}
+                  className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
+                    selectedLinuxDistro === 'rpm'
+                      ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
+                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                  }`}
+                >
+                  <div className="font-medium">.rpm</div>
+                  <div className="text-xs opacity-75">Red Hat / Fedora</div>
+                </button>
+                {selectedArch === 'arm64' && (
+                  <button
+                    onClick={() => setSelectedLinuxDistro('pkg.tar.zst')}
+                    className={`px-4 py-2 rounded-lg border-2 transition-all text-sm ${
+                      selectedLinuxDistro === 'pkg.tar.zst'
+                        ? 'border-blue-600 dark:border-blue-500 bg-blue-50 dark:bg-blue-900/30 text-blue-900 dark:text-blue-100'
+                        : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
+                    }`}
+                  >
+                    <div className="font-medium">.pkg.tar.zst</div>
+                    <div className="text-xs opacity-75">Arch Linux</div>
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Download Card */}
           {selectedPlatformData && selectedArchData && (
             <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-8 border border-gray-200 dark:border-gray-700">
@@ -473,17 +546,29 @@ const Download: React.FC = () => {
                       <div className="text-yellow-800 dark:text-yellow-200 space-y-2">
                         <p className="font-medium">Installation commands:</p>
                         <div className="bg-yellow-100 dark:bg-yellow-900/30 rounded p-2 font-mono text-xs mt-1">
-                          {selectedArch === 'amd64' || selectedArch === 'arm64' ? (
+                          {selectedLinuxDistro === 'deb' && (
                             <>
                               # Ubuntu/Debian (.deb)<br/>
                               sudo dpkg -i {getFilename()}<br/>
                               sudo apt-get install -f  # Install dependencies<br/><br/>
                               # Or double-click the .deb file in your file manager
                             </>
-                          ) : (
+                          )}
+                          {selectedLinuxDistro === 'rpm' && (
                             <>
-                              sudo dpkg -i {getFilename()}<br/>
-                              sudo apt-get install -f
+                              # Red Hat/Fedora/CentOS (.rpm)<br/>
+                              sudo rpm -ivh {getFilename()}<br/><br/>
+                              # Or using dnf:<br/>
+                              sudo dnf install {getFilename()}<br/><br/>
+                              # Or using yum:<br/>
+                              sudo yum localinstall {getFilename()}
+                            </>
+                          )}
+                          {selectedLinuxDistro === 'pkg.tar.zst' && (
+                            <>
+                              # Arch Linux (.pkg.tar.zst)<br/>
+                              sudo pacman -U {getFilename()}<br/><br/>
+                              # The package will be installed with all dependencies
                             </>
                           )}
                         </div>
