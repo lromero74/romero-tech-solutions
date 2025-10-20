@@ -295,19 +295,14 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     if (!newFolderName.trim()) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/client/folders`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          folderName: newFolderName.trim(),
-          folderDescription: newFolderDescription.trim() || null,
-          folderColor: newFolderColor,
-          parentFolderId: selectedFolder
-        })
+      const result = await apiService.post('/client/folders', {
+        folderName: newFolderName.trim(),
+        folderDescription: newFolderDescription.trim() || null,
+        folderColor: newFolderColor,
+        parentFolderId: selectedFolder
       });
 
-      if (response.ok) {
+      if (result.success) {
         setNewFolderName('');
         setNewFolderDescription('');
         setNewFolderColor('#3B82F6');
@@ -315,8 +310,7 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
         invalidateCache();
         await loadFolders();
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to create folder');
+        alert(result.message || 'Failed to create folder');
       }
     } catch (error) {
       console.error('Create folder error:', error);
@@ -348,24 +342,18 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     if (selectedFiles.size === 0) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/client/folders/move-files`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          fileIds: Array.from(selectedFiles),
-          folderId: targetFolderId
-        })
+      const result = await apiService.post('/client/folders/move-files', {
+        fileIds: Array.from(selectedFiles),
+        folderId: targetFolderId
       });
 
-      if (response.ok) {
+      if (result.success) {
         setSelectedFiles(new Set());
         setShowMoveToFolder(false);
         invalidateCache();
         await loadData(true);
       } else {
-        const error = await response.json();
-        alert(error.message || 'Failed to move files');
+        alert(result.message || 'Failed to move files');
       }
     } catch (error) {
       console.error('Move files error:', error);
@@ -389,17 +377,12 @@ const FileManager: React.FC<FileManagerProps> = ({ onNavigateToServiceRequest })
     if (!draggedFile) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/client/folders/move-files`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          fileIds: [draggedFile],
-          folderId: targetFolderId
-        })
+      const result = await apiService.post('/client/folders/move-files', {
+        fileIds: [draggedFile],
+        folderId: targetFolderId
       });
 
-      if (response.ok) {
+      if (result.success) {
         invalidateCache();
         await loadData(true);
       }

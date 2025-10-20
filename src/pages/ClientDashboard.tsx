@@ -5,6 +5,7 @@ import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import { ThemeProvider } from '../contexts/ThemeContext';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
+import apiService from '../services/apiService';
 import ServiceScheduler from '../components/client/ServiceScheduler';
 import ServiceRequests from '../components/client/ServiceRequests';
 import ClientSettings from '../components/client/ClientSettings';
@@ -209,19 +210,7 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
 
     setIsDeleting(true);
     try {
-      const result = await fetch(
-        `${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/client/profile/delete-service-location/${deletingLocation.id}`,
-        {
-          method: 'DELETE',
-          headers: {
-            'Authorization': `Bearer ${RoleBasedStorage.getItem('sessionToken')}`,
-            'Content-Type': 'application/json'
-          },
-          credentials: 'include'
-        }
-      );
-
-      const data = await result.json();
+      const data = await apiService.delete(`/client/profile/delete-service-location/${deletingLocation.id}`);
 
       if (data.success) {
         // Remove location from state

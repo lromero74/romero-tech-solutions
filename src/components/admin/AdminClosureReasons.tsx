@@ -3,18 +3,7 @@ import { Plus, Edit2, Trash2, Eye, EyeOff, AlertCircle } from 'lucide-react';
 import { useTheme, themeClasses } from '../../contexts/ThemeContext';
 import AlertModal from '../shared/AlertModal';
 import DeleteConfirmModal from './shared/DeleteConfirmModal';
-import { RoleBasedStorage } from '../../utils/roleBasedStorage';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-
-// Helper function to get auth headers
-const getAuthHeaders = (): HeadersInit => {
-  const token = RoleBasedStorage.getItem('sessionToken');
-  return {
-    'Content-Type': 'application/json',
-    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-  };
-};
+import apiService from '../../services/apiService';
 
 interface ClosureReason {
   id: string;
@@ -222,11 +211,7 @@ const AdminClosureReasons: React.FC<AdminClosureReasonsProps> = ({
   const fetchClosureReasons = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/admin/closure-reasons`, {
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-      const data = await response.json();
+      const data = await apiService.get('/admin/closure-reasons');
 
       if (data.success) {
         setClosureReasons(data.data);
@@ -268,20 +253,9 @@ const AdminClosureReasons: React.FC<AdminClosureReasonsProps> = ({
 
   const handleSave = async (data: Partial<ClosureReason>) => {
     try {
-      const url = editingReason
-        ? `${API_BASE_URL}/admin/closure-reasons/${editingReason.id}`
-        : `${API_BASE_URL}/admin/closure-reasons`;
-
-      const method = editingReason ? 'PUT' : 'POST';
-
-      const response = await fetch(url, {
-        method,
-        headers: getAuthHeaders(),
-        credentials: 'include',
-        body: JSON.stringify(data),
-      });
-
-      const result = await response.json();
+      const result = editingReason
+        ? await apiService.put(`/admin/closure-reasons/${editingReason.id}`, data)
+        : await apiService.post('/admin/closure-reasons', data);
 
       if (result.success) {
         setAlertModal({
@@ -316,13 +290,7 @@ const AdminClosureReasons: React.FC<AdminClosureReasonsProps> = ({
     if (!deleteReason) return;
 
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/closure-reasons/${deleteReason.id}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const result = await response.json();
+      const result = await apiService.delete(`/admin/closure-reasons/${deleteReason.id}`);
 
       if (result.success) {
         setAlertModal({
@@ -354,13 +322,7 @@ const AdminClosureReasons: React.FC<AdminClosureReasonsProps> = ({
 
   const handleToggleActive = async (reason: ClosureReason) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/admin/closure-reasons/${reason.id}/toggle-active`, {
-        method: 'PATCH',
-        headers: getAuthHeaders(),
-        credentials: 'include'
-      });
-
-      const result = await response.json();
+      const result = await apiService.patch(`/admin/closure-reasons/${reason.id}/toggle-active`);
 
       if (result.success) {
         setAlertModal({
