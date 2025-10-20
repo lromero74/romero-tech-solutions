@@ -739,34 +739,20 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
       let sessionConfig = defaultConfig;
 
-      try {
-        console.log('🔍 [Client MFA] Attempting to load session config from database...');
-        const dbConfig = await systemSettingsService.getSessionConfig();
-        console.log('🔍 [Client MFA] Database response:', dbConfig);
-        if (dbConfig) {
-          sessionConfig = dbConfig;
-          console.log('📥 [Client MFA] Using database session config:', sessionConfig);
-        } else {
-          console.log('⚠️ [Client MFA] No database config found, checking local storage...');
-          const existingConfig = sessionManager.getConfig();
-          if (existingConfig) {
-            sessionConfig = existingConfig;
-            console.log('📥 [Client MFA] Using local session config:', sessionConfig);
-          } else {
-            sessionConfig = defaultConfig;
-            console.log('📥 [Client MFA] Using default session config:', sessionConfig);
-          }
-        }
-      } catch (error) {
-        console.warn('⚠️ [Client MFA] Failed to load database config, using fallback:', error);
-        const existingConfig = sessionManager.getConfig();
-        if (existingConfig) {
-          sessionConfig = existingConfig;
-          console.log('📥 [Client MFA] Using local session config (fallback):', sessionConfig);
-        } else {
+      // Clients use default config - admin system settings don't apply to client sessions
+      console.log('👤 [Client MFA] Client user detected, using default session config');
+      const cachedConfig = RoleBasedStorage.getItem('sessionConfig');
+      if (cachedConfig) {
+        try {
+          sessionConfig = JSON.parse(cachedConfig);
+          console.log('📥 [Client MFA] Using cached session config:', sessionConfig);
+        } catch {
           sessionConfig = defaultConfig;
-          console.log('📥 [Client MFA] Using default session config (fallback):', sessionConfig);
+          console.log('📥 [Client MFA] Using default session config:', sessionConfig);
         }
+      } else {
+        sessionConfig = defaultConfig;
+        console.log('📥 [Client MFA] Using default session config:', sessionConfig);
       }
 
       setSessionConfig(sessionConfig);
@@ -828,37 +814,57 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
           warningTime: 2 // 2 minutes warning
         };
 
-        // Try to load config from database first, then local storage, then default
+        // Try to load config from cache or use default
+        // Clients use default config - admin system settings don't apply to client sessions
         let sessionConfig: SessionConfig;
 
         (async () => {
-          try {
-            console.log('🔍 [Trusted Device] Attempting to load session config from database...');
-            const dbConfig = await systemSettingsService.getSessionConfig();
-            console.log('🔍 [Trusted Device] Database response:', dbConfig);
-            if (dbConfig) {
-              sessionConfig = dbConfig;
-              console.log('📥 [Trusted Device] Using database session config:', sessionConfig);
-            } else {
-              console.log('⚠️ [Trusted Device] No database config found, checking local storage...');
-              const existingConfig = sessionManager.getConfig();
-              if (existingConfig) {
-                sessionConfig = existingConfig;
-                console.log('📥 [Trusted Device] Using local session config:', sessionConfig);
-              } else {
+          // Check if user is a client - if so, skip database call
+          if (userData.role === 'client') {
+            console.log('👤 [Trusted Device] Client user detected, using default session config');
+            const cachedConfig = RoleBasedStorage.getItem('sessionConfig');
+            if (cachedConfig) {
+              try {
+                sessionConfig = JSON.parse(cachedConfig);
+                console.log('📥 [Trusted Device] Using cached session config:', sessionConfig);
+              } catch {
                 sessionConfig = defaultConfig;
                 console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
               }
-            }
-          } catch (error) {
-            console.warn('⚠️ [Trusted Device] Failed to load database config, using fallback:', error);
-            const existingConfig = sessionManager.getConfig();
-            if (existingConfig) {
-              sessionConfig = existingConfig;
-              console.log('📥 [Trusted Device] Using local session config (fallback):', sessionConfig);
             } else {
               sessionConfig = defaultConfig;
-              console.log('📥 [Trusted Device] Using default session config (fallback):', sessionConfig);
+              console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
+            }
+          } else {
+            // Employee users can load from database
+            try {
+              console.log('🔍 [Trusted Device] Attempting to load session config from database...');
+              const dbConfig = await systemSettingsService.getSessionConfig();
+              console.log('🔍 [Trusted Device] Database response:', dbConfig);
+              if (dbConfig) {
+                sessionConfig = dbConfig;
+                console.log('📥 [Trusted Device] Using database session config:', sessionConfig);
+              } else {
+                console.log('⚠️ [Trusted Device] No database config found, checking local storage...');
+                const existingConfig = sessionManager.getConfig();
+                if (existingConfig) {
+                  sessionConfig = existingConfig;
+                  console.log('📥 [Trusted Device] Using local session config:', sessionConfig);
+                } else {
+                  sessionConfig = defaultConfig;
+                  console.log('📥 [Trusted Device] Using default session config:', sessionConfig);
+                }
+              }
+            } catch (error) {
+              console.warn('⚠️ [Trusted Device] Failed to load database config, using fallback:', error);
+              const existingConfig = sessionManager.getConfig();
+              if (existingConfig) {
+                sessionConfig = existingConfig;
+                console.log('📥 [Trusted Device] Using local session config (fallback):', sessionConfig);
+              } else {
+                sessionConfig = defaultConfig;
+                console.log('📥 [Trusted Device] Using default session config (fallback):', sessionConfig);
+              }
             }
           }
 
