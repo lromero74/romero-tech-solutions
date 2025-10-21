@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { apiService } from '../services/apiService';
@@ -9,7 +8,6 @@ interface AgentLoginProps {
 }
 
 const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
-  const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const { setUserFromTrustedDevice } = useEnhancedAuth();
@@ -82,7 +80,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
                 setMessage('Setting up your profile...');
                 setStatus('success');
                 setTimeout(() => {
-                  navigate('/onboarding?next=schedule-service');
+                  window.location.href = '/onboarding?next=schedule-service';
                 }, 1000);
                 return;
               } else {
@@ -104,7 +102,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           // Automatically redirect after 1 second
           setTimeout(() => {
             if (redirectPath) {
-              navigate(redirectPath);
+              window.location.href = redirectPath;
             } else {
               onSuccess();
             }

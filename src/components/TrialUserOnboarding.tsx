@@ -7,7 +7,6 @@ import {
   ArrowRight,
   Loader2
 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useLanguage } from '../contexts/LanguageContext';
 import { apiService } from '../services/apiService';
 
@@ -26,9 +25,10 @@ interface OnboardingFormData {
 
 const TrialUserOnboarding: React.FC = () => {
   const { t } = useLanguage();
-  const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const nextPath = searchParams.get('next') || '/dashboard';
+
+  // Get next path from URL query parameters
+  const params = new URLSearchParams(window.location.search);
+  const nextPath = params.get('next') || '/dashboard';
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -249,9 +249,9 @@ const TrialUserOnboarding: React.FC = () => {
       if (response.success) {
         // Navigate to the intended destination (e.g., /dashboard?tab=schedule-service)
         if (nextPath.includes('schedule-service')) {
-          navigate('/dashboard?tab=schedule-service');
+          window.location.href = '/dashboard?tab=schedule-service';
         } else {
-          navigate(nextPath);
+          window.location.href = nextPath;
         }
       } else {
         setError(response.message || 'Failed to complete onboarding');
