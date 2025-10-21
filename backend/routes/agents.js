@@ -1309,6 +1309,7 @@ router.post('/register', async (req, res) => {
 router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;
+    const { redirect } = req.body; // Extract redirect parameter from request body
 
     // Get agent details including business_id and service_location_id
     const agentResult = await query(
@@ -1352,20 +1353,28 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     const user = userResult.rows[0];
 
     // Generate magic-link token with agent and user info
+    const tokenPayload = {
+      agent_id: agent_id,
+      user_id: user.id,
+      business_id: agent.business_id,
+      type: 'agent_magic_link'
+    };
+
+    // Include redirect path if provided
+    if (redirect) {
+      tokenPayload.redirect = redirect;
+    }
+
     const magicToken = jwt.sign(
-      {
-        agent_id: agent_id,
-        user_id: user.id,
-        business_id: agent.business_id,
-        type: 'agent_magic_link'
-      },
+      tokenPayload,
       process.env.JWT_SECRET,
       { expiresIn: '10m' } // 10 minute expiration
     );
 
     const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
-    console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})`);
+    const redirectInfo = redirect ? ` → ${redirect}` : '';
+    console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})${redirectInfo}`);
 
     res.json({
       success: true,
@@ -1374,7 +1383,8 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
         magic_link_url: magicLinkUrl,
         expires_in: '10m',
         agent_name: agent.device_name,
-        business_name: agent.business_name
+        business_name: agent.business_name,
+        redirect: redirect || null
       }
     });
 

@@ -1,15 +1,19 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
+import { apiService } from '../services/apiService';
 
 interface AgentLoginProps {
   onSuccess: () => void;
 }
 
 const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
+  const navigate = useNavigate();
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const { setUserFromTrustedDevice } = useEnhancedAuth();
+  const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   useEffect(() => {
     const performMagicLinkLogin = async () => {
@@ -56,12 +60,54 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           // This method properly handles authentication state for magic-link logins
           await setUserFromTrustedDevice(result.user, result.session?.sessionToken);
 
+          // Extract redirect path from JWT token if present
+          const redirect = result.redirect || null;
+          console.log('🔀 Redirect path from token:', redirect);
+
+          // Check profile completion if redirect requires it
+          if (redirect === '/schedule-service') {
+            try {
+              const profileStatus = await apiService.get<{
+                success: boolean;
+                data: {
+                  requiresOnboarding: boolean;
+                  hasServiceLocation: boolean;
+                };
+              }>('/client/profile/completion-status');
+
+              console.log('📋 Profile status:', profileStatus.data);
+
+              if (profileStatus.success && profileStatus.data.requiresOnboarding) {
+                // User needs onboarding - redirect to onboarding with next parameter
+                setMessage('Setting up your profile...');
+                setStatus('success');
+                setTimeout(() => {
+                  navigate('/onboarding?next=schedule-service');
+                }, 1000);
+                return;
+              } else {
+                // User has service location - go directly to service request
+                setRedirectPath('/dashboard?tab=schedule-service');
+              }
+            } catch (error) {
+              console.error('Error checking profile status:', error);
+              // Fallback to dashboard if profile check fails
+              setRedirectPath('/dashboard');
+            }
+          } else if (redirect) {
+            setRedirectPath(redirect);
+          }
+
           setStatus('success');
           setMessage('Welcome! Opening your agent dashboard...');
 
-          // Automatically redirect to dashboard after 1 second
+          // Automatically redirect after 1 second
           setTimeout(() => {
-            onSuccess();
+            if (redirectPath) {
+              navigate(redirectPath);
+            } else {
+              onSuccess();
+            }
           }, 1000);
         } else {
           setStatus('error');

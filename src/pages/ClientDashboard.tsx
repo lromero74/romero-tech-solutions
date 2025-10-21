@@ -122,6 +122,18 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     RoleBasedStorage.setItem('clientActiveTab', tab);
   };
 
+  // Check for tab parameter in URL on mount (for magic link redirects)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tabParam = params.get('tab');
+
+    if (tabParam === 'schedule-service') {
+      setActiveTab('schedule');
+      // Clean up URL parameter after reading it
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
   // State for AddServiceLocationForm modal
   const [showAddLocationForm, setShowAddLocationForm] = useState(false);
 

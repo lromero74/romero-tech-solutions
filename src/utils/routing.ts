@@ -44,6 +44,9 @@ export const getPageFromPath = (path: string): AppPage => {
       path === '/agent-magic-login' || path.startsWith('/agent-magic-login')) {
     return 'agent-login';
   }
+  if (path === '/onboarding' || path.startsWith('/onboarding')) {
+    return 'onboarding';
+  }
   return 'home';
 };
 
@@ -77,7 +80,7 @@ export const getPathFromPage = (page: AppPage): string => {
 
 export const updateUrlForPage = (page: AppPage): void => {
   // Don't update URL for pages with dynamic parameters
-  if (page === 'rate' || page === 'trial-login' || page === 'agent-login') {
+  if (page === 'rate' || page === 'trial-login' || page === 'agent-login' || page === 'onboarding') {
     return;
   }
 

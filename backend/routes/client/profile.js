@@ -903,4 +903,180 @@ router.put('/default-aggregation-level', authenticateClient, async (req, res) =>
   }
 });
 
+/**
+ * Complete trial user onboarding
+ * POST /api/client/profile/complete-onboarding
+ *
+ * Completes onboarding for trial users who need to set up business info and service location
+ */
+router.post('/complete-onboarding', authenticateClient, async (req, res) => {
+  const client = await getPool().then(pool => pool.connect());
+  try {
+    await client.query('BEGIN');
+
+    const { businessId, clientId } = req.user;
+    const {
+      businessName,
+      isIndividual,
+      streetAddress1,
+      streetAddress2,
+      city,
+      state,
+      zipCode,
+      firstName,
+      lastName,
+      phone
+    } = req.body;
+
+    // Validate required fields
+    if (!zipCode || !streetAddress1 || !city || !state) {
+      return res.status(400).json({
+        success: false,
+        message: 'Address information is required'
+      });
+    }
+
+    if (!isIndividual && !businessName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Business name is required for business accounts'
+      });
+    }
+
+    if (!firstName || !lastName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Contact name is required'
+      });
+    }
+
+    // Update business name if provided
+    if (businessName) {
+      await client.query(
+        'UPDATE businesses SET name = $1, is_individual = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3',
+        [businessName, isIndividual || false, businessId]
+      );
+    }
+
+    // Update user profile with name and phone
+    await client.query(
+      `UPDATE users
+       SET first_name = $1, last_name = $2, phone = $3, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4`,
+      [firstName, lastName, phone, clientId]
+    );
+
+    // Check if headquarters location already exists
+    const existingLocation = await client.query(
+      `SELECT id FROM service_locations
+       WHERE business_id = $1 AND is_headquarters = true AND soft_delete = false`,
+      [businessId]
+    );
+
+    if (existingLocation.rows.length === 0) {
+      // Create headquarters service location
+      await client.query(
+        `INSERT INTO service_locations (
+          business_id,
+          address_label,
+          street_address_1,
+          street_address_2,
+          city,
+          state,
+          zip_code,
+          country,
+          contact_person,
+          contact_phone,
+          is_headquarters
+        ) VALUES ($1, 'Headquarters', $2, $3, $4, $5, $6, 'United States', $7, $8, true)`,
+        [
+          businessId,
+          streetAddress1,
+          streetAddress2 || null,
+          city,
+          state,
+          zipCode,
+          `${firstName} ${lastName}`,
+          phone
+        ]
+      );
+    }
+
+    await client.query('COMMIT');
+
+    console.log(`✅ Onboarding completed for user ${clientId} (business: ${businessId})`);
+
+    res.json({
+      success: true,
+      message: 'Onboarding completed successfully'
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('Error completing trial onboarding:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to complete onboarding',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  } finally {
+    client.release();
+  }
+});
+
+/**
+ * Check profile completion status
+ * GET /api/client/profile/completion-status
+ *
+ * Returns whether the client has completed their profile setup
+ * (specifically if they have at least one service location configured)
+ */
+router.get('/completion-status', authenticateClient, async (req, res) => {
+  try {
+    const pool = await getPool();
+    const { businessId } = req.user;
+
+    // Check if user has at least one active service location
+    const locationResult = await pool.query(
+      `SELECT COUNT(*) as location_count
+       FROM service_locations
+       WHERE business_id = $1 AND soft_delete = false`,
+      [businessId]
+    );
+
+    const hasServiceLocation = parseInt(locationResult.rows[0].location_count) > 0;
+
+    // Get user profile completion info
+    const userResult = await pool.query(
+      `SELECT
+         CASE WHEN first_name IS NOT NULL AND first_name != '' THEN true ELSE false END as has_name,
+         CASE WHEN phone IS NOT NULL AND phone != '' THEN true ELSE false END as has_phone
+       FROM users
+       WHERE id = $1`,
+      [req.user.clientId]
+    );
+
+    const user = userResult.rows[0] || { has_name: false, has_phone: false };
+
+    res.json({
+      success: true,
+      data: {
+        profileCompleted: hasServiceLocation && user.has_name,
+        requiresOnboarding: !hasServiceLocation,
+        hasServiceLocation: hasServiceLocation,
+        hasName: user.has_name,
+        hasPhone: user.has_phone
+      }
+    });
+
+  } catch (error) {
+    console.error('Error checking profile completion status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to check profile completion status',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
 export default router;

@@ -25,6 +25,7 @@ import ServiceRating from './pages/ServiceRating';
 import TrialLogin from './pages/TrialLogin';
 // import TrialDashboard from './pages/TrialDashboard'; // DEPRECATED: All clients now use ClientDashboard
 import AgentLogin from './pages/AgentLogin';
+import TrialUserOnboarding from './components/TrialUserOnboarding';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import { useVersionCheck } from './hooks/useVersionCheck';
@@ -127,6 +128,16 @@ function AppContent() {
     // Handle agent magic-link login page
     if (currentPage === 'agent-login') {
       return <AgentLogin onSuccess={() => setCurrentPage('dashboard')} />;
+    }
+
+    // Handle trial user onboarding page (requires authentication)
+    if (currentPage === 'onboarding') {
+      if (!isAuthenticated || !isClient) {
+        // Redirect to client login if not authenticated
+        setCurrentPage('clogin');
+        return null;
+      }
+      return <TrialUserOnboarding />;
     }
 
     // Handle service rating page (public - no auth required)
@@ -262,8 +273,8 @@ function AppContent() {
     }
   };
 
-  // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, trial login, and client dashboard when authenticated or loading
-  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' || currentPage === 'trial-login' ||
+  // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, trial login, onboarding, and client dashboard when authenticated or loading
+  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' || currentPage === 'trial-login' || currentPage === 'onboarding' || currentPage === 'agent-login' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
       (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isExecutive || isSales || isClient))))) {
     return renderPage();

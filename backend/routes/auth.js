@@ -2607,7 +2607,7 @@ router.post('/agent-magic-login', async (req, res) => {
       });
     }
 
-    const { agent_id, user_id, business_id } = decoded;
+    const { agent_id, user_id, business_id, redirect } = decoded;
 
     // For device_management tokens, we need to look up business_id from the user
     let effectiveBusinessId = business_id;
@@ -2701,7 +2701,8 @@ router.post('/agent-magic-login', async (req, res) => {
       agentId: agent_id  // Link to the specific agent that opened dashboard
     };
 
-    console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})`);
+    const redirectInfo = redirect ? ` → ${redirect}` : '';
+    console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})${redirectInfo}`);
 
     res.status(200).json({
       success: true,
@@ -2710,7 +2711,8 @@ router.post('/agent-magic-login', async (req, res) => {
       session: {
         sessionToken: session.sessionToken,
         expiresAt: session.expiresAt
-      }
+      },
+      redirect: redirect || null // Include redirect path if present
     });
 
   } catch (error) {
