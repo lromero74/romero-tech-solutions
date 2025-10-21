@@ -195,6 +195,19 @@ router.post('/trial/verify-email', async (req, res) => {
     const currentAgentCount = parseInt(agentCountResult.rows[0].count) || 0;
 
     if (currentAgentCount >= devicesAllowed) {
+      // Generate magic link for user to manage devices
+      const magicToken = jwt.sign(
+        {
+          user_id: userId,
+          business_id: businessId,
+          type: 'agent_magic_link'
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: '10m' } // 10 minute expiration
+      );
+
+      const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
+
       return res.status(403).json({
         success: false,
         message: `Device limit reached (${devicesAllowed} devices on Free tier). Please remove a device or upgrade.`,
@@ -202,7 +215,8 @@ router.post('/trial/verify-email', async (req, res) => {
         data: {
           devices_used: currentAgentCount,
           devices_allowed: devicesAllowed,
-          subscription_tier: 'free'
+          subscription_tier: 'free',
+          magic_link_url: magicLinkUrl  // Magic link for auto-login to manage devices
         }
       });
     }
@@ -1349,7 +1363,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
       { expiresIn: '10m' } // 10 minute expiration
     );
 
-    const magicLinkUrl = `https://romerotechsolutions.com/agent/login?token=${magicToken}`;
+    const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
     console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})`);
 
