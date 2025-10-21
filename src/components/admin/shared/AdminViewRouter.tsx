@@ -33,6 +33,9 @@ import TrialAgentsDashboard from '../TrialAgentsDashboard';
 import TrialConversionModal from '../TrialConversionModal';
 import AlertConfigurationManager from '../AlertConfigurationManager';
 import AlertHistoryDashboard from '../AlertHistoryDashboard';
+import AlertSubscriptionManager from '../AlertSubscriptionManager';
+import AlertNotificationLogs from '../AlertNotificationLogs';
+import EscalationPolicyManager from '../EscalationPolicyManager';
 import PolicyAutomationDashboard from '../PolicyAutomationDashboard';
 import SoftwareDeploymentDashboard from '../SoftwareDeploymentDashboard';
 import SubscriptionPricing from '../../../pages/admin/SubscriptionPricing';
@@ -1262,6 +1265,15 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'alert-history':
         return <AlertHistoryDashboard onNavigateToAgent={onNavigateToAgentFromAlert} />;
+
+      case 'alert-subscriptions':
+        return <AlertSubscriptionManager />;
+
+      case 'alert-notification-logs':
+        return <AlertNotificationLogs />;
+
+      case 'alert-escalation-policies':
+        return <EscalationPolicyManager />;
 
       case 'policy-automation':
         return (

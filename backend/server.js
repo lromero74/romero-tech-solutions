@@ -26,6 +26,7 @@ import clientServiceRequestRoutes from './routes/client/serviceRequests.js';
 import clientSchedulerRoutes from './routes/client/scheduler.js';
 import clientPaymentRoutes, { webhookRouter } from './routes/client/payments.js';
 import clientInvoiceRoutes from './routes/client/invoices.js';
+import clientAlertSubscriptionRoutes from './routes/client/alertSubscriptions.js';
 import translationsRoutes from './routes/translations.js';
 import trustedDevicesRoutes from './routes/trustedDevices.js';
 import serviceAreasRoutes from './routes/serviceAreas.js';
@@ -75,6 +76,9 @@ import { alertConfigService } from './services/alertConfigService.js';
 
 // Import policy scheduler service
 import { policySchedulerService } from './services/policySchedulerService.js';
+
+// Import escalation monitor
+import escalationMonitor from './jobs/escalationMonitor.js';
 
 // Import environment-aware logger
 import { loggers as log } from './utils/logger.js';
@@ -498,6 +502,7 @@ app.use('/api/client/profile', generalLimiter, doubleCsrfProtection, clientProfi
 app.use('/api/client/mfa', generalLimiter, methodBasedCsrfProtection, clientMfaRoutes); // Client MFA (CSRF skipped for GET)
 app.use('/api/client/payments', generalLimiter, doubleCsrfProtection, clientPaymentRoutes); // Client payments (Stripe) + CSRF
 app.use('/api/client/invoices', generalLimiter, methodBasedCsrfProtection, clientInvoiceRoutes); // Client invoices (CSRF skipped for GET)
+app.use('/api/client/alert-subscriptions', generalLimiter, methodBasedCsrfProtection, clientAlertSubscriptionRoutes); // Client alert subscriptions (CSRF skipped for GET)
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
 app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD
@@ -689,6 +694,14 @@ const startServer = async () => {
       console.warn('⚠️  Failed to start policy scheduler:', error.message);
     }
 
+    // Start escalation monitor
+    console.log('🔔 Starting alert escalation monitor...');
+    try {
+      escalationMonitor.start();
+    } catch (error) {
+      console.warn('⚠️  Failed to start escalation monitor:', error.message);
+    }
+
     // Start the server
     httpServer.listen(PORT, () => {
       console.log(`🚀 Server running on port ${PORT}`);
@@ -701,6 +714,7 @@ const startServer = async () => {
       console.log(`🧹 Metrics cleanup: ENABLED (1-year retention)`);
       console.log(`🚨 Alert configurations: LOADED`);
       console.log(`🤖 Policy scheduler: ENABLED`);
+      console.log(`🔔 Escalation monitor: ENABLED (checks every 5 minutes)`);
 
       // Start session cleanup process
       startSessionCleanup();
@@ -721,6 +735,7 @@ process.on('SIGTERM', () => {
   auditLogCleanupService.stop();
   alertCleanupService.stop();
   policySchedulerService.stop();
+  escalationMonitor.stop();
   process.exit(0);
 });
 
@@ -732,6 +747,7 @@ process.on('SIGINT', () => {
   auditLogCleanupService.stop();
   alertCleanupService.stop();
   policySchedulerService.stop();
+  escalationMonitor.stop();
   process.exit(0);
 });
 

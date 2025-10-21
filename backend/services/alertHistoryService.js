@@ -5,6 +5,7 @@
 
 import { query } from '../config/database.js';
 import { websocketService } from './websocketService.js';
+import { alertNotificationService } from './alertNotificationService.js';
 
 class AlertHistoryService {
   /**
@@ -62,10 +63,17 @@ class AlertHistoryService {
       );
       const agentName = agentResult.rows[0]?.device_name || 'Unknown Agent';
 
-      // Send WebSocket notification if enabled
+      // Send WebSocket notification if enabled (legacy - kept for backward compatibility)
       if (notify_websocket) {
         await this._sendWebSocketNotification(savedAlert, agentName, alert_name);
       }
+
+      // Route alert to all appropriate subscribers (email, SMS, WebSocket, etc.)
+      // This runs asynchronously and doesn't block alert creation
+      alertNotificationService.routeAlert(savedAlert.id).catch(error => {
+        console.error('❌ Error routing alert notifications:', error);
+        // Don't throw - alert is already saved, notification failure shouldn't break the flow
+      });
 
       console.log(`✅ Alert saved: ${alert_name} (${severity}) - ID: ${savedAlert.id}`);
       return savedAlert;

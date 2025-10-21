@@ -1,13 +1,16 @@
-RTS Monitoring Agent - Version 1.16.21 Release Notes
+RTS Monitoring Agent - Version 1.16.30 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2025-10-20 06:23:38 UTC
+Release Date: 2025-10-21 02:24:05 UTC
 Previous Version: v1.16.20
-Git Commit: 53a026a
+Git Commit: cefe17f
 
 Changes Since v1.16.20:
 ───────────────────────────────────────────────────────────
 
+• fix: Parse device limit error before generic error check
+• fix: Improve device limit flow - retry same code after device removal
+• feat: Add passwordless magic link auto-login for free tier device management
 • docs: Add comprehensive Windows security documentation and signing guide (v1.16.20)
 
 ───────────────────────────────────────────────────────────

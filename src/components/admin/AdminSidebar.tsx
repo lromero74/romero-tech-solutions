@@ -28,6 +28,8 @@ import {
   Monitor,
   AlertTriangle,
   Bell,
+  BellRing,
+  Zap,
   Code,
   Package,
   TestTube
@@ -35,7 +37,7 @@ import {
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermissionContext } from '../../contexts/PermissionContext';
 
-type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
+type AdminView = 'overview' | 'employees' | 'employee-calendar' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'closure-reasons' | 'roles' | 'permissions' | 'permission-audit-log' | 'role-hierarchy' | 'reports' | 'settings' | 'service-hour-rates' | 'pricing-settings' | 'password-complexity' | 'workflow-configuration' | 'filter-presets' | 'quota-management' | 'client-files' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'trial-agents' | 'alert-configurations' | 'alert-history' | 'alert-subscriptions' | 'alert-notification-logs' | 'alert-escalation-policies' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
 
 interface AdminSidebarProps {
   currentView: AdminView;
@@ -101,7 +103,10 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         { id: 'agents', label: 'Monitoring Agents', icon: Monitor, permission: 'view.agents.enable' },
         { id: 'trial-agents', label: 'Trial Agents', icon: TestTube, permission: 'view.agents.enable' },
         { id: 'alert-configurations', label: 'Alert Configurations', icon: AlertTriangle, permission: 'view.agents.enable' },
-        { id: 'alert-history', label: 'Alert History', icon: Bell, permission: 'view.agents.enable' }
+        { id: 'alert-history', label: 'Alert History', icon: Bell, permission: 'view.agents.enable' },
+        { id: 'alert-subscriptions', label: 'Alert Subscriptions', icon: BellRing, permission: 'alert_subscriptions.view_own' },
+        { id: 'alert-notification-logs', label: 'Notification Logs', icon: FileText, permission: 'alert_notifications.view_own' },
+        { id: 'alert-escalation-policies', label: 'Escalation Policies', icon: Zap, permission: 'escalation_policies.view' }
       ]
     },
     {

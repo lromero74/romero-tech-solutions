@@ -2298,6 +2298,22 @@ Please do not reply to this email. For assistance, contact your administrator.
   }
 
   /**
+   * Send raw email with provided options (used by alert notification service)
+   * @param {object} mailOptions - Nodemailer mail options
+   * @returns {Promise<object>}
+   */
+  async sendRawEmail(mailOptions) {
+    try {
+      const result = await transporter.sendMail(mailOptions);
+      console.log(`📧 Raw email sent to ${mailOptions.to}`);
+      return { success: true, messageId: result.messageId };
+    } catch (error) {
+      console.error(`❌ Error sending raw email to ${mailOptions.to}:`, error);
+      throw error;
+    }
+  }
+
+  /**
    * Helper to get email footer
    */
   getEmailFooter() {

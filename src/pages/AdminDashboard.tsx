@@ -12,7 +12,7 @@ import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
 import { useModalManager, useServiceLocationFilters, useClientFilters, useBusinessFilters } from '../hooks/admin';
 
-type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity' | 'filter-presets' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
+type AdminView = 'overview' | 'employees' | 'clients' | 'businesses' | 'services' | 'service-requests' | 'invoices' | 'service-locations' | 'roles' | 'reports' | 'settings' | 'password-complexity' | 'filter-presets' | 'testimonials' | 'rating-questions' | 'agents' | 'agent-details' | 'alert-configurations' | 'alert-history' | 'alert-subscriptions' | 'alert-notification-logs' | 'alert-escalation-policies' | 'policy-automation' | 'software-deployment' | 'subscription-pricing';
 
 const AdminDashboardContent: React.FC = () => {
   const { user, signOut, sessionWarning, extendSession, sessionConfig, updateSessionConfig, updateSessionWarningTime } = useEnhancedAuth();
