@@ -220,7 +220,6 @@ router.post('/trial/verify-email', async (req, res) => {
         }
       });
     }
-    }
 
     // Create agent device
     const agentId = uuidv4();
