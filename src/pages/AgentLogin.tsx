@@ -25,29 +25,8 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           return;
         }
 
-        // CRITICAL: If we have a token AND existing auth, we need to force a clean slate
-        // by reloading the page with the token but clearing auth first
-        // Use URL parameter as flag to prevent infinite reload loops (survives page reload)
-        const urlParams2 = new URLSearchParams(window.location.search);
-        const hasAlreadyCleared = urlParams2.get('cleared') === '1';
-
-        const hasExistingAuth = localStorage.getItem('client_authUser') ||
-                                localStorage.getItem('admin_authUser') ||
-                                sessionStorage.getItem('client_authUser') ||
-                                sessionStorage.getItem('admin_authUser');
-
-        if (hasExistingAuth && !hasAlreadyCleared) {
-          console.log('🧹 Existing auth detected - clearing and reloading to process magic link cleanly');
-          localStorage.clear();
-          sessionStorage.clear();
-          // Add flag to URL to prevent loop on reload
-          const currentUrl = new URL(window.location.href);
-          currentUrl.searchParams.set('cleared', '1');
-          window.location.href = currentUrl.toString();
-          return;
-        }
-
         // Call the agent magic-link login endpoint
+        // Note: App should NOT load existing auth when on agent-login page
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
         const response = await fetch(`${apiBaseUrl}/auth/agent-magic-login`, {
           method: 'POST',

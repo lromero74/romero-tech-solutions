@@ -495,6 +495,13 @@ export class AuthService {
   // Get current authenticated user
   async getCurrentAuthUser(): Promise<AuthUser | null> {
     try {
+      // CRITICAL: Skip loading auth when on agent-login page
+      // This allows magic link authentication to work without interference from existing sessions
+      if (window.location.pathname === '/agent/login') {
+        console.log('🚫 Skipping auth load on agent-login page - magic link will handle auth');
+        return null;
+      }
+
       console.log('Attempting to get current user from localStorage...');
 
       // Check localStorage for stored authentication state (role-based)
