@@ -206,7 +206,7 @@ router.post('/trial/verify-email', async (req, res) => {
         { expiresIn: '10m' } // 10 minute expiration
       );
 
-      const magicLinkUrl = `https://romerotechsolutions.com/agent/login?token=${magicToken}`;
+      const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
       return res.status(403).json({
         success: false,
@@ -1363,7 +1363,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
       { expiresIn: '10m' } // 10 minute expiration
     );
 
-    const magicLinkUrl = `https://romerotechsolutions.com/agent/login?token=${magicToken}`;
+    const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
     console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})`);
 
