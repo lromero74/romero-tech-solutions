@@ -25,10 +25,23 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           return;
         }
 
+        // CRITICAL: If we have a token AND existing auth, we need to force a clean slate
+        // by reloading the page with the token but clearing auth first
+        const hasExistingAuth = localStorage.getItem('client_authUser') ||
+                                localStorage.getItem('admin_authUser') ||
+                                sessionStorage.getItem('client_authUser') ||
+                                sessionStorage.getItem('admin_authUser');
+
+        if (hasExistingAuth) {
+          console.log('🧹 Existing auth detected - clearing and reloading to process magic link cleanly');
+          localStorage.clear();
+          sessionStorage.clear();
+          // Reload with the same URL to process magic link on clean slate
+          window.location.reload();
+          return;
+        }
+
         // Call the agent magic-link login endpoint
-        // Note: We don't clear storage here because setUserFromTrustedDevice will
-        // overwrite any existing auth data, and clearing triggers auth context to
-        // think user logged out, causing premature redirect to login page
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
         const response = await fetch(`${apiBaseUrl}/auth/agent-magic-login`, {
           method: 'POST',
