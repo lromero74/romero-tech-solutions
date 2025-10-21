@@ -111,6 +111,21 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       setIsLoading(true);
       setHasError(false);
 
+      // CRITICAL: Skip entire auth check when magic link token is present
+      // This allows magic link authentication to work without interference from existing sessions
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasMagicLinkToken = urlParams.has('token');
+      const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
+                               window.location.pathname === '/agent-magic-login';
+
+      if (hasMagicLinkToken && isAgentLoginPath) {
+        console.log('🚫 EnhancedAuthContext: Skipping auth state check - magic link will handle authentication');
+        setIsLoading(false);
+        setUser(null);
+        setSessionToken(null);
+        return; // Exit early, don't load any auth
+      }
+
       // First get the stored user to determine the role, then read the session token with that role
       let storedSessionToken: string | null = null;
       const storedAuthUser = RoleBasedStorage.getItem('authUser');
