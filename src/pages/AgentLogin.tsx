@@ -11,7 +11,6 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
   const [message, setMessage] = useState('');
   const { setUserFromTrustedDevice } = useEnhancedAuth();
-  const [redirectPath, setRedirectPath] = useState<string | null>(null);
 
   useEffect(() => {
     const performMagicLinkLogin = async () => {
@@ -63,6 +62,8 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           console.log('🔀 Redirect path from token:', redirect);
 
           // Check profile completion if redirect requires it
+          let finalRedirect = null;
+
           if (redirect === '/schedule-service') {
             try {
               const profileStatus = await apiService.get<{
@@ -85,15 +86,15 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
                 return;
               } else {
                 // User has service location - go directly to service request
-                setRedirectPath('/dashboard?tab=schedule-service');
+                finalRedirect = '/dashboard?tab=schedule-service';
               }
             } catch (error) {
               console.error('Error checking profile status:', error);
               // Fallback to dashboard if profile check fails
-              setRedirectPath('/dashboard');
+              finalRedirect = '/dashboard';
             }
           } else if (redirect) {
-            setRedirectPath(redirect);
+            finalRedirect = redirect;
           }
 
           setStatus('success');
@@ -101,8 +102,8 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
 
           // Automatically redirect after 1 second
           setTimeout(() => {
-            if (redirectPath) {
-              window.location.href = redirectPath;
+            if (finalRedirect) {
+              window.location.href = finalRedirect;
             } else {
               onSuccess();
             }
