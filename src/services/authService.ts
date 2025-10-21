@@ -495,10 +495,15 @@ export class AuthService {
   // Get current authenticated user
   async getCurrentAuthUser(): Promise<AuthUser | null> {
     try {
-      // CRITICAL: Skip loading auth when on agent-login page
+      // CRITICAL: Skip loading auth when processing magic link
       // This allows magic link authentication to work without interference from existing sessions
-      if (window.location.pathname === '/agent/login') {
-        console.log('🚫 Skipping auth load on agent-login page - magic link will handle auth');
+      const urlParams = new URLSearchParams(window.location.search);
+      const hasMagicLinkToken = urlParams.has('token');
+      const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
+                               window.location.pathname === '/agent-magic-login';
+
+      if (hasMagicLinkToken && isAgentLoginPath) {
+        console.log('🚫 Skipping auth load - magic link token detected, allowing fresh authentication');
         return null;
       }
 
