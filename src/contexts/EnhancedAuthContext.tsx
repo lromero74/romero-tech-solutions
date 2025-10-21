@@ -118,6 +118,14 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
                                window.location.pathname === '/agent-magic-login';
 
+      // DEBUG: Log detection logic
+      console.log('🔍 [EnhancedAuthContext] Magic link detection:', {
+        pathname: window.location.pathname,
+        hasToken: hasMagicLinkToken,
+        isAgentLoginPath,
+        fullUrl: window.location.href
+      });
+
       if (hasMagicLinkToken && isAgentLoginPath) {
         console.log('🚫 EnhancedAuthContext: Skipping auth state check - magic link will handle authentication');
         setIsLoading(false);
