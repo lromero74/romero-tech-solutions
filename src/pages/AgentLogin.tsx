@@ -25,6 +25,12 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           return;
         }
 
+        // Clear any existing session before processing magic link
+        // This ensures we start fresh and avoid conflicts with stale sessions
+        console.log('🧹 Clearing any existing session before magic link authentication...');
+        localStorage.clear();
+        sessionStorage.clear();
+
         // Call the agent magic-link login endpoint
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
         const response = await fetch(`${apiBaseUrl}/auth/agent-magic-login`, {
