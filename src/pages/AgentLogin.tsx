@@ -27,28 +27,25 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
 
         // CRITICAL: If we have a token AND existing auth, we need to force a clean slate
         // by reloading the page with the token but clearing auth first
-        // Use a flag to prevent infinite reload loops
+        // Use URL parameter as flag to prevent infinite reload loops (survives page reload)
+        const urlParams2 = new URLSearchParams(window.location.search);
+        const hasAlreadyCleared = urlParams2.get('cleared') === '1';
+
         const hasExistingAuth = localStorage.getItem('client_authUser') ||
                                 localStorage.getItem('admin_authUser') ||
                                 sessionStorage.getItem('client_authUser') ||
                                 sessionStorage.getItem('admin_authUser');
 
-        const hasAlreadyCleared = sessionStorage.getItem('magicLinkCleared');
-
         if (hasExistingAuth && !hasAlreadyCleared) {
           console.log('🧹 Existing auth detected - clearing and reloading to process magic link cleanly');
-          // Set flag BEFORE clearing to prevent loop
-          sessionStorage.setItem('magicLinkCleared', 'true');
           localStorage.clear();
           sessionStorage.clear();
-          sessionStorage.setItem('magicLinkCleared', 'true'); // Restore flag after clear
-          // Reload with the same URL to process magic link on clean slate
-          window.location.reload();
+          // Add flag to URL to prevent loop on reload
+          const currentUrl = new URL(window.location.href);
+          currentUrl.searchParams.set('cleared', '1');
+          window.location.href = currentUrl.toString();
           return;
         }
-
-        // Clear the flag after successful processing
-        sessionStorage.removeItem('magicLinkCleared');
 
         // Call the agent magic-link login endpoint
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
