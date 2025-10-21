@@ -51,6 +51,32 @@ interface EnhancedAuthProviderProps {
   children: ReactNode;
 }
 
+// CRITICAL: One-time check for magic link at module initialization
+// This clears auth storage BEFORE React even starts rendering
+const checkAndClearForMagicLink = (() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasMagicLinkToken = urlParams.has('token');
+  const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
+                           window.location.pathname === '/agent-magic-login';
+
+  if (hasMagicLinkToken && isAgentLoginPath) {
+    console.log('🧹 [INIT] Magic link detected at module load - clearing ALL existing auth storage');
+    console.log('🔍 [INIT] Magic link URL details:', {
+      pathname: window.location.pathname,
+      hasToken: hasMagicLinkToken,
+      fullUrl: window.location.href
+    });
+
+    // Clear ALL auth-related storage immediately
+    localStorage.clear();
+    sessionStorage.clear();
+
+    console.log('✅ [INIT] Auth storage cleared - magic link can now process cleanly');
+    return true;
+  }
+  return false;
+})();
+
 export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ children }) => {
   const [user, setUserState] = useState<AuthUser | null>(null);
 
