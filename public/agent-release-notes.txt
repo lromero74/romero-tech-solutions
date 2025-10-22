@@ -1,13 +1,14 @@
-RTS Monitoring Agent - Version 1.16.30 Release Notes
+RTS Monitoring Agent - Version 1.16.32 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2025-10-21 02:24:05 UTC
+Release Date: 2025-10-22 00:27:50 UTC
 Previous Version: v1.16.20
-Git Commit: cefe17f
+Git Commit: a7f1476
 
 Changes Since v1.16.20:
 ───────────────────────────────────────────────────────────
 
+• feat: Add 'Schedule Service Request' menu item with magic link redirect
 • fix: Parse device limit error before generic error check
 • fix: Improve device limit flow - retry same code after device removal
 • feat: Add passwordless magic link auto-login for free tier device management

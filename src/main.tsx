@@ -7,6 +7,26 @@ import { registerSW } from './utils/serviceWorker';
 // Import form persistence to enable scroll preservation globally
 import './utils/formStatePersistence';
 
+// CRITICAL: Clear auth storage IMMEDIATELY for magic links
+// This must be the FIRST code that runs, before ANY React initialization
+(() => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const hasMagicLinkToken = urlParams.has('token');
+  const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
+                           window.location.pathname === '/agent-magic-login';
+
+  if (hasMagicLinkToken && isAgentLoginPath) {
+    console.log('🧹 [MAIN.TSX] Magic link detected - clearing ALL auth storage IMMEDIATELY');
+    console.log('🔍 [MAIN.TSX] URL at entry point:', window.location.href);
+
+    // Clear ALL storage before React starts
+    localStorage.clear();
+    sessionStorage.clear();
+
+    console.log('✅ [MAIN.TSX] Auth storage cleared at entry point');
+  }
+})();
+
 const compatibility = checkFirefoxCompatibility();
 if (!compatibility.compatible) {
   firefoxDebugLog('Compatibility issues detected', compatibility.issues);
