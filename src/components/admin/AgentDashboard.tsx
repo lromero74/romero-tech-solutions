@@ -46,7 +46,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const canViewAgents = checkPermission('view.agents.enable');
   const canManageAgents = checkPermission('manage.agents.enable');
   const canCreateTokens = checkPermission('create.agent_tokens.enable');
-  const canEditAgents = checkPermission('edit.agents.enable');
+  const canEditAgents = checkPermission('modify.agents.enable');
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -173,7 +173,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       setPermissionDenied({
         show: true,
         action: 'Edit Agent',
-        requiredPermission: 'edit.agents.enable',
+        requiredPermission: 'modify.agents.enable',
         message: 'You do not have permission to edit agents'
       });
       return;

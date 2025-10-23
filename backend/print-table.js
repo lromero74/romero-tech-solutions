@@ -96,13 +96,27 @@ function printTable(rows, tableName) {
   console.log(colors.border + bottomBorder + colors.reset);
 }
 
+async function readStdin() {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    process.stdin.on('data', chunk => {
+      data += chunk;
+    });
+    process.stdin.on('end', () => {
+      resolve(data);
+    });
+    process.stdin.on('error', reject);
+  });
+}
+
 async function main() {
   const args = process.argv.slice(2);
 
-  if (args.length === 0) {
+  if (args.length === 0 && process.stdin.isTTY) {
     console.log('Usage:');
     console.log('  node print-table.js <table_name> [limit]');
     console.log('  node print-table.js --sql "<custom_sql_query>"');
+    console.log('  node print-table.js --sql < migration.sql     # Read SQL from file');
     console.log('  node print-table.js --list                    # List all tables');
     console.log('  node print-table.js --describe <table_name>   # Describe table structure');
     console.log('  node print-table.js --sizes                   # Show table sizes');
@@ -115,6 +129,7 @@ async function main() {
     console.log('  node print-table.js --list');
     console.log('  node print-table.js --describe users');
     console.log('  node print-table.js --sql "SELECT email FROM users WHERE is_active = true"');
+    console.log('  node print-table.js --sql < backend/migrations/001_init.sql');
     process.exit(1);
   }
 
@@ -124,8 +139,15 @@ async function main() {
     let queryText, queryLabel, result;
 
     // Handle different flags
-    if (args[0] === '--sql' && args[1]) {
-      queryText = args[1];
+    if (args[0] === '--sql') {
+      // Check if SQL is provided as argument or from stdin
+      if (args[1]) {
+        queryText = args[1];
+      } else if (!process.stdin.isTTY) {
+        queryText = await readStdin();
+      } else {
+        throw new Error('No SQL query provided. Use: --sql "query" or --sql < file.sql');
+      }
       queryLabel = 'Custom Query';
       result = await query(queryText);
     } else if (args[0] === '--list') {
@@ -169,8 +191,13 @@ async function main() {
       queryLabel = tableName;
     }
 
-    // Print the table
-    printTable(result.rows, queryLabel);
+    // Print the table (only if there are rows to display)
+    if (result.rows && result.rows.length > 0) {
+      printTable(result.rows, queryLabel);
+    } else {
+      console.log(`\n${colors.header}${queryLabel}${colors.reset}`);
+      console.log('Query executed successfully (no rows returned).');
+    }
 
   } catch (error) {
     console.error('Error:', error.message);

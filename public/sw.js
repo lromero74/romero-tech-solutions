@@ -1,6 +1,6 @@
-const CACHE_NAME = 'romero-tech-v1.101.92';
-const STATIC_CACHE_NAME = 'romero-tech-static-v1.101.92';
-const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.101.92';
+const CACHE_NAME = 'romero-tech-v1.101.93';
+const STATIC_CACHE_NAME = 'romero-tech-static-v1.101.93';
+const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.101.93';
 
 // Resources to cache immediately
 const STATIC_ASSETS = [
