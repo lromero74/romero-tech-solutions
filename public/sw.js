@@ -1,6 +1,6 @@
-const CACHE_NAME = 'romero-tech-v1.101.94';
-const STATIC_CACHE_NAME = 'romero-tech-static-v1.101.94';
-const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.101.94';
+const CACHE_NAME = 'romero-tech-v1.101.95';
+const STATIC_CACHE_NAME = 'romero-tech-static-v1.101.95';
+const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.101.95';
 
 // Resources to cache immediately
 const STATIC_ASSETS = [
@@ -41,7 +41,7 @@ self.addEventListener('activate', (event) => {
 
   event.waitUntil(
     Promise.all([
-      // Clean up old caches
+      // Clean up ALL old caches (more aggressive for Safari)
       caches.keys().then((cacheNames) => {
         return Promise.all(
           cacheNames.map((cacheName) => {
@@ -54,9 +54,17 @@ self.addEventListener('activate', (event) => {
           })
         );
       }),
-      // Take control of all clients
+      // Take control of all clients immediately
       self.clients.claim()
-    ])
+    ]).then(() => {
+      // Force reload all clients (Safari compatibility)
+      return self.clients.matchAll({ type: 'window' }).then((clients) => {
+        clients.forEach((client) => {
+          console.log('SW: Reloading client after activation');
+          client.navigate(client.url);
+        });
+      });
+    })
   );
 });
 
