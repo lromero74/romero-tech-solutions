@@ -34,6 +34,7 @@ import TrialConversionModal from '../TrialConversionModal';
 import AlertConfigurationManager from '../AlertConfigurationManager';
 import AlertHistoryDashboard from '../AlertHistoryDashboard';
 import AlertSubscriptionManager from '../AlertSubscriptionManager';
+import MyAlertSubscriptions from '../MyAlertSubscriptions';
 import AlertNotificationLogs from '../AlertNotificationLogs';
 import EscalationPolicyManager from '../EscalationPolicyManager';
 import PolicyAutomationDashboard from '../PolicyAutomationDashboard';
@@ -1267,7 +1268,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return <AlertHistoryDashboard onNavigateToAgent={onNavigateToAgentFromAlert} />;
 
       case 'alert-subscriptions':
-        return <AlertSubscriptionManager />;
+        // Show full admin view for admin/executive, self-service view for others
+        const isAdminOrExecutive = user?.role === 'admin' || user?.role === 'executive';
+        return isAdminOrExecutive ? <AlertSubscriptionManager /> : <MyAlertSubscriptions />;
 
       case 'alert-notification-logs':
         return <AlertNotificationLogs />;

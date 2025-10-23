@@ -267,16 +267,26 @@ export interface AgentMetric {
 export interface AgentAlert {
   id: string;
   agent_device_id: string;
-  alert_rule_id: string | null;
+  agent_alert_id?: string | null;
+  alert_rule_id?: string | null;
   alert_type: string;
+  alert_name?: string | null;
   severity: 'info' | 'warning' | 'critical';
-  message: string;
-  metric_snapshot: Record<string, unknown> | null;
+  message?: string;
+  alert_message?: string; // Alternative field name from agent_alert_history
+  metric_value?: number | null;
+  threshold_value?: number | null;
+  metric_snapshot?: Record<string, unknown> | null;
   status: 'active' | 'acknowledged' | 'resolved';
+  triggered_at?: string;
   created_at: string;
   acknowledged_at: string | null;
   acknowledged_by: string | null;
   resolved_at: string | null;
+  resolution_notes?: string | null;
+  notification_sent?: boolean | null;
+  notification_sent_at?: string | null;
+  service_request_created?: string | null;
 }
 
 export interface AgentCommand {

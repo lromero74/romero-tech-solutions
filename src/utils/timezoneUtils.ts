@@ -4,6 +4,7 @@
  */
 
 import { RoleBasedStorage } from './roleBasedStorage';
+import api from '../services/apiService';
 
 /**
  * Common timezones grouped by region for timezone selector
@@ -241,5 +242,140 @@ export function isValidTimezone(timezone: string): boolean {
     return true;
   } catch (error) {
     return false;
+  }
+}
+
+/**
+ * Save user's timezone preference to backend
+ * @param timezone IANA timezone string
+ * @param userType 'employee' or 'client'
+ * @returns Promise<boolean> Success status
+ */
+export async function saveUserTimezone(timezone: string, userType: 'employee' | 'client' = 'employee'): Promise<boolean> {
+  try {
+    // Validate timezone before saving
+    if (!isValidTimezone(timezone)) {
+      console.error('Invalid timezone:', timezone);
+      return false;
+    }
+
+    // Determine the correct endpoint based on user type
+    const endpoint = userType === 'employee'
+      ? '/employees/timezone'
+      : '/client/settings/timezone';
+
+    // Save to backend
+    const response = await api.post(endpoint, { timezone });
+
+    if (response.data.success) {
+      console.log(`✅ Timezone preference saved to backend: ${timezone}`);
+
+      // Update the auth user in storage
+      try {
+        const authUser = RoleBasedStorage.getItem('authUser');
+        if (authUser) {
+          const user = JSON.parse(authUser);
+          user.timezonePreference = timezone;
+          RoleBasedStorage.setItem('authUser', JSON.stringify(user));
+          console.log('✅ Updated timezone in auth storage');
+        }
+      } catch (storageError) {
+        console.warn('Failed to update timezone in storage:', storageError);
+      }
+
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.error('Error saving user timezone:', error);
+    return false;
+  }
+}
+
+/**
+ * Fetch user's timezone preference from backend
+ * @param userType 'employee' or 'client'
+ * @returns Promise<string> Timezone string (defaults to detected timezone on error)
+ */
+export async function fetchUserTimezone(userType: 'employee' | 'client' = 'employee'): Promise<string> {
+  try {
+    const endpoint = userType === 'employee'
+      ? '/employees/timezone'
+      : '/client/settings/timezone';
+
+    const response = await api.get(endpoint);
+
+    if (response.data.success && response.data.timezone) {
+      const timezone = response.data.timezone;
+      console.log(`📍 Fetched timezone from backend: ${timezone}`);
+
+      // Update the auth user in storage
+      try {
+        const authUser = RoleBasedStorage.getItem('authUser');
+        if (authUser) {
+          const user = JSON.parse(authUser);
+          user.timezonePreference = timezone;
+          RoleBasedStorage.setItem('authUser', JSON.stringify(user));
+        }
+      } catch (storageError) {
+        console.warn('Failed to update timezone in storage:', storageError);
+      }
+
+      return timezone;
+    }
+
+    // If no preference set, return detected timezone
+    return detectUserTimezone();
+  } catch (error) {
+    console.error('Error fetching user timezone:', error);
+    return detectUserTimezone();
+  }
+}
+
+/**
+ * Initialize user's timezone preference on login
+ * Detects browser timezone and saves it if user has no preference set
+ * @param userType 'employee' or 'client'
+ * @returns Promise<string> The timezone that was set (detected or existing)
+ */
+export async function initializeUserTimezone(userType: 'employee' | 'client' = 'employee'): Promise<string> {
+  try {
+    // First, try to fetch existing preference from backend
+    const existingTimezone = await fetchUserTimezone(userType);
+
+    // Check if this is a stored preference (not just the default fallback)
+    try {
+      const authUser = RoleBasedStorage.getItem('authUser');
+      if (authUser) {
+        const user = JSON.parse(authUser);
+        if (user.timezonePreference && user.timezonePreference === existingTimezone) {
+          console.log(`📍 Using existing timezone preference: ${existingTimezone}`);
+          return existingTimezone;
+        }
+      }
+    } catch (storageError) {
+      console.warn('Failed to check stored timezone:', storageError);
+    }
+
+    // No preference set or matches default - detect browser timezone and save it
+    const browserTimezone = detectUserTimezone();
+    console.log(`📍 Detected browser timezone: ${browserTimezone}`);
+
+    // Only save if different from the backend default (America/Los_Angeles)
+    if (browserTimezone !== 'America/Los_Angeles' || existingTimezone !== browserTimezone) {
+      const saved = await saveUserTimezone(browserTimezone, userType);
+
+      if (saved) {
+        console.log(`📍 Initialized timezone preference: ${browserTimezone}`);
+        return browserTimezone;
+      }
+    }
+
+    // Return the browser timezone for UI use
+    return browserTimezone;
+  } catch (error) {
+    console.error('Error initializing user timezone:', error);
+    return detectUserTimezone(); // Fallback to browser detection
   }
 }

@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Plus, Edit2, Trash2, Mail, MessageSquare, Globe, BellRing, Clock, Shield } from 'lucide-react';
+import { Bell, Plus, Edit2, Trash2, Mail, MessageSquare, Globe, BellRing, Clock } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import api from '../../services/apiService';
 import SubscriptionEditorModal from './SubscriptionEditorModal';
 
 interface AlertSubscription {
   id: number;
-  employee_id: string;
-  first_name: string;
-  last_name: string;
-  employee_email: string;
   business_id?: string;
   business_name?: string;
   service_location_id?: string;
@@ -32,42 +28,41 @@ interface AlertSubscription {
   created_at: string;
 }
 
-const AlertSubscriptionManager: React.FC = () => {
+const MyAlertSubscriptions: React.FC = () => {
   const [subscriptions, setSubscriptions] = useState<AlertSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editingSubscription, setEditingSubscription] = useState<AlertSubscription | null>(null);
   const [showEditorModal, setShowEditorModal] = useState(false);
-  const [stats, setStats] = useState<any>(null);
+  const [userTimezone, setUserTimezone] = useState<string>('America/Los_Angeles');
 
   useEffect(() => {
     loadSubscriptions();
-    loadStats();
   }, []);
 
   const loadSubscriptions = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/admin/alerts/subscriptions');
-      // Backend returns { success: true, data: [...] }
-      // Axios puts this in response.data, so response.data.data is the array
-      const subscriptionsData = Array.isArray(response.data) ? response.data : (response.data.data || []);
+      const response = await api.get('/admin/alerts/my-subscriptions');
+
+      // Backend returns { success: true, data: [...], timezone: 'America/New_York' }
+      const subscriptionsData = Array.isArray(response.data)
+        ? response.data
+        : (response.data.data || []);
+
       setSubscriptions(subscriptionsData);
+
+      // Store user's timezone from response if available
+      if (response.data.timezone) {
+        setUserTimezone(response.data.timezone);
+      }
+
       setError(null);
     } catch (err: any) {
-      console.error('Failed to load alert subscriptions:', err);
-      setError(err.message || 'Failed to load alert subscriptions');
+      console.error('Failed to load my subscriptions:', err);
+      setError(err.message || 'Failed to load your alert subscriptions');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const loadStats = async () => {
-    try {
-      const response = await api.get('/admin/alerts/subscription-stats');
-      setStats(response.data.data);
-    } catch (err: any) {
-      console.error('Failed to load subscription stats:', err);
     }
   };
 
@@ -89,16 +84,14 @@ const AlertSubscriptionManager: React.FC = () => {
     try {
       await api.delete(`/admin/alerts/subscriptions/${subscription.id}`);
       await loadSubscriptions();
-      await loadStats();
     } catch (err: any) {
       console.error('Failed to delete subscription:', err);
-      alert('Failed to delete alert subscription');
+      alert('Failed to delete alert subscription. You may not have permission to delete this subscription.');
     }
   };
 
   const handleSaveSubscription = async () => {
     await loadSubscriptions();
-    await loadStats();
     setShowEditorModal(false);
     setEditingSubscription(null);
   };
@@ -130,7 +123,7 @@ const AlertSubscriptionManager: React.FC = () => {
       <div className={`flex items-center justify-center p-8 ${themeClasses.bg.card} rounded-lg border ${themeClasses.border.primary}`}>
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <p className={themeClasses.text.primary}>Loading subscriptions...</p>
+          <p className={themeClasses.text.primary}>Loading your subscriptions...</p>
         </div>
       </div>
     );
@@ -157,10 +150,10 @@ const AlertSubscriptionManager: React.FC = () => {
         <div>
           <h2 className={`text-2xl font-bold ${themeClasses.text.primary}`}>
             <Bell className="inline-block w-6 h-6 mr-2" />
-            Alert Subscriptions
+            My Alert Subscriptions
           </h2>
           <p className={`mt-1 text-sm ${themeClasses.text.secondary}`}>
-            Manage your alert notification preferences
+            Manage your personal alert notification preferences
           </p>
         </div>
         <button
@@ -172,44 +165,33 @@ const AlertSubscriptionManager: React.FC = () => {
         </button>
       </div>
 
-      {/* Statistics Cards */}
-      {stats && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className={`${themeClasses.bg.card} p-4 rounded-lg border ${themeClasses.border.primary}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${themeClasses.text.secondary}`}>Active Subscriptions</p>
-                <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>{stats.active_employee_subs}</p>
-              </div>
-              <Bell className="w-8 h-8 text-blue-500 dark:text-blue-400" />
-            </div>
+      {/* Info Banner */}
+      <div className={`${themeClasses.bg.secondary} border ${themeClasses.border.primary} rounded-lg p-4`}>
+        <div className="flex items-start gap-3">
+          <Bell className={`w-5 h-5 ${themeClasses.text.link} mt-0.5`} />
+          <div>
+            <p className={`text-sm ${themeClasses.text.primary} font-medium`}>
+              About Alert Subscriptions
+            </p>
+            <p className={`text-sm ${themeClasses.text.secondary} mt-1`}>
+              Create custom alert subscriptions to receive notifications for specific agents, locations, or businesses.
+              Configure quiet hours to avoid notifications during specific times. All times are displayed in your timezone: <strong>{userTimezone}</strong>
+            </p>
           </div>
-          <div className={`${themeClasses.bg.card} p-4 rounded-lg border ${themeClasses.border.primary}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${themeClasses.text.secondary}`}>Inactive</p>
-                <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>{stats.inactive_employee_subs}</p>
-              </div>
-              <BellRing className={`w-8 h-8 ${themeClasses.text.muted}`} />
+        </div>
+      </div>
+
+      {/* Subscriptions Count */}
+      {subscriptions.length > 0 && (
+        <div className={`${themeClasses.bg.card} p-4 rounded-lg border ${themeClasses.border.primary}`}>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className={`text-sm ${themeClasses.text.secondary}`}>Active Subscriptions</p>
+              <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>
+                {subscriptions.filter(s => s.enabled).length}
+              </p>
             </div>
-          </div>
-          <div className={`${themeClasses.bg.card} p-4 rounded-lg border ${themeClasses.border.primary}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${themeClasses.text.secondary}`}>Subscribed Employees</p>
-                <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>{stats.subscribed_employees}</p>
-              </div>
-              <Shield className={`w-8 h-8 ${themeClasses.text.success}`} />
-            </div>
-          </div>
-          <div className={`${themeClasses.bg.card} p-4 rounded-lg border ${themeClasses.border.primary}`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className={`text-sm ${themeClasses.text.secondary}`}>Client Subscriptions</p>
-                <p className={`text-2xl font-bold ${themeClasses.text.primary}`}>{stats.active_client_subs}</p>
-              </div>
-              <Globe className="w-8 h-8 text-purple-500 dark:text-purple-400" />
-            </div>
+            <Bell className="w-8 h-8 text-blue-500 dark:text-blue-400" />
           </div>
         </div>
       )}
@@ -347,4 +329,4 @@ const AlertSubscriptionManager: React.FC = () => {
   );
 };
 
-export default AlertSubscriptionManager;
+export default MyAlertSubscriptions;

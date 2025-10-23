@@ -16,6 +16,7 @@ import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChartECharts from './MetricsChartECharts';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
 import AssetInventory from './agent-details/AssetInventory';
+import AlertHistory from './agent-details/AlertHistory';
 import { websocketService } from '../../services/websocketService';
 import { useSharedChartSettings } from './MetricsChartECharts/hooks/useSharedChartSettings';
 import ExecutionDetailsModal from './modals/ExecutionDetailsModal';
@@ -979,7 +980,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       <CurrentMetrics latestMetrics={latestMetrics} />
       {/* Metrics History Charts */}
       {metricsHistory.length > 0 && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-metrics-section>
           <div className="flex items-center justify-between">
             <h3 className={`text-xl font-semibold ${themeClasses.text.primary} flex items-center`}>
               <TrendingUp className="w-6 h-6 mr-2" />
@@ -1292,46 +1293,22 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
 
           {/* Alerts Tab */}
           {activeTab === 'alerts' && (
-            <div className="space-y-3">
-              {alerts.length === 0 ? (
-                <div className="text-center py-8">
-                  <Bell className={`w-12 h-12 mx-auto mb-3 ${themeClasses.text.muted}`} />
-                  <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noActiveAlerts', undefined, 'No active alerts')}</p>
-                </div>
-              ) : (
-                alerts.map((alert) => (
-                  <div
-                    key={alert.id}
-                    className={`p-4 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover}`}
-                  >
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <span className={`px-2 py-1 rounded text-xs font-medium ${getSeverityBadge(alert.severity)}`}>
-                            {alert.severity.toUpperCase()}
-                          </span>
-                          <span className={`text-xs ${themeClasses.text.muted}`}>
-                            {formatRelativeTime(alert.created_at)}
-                          </span>
-                        </div>
-                        <p className={`text-sm ${themeClasses.text.primary} mb-2`}>{alert.message}</p>
-                        <p className={`text-xs ${themeClasses.text.secondary}`}>
-                          {t('agentDetails.labels.type', undefined, 'Type')}: {alert.alert_type}
-                        </p>
-                      </div>
-                      {canManageAgents && alert.status === 'active' && (
-                        <button
-                          onClick={() => handleAcknowledgeAlert(alert.id)}
-                          className="ml-4 px-3 py-1 text-xs font-medium text-blue-600 hover:text-blue-800"
-                        >
-                          {t('agentDetails.actions.acknowledge', undefined, 'Acknowledge')}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
+            <AlertHistory
+              agentId={agentId}
+              onNavigateToMetric={(timestamp, resource) => {
+                // Switch to overview tab to show metrics
+                setActiveTab('overview');
+                // Switch to the correct resource tab
+                setActiveResourceTab(resource);
+                // Scroll to metrics section (delayed to allow tab switch)
+                setTimeout(() => {
+                  const metricsSection = document.querySelector('[data-metrics-section]');
+                  if (metricsSection) {
+                    metricsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }, 100);
+              }}
+            />
           )}
 
           {/* Commands Tab */}

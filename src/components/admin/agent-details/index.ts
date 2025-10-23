@@ -17,5 +17,6 @@ export { SecurityStatus } from './SecurityStatus';
 export { FailedLoginAttempts } from './FailedLoginAttempts';
 export { ServiceMonitoring } from './ServiceMonitoring';
 export { OSEndOfLifeStatus } from './OSEndOfLifeStatus';
+export { default as AlertHistory } from './AlertHistory';
 export * from './types';
 export * from './utils';

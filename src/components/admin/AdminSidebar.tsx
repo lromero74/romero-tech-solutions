@@ -156,6 +156,11 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
   const filteredNavigationGroups = navigationGroups.map(group => ({
     ...group,
     items: group.items.filter(item => {
+      // Block technicians from seeing Alert Subscriptions
+      if (item.id === 'alert-subscriptions' && (user as any)?.role === 'technician') {
+        return false;
+      }
+
       // If item has no permission requirement, always show it
       if (!item.permission) return true;
       // Otherwise, check if user has the required permission
