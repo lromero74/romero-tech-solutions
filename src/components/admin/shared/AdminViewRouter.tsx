@@ -48,6 +48,7 @@ import EditServiceLocationModal from '../AdminServiceLocations_Modals/EditServic
 import AddServiceLocationModal from '../AdminServiceLocations_Modals/AddServiceLocationModal';
 import { useAdminData, Business, Client } from '../../../contexts/AdminDataContext';
 import { useEnhancedAuth } from '../../../contexts/EnhancedAuthContext';
+import { usePermissionContext } from '../../../contexts/PermissionContext';
 import { agentService, type AgentDevice } from '../../../services/agentService';
 import { useEmployeeFilters } from '../../../hooks/admin/useEmployeeFilters';
 import { useClientFilters } from '../../../hooks/admin/useClientFilters';
@@ -143,6 +144,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
   // Get current user for authorization checks
   const { user, isAuthenticated } = useEnhancedAuth();
+  const { hasPermission } = usePermissionContext();
 
   // NOTE: We no longer poll refreshOnlineStatus() on view changes because we have WebSocket
   // for real-time employee status updates. The WebSocket connection is managed in AdminDataContext
@@ -1268,9 +1270,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
         return <AlertHistoryDashboard onNavigateToAgent={onNavigateToAgentFromAlert} />;
 
       case 'alert-subscriptions':
-        // Show full admin view for admin/executive, self-service view for others
-        const isAdminOrExecutive = user?.role === 'admin' || user?.role === 'executive';
-        return isAdminOrExecutive ? <AlertSubscriptionManager /> : <MyAlertSubscriptions />;
+        // Show full admin view if user can view all subscriptions, otherwise self-service view
+        const canViewAllSubscriptions = hasPermission('alert_subscriptions.view_all');
+        return canViewAllSubscriptions ? <AlertSubscriptionManager /> : <MyAlertSubscriptions />;
 
       case 'alert-notification-logs':
         return <AlertNotificationLogs />;

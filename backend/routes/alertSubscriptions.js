@@ -8,6 +8,7 @@
 import express from 'express';
 import { query } from '../config/database.js';
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
+import { requirePermission, requirePermissionOrSelf } from '../middleware/permissionMiddleware.js';
 import {
   convertLocalTimeToUTC,
   convertUTCToLocalTime,
@@ -16,15 +17,6 @@ import {
 } from '../utils/timezoneHelper.js';
 
 const router = express.Router();
-
-/**
- * Helper function to check if user is a technician
- * @param {object} user - req.user object from auth middleware
- * @returns {boolean} - True if user is a technician
- */
-function isTechnician(user) {
-  return user && user.role === 'technician';
-}
 
 /**
  * Helper function to validate scope access (placeholder for future RBAC integration)
@@ -41,13 +33,30 @@ async function canAccessScope(employeeId, scope) {
 }
 
 /**
- * Get all alert subscriptions (Admin only)
+ * Helper function to get employee_id from subscription (for requirePermissionOrSelf middleware)
+ * @param {object} req - Express request object
+ * @returns {Promise<string|null>} - Employee UUID or null
+ */
+async function getSubscriptionOwnerId(req) {
+  try {
+    const { id } = req.params;
+    const result = await query('SELECT employee_id FROM alert_subscribers WHERE id = $1', [id]);
+    return result.rows[0]?.employee_id || null;
+  } catch (error) {
+    console.error('Error getting subscription owner:', error);
+    return null;
+  }
+}
+
+/**
+ * Get all alert subscriptions
  * GET /api/admin/alerts/subscriptions
  *
  * Returns all alert subscriptions with employee and scope details
  * Times are converted from UTC to the requesting user's timezone
+ * Requires: alert_subscriptions.view_all permission
  */
-router.get('/subscriptions', authMiddleware, requireEmployee, async (req, res) => {
+router.get('/subscriptions', authMiddleware, requireEmployee, requirePermission('alert_subscriptions.view_all'), async (req, res) => {
   try {
     // Get user's timezone preference
     const userTimezone = await getUserTimezone(req.user.id, 'employee');
@@ -195,16 +204,11 @@ router.get('/subscription-stats', authMiddleware, requireEmployee, async (req, r
  * - quiet_hours_end: time in LOCAL timezone (e.g., '06:00')
  * - quiet_hours_timezone: string (e.g., 'America/New_York') - defaults to user's preference
  * - enabled: boolean
+ *
+ * Requires: alert_subscriptions.manage_own permission (or manage_all if creating for others)
  */
-router.post('/subscriptions', authMiddleware, requireEmployee, async (req, res) => {
+router.post('/subscriptions', authMiddleware, requireEmployee, requirePermissionOrSelf('alert_subscriptions.manage_all', (req) => req.body.employee_id || req.user.id), async (req, res) => {
   try {
-    // Block technicians from creating subscriptions
-    if (isTechnician(req.user)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Technicians are not authorized to create alert subscriptions'
-      });
-    }
 
     const {
       employee_id,
@@ -358,17 +362,11 @@ router.post('/subscriptions', authMiddleware, requireEmployee, async (req, res) 
 /**
  * Update an alert subscription
  * PUT /api/admin/alerts/subscriptions/:id
+ *
+ * Requires: alert_subscriptions.manage_own permission (or manage_all if updating others' subscriptions)
  */
-router.put('/subscriptions/:id', authMiddleware, requireEmployee, async (req, res) => {
+router.put('/subscriptions/:id', authMiddleware, requireEmployee, requirePermissionOrSelf('alert_subscriptions.manage_all', getSubscriptionOwnerId), async (req, res) => {
   try {
-    // Block technicians from updating subscriptions
-    if (isTechnician(req.user)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Technicians are not authorized to update alert subscriptions'
-      });
-    }
-
     const { id } = req.params;
     const {
       business_id,
@@ -389,7 +387,7 @@ router.put('/subscriptions/:id', authMiddleware, requireEmployee, async (req, re
       enabled
     } = req.body;
 
-    // Check if subscription exists and verify ownership
+    // Check if subscription exists
     const checkQuery = 'SELECT id, employee_id FROM alert_subscribers WHERE id = $1';
     const checkResult = await query(checkQuery, [id]);
 
@@ -397,18 +395,6 @@ router.put('/subscriptions/:id', authMiddleware, requireEmployee, async (req, re
       return res.status(404).json({
         success: false,
         message: 'Alert subscription not found'
-      });
-    }
-
-    // Verify user owns this subscription (or is admin)
-    const subscription = checkResult.rows[0];
-    const isOwner = subscription.employee_id === req.user.id;
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'executive';
-
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only update your own subscriptions'
       });
     }
 
@@ -501,20 +487,14 @@ router.put('/subscriptions/:id', authMiddleware, requireEmployee, async (req, re
 /**
  * Delete an alert subscription
  * DELETE /api/admin/alerts/subscriptions/:id
+ *
+ * Requires: alert_subscriptions.manage_own permission (or manage_all if deleting others' subscriptions)
  */
-router.delete('/subscriptions/:id', authMiddleware, requireEmployee, async (req, res) => {
+router.delete('/subscriptions/:id', authMiddleware, requireEmployee, requirePermissionOrSelf('alert_subscriptions.manage_all', getSubscriptionOwnerId), async (req, res) => {
   try {
-    // Block technicians from deleting subscriptions
-    if (isTechnician(req.user)) {
-      return res.status(403).json({
-        success: false,
-        message: 'Technicians are not authorized to delete alert subscriptions'
-      });
-    }
-
     const { id } = req.params;
 
-    // Check if subscription exists and verify ownership
+    // Check if subscription exists
     const checkQuery = 'SELECT id, employee_id FROM alert_subscribers WHERE id = $1';
     const checkResult = await query(checkQuery, [id]);
 
@@ -522,18 +502,6 @@ router.delete('/subscriptions/:id', authMiddleware, requireEmployee, async (req,
       return res.status(404).json({
         success: false,
         message: 'Alert subscription not found'
-      });
-    }
-
-    // Verify user owns this subscription (or is admin)
-    const subscription = checkResult.rows[0];
-    const isOwner = subscription.employee_id === req.user.id;
-    const isAdmin = req.user.role === 'admin' || req.user.role === 'executive';
-
-    if (!isOwner && !isAdmin) {
-      return res.status(403).json({
-        success: false,
-        message: 'You can only delete your own subscriptions'
       });
     }
 
@@ -558,8 +526,9 @@ router.delete('/subscriptions/:id', authMiddleware, requireEmployee, async (req,
  * GET /api/admin/alerts/my-subscriptions
  *
  * Returns subscriptions for the authenticated employee with times in their timezone
+ * Requires: alert_subscriptions.view_own permission
  */
-router.get('/my-subscriptions', authMiddleware, async (req, res) => {
+router.get('/my-subscriptions', authMiddleware, requireEmployee, requirePermission('alert_subscriptions.view_own'), async (req, res) => {
   try {
     // Get user's timezone preference
     const userTimezone = await getUserTimezone(req.user.id, 'employee');
