@@ -5,7 +5,7 @@
  * All times are stored in UTC in the database and converted for display.
  */
 
-const { query } = require('../config/database');
+import { query } from '../config/database.js';
 
 /**
  * Convert local time string to UTC time
@@ -244,7 +244,7 @@ function isInQuietHours(quietHoursStartUTC, quietHoursEndUTC) {
   }
 }
 
-module.exports = {
+export {
   convertLocalTimeToUTC,
   convertUTCToLocalTime,
   validateTimezone,
