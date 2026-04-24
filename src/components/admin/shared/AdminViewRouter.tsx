@@ -687,7 +687,7 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
             setBusinessClientCountFilter={businessFilters.setClientCountFilter}
             clearBusinessFilters={businessFilters.clearFilters}
             // Loading state
-            loadingBusinessOperations={loadingBusinessOperations}
+            loadingBusinessOperations={businessHandlers.loadingBusinessOperations}
             getFilteredAndSortedBusinesses={() => {
               // IMPORTANT: Use enhancedBusinesses instead of original businesses
               // First apply the hook's filtering logic to ENHANCED data

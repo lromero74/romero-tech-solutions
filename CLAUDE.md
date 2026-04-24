@@ -13,7 +13,7 @@
 - Never commit without asking for permission
 - Never push without asking for permission
 - production app url is: https://romerotechsolutions.com
-- employees log in via: https://romerotechsolutions.com/employees
+- employees log in via: https://romerotechsolutions.com/employee  (singular — `/employees` falls through to 'home' in src/utils/routing.ts)
 - clients/users log in via: https://romerotechsolutions.com/clogin
 - script exists to run SQL commands against database: /Users/louis/New/01_Projects/RomeroTechSolutions/scripts/table --sql
 - always consider what a security analysis would expect when developing
