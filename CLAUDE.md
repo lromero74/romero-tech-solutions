@@ -1,17 +1,13 @@
-- project root: /Users/louis/New/01_Projects/RomeroTechSolutions
+- project root: /Users/louis/New/01_Projects/RomeroTechSolutions  (home-symlinked at ~/romero-tech-solutions)
 - frontend root: /Users/louis/New/01_Projects/RomeroTechSolutions/src
 - backend root: /Users/louis/New/01_Projects/RomeroTechSolutions/backend
 - dev environment frontend: localhost
 - dev environment backend: localhost
 - script to restart dev environment: <project root>/restart-services.sh
-- production environment front end: AWS Amplify
-- production environment back end: AWS EC2 (accessible vi "ssh botmanager")
-- dev an prod share database: Amazon RDS postgres
-- aws cli is installed
-- you have access to aws cli with my credentials stored in: /Users/louis/.aws
-- AWS Secrets manager is used fo database connection
-- Never commit without asking for permission
-- Never push without asking for permission
+- production: testbot server (ssh testbot) — nginx serves dist/ for www+apex, proxies api subdomain to node on :3001. Systemd unit: romero-tech-solutions-backend.service. See memory file reference_testbot_romerotechsolutions_stack.md for full layout.
+- production database: local postgres-15 on testbot, DB `romerotechsolutions` owned by role `romero_app` (loopback only, credentials in backend/.env on testbot). Amazon RDS is retired as of 2026-04-24.
+- aws cli is installed with credentials in /Users/louis/.aws. AWS Secrets Manager is NOT used in the testbot stack (backend reads DB_* env vars directly).
+- Request permission before committing or pushing. Once granted, proceed via /shipit. Release flow is github origin → testbot git pull — never rsync individual files.
 - production app url is: https://romerotechsolutions.com
 - employees log in via: https://romerotechsolutions.com/employee  (singular — `/employees` falls through to 'home' in src/utils/routing.ts)
 - clients/users log in via: https://romerotechsolutions.com/clogin
@@ -83,11 +79,9 @@ const canModify = checkPermission('modify.businesses.enable');
 {(canModify || canDelete) && <ActionButtons />}
 ```
 - front end expects to be run ineractively (it waits at an input prompt for commands when you start it)
-- never commit unless human says you can
 - before you write code that relies on database queries, check the schema to make sure you are looking for the right things.
 *** IMPORTANT! ** when committing bump src/hooks/useVersionCheck.ts, public/version.json and package.json version numbers
 - no helper scripts you write shall include any secrets
-- no committing unless I tell you to
 - when you rebuild the agent binaries, bump their version number
 - the user experience for all OS versions of the agent should be very similar
 - for the rts-agent: when you build, build installers for all supported systems and when you code, code for user experience being the same for all supported systems
