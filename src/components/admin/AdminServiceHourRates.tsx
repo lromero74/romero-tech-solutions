@@ -95,44 +95,35 @@ const AdminServiceHourRates: React.FC = () => {
     }
   };
 
-  // Get the tier for a specific day and hour (converts Pacific display time to UTC for lookup)
+  // Rate tier rows store Pacific wall-clock semantics directly: dayOfWeek is
+  // the Pacific weekday (0=Sun..6=Sat) and timeStart/timeEnd are the Pacific
+  // HH:MM:SS bounds. The grid cell at (day, hour) maps 1:1 — no Date math,
+  // no DST conversion. (Old code did pacificDate.setHours()/.getUTCHours()
+  // which inherited the browser's current DST offset and shifted by an hour
+  // every spring/fall.)
+  const cellTimeStart = (hour: number) => `${String(hour).padStart(2, '0')}:00:00`;
+  const cellTimeEnd = (hour: number) => `${String((hour + 1) % 24).padStart(2, '0')}:00:00`;
+
   const getTierForCell = (dayOfWeek: number, hour: number): ServiceHourRateTier | null => {
-    // Convert Pacific time to UTC for database lookup
-    const pacificDate = new Date();
-    const currentDayOfWeek = pacificDate.getDay();
-    const daysUntilTarget = (dayOfWeek - currentDayOfWeek + 7) % 7;
-    pacificDate.setDate(pacificDate.getDate() + daysUntilTarget);
-    pacificDate.setHours(hour, 0, 0, 0);
+    const timeStart = cellTimeStart(hour);
+    const timeEnd = cellTimeEnd(hour);
 
-    const utcStartDay = pacificDate.getUTCDay();
-    const utcStartHour = pacificDate.getUTCHours();
-    const utcStartMinutes = pacificDate.getUTCMinutes();
-
-    const pacificEndDate = new Date(pacificDate);
-    pacificEndDate.setHours(pacificEndDate.getHours() + 1);
-    const utcEndHour = pacificEndDate.getUTCHours();
-    const utcEndMinutes = pacificEndDate.getUTCMinutes();
-
-    const utcTimeStart = `${String(utcStartHour).padStart(2, '0')}:${String(utcStartMinutes).padStart(2, '0')}:00`;
-    const utcTimeEnd = `${String(utcEndHour).padStart(2, '0')}:${String(utcEndMinutes).padStart(2, '0')}:00`;
-
-    // First, try to find an exact match using UTC times
+    // Exact match first (the cell's own row).
     const exactMatch = rateTiers.find(tier =>
-      tier.dayOfWeek === utcStartDay &&
       tier.isActive &&
-      tier.timeStart === utcTimeStart &&
-      tier.timeEnd === utcTimeEnd
+      tier.dayOfWeek === dayOfWeek &&
+      tier.timeStart === timeStart &&
+      tier.timeEnd === timeEnd
     );
-
     if (exactMatch) return exactMatch;
 
-    // If no exact match, find any tier that covers this hour in UTC
-    return rateTiers.find(tier =>
-      tier.dayOfWeek === utcStartDay &&
-      tier.isActive &&
-      tier.timeStart <= utcTimeStart &&
-      tier.timeEnd > utcTimeStart
-    ) || null;
+    // Otherwise find any active tier whose [start, end) covers this hour.
+    // 23:00–00:00 wrap is stored as 23:00–00:00; treat 00:00 timeEnd as 24:00.
+    return rateTiers.find(tier => {
+      if (!tier.isActive || tier.dayOfWeek !== dayOfWeek) return false;
+      const adjEnd = tier.timeEnd === '00:00:00' ? '24:00:00' : tier.timeEnd;
+      return tier.timeStart <= timeStart && adjEnd > timeStart;
+    }) || null;
   };
 
   // Handle cell click
@@ -148,55 +139,32 @@ const AdminServiceHourRates: React.FC = () => {
     }
   };
 
-  // Apply tier to a cell directly
+  // Apply tier to a cell directly. Stores Pacific wall-clock semantics
+  // (the cell's day index + its hour-long Pacific window). No UTC math.
   const applyTierToCell = async (day: number, hour: number, tierLevel: number) => {
     setSaveStatus('saving');
     try {
       const selectedTier = TIER_LEVELS_BASE.find(t => t.value === tierLevel);
       if (!selectedTier) return;
 
-      // Convert Pacific time to UTC for database storage
-      // Create a date in Pacific timezone for the selected day/hour
-      const pacificDate = new Date();
-      const currentDayOfWeek = pacificDate.getDay();
-      const daysUntilTarget = (day - currentDayOfWeek + 7) % 7;
-      pacificDate.setDate(pacificDate.getDate() + daysUntilTarget);
-      pacificDate.setHours(hour, 0, 0, 0);
+      const timeStart = cellTimeStart(hour);                    // "HH:00:00"
+      const timeEnd = cellTimeEnd(hour);                        // "(HH+1):00:00", or "00:00:00" for hour=23
 
-      // Get UTC equivalents
-      const utcStartDay = pacificDate.getUTCDay();
-      const utcStartHour = pacificDate.getUTCHours();
-      const utcStartMinutes = pacificDate.getUTCMinutes();
-
-      // End time is 1 hour later
-      const pacificEndDate = new Date(pacificDate);
-      pacificEndDate.setHours(pacificEndDate.getHours() + 1);
-      const utcEndHour = pacificEndDate.getUTCHours();
-      const utcEndMinutes = pacificEndDate.getUTCMinutes();
-
-      const utcTimeStart = `${String(utcStartHour).padStart(2, '0')}:${String(utcStartMinutes).padStart(2, '0')}:00`;
-      const utcTimeEnd = `${String(utcEndHour).padStart(2, '0')}:${String(utcEndMinutes).padStart(2, '0')}:00`;
-
-      console.log('🌍 Time conversion:', {
-        pacific: `Day ${day} ${hour}:00`,
-        utc: `Day ${utcStartDay} ${utcTimeStart}`,
-        utcEnd: `${utcTimeEnd}`
-      });
-
-      // Find existing tier with EXACT same time range in UTC
+      // Find an existing active tier covering this exact cell to update
+      // (rather than creating a duplicate row).
       const exactMatchTier = rateTiers.find(tier =>
-        tier.dayOfWeek === utcStartDay &&
         tier.isActive &&
-        tier.timeStart === utcTimeStart &&
-        tier.timeEnd === utcTimeEnd
+        tier.dayOfWeek === day &&
+        tier.timeStart === timeStart &&
+        tier.timeEnd === timeEnd
       );
 
       const tierData = {
         tierName: selectedTier.label,
         tierLevel: selectedTier.value,
-        dayOfWeek: utcStartDay,
-        timeStart: utcTimeStart.substring(0, 5), // HH:MM format
-        timeEnd: utcTimeEnd.substring(0, 5),     // HH:MM format
+        dayOfWeek: day,
+        timeStart: timeStart.substring(0, 5),  // HH:MM (backend accepts both, but matches existing API shape)
+        timeEnd: timeEnd.substring(0, 5),
         rateMultiplier: customMultipliers[tierLevel],
         colorCode: selectedTier.defaultColor,
         description: '',

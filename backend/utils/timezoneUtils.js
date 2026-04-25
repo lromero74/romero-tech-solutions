@@ -129,34 +129,37 @@ class TimezoneService {
   }
 
   /**
-   * Get day of week and time string for a UTC timestamp
-   * CRITICAL: Database stores tier times in UTC, so we return UTC time!
-   * But day of week is in business timezone (rates can differ by day)
+   * Convert a UTC instant to its Pacific (business-timezone) wall-clock
+   * representation: day-of-week (0–6, Sun=0) + HH:MM:SS.
+   *
+   * Both values are in business timezone — rate-tier rows are stored as
+   * Pacific wall-clock (a "Standard rate Mon–Fri 9am–5pm" policy is the
+   * same wall-clock window summer or winter, even though the underlying
+   * UTC offset shifts across DST).
+   *
    * @param {Date} utcTimestamp - UTC Date object
-   * @returns {{dayOfWeek: number, timeString: string}} Business day of week + UTC time
+   * @returns {{dayOfWeek: number, timeString: string}} Pacific weekday + HH:MM:SS
    */
   getBusinessDayAndTime(utcTimestamp) {
-    // Get day of week in business timezone (rates vary by business day)
     const formatter = new Intl.DateTimeFormat('en-US', {
       timeZone: this.businessTimezone,
-      weekday: 'short'
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
     });
 
     const parts = formatter.formatToParts(utcTimestamp);
-    const weekdayPart = parts.find(p => p.type === 'weekday');
+    const get = (type) => parts.find((p) => p.type === type)?.value;
 
-    // Convert weekday short name to day number (0-6, Sunday=0)
-    const weekdayMap = { 'Sun': 0, 'Mon': 1, 'Tue': 2, 'Wed': 3, 'Thu': 4, 'Fri': 5, 'Sat': 6 };
-    const dayOfWeek = weekdayMap[weekdayPart.value];
+    const weekdayMap = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const dayOfWeek = weekdayMap[get('weekday')];
 
-    // Get time in UTC (because database stores tier times in UTC!)
-    const hours = String(utcTimestamp.getUTCHours()).padStart(2, '0');
-    const minutes = String(utcTimestamp.getUTCMinutes()).padStart(2, '0');
-    const seconds = String(utcTimestamp.getUTCSeconds()).padStart(2, '0');
-    const timeString = `${hours}:${minutes}:${seconds}`;
-
-    // Debug logging
-    console.log(`🕐 UTC ${utcTimestamp.toISOString()} → ${weekdayPart.value} (day ${dayOfWeek}) at ${timeString} UTC`);
+    // Intl returns "24" instead of "00" for midnight under hour12:false in
+    // some locales. Normalize to "00".
+    const hh = (get('hour') === '24' ? '00' : get('hour')).padStart(2, '0');
+    const timeString = `${hh}:${get('minute')}:${get('second')}`;
 
     return { dayOfWeek, timeString };
   }

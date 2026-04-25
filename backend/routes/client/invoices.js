@@ -125,9 +125,15 @@ const calculateCost = async (pool, date, timeStart, timeEnd, baseRate, isFirstRe
   const endMinutes = endHour * 60 + endMin;
   const durationHours = (endMinutes - startMinutes) / 60;
 
-  // Get day of week from date
-  const requestDate = new Date(date);
-  const dayOfWeek = requestDate.getDay();
+  // Day of week from the calendar date itself — parse the YYYY-MM-DD as a
+  // UTC midnight so .getUTCDay() returns the calendar weekday regardless of
+  // server timezone. (Old `new Date(date).getDay()` used the server's local
+  // timezone and returned the wrong day on a UTC server when the input was
+  // parsed as UTC midnight.) This is calendar-date arithmetic, not a
+  // timezone conversion — the day-of-week is the same in any time zone for
+  // a given YYYY-MM-DD label.
+  const [yyyy, mm, dd] = date.split('-').map(Number);
+  const dayOfWeek = new Date(Date.UTC(yyyy, mm - 1, dd)).getUTCDay();
 
   // Load rate tiers for this day
   const tiersQuery = `

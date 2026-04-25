@@ -312,95 +312,45 @@ const ResourceTimeSlotScheduler: React.FC<ResourceTimeSlotSchedulerProps> = ({
     return { hour, minute };
   };
 
-  // Helper function to find rate tier for a given time
-  const findRateTierForTime = (hour: number, minute: number, dayOfWeek: number): RateTier | undefined => {
-    // Convert from user's timezone to UTC
-    // Strategy: Calculate the UTC offset for the user's timezone on this date, then apply it
+  // Find the rate tier that applies to the slot starting at (hour, minute) in
+  // the user's timezone on selectedDate. Rate tiers are stored as Pacific
+  // wall-clock policy (a "Mon–Fri 9am–5pm Pacific" rule applies the same
+  // wall-clock-Pacific window winter or summer, even though the underlying
+  // UTC moment shifts across DST). So:
+  //   1. Build the real UTC instant the slot starts at.
+  //   2. Format that instant in business (Pacific) timezone → get Pacific
+  //      weekday + HH:MM:SS.
+  //   3. Match against tier rows (whose dayOfWeek/timeStart/timeEnd are now
+  //      Pacific wall-clock literals).
+  // The `dayOfWeek` argument is no longer needed — kept for caller-signature
+  // stability, ignored.
+  const findRateTierForTime = (hour: number, minute: number, _dayOfWeek: number): RateTier | undefined => {
+    const utcInstant = createDateFromUserTime(hour, minute);
 
-    const year = selectedDate.getFullYear();
-    const month = selectedDate.getMonth();
-    const day = selectedDate.getDate();
-
-    // Step 1: Calculate the offset between user's timezone and UTC for this specific date
-    // Create a reference UTC date (noon UTC on the selected day)
-    const referenceUTC = new Date(Date.UTC(year, month, day, 12, 0, 0));
-
-    // Format this UTC time as it appears in the user's timezone
-    const partsInUserTZ = new Intl.DateTimeFormat('en-US', {
-      timeZone: userTimezone,
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'short',
       hour: '2-digit',
       minute: '2-digit',
-      hour12: false
-    }).formatToParts(referenceUTC);
+      second: '2-digit',
+      hour12: false,
+    });
+    const parts = fmt.formatToParts(utcInstant);
+    const get = (type: string) => parts.find(p => p.type === type)?.value || '';
+    const weekdayMap: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+    const pacDayOfWeek = weekdayMap[get('weekday')];
+    const hh = (get('hour') === '24' ? '00' : get('hour')).padStart(2, '0');
+    const pacTimeString = `${hh}:${get('minute')}:${get('second')}`;
 
-    const hourInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'hour')?.value || '0');
-    const minuteInUserTZ = parseInt(partsInUserTZ.find(p => p.type === 'minute')?.value || '0');
-
-    // The offset in hours: (time shown in user TZ) - (UTC time)
-    // Example: If it's 12:00 UTC and user sees 08:00 EDT, offset = 8 - 12 = -4
-    const offsetHours = hourInUserTZ - 12;
-    const offsetMinutes = minuteInUserTZ;
-
-    // Step 2: Convert the input hour:minute from user's timezone to UTC
-    // UTC time = user time - offset
-    // Example: User sees 10:00 EDT, offset = -4, so UTC = 10 - (-4) = 14:00 ✓
-    let utcHour = hour - offsetHours;
-    let utcMinute = minute - offsetMinutes;
-
-    // Handle minute overflow/underflow
-    if (utcMinute < 0) {
-      utcMinute += 60;
-      utcHour -= 1;
-    } else if (utcMinute >= 60) {
-      utcMinute -= 60;
-      utcHour += 1;
-    }
-
-    // Create a proper date to handle day changes and get the correct day of week
-    const utcDate = new Date(Date.UTC(year, month, day, utcHour, utcMinute, 0));
-    const utcDayOfWeek = utcDate.getUTCDay();
-    utcHour = utcDate.getUTCHours();
-    utcMinute = utcDate.getUTCMinutes();
-
-    const utcTimeString = `${String(utcHour).padStart(2, '0')}:${String(utcMinute).padStart(2, '0')}:00`;
-
-    // Debug logging to trace timezone conversion
-    if (hour === 8 && minute === 0) {
-      console.log(`🕐 Timezone Debug for ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:`,{
-        userTimezone: userTimezone,
-        inputTime: `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} (user TZ)`,
-        utcOffset: `${offsetHours >= 0 ? '+' : ''}${offsetHours}:${String(Math.abs(offsetMinutes)).padStart(2, '0')}`,
-        utcTime: `${utcTimeString} (Day ${utcDayOfWeek})`,
-        calculation: `${hour}:${String(minute).padStart(2, '0')} - (${offsetHours}:${String(offsetMinutes).padStart(2, '0')}) = ${utcHour}:${String(utcMinute).padStart(2, '0')} UTC`
-      });
-    }
-
-    // Find ALL matching tiers for this UTC day and time (handle overlapping ranges)
     const matchingTiers = rateTiers.filter(tier => {
-      if (tier.dayOfWeek !== utcDayOfWeek) return false;
-
-      // Handle midnight crossing: if timeEnd is "00:00:00", treat it as "24:00:00"
-      const adjustedTimeEnd = tier.timeEnd === '00:00:00' ? '24:00:00' : tier.timeEnd;
-
-      // Compare UTC time strings (both are now in UTC)
-      const matches = utcTimeString >= tier.timeStart && utcTimeString < adjustedTimeEnd;
-
-      // Debug logging for 8am slot
-      if (hour === 8 && minute === 0 && matches) {
-        console.log(`  ✅ Matched tier: ${tier.tierName} (${tier.timeStart}-${tier.timeEnd} UTC, multiplier: ${tier.rateMultiplier}x)`);
-      }
-
-      return matches;
+      if (tier.dayOfWeek !== pacDayOfWeek) return false;
+      const adjEnd = tier.timeEnd === '00:00:00' ? '24:00:00' : tier.timeEnd;
+      return pacTimeString >= tier.timeStart && pacTimeString < adjEnd;
     });
 
-    // If multiple tiers match (overlapping ranges), return the highest priority tier
-    if (matchingTiers.length > 0) {
-      // Sort by tier level descending (Emergency = 3, Premium = 2, Standard = 1)
-      return matchingTiers.sort((a, b) => b.tierLevel - a.tierLevel)[0];
-    }
-
-    // If no exact match, return undefined (no default tier)
-    return undefined;
+    if (matchingTiers.length === 0) return undefined;
+    // Highest tier-level wins on overlap (Emergency > Premium > Standard).
+    return matchingTiers.sort((a, b) => b.tierLevel - a.tierLevel)[0];
   };
 
   // Check if selected time range includes emergency hours
