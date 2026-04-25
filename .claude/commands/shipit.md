@@ -44,16 +44,16 @@ Follow every step exactly:
    git push origin vX.Y.Z
    ```
 
-8. **Deploy to testbot**:
+8. **Deploy to testbot** via the project service script:
    ```bash
-   ssh testbot 'cd ~/romero-tech-solutions && git pull --ff-only origin main && \
-     npm install --no-audit --no-fund && \
-     npm run build && \
-     sudo systemctl restart romero-tech-solutions-backend'
+   # Backend changed (or you're not sure): full restart — pulls deps,
+   # rebuilds dist/, restarts the systemd unit.
+   ssh testbot 'cd ~/romero-tech-solutions && git pull --ff-only origin main && ./service.sh restart --prod'
+
+   # Frontend-only change: rebuild dist/ in place, no restart.
+   ssh testbot 'cd ~/romero-tech-solutions && git pull --ff-only origin main && ./service.sh build'
    ```
-   - If only frontend source changed: the systemctl restart is strictly unnecessary (nginx serves dist/ from disk directly, so the new bundle is live as soon as `npm run build` finishes). Users see a version-check toast and reload.
-   - If backend changed: the restart is required.
-   - If you can't tell: just restart — it costs ~3 seconds.
+   nginx serves dist/ from disk, so a frontend-only rebuild is live the moment `npm run build` finishes; users see a version-check toast and reload. Backend changes need the systemd restart for the new code to load.
 
 9. **Post-ship verification**:
    ```bash
@@ -61,8 +61,8 @@ Follow every step exactly:
    curl -s https://romerotechsolutions.com/version.json
    # Backend healthy
    curl -s https://api.romerotechsolutions.com/api/health
-   # Systemd happy
-   ssh testbot 'sudo systemctl is-active romero-tech-solutions-backend'
+   # Systemd + frontend dist + port collision check
+   ssh testbot './romero-tech-solutions/service.sh status'
    ```
 
 10. **If anything fails**: do not --amend the commit, do not force-push. Fix forward with a new commit + tag. The version-check on the client will auto-reload users to the fixed version.

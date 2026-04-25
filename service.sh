@@ -4,12 +4,12 @@
 # Mirrors the interface used by ~/worship-setlist/service.sh, ~/funder-finder/service.sh,
 # and ~/tampa-re-investor/service.sh — same commands, same flag shape.
 #
-# Unlike worship-setlist, this project's frontend lives on AWS Amplify
-# (https://romerotechsolutions.com via Amplify CDN), not on this host. Only the
-# backend (api.romerotechsolutions.com → 127.0.0.1:3001) runs on testbot. Dev mode
-# is therefore not a toggle on this host — the script accepts --prod for parity
-# with sister projects, and --dev is a no-op that points you at the local dev
-# workflow on your laptop.
+# Post-cutover (2026-04-24) this host runs BOTH the frontend and the backend:
+#   - nginx serves the Vite-built dist/ for romerotechsolutions.com (+ www)
+#   - nginx proxies api.romerotechsolutions.com → 127.0.0.1:3001 (Node backend)
+# So `build` rebuilds dist/, and `restart --prod` rebuilds dist/ + restarts the
+# backend systemd unit. Dev mode (Vite HMR) is a laptop-only thing — the --dev
+# flag is accepted for sister-script parity and points the user at npm run dev.
 #
 # Usage: ./service.sh [start|stop|restart|build|status|logs]
 #        ./service.sh restart --prod [--force]
@@ -179,9 +179,9 @@ show_status() {
 
     local mode
     mode=$(get_current_mode)
-    echo -e "Mode:     ${GREEN}${mode^^}${NC} (backend on testbot; frontend on AWS Amplify)"
-    echo -e "URLs:     https://romerotechsolutions.com (Amplify)"
-    echo -e "          https://api.romerotechsolutions.com (this host, port ${BACKEND_PORT})"
+    echo -e "Mode:     ${GREEN}${mode^^}${NC} (frontend dist/ + backend both served from this host)"
+    echo -e "URLs:     https://romerotechsolutions.com (nginx → dist/)"
+    echo -e "          https://api.romerotechsolutions.com (nginx → port ${BACKEND_PORT})"
     echo ""
 
     echo -n "Backend:  "
@@ -200,7 +200,15 @@ show_status() {
 
     echo ""
     echo -e "Nginx:    ${NGINX_CONF}"
-    echo -e "Frontend: AWS Amplify (deploy via git push to main; not managed here)"
+    if [ -d "${SCRIPT_DIR}/dist" ]; then
+        local dist_size
+        dist_size=$(du -sh "${SCRIPT_DIR}/dist" 2>/dev/null | cut -f1)
+        local dist_mtime
+        dist_mtime=$(stat -c %y "${SCRIPT_DIR}/dist/index.html" 2>/dev/null | cut -d. -f1 || echo unknown)
+        echo -e "Frontend: ${SCRIPT_DIR}/dist (${dist_size}, built ${dist_mtime})"
+    else
+        echo -e "Frontend: ${RED}dist/ missing${NC} — run \`./service.sh build\` to populate"
+    fi
 
     echo ""
     echo -e "${BLUE}Detailed status:${NC}"
@@ -230,7 +238,7 @@ case "${1:-}" in
         echo ""
         start_backend
         echo ""
-        echo -e "${GREEN}Backend started — frontend served by AWS Amplify${NC}"
+        echo -e "${GREEN}Backend started. Frontend dist/ is served by nginx; rebuild with \`./service.sh build\`.${NC}"
         ;;
 
     stop)
@@ -248,8 +256,8 @@ case "${1:-}" in
         for arg in "$@"; do
             case "$arg" in
                 --dev)
-                    echo -e "${YELLOW}--dev is not applicable on this host — frontend is on AWS Amplify.${NC}"
-                    echo -e "${YELLOW}Run \`npm run dev\` on your laptop to develop locally.${NC}"
+                    echo -e "${YELLOW}--dev is not applicable on this host — testbot only runs prod.${NC}"
+                    echo -e "${YELLOW}Run \`npm run dev\` on your laptop for HMR development.${NC}"
                     exit 0
                     ;;
                 --prod)      TARGET_MODE="prod" ;;
@@ -284,6 +292,24 @@ case "${1:-}" in
             exit 1
         fi
 
+        echo -e "${BLUE}Installing backend deps...${NC}"
+        (cd "${BACKEND_DIR}" && npm install --no-audit --no-fund) || {
+            echo -e "${RED}backend npm install failed${NC}"
+            exit 1
+        }
+
+        echo -e "${BLUE}Installing frontend deps...${NC}"
+        (cd "${SCRIPT_DIR}" && npm install --no-audit --no-fund) || {
+            echo -e "${RED}frontend npm install failed${NC}"
+            exit 1
+        }
+
+        echo -e "${BLUE}Building frontend dist/...${NC}"
+        (cd "${SCRIPT_DIR}" && npm run build) || {
+            echo -e "${RED}frontend build failed${NC}"
+            exit 1
+        }
+
         echo -e "${BLUE}Restarting backend...${NC}"
         sudo systemctl restart "$BACKEND_SERVICE"
         sleep 2
@@ -296,22 +322,33 @@ case "${1:-}" in
         fi
 
         echo ""
-        echo -e "${GREEN}Romero Tech Solutions restarted${NC}"
+        echo -e "${GREEN}Romero Tech Solutions restarted (frontend rebuilt + backend up)${NC}"
         ;;
 
     build)
         echo -e "${YELLOW}========================================${NC}"
-        echo -e "${YELLOW}  Backend deps install (no frontend build on testbot)${NC}"
+        echo -e "${YELLOW}  Build (backend deps + frontend dist/)${NC}"
         echo -e "${YELLOW}========================================${NC}"
         echo ""
-        echo -e "${BLUE}Running: cd backend && npm install --omit=dev${NC}"
-        (cd "${BACKEND_DIR}" && npm install --omit=dev) || {
-            echo -e "${RED}npm install failed${NC}"
+        echo -e "${BLUE}Backend npm install...${NC}"
+        (cd "${BACKEND_DIR}" && npm install --no-audit --no-fund) || {
+            echo -e "${RED}backend npm install failed${NC}"
             exit 1
         }
         echo ""
-        echo -e "${GREEN}Backend deps installed${NC}"
-        echo -e "${YELLOW}Frontend build is handled by AWS Amplify on git push.${NC}"
+        echo -e "${BLUE}Frontend npm install...${NC}"
+        (cd "${SCRIPT_DIR}" && npm install --no-audit --no-fund) || {
+            echo -e "${RED}frontend npm install failed${NC}"
+            exit 1
+        }
+        echo ""
+        echo -e "${BLUE}Frontend build (npm run build → dist/)...${NC}"
+        (cd "${SCRIPT_DIR}" && npm run build) || {
+            echo -e "${RED}frontend build failed${NC}"
+            exit 1
+        }
+        echo ""
+        echo -e "${GREEN}Build complete. Note: nginx serves dist/ from disk — no restart needed for frontend-only changes.${NC}"
         ;;
 
     status)
@@ -338,14 +375,14 @@ case "${1:-}" in
         echo "  stop                    Stop backend"
         echo "  restart --prod          Restart backend"
         echo "  restart --prod --force  Restart even if a foreign process holds the port"
-        echo "  build                   npm install backend deps (--omit=dev)"
+        echo "  build                   npm install + npm run build (frontend dist/)"
         echo "  status                  Show service status + port-collision check"
         echo "  logs                    Show recent backend logs"
         echo "  setup-nginx             (no-op; nginx config is hand-managed)"
         echo ""
         echo "Notes:"
         echo "  - Backend port: ${BACKEND_PORT}"
-        echo "  - Frontend lives on AWS Amplify, deployed via git push to main."
+        echo "  - Frontend dist/ is served by nginx from disk; \`build\` rebuilds it without restarting the backend."
         echo "  - --dev is not applicable on this host (run \`npm run dev\` locally)."
         echo ""
         echo "Sister-project port map (for collision awareness):"
