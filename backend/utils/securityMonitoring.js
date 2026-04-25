@@ -33,6 +33,37 @@ if (!fs.existsSync(securityLogDir)) {
   fs.mkdirSync(securityLogDir, { recursive: true });
 }
 
+// Path to the fail2ban-watched intrusion log on testbot. We append `[BAN] <ip>
+// reason=<alert>` lines here so the romerotechsolutions-intrusion jail can
+// promote app-level decisions to iptables-level bans. Override via env for
+// tests / dev. If the file isn't writable, the helper below quietly disables
+// itself after the first failure — we don't want to crash the API for it.
+const INTRUSION_LOG_PATH = process.env.INTRUSION_LOG_PATH || '/var/log/romerotechsolutions/intrusion.log';
+let intrusionLogDisabled = false;
+
+// Alerts that warrant a hard IP ban. HIGH_ACTIVITY_VOLUME is intentionally not
+// here: a legitimate burst (e.g., a user reloading repeatedly) shouldn't iptables
+// us. Failed logins and rate-limit hits do — they're already gated by thresholds
+// inside checkSecurityPatterns before reaching triggerSecurityAlert.
+const BAN_WORTHY_ALERT_TYPES = new Set([
+  'MULTIPLE_FAILED_LOGINS',
+  'PERSISTENT_RATE_LIMITING',
+  'MALWARE_UPLOAD',
+  'ADMIN_COMPROMISE',
+  'DATABASE_BREACH'
+]);
+
+const appendBanLine = (ip, reason) => {
+  if (intrusionLogDisabled || !ip || ip === 'unknown') return;
+  const line = `${new Date().toISOString()} [BAN] ${ip} reason=${reason}\n`;
+  fs.appendFile(INTRUSION_LOG_PATH, line, (err) => {
+    if (err) {
+      intrusionLogDisabled = true;
+      console.warn(`⚠️ Intrusion log unavailable (${INTRUSION_LOG_PATH}): ${err.code}. Disabling fail2ban hand-off for this process.`);
+    }
+  });
+};
+
 /**
  * Log security events to file and memory
  * @param {string} eventType - Type of security event
@@ -158,6 +189,12 @@ const triggerSecurityAlert = (alertType, alertData) => {
       console.error('Failed to write alert log:', err);
     }
   });
+
+  // Hand off to fail2ban for ban-worthy alert types. The jail at
+  // /etc/fail2ban/jail.local watches the intrusion log for [BAN] lines.
+  if (BAN_WORTHY_ALERT_TYPES.has(alertType) && alertData?.clientIP) {
+    appendBanLine(alertData.clientIP, alertType);
+  }
 
   // In production, integrate with:
   // - Email notifications
