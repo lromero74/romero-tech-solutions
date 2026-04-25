@@ -56,13 +56,15 @@ interface UpdatePackageDialogProps {
   packages: string[];     // [] = scope=all
   scope: 'all' | 'selected' | 'security_only';
   onClose: () => void;
-  // Called whenever the agent reports a terminal status. The
-  // `succeeded` array is the names of packages whose outcome was
-  // "succeeded". The parent (PackageManagerStatus) uses this to
-  // optimistically hide those packages from the outdated list so the
-  // user gets immediate feedback without waiting for the next agent
-  // heartbeat to refresh the underlying data.
-  onResult?: (succeededPackages: string[], status: 'completed' | 'completed_with_failures' | 'failed') => void;
+  // Called whenever the agent reports a terminal status. The first
+  // arg is package names whose outcome implies they're no longer
+  // outdated (succeeded OR skipped-because-already-at-latest), so
+  // the parent (PackageManagerStatus) can optimistically hide those
+  // rows without waiting for the next agent heartbeat. Packages
+  // that failed, or were skipped for non-currency reasons (running
+  // snap app, missing pkg, etc.), are NOT in this array — they
+  // stay visible because they still need attention.
+  onResult?: (packagesNoLongerOutdated: string[], status: 'completed' | 'completed_with_failures' | 'failed') => void;
 }
 
 export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
@@ -94,10 +96,19 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
     const transition = (status: string, result: UpdateResult | undefined, error?: string) => {
       const notify = (terminalStatus: 'completed' | 'completed_with_failures' | 'failed') => {
         if (!onResult) return;
-        const ok = (result?.results || [])
-          .filter(r => r.outcome === 'succeeded')
+        // Hide rows whose per-package outcome was either:
+        //   - succeeded: the agent actually upgraded it
+        //   - skipped + already_at_latest: the package was already
+        //     current (the cached outdated list was stale; no longer
+        //     belongs in the "needs update" view)
+        // Other skipped reasons (package_not_installed, snap_app_running,
+        // etc.) stay visible since the package is still legitimately in
+        // some sub-optimal state.
+        const noLongerOutdated = (result?.results || [])
+          .filter(r => r.outcome === 'succeeded'
+            || (r.outcome === 'skipped' && r.skipped_reason === 'already_at_latest'))
           .map(r => r.package);
-        onResult(ok, terminalStatus);
+        onResult(noLongerOutdated, terminalStatus);
       };
       switch (status) {
         case 'completed':
