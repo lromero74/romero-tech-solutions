@@ -4,6 +4,7 @@ import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 import { UpdatePackageDialog } from './UpdatePackageDialog';
+import { ChangelogDialog } from './ChangelogDialog';
 
 // Maps package_manager values the agent reports (homebrew, npm, pip,
 // apt, yum, dnf, snap, flatpak, mas, …) to the canonical key the
@@ -34,9 +35,17 @@ interface DialogTarget {
   scope: 'all' | 'selected';
 }
 
+interface ChangelogTarget {
+  manager: string;
+  packageName: string;
+  fromVersion: string;
+  toVersion: string;
+}
+
 export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agentId?: string }> = ({ latestMetrics, agentId }) => {
   const { t } = useOptionalClientLanguage();
   const [dialog, setDialog] = useState<DialogTarget | null>(null);
+  const [changelog, setChangelog] = useState<ChangelogTarget | null>(null);
 
   if (!latestMetrics || latestMetrics.package_managers_outdated === undefined) return null;
 
@@ -221,7 +230,22 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                         <tr key={idx} className="border-b border-blue-100 dark:border-blue-800/50">
                           <td className="py-1 px-2 text-blue-800 dark:text-blue-200">{pkg.name}</td>
                           <td className="py-1 px-2 text-red-600 dark:text-red-400">{pkg.installed_version}</td>
-                          <td className="py-1 px-2 text-green-600 dark:text-green-400">{pkg.latest_version}</td>
+                          <td className="py-1 px-2">
+                            {/* Clicking the new version opens the
+                                ChangelogDialog so users see what's been
+                                patched / what CVEs are fixed before
+                                running the update. */}
+                            <button
+                              onClick={() => setChangelog({
+                                manager: pkg.package_manager,
+                                packageName: pkg.name,
+                                fromVersion: pkg.installed_version,
+                                toVersion: pkg.latest_version,
+                              })}
+                              className="text-green-600 dark:text-green-400 hover:underline">
+                              {pkg.latest_version}
+                            </button>
+                          </td>
                           <td className="py-1 px-2 text-blue-800 dark:text-blue-200">{pkg.package_manager}</td>
                           {agentId && (
                             <td className="py-1 px-2">
@@ -258,6 +282,15 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
           packages={dialog.packages}
           scope={dialog.scope}
           onClose={() => setDialog(null)}
+        />
+      )}
+      {changelog && (
+        <ChangelogDialog
+          packageName={changelog.packageName}
+          manager={changelog.manager}
+          fromVersion={changelog.fromVersion}
+          toVersion={changelog.toVersion}
+          onClose={() => setChangelog(null)}
         />
       )}
     </div>

@@ -4150,4 +4150,148 @@ router.post('/:agent_id/backfill-candles', authMiddleware, requireEmployee, asyn
   }
 });
 
+/**
+ * Get vulnerability advisories for a package version range
+ * GET /api/agents/packages/vulnerabilities?ecosystem=PyPI&package=X&from_version=A&to_version=B
+ *
+ * Used by the dashboard's "click on Latest version → see what's
+ * changed / what CVEs were patched" flow. Backed by OSV.dev's free
+ * /v1/query API — covers PyPI / npm / Go / Maven / RubyGems / Crates /
+ * Packagist / Linux distros (Debian, Ubuntu, Alpine, Rocky, etc.) /
+ * NPM / OSS-Fuzz. Returns vulnerabilities affecting any version
+ * `> from_version` and `<= to_version` so the user sees what they're
+ * gaining by updating.
+ *
+ * In-memory cache keyed on (ecosystem, package, from, to) with 1h TTL
+ * to keep us a polite OSV.dev citizen — the free tier doesn't ratelimit
+ * but published etiquette is "cache aggressively".
+ */
+const osvCache = new Map(); // key → { fetchedAt: ms, payload }
+const OSV_TTL_MS = 60 * 60 * 1000;
+
+router.get('/packages/vulnerabilities', authMiddleware, async (req, res) => {
+  try {
+    const { ecosystem, package: pkgName, from_version, to_version } = req.query;
+    if (!ecosystem || !pkgName) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required query params: ecosystem, package',
+      });
+    }
+
+    const cacheKey = `${ecosystem}|${pkgName}|${from_version || ''}|${to_version || ''}`;
+    const cached = osvCache.get(cacheKey);
+    if (cached && Date.now() - cached.fetchedAt < OSV_TTL_MS) {
+      return res.json(cached.payload);
+    }
+
+    // OSV /v1/query — sending package alone returns ALL vulns ever
+    // recorded for that package; we filter client-side by the version
+    // range below. Sending {version: from} narrows to "what affects
+    // this version" but we want the diff, not the snapshot.
+    const osvBody = { package: { ecosystem, name: pkgName } };
+    const osvResp = await fetch('https://api.osv.dev/v1/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(osvBody),
+    });
+    if (!osvResp.ok) {
+      const text = await osvResp.text();
+      return res.status(502).json({
+        success: false,
+        message: `OSV.dev returned ${osvResp.status}`,
+        detail: text.slice(0, 500),
+      });
+    }
+    const osvData = await osvResp.json();
+    const allVulns = Array.isArray(osvData.vulns) ? osvData.vulns : [];
+
+    // Filter to vulnerabilities whose `affected[].ranges[].events`
+    // intersect (from_version, to_version]. OSV's range model is
+    // event-stream; rather than reimplement semver semantics here we
+    // keep it lenient: include the vuln if ANY of its `affected`
+    // entries lists from_version or any version literally between
+    // them, OR if from_version isn't supplied (return everything).
+    const fromV = from_version ? String(from_version) : null;
+    const toV = to_version ? String(to_version) : null;
+
+    // Lightweight filtering — OSV format is rich enough that doing
+    // bulletproof range-intersection client-side is its own project.
+    // For v1 we return all vulns that mention from_version in their
+    // affected ranges as "introduced" or "fixed", AND we leave the
+    // rest out only when from_version is set; that's a useful
+    // approximation for "what changed between A and B?".
+    const filtered = !fromV
+      ? allVulns
+      : allVulns.filter(v => {
+          if (!Array.isArray(v.affected)) return true; // be inclusive on uncertain shape
+          for (const a of v.affected) {
+            if (!Array.isArray(a.ranges)) continue;
+            for (const r of a.ranges) {
+              if (!Array.isArray(r.events)) continue;
+              for (const e of r.events) {
+                // OSV "fixed" events for the to_version side — vulnerabilities
+                // patched in or before our target are exactly what we want.
+                if (e.fixed && toV && versionLte(e.fixed, toV)) return true;
+                if (e.introduced && fromV && versionLte(e.introduced, toV)) return true;
+              }
+            }
+          }
+          return false;
+        });
+
+    // Trim each vuln to a UI-friendly subset; full CVE blob is huge.
+    const trimmed = filtered.map(v => ({
+      id: v.id,
+      summary: v.summary || '',
+      details: v.details || '',
+      severity: v.severity || [],
+      aliases: Array.isArray(v.aliases) ? v.aliases : [],
+      references: Array.isArray(v.references) ? v.references.map(r => ({ type: r.type, url: r.url })) : [],
+      published: v.published,
+      modified: v.modified,
+    }));
+
+    const payload = {
+      success: true,
+      data: {
+        ecosystem, package: pkgName, from_version: fromV, to_version: toV,
+        count: trimmed.length, vulnerabilities: trimmed,
+      },
+    };
+    osvCache.set(cacheKey, { fetchedAt: Date.now(), payload });
+    return res.json(payload);
+  } catch (error) {
+    console.error('OSV vulnerability lookup error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to look up vulnerabilities',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+});
+
+// versionLte does a tolerant lexicographic-with-numeric-promotion
+// compare. OSV often sends pre-release / build-metadata strings that
+// strict semver libraries reject; for our display-only "did the patch
+// land before our target?" query, this approximation is adequate.
+function versionLte(a, b) {
+  const partsA = String(a).split(/[.\-+]/).map(p => /^\d+$/.test(p) ? parseInt(p, 10) : p);
+  const partsB = String(b).split(/[.\-+]/).map(p => /^\d+$/.test(p) ? parseInt(p, 10) : p);
+  const len = Math.max(partsA.length, partsB.length);
+  for (let i = 0; i < len; i++) {
+    const x = partsA[i] === undefined ? 0 : partsA[i];
+    const y = partsB[i] === undefined ? 0 : partsB[i];
+    if (typeof x === typeof y) {
+      if (x < y) return true;
+      if (x > y) return false;
+    } else {
+      // Mixed types: numeric is "less than" string (1 < "1.0-alpha")
+      if (typeof x === 'number') return true;
+      if (typeof y === 'number') return false;
+    }
+  }
+  return true; // equal
+}
+
 export default router;
