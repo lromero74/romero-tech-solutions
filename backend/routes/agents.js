@@ -2610,11 +2610,14 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
       });
     }
 
-    // Validate status
-    if (!['completed', 'failed'].includes(status)) {
+    // Validate status. `completed_with_failures` is the partial-success
+    // case (e.g. update_packages where some packages succeeded and some
+    // failed) — distinct from outright `failed` so the dashboard can
+    // render it differently.
+    if (!['completed', 'completed_with_failures', 'failed'].includes(status)) {
       return res.status(400).json({
         success: false,
-        message: 'Invalid status. Must be "completed" or "failed"',
+        message: 'Invalid status. Must be "completed", "completed_with_failures", or "failed"',
         code: 'INVALID_STATUS'
       });
     }
@@ -2637,6 +2640,32 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
       result,
       error
     );
+
+    // Push to admin sockets so the dashboard can react in real time
+    // without polling. Used by the package-update flow's modal to flip
+    // from "running" to "done" the moment the agent finishes.
+    try {
+      const cmdRow = await query(
+        `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
+        [command_id]
+      );
+      websocketService.broadcastToAdmins({
+        type: 'agent.command.completed',
+        data: {
+          command_id,
+          agent_id,
+          command_type: cmdRow.rows[0]?.command_type,
+          status,
+          result,
+          error,
+          completed_at: new Date().toISOString(),
+        },
+      });
+    } catch (wsErr) {
+      // Never let websocket failure block the result write — the row
+      // is already persisted; the dashboard will catch up on next poll.
+      console.error('agent.command.completed broadcast failed:', wsErr);
+    }
 
     res.json({
       success: true,

@@ -247,6 +247,10 @@ export interface AgentMetric {
   homebrew_outdated?: number;
   npm_outdated?: number;
   pip_outdated?: number;
+  // mas (Mac App Store) is reported alongside the other package managers;
+  // declared here so PackageManagerStatus can render it without each
+  // consumer site casting through `any`.
+  mas_outdated?: number;
   outdated_packages_data?: Array<{
     name: string;
     installed_version: string;
@@ -488,6 +492,39 @@ class AgentService {
     }
   ): Promise<ApiResponse<{ command_id: string; status: string }>> {
     return apiService.post(`/agents/${agentId}/commands`, data);
+  }
+
+  /**
+   * Trigger a remote package-update on the device. Backend creates an
+   * agent_commands row with command_type=update_packages; the agent's
+   * existing /commands poll picks it up and runs it via internal/updatepkgs.
+   * Final result arrives via the agent.command.completed websocket event.
+   */
+  async requestUpdatePackages(
+    agentId: string,
+    payload: {
+      manager: string;
+      scope: 'all' | 'selected' | 'security_only';
+      packages: string[];
+      dry_run?: boolean;
+      auto_confirm?: boolean;
+      timeout_seconds?: number;
+      stop_on_first_failure?: boolean;
+    }
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'update_packages',
+      command_params: {
+        manager: payload.manager,
+        scope: payload.scope,
+        packages: payload.packages,
+        dry_run: payload.dry_run ?? false,
+        auto_confirm: payload.auto_confirm ?? true,
+        timeout_seconds: payload.timeout_seconds ?? 1800,
+        stop_on_first_failure: payload.stop_on_first_failure ?? false,
+      },
+      requires_approval: false,
+    });
   }
 
   /**

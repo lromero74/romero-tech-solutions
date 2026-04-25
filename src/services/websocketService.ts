@@ -60,6 +60,20 @@ interface AgentMetricsUpdate {
   timestamp: string;
 }
 
+// AgentCommandCompleted is emitted by the backend when an agent posts
+// its result for a remote command (update_packages, ping, etc.). The
+// frontend's UpdatePackageDialog subscribes to flip from "running" →
+// "done" without polling.
+interface AgentCommandCompleted {
+  command_id: string;
+  agent_id: string;
+  command_type: string;
+  status: 'completed' | 'completed_with_failures' | 'failed';
+  result: any;       // command-type-specific (UpdateResult for update_packages)
+  error?: string;
+  completed_at: string;
+}
+
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
 type EmployeeLoginCallback = (change: EmployeeLoginChange) => void;
 type AuthErrorCallback = (error: { message: string }) => void;
@@ -67,6 +81,7 @@ type EntityDataChangedCallback = (change: EntityDataChanged) => void;
 type ServiceRequestViewersCallback = (update: ServiceRequestViewersUpdate) => void;
 type AgentStatusCallback = (update: AgentStatusUpdate) => void;
 type AgentMetricsCallback = (update: AgentMetricsUpdate) => void;
+type AgentCommandCompletedCallback = (update: AgentCommandCompleted) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -85,6 +100,7 @@ class WebSocketService {
   private onServiceRequestViewers: ServiceRequestViewersCallback | null = null;
   private onAgentStatusCallbacks: AgentStatusCallback[] = [];
   private onAgentMetricsCallbacks: AgentMetricsCallback[] = [];
+  private onAgentCommandCompletedCallbacks: AgentCommandCompletedCallback[] = [];
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -230,6 +246,20 @@ class WebSocketService {
           });
         });
 
+        // Emitted by backend when an agent posts the result of a remote
+        // command (e.g. update_packages). Subscribers (currently the
+        // package-update modal) get a real-time flip from running → done.
+        this.socket.on('agent.command.completed', (update: AgentCommandCompleted) => {
+          console.log(`🛠️  Agent command completed: ${update.command_type} (${update.status}) for ${update.agent_id}`);
+          this.onAgentCommandCompletedCallbacks.forEach(callback => {
+            try {
+              callback(update);
+            } catch (error) {
+              console.error('❌ Error in agent command completed callback:', error);
+            }
+          });
+        });
+
         this.socket.on('error', (error) => {
           console.error('❌ WebSocket error:', error);
         });
@@ -313,6 +343,21 @@ class WebSocketService {
       if (index > -1) {
         this.onAgentStatusCallbacks.splice(index, 1);
         console.log('🗑️ Unregistered onAgentStatusChange callback');
+      }
+    };
+  }
+
+  /**
+   * Subscribe to agent.command.completed events. Multiple subscribers
+   * are supported (e.g. several open update-package modals on different
+   * tabs); each gets its own callback. Returns an unsubscribe fn.
+   */
+  onAgentCommandCompleted(callback: AgentCommandCompletedCallback): () => void {
+    this.onAgentCommandCompletedCallbacks.push(callback);
+    return () => {
+      const index = this.onAgentCommandCompletedCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onAgentCommandCompletedCallbacks.splice(index, 1);
       }
     };
   }

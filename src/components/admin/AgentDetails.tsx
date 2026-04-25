@@ -1160,7 +1160,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       <OSPatchStatus latestMetrics={latestMetrics} />
 
       {/* Package Manager Status */}
-      <PackageManagerStatus latestMetrics={latestMetrics} />
+      <PackageManagerStatus latestMetrics={latestMetrics} agentId={agentId} />
 
       {/* OS End-of-Life Status */}
       <OSEndOfLifeStatus latestMetrics={latestMetrics} />

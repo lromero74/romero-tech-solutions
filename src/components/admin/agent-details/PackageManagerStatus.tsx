@@ -1,12 +1,57 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Download, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { UpdatePackageDialog } from './UpdatePackageDialog';
 
-export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+// Maps package_manager values the agent reports (homebrew, npm, pip,
+// apt, yum, dnf, snap, flatpak, mas, …) to the canonical key the
+// agent's update_packages handler accepts.
+const managerAlias: Record<string, string> = {
+  homebrew: 'brew',
+  brew: 'brew',
+  npm: 'npm',
+  pip: 'pip',
+  pip3: 'pip',
+  apt: 'apt',
+  yum: 'dnf',
+  dnf: 'dnf',
+  pacman: 'pacman',
+  zypper: 'zypper',
+  gem: 'gem',
+  cargo: 'cargo',
+  snap: 'snap',
+  flatpak: 'flatpak',
+  winget: 'winget',
+  choco: 'choco',
+  // mas (Mac App Store) intentionally has no remote-update support yet.
+};
+
+interface DialogTarget {
+  manager: string;
+  packages: string[];
+  scope: 'all' | 'selected';
+}
+
+export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agentId?: string }> = ({ latestMetrics, agentId }) => {
   const { t } = useOptionalClientLanguage();
+  const [dialog, setDialog] = useState<DialogTarget | null>(null);
+
   if (!latestMetrics || latestMetrics.package_managers_outdated === undefined) return null;
+
+  // Click handler — maps the manager alias and opens the modal.
+  const requestUpdate = (manager: string, pkg: string | null) => {
+    const mapped = managerAlias[manager.toLowerCase()];
+    if (!mapped || !agentId) return;
+    setDialog({
+      manager: mapped,
+      packages: pkg ? [pkg] : [],
+      scope: pkg ? 'selected' : 'all',
+    });
+  };
+
+  const canUpdate = (manager: string) => Boolean(agentId && managerAlias[manager.toLowerCase()]);
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
@@ -142,7 +187,25 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
                   : t('agentDetails.packageManagerStatus.outdatedDetectedPlural', undefined, 'outdated packages detected')}
               </p>
               {latestMetrics.outdated_packages_data && Array.isArray(latestMetrics.outdated_packages_data) && latestMetrics.outdated_packages_data.length > 0 && (
-                <div className="mt-2 max-h-40 overflow-y-auto">
+                <div className="mt-2 max-h-72 overflow-y-auto">
+                  {/* Per-manager "Update all" buttons. Aggregated from
+                      the unique set of managers in outdated_packages_data
+                      so we only show a button for managers that have
+                      outdated packages right now. */}
+                  {agentId && (
+                    <div className="flex flex-wrap gap-2 mb-2">
+                      {Array.from(new Set(latestMetrics.outdated_packages_data.map((p: any) => p.package_manager))).map((mgr: any) => (
+                        canUpdate(mgr) ? (
+                          <button
+                            key={mgr}
+                            onClick={() => requestUpdate(mgr, null)}
+                            className="px-2 py-1 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
+                            Update all {mgr}
+                          </button>
+                        ) : null
+                      ))}
+                    </div>
+                  )}
                   <table className="w-full text-xs">
                     <thead>
                       <tr className="border-b border-blue-200 dark:border-blue-700">
@@ -150,22 +213,36 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
                         <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderInstalled', undefined, 'Installed')}</th>
                         <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderLatest', undefined, 'Latest')}</th>
                         <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">{t('agentDetails.packageManagerStatus.tableHeaderManager', undefined, 'Manager')}</th>
+                        {agentId && <th className="text-left py-1 px-2 font-semibold text-blue-900 dark:text-blue-100">Action</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {latestMetrics.outdated_packages_data.slice(0, 10).map((pkg: any, idx: number) => (
+                      {latestMetrics.outdated_packages_data.slice(0, 50).map((pkg: any, idx: number) => (
                         <tr key={idx} className="border-b border-blue-100 dark:border-blue-800/50">
                           <td className="py-1 px-2 text-blue-800 dark:text-blue-200">{pkg.name}</td>
                           <td className="py-1 px-2 text-red-600 dark:text-red-400">{pkg.installed_version}</td>
                           <td className="py-1 px-2 text-green-600 dark:text-green-400">{pkg.latest_version}</td>
                           <td className="py-1 px-2 text-blue-800 dark:text-blue-200">{pkg.package_manager}</td>
+                          {agentId && (
+                            <td className="py-1 px-2">
+                              {canUpdate(pkg.package_manager) ? (
+                                <button
+                                  onClick={() => requestUpdate(pkg.package_manager, pkg.name)}
+                                  className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
+                                  Update
+                                </button>
+                              ) : (
+                                <span className="text-xs text-gray-500">n/a</span>
+                              )}
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                  {latestMetrics.outdated_packages_data.length > 10 && (
+                  {latestMetrics.outdated_packages_data.length > 50 && (
                     <p className="text-xs text-blue-600 dark:text-blue-300 mt-2">
-                      {t('agentDetails.packageManagerStatus.andMore', { count: latestMetrics.outdated_packages_data.length - 10 }, `...and ${latestMetrics.outdated_packages_data.length - 10} more`)}
+                      {t('agentDetails.packageManagerStatus.andMore', { count: String(latestMetrics.outdated_packages_data.length - 50) }, `...and ${latestMetrics.outdated_packages_data.length - 50} more`)}
                     </p>
                   )}
                 </div>
@@ -173,6 +250,15 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps> = ({ lat
             </div>
           </div>
         </div>
+      )}
+      {dialog && agentId && (
+        <UpdatePackageDialog
+          agentId={agentId}
+          manager={dialog.manager}
+          packages={dialog.packages}
+          scope={dialog.scope}
+          onClose={() => setDialog(null)}
+        />
       )}
     </div>
   );

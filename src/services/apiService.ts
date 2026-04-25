@@ -13,6 +13,11 @@ interface ApiResponse<T = any> {
 
 interface RequestOptions extends RequestInit {
   skipAuth?: boolean; // Skip automatic session handling for some requests
+  // Optional querystring params merged into the URL by the dispatcher
+  // (request() at line ~174 destructures `params` and casts at the call
+  // site); declaring it on the interface lets call sites typecheck
+  // cleanly without each one casting through `any`.
+  params?: Record<string, string>;
 }
 
 class ApiService {
