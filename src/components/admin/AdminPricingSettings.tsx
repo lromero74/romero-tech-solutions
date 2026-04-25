@@ -243,7 +243,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                         type="text"
                         value={formData.categoryName}
                         onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
-                        className={`w-full px-3 py-2 rounded-md ${themeClasses.input.base}`}
+                        className={`w-full px-3 py-2 rounded-md ${themeClasses.input} border`}
                       />
                     </div>
                     <div>
@@ -260,7 +260,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                           step="1"
                           value={formData.baseHourlyRate}
                           onChange={(e) => setFormData({ ...formData, baseHourlyRate: parseFloat(e.target.value) || 0 })}
-                          className={`w-full pl-7 pr-3 py-2 rounded-md ${themeClasses.input.base}`}
+                          className={`w-full pl-7 pr-3 py-2 rounded-md ${themeClasses.input} border`}
                         />
                       </div>
                     </div>
@@ -273,7 +273,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                       type="text"
                       value={formData.description}
                       onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input.base}`}
+                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} border`}
                       placeholder="Optional description"
                     />
                   </div>
@@ -358,7 +358,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                       type="text"
                       value={formData.categoryName}
                       onChange={(e) => setFormData({ ...formData, categoryName: e.target.value })}
-                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input.base}`}
+                      className={`w-full px-3 py-2 rounded-md ${themeClasses.input} border`}
                       placeholder="e.g., Enterprise, Startup"
                     />
                   </div>
@@ -376,7 +376,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                         step="1"
                         value={formData.baseHourlyRate}
                         onChange={(e) => setFormData({ ...formData, baseHourlyRate: parseFloat(e.target.value) || 0 })}
-                        className={`w-full pl-7 pr-3 py-2 rounded-md ${themeClasses.input.base}`}
+                        className={`w-full pl-7 pr-3 py-2 rounded-md ${themeClasses.input} border`}
                       />
                     </div>
                   </div>
@@ -389,7 +389,7 @@ const AdminPricingSettings: React.FC<AdminPricingSettingsProps> = ({
                     type="text"
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input.base}`}
+                    className={`w-full px-3 py-2 rounded-md ${themeClasses.input} border`}
                     placeholder="Optional description"
                   />
                 </div>
