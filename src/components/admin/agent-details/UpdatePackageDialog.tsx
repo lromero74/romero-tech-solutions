@@ -70,22 +70,78 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
   }, [manager, scope, packages]);
 
   // Subscribe to agent.command.completed once we're queued, so we
-  // catch the result as soon as the agent reports it.
+  // catch the result as soon as the agent reports it. Falls back to
+  // polling /commands/list after 60s in case the websocket event
+  // gets lost (page reload, dropped socket, server restart between
+  // queue and result, etc.) — without it the user stares at the
+  // spinner forever.
   useEffect(() => {
     if (state.kind !== 'queued') return;
-    const unsubscribe = websocketService.onAgentCommandCompleted((evt) => {
-      if (evt.command_id !== state.commandId) return;
-      const result: UpdateResult | undefined = evt.result || undefined;
-      if (evt.status === 'completed') {
-        setState({ kind: 'completed', result: result! });
-      } else if (evt.status === 'completed_with_failures') {
-        setState({ kind: 'partial', result: result! });
-      } else {
-        setState({ kind: 'failed', error: evt.error || 'Update failed', result });
+    const targetId = state.commandId;
+
+    // Translate the agent_commands.status text from the DB into the
+    // dialog's terminal state machine. Tolerant of either the new
+    // `completed_with_failures` value or the older `completed`/`failed`.
+    const transition = (status: string, result: UpdateResult | undefined, error?: string) => {
+      switch (status) {
+        case 'completed':
+          if (result) setState({ kind: 'completed', result });
+          else setState({ kind: 'failed', error: error || 'Completed but result missing' });
+          return;
+        case 'completed_with_failures':
+          if (result) setState({ kind: 'partial', result });
+          else setState({ kind: 'failed', error: error || 'Partial completion without result' });
+          return;
+        case 'failed':
+          setState({ kind: 'failed', error: error || 'Update failed', result });
+          return;
+        // pending / delivered / acknowledged → still in flight, keep waiting.
       }
+    };
+
+    // 1. Live websocket subscription — first to fire wins.
+    const unsubscribe = websocketService.onAgentCommandCompleted((evt) => {
+      if (evt.command_id !== targetId) return;
+      transition(evt.status, evt.result || undefined, evt.error);
     });
-    return unsubscribe;
-  }, [state]);
+
+    // 2. Fallback poll. Starts after a 60s grace period (so we don't
+    //    hammer the API while the websocket would have delivered) and
+    //    runs every 10s. Reads /commands/list, finds our id, and if
+    //    its status is terminal we transition. The interval clears
+    //    automatically when the modal unmounts or transitions out
+    //    of "queued" (the useEffect re-runs).
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
+    const startPoll = () => {
+      if (pollTimer) return;
+      pollTimer = setInterval(async () => {
+        try {
+          const resp = await agentService.getAgentCommands(agentId);
+          if (!resp.success || !resp.data) return;
+          const row = resp.data.commands.find((c: any) => c.id === targetId);
+          if (!row) return;
+          if (['completed', 'completed_with_failures', 'failed'].includes(row.status)) {
+            // The DB stores the agent's structured result JSON-stringified
+            // in the stdout column (see backend/routes/agents.js:2630).
+            let parsedResult: UpdateResult | undefined;
+            if (row.stdout) {
+              try { parsedResult = JSON.parse(row.stdout); } catch { /* leave undefined */ }
+            }
+            transition(row.status, parsedResult, row.error_message);
+          }
+        } catch {
+          // Transient errors are fine — we'll try again on the next tick.
+        }
+      }, 10_000);
+    };
+    const pollDelay = setTimeout(startPoll, 60_000);
+
+    return () => {
+      unsubscribe();
+      clearTimeout(pollDelay);
+      if (pollTimer) clearInterval(pollTimer);
+    };
+  }, [state, agentId]);
 
   const onConfirm = async () => {
     setState({ kind: 'submitting' });
