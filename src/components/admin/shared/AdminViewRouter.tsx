@@ -22,6 +22,7 @@ import AdminInvoices from '../AdminInvoices';
 import WorkflowConfiguration from '../WorkflowConfiguration';
 import AdminPricingSettings from '../AdminPricingSettings';
 import AdminPermissionAuditLog from '../AdminPermissionAuditLog';
+import AdminIntrusionJails from '../AdminIntrusionJails';
 import AdminRoleHierarchy from '../AdminRoleHierarchy';
 import FilterPresetManager from '../FilterPresetManager';
 import AdminTestimonials from '../AdminTestimonials';
@@ -1081,6 +1082,9 @@ export const AdminViewRouter: React.FC<AdminViewRouterProps> = ({
 
       case 'permission-audit-log':
         return <AdminPermissionAuditLog />;
+
+      case 'intrusion-jails':
+        return <AdminIntrusionJails />;
 
       case 'role-hierarchy':
         return <AdminRoleHierarchy />;

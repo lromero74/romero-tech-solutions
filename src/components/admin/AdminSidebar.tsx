@@ -132,7 +132,8 @@ const AdminSidebar: React.FC<AdminSidebarProps> = ({
         { id: 'permissions', label: 'Permissions', icon: Shield, permission: 'view.permissions.enable' },
         { id: 'role-hierarchy', label: 'Role Hierarchy', icon: Network, permission: 'view.role_hierarchy.enable' },
         { id: 'permission-audit-log', label: 'Permission Audit Log', icon: FileText, permission: 'view.permission_audit_log.enable' },
-        { id: 'password-complexity', label: 'Password Policy', icon: Lock, permission: 'view.password_complexity.enable' }
+        { id: 'password-complexity', label: 'Password Policy', icon: Lock, permission: 'view.password_complexity.enable' },
+        { id: 'intrusion-jails', label: 'Intrusion Jails', icon: Shield, permission: 'manage.security_sessions.enable' }
       ]
     },
     {
