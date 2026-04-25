@@ -300,7 +300,13 @@ const csrfOptions = {
   cookieName: CSRF_COOKIE_NAME,
   cookieOptions: {
     httpOnly: true,
-    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // lax for development
+    // Lax is correct for double-submit CSRF: cross-site GETs (where Lax
+    // allows the cookie) can't cause harm because GETs are idempotent;
+    // unsafe methods (POST/PUT/DELETE) still need the matching token in
+    // the X-CSRF-Token header. Strict was breaking same-site cross-origin
+    // XHR (page on romerotechsolutions.com → api.romerotechsolutions.com)
+    // in some browsers.
+    sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
     path: '/',
   },
