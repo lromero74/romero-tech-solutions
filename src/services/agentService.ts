@@ -256,7 +256,16 @@ export interface AgentMetric {
     installed_version: string;
     latest_version: string;
     package_manager: string;
+    // Vendor-managed packages (Apple's CommandLineTools, distro
+    // dist-packages) — the dashboard groups these under their parent
+    // updater instead of surfacing them as actionable rows.
+    system_managed?: boolean;
+    system_updater?: 'macos_clt' | 'apt' | 'dnf' | 'pacman' | 'zypper' | 'linux_distro';
   }> | null;
+  // True when the agent saw a pending Command Line Tools update in
+  // softwareupdate --list. Drives the "Update via Software Update"
+  // prompt under the macOS CommandLineTools group.
+  clt_update_available?: boolean;
   raw_metrics?: Record<string, unknown> | null;
   collected_at: string;
   // Backward compatibility (deprecated)
