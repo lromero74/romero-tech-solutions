@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Download, Info } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
@@ -46,6 +46,27 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
   const { t } = useOptionalClientLanguage();
   const [dialog, setDialog] = useState<DialogTarget | null>(null);
   const [changelog, setChangelog] = useState<ChangelogTarget | null>(null);
+
+  // Optimistic UI: when an Update succeeds we add the package's
+  // (manager, name) to this set so the row vanishes immediately,
+  // even though the underlying latestMetrics.outdated_packages_data
+  // won't refresh until the next agent heartbeat. The set resets
+  // whenever the underlying data changes (a fresh heartbeat will
+  // already exclude the package, so no need to remember our local
+  // hide).
+  const [hiddenAfterUpdate, setHiddenAfterUpdate] = useState<Set<string>>(() => new Set());
+  const outdatedRaw = latestMetrics?.outdated_packages_data;
+  useEffect(() => {
+    setHiddenAfterUpdate(new Set());
+  }, [outdatedRaw]);
+
+  // Build the visible list once per render so the table, the
+  // "Update all <manager>" button group, AND the empty-state
+  // collapse all use the same filtered data.
+  const visibleOutdated = useMemo(() => {
+    if (!Array.isArray(outdatedRaw)) return [];
+    return outdatedRaw.filter((p: any) => !hiddenAfterUpdate.has(`${p.package_manager}|${p.name}`));
+  }, [outdatedRaw, hiddenAfterUpdate]);
 
   if (!latestMetrics || latestMetrics.package_managers_outdated === undefined) return null;
 
@@ -195,15 +216,14 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                   ? t('agentDetails.packageManagerStatus.outdatedDetected', undefined, 'outdated package detected')
                   : t('agentDetails.packageManagerStatus.outdatedDetectedPlural', undefined, 'outdated packages detected')}
               </p>
-              {latestMetrics.outdated_packages_data && Array.isArray(latestMetrics.outdated_packages_data) && latestMetrics.outdated_packages_data.length > 0 && (
+              {visibleOutdated.length > 0 && (
                 <div className="mt-2 max-h-72 overflow-y-auto">
-                  {/* Per-manager "Update all" buttons. Aggregated from
-                      the unique set of managers in outdated_packages_data
-                      so we only show a button for managers that have
-                      outdated packages right now. */}
+                  {/* Per-manager "Update all" buttons, aggregated from
+                      the visible (post-optimistic-filter) set so we
+                      hide the button when its manager has nothing left. */}
                   {agentId && (
                     <div className="flex flex-wrap gap-2 mb-2">
-                      {Array.from(new Set(latestMetrics.outdated_packages_data.map((p: any) => p.package_manager))).map((mgr: any) => (
+                      {Array.from(new Set(visibleOutdated.map((p: any) => p.package_manager))).map((mgr: any) => (
                         canUpdate(mgr) ? (
                           <button
                             key={mgr}
@@ -226,7 +246,7 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                       </tr>
                     </thead>
                     <tbody>
-                      {latestMetrics.outdated_packages_data.slice(0, 50).map((pkg: any, idx: number) => (
+                      {visibleOutdated.slice(0, 50).map((pkg: any, idx: number) => (
                         <tr key={idx} className="border-b border-blue-100 dark:border-blue-800/50">
                           <td className="py-1 px-2 text-blue-800 dark:text-blue-200">{pkg.name}</td>
                           <td className="py-1 px-2 text-red-600 dark:text-red-400">{pkg.installed_version}</td>
@@ -264,9 +284,9 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                       ))}
                     </tbody>
                   </table>
-                  {latestMetrics.outdated_packages_data.length > 50 && (
+                  {visibleOutdated.length > 50 && (
                     <p className="text-xs text-blue-600 dark:text-blue-300 mt-2">
-                      {t('agentDetails.packageManagerStatus.andMore', { count: String(latestMetrics.outdated_packages_data.length - 50) }, `...and ${latestMetrics.outdated_packages_data.length - 50} more`)}
+                      {t('agentDetails.packageManagerStatus.andMore', { count: String(visibleOutdated.length - 50) }, `...and ${visibleOutdated.length - 50} more`)}
                     </p>
                   )}
                 </div>
@@ -282,6 +302,26 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
           packages={dialog.packages}
           scope={dialog.scope}
           onClose={() => setDialog(null)}
+          onResult={(succeeded) => {
+            // Optimistic-hide each succeeded package so the row
+            // disappears immediately. We key on the *displayed*
+            // package_manager string (e.g. "homebrew", "pip") which
+            // is what outdated_packages_data uses; the canonical
+            // manager passed to the agent ("brew", "pip") may
+            // differ, so we look up the original rows by name.
+            if (succeeded.length === 0) return;
+            const newSet = new Set(hiddenAfterUpdate);
+            for (const name of succeeded) {
+              if (Array.isArray(outdatedRaw)) {
+                for (const row of outdatedRaw as any[]) {
+                  if (row.name === name) {
+                    newSet.add(`${row.package_manager}|${name}`);
+                  }
+                }
+              }
+            }
+            setHiddenAfterUpdate(newSet);
+          }}
         />
       )}
       {changelog && (

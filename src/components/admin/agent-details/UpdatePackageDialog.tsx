@@ -56,10 +56,17 @@ interface UpdatePackageDialogProps {
   packages: string[];     // [] = scope=all
   scope: 'all' | 'selected' | 'security_only';
   onClose: () => void;
+  // Called whenever the agent reports a terminal status. The
+  // `succeeded` array is the names of packages whose outcome was
+  // "succeeded". The parent (PackageManagerStatus) uses this to
+  // optimistically hide those packages from the outdated list so the
+  // user gets immediate feedback without waiting for the next agent
+  // heartbeat to refresh the underlying data.
+  onResult?: (succeededPackages: string[], status: 'completed' | 'completed_with_failures' | 'failed') => void;
 }
 
 export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
-  agentId, manager, packages, scope, onClose,
+  agentId, manager, packages, scope, onClose, onResult,
 }) => {
   const [state, setState] = useState<DialogState>({ kind: 'idle' });
 
@@ -82,18 +89,38 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
     // Translate the agent_commands.status text from the DB into the
     // dialog's terminal state machine. Tolerant of either the new
     // `completed_with_failures` value or the older `completed`/`failed`.
+    // Also notifies the parent of succeeded packages so it can
+    // optimistically remove them from the outdated list.
     const transition = (status: string, result: UpdateResult | undefined, error?: string) => {
+      const notify = (terminalStatus: 'completed' | 'completed_with_failures' | 'failed') => {
+        if (!onResult) return;
+        const ok = (result?.results || [])
+          .filter(r => r.outcome === 'succeeded')
+          .map(r => r.package);
+        onResult(ok, terminalStatus);
+      };
       switch (status) {
         case 'completed':
-          if (result) setState({ kind: 'completed', result });
-          else setState({ kind: 'failed', error: error || 'Completed but result missing' });
+          if (result) {
+            setState({ kind: 'completed', result });
+            notify('completed');
+          } else {
+            setState({ kind: 'failed', error: error || 'Completed but result missing' });
+            notify('failed');
+          }
           return;
         case 'completed_with_failures':
-          if (result) setState({ kind: 'partial', result });
-          else setState({ kind: 'failed', error: error || 'Partial completion without result' });
+          if (result) {
+            setState({ kind: 'partial', result });
+            notify('completed_with_failures');
+          } else {
+            setState({ kind: 'failed', error: error || 'Partial completion without result' });
+            notify('failed');
+          }
           return;
         case 'failed':
           setState({ kind: 'failed', error: error || 'Update failed', result });
+          notify('failed');
           return;
         // pending / delivered / acknowledged → still in flight, keep waiting.
       }
