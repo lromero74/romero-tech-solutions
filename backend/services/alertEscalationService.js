@@ -103,9 +103,13 @@ class AlertEscalationService {
    */
   async _findAlertsNeedingEscalation(policy) {
     try {
-      // Build severity filter
-      const severityPlaceholders = policy.trigger_severity.map((_, i) => `$${i + 2}`).join(', ');
-
+      // The schema column is `severity_levels` (a TEXT[]). Two original bugs
+      // here: (1) read `policy.trigger_severity` which doesn't exist, throwing
+      // `Cannot read properties of undefined (reading 'map')`. (2) Even after
+      // the rename, the prior code built `severityPlaceholders` (never used)
+      // and used `$${severity_levels.length + 2}` for the duration filter,
+      // which produced wrong placeholder numbers — the array goes through as
+      // $1 (a single bound value, not unfolded), so the duration is just $2.
       const sql = `
         SELECT
           ah.*,
@@ -117,11 +121,11 @@ class AlertEscalationService {
         WHERE ah.acknowledged_at IS NULL
           AND ah.resolved_at IS NULL
           AND ah.severity = ANY($1::text[])
-          AND EXTRACT(EPOCH FROM (NOW() - ah.triggered_at)) / 60 >= $${policy.trigger_severity.length + 2}
+          AND EXTRACT(EPOCH FROM (NOW() - ah.triggered_at)) / 60 >= $2
         ORDER BY ah.triggered_at ASC
       `;
 
-      const values = [policy.trigger_severity, policy.trigger_after_minutes];
+      const values = [policy.severity_levels, policy.trigger_after_minutes];
 
       const result = await query(sql, values);
       return result.rows;

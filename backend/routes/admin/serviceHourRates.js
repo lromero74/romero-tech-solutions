@@ -121,6 +121,11 @@ router.post('/', requirePermission('modify.service_hour_rates.enable'), async (r
 
     const pool = await getPool();
 
+    // Upsert against uniq_service_hour_rate_tiers_active_cell (partial unique
+    // on day_of_week, time_start, time_end WHERE is_active = true). If a
+    // second click for the same cell races the first, the second collides
+    // with the first row and updates it in place — same end state as if
+    // the React state had updated in time, no duplicate rows.
     const query = `
       INSERT INTO service_hour_rate_tiers (
         tier_name,
@@ -134,6 +139,15 @@ router.post('/', requirePermission('modify.service_hour_rates.enable'), async (r
         display_order,
         is_active
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      ON CONFLICT (day_of_week, time_start, time_end) WHERE is_active = true
+      DO UPDATE SET
+        tier_name       = EXCLUDED.tier_name,
+        tier_level      = EXCLUDED.tier_level,
+        rate_multiplier = EXCLUDED.rate_multiplier,
+        color_code      = EXCLUDED.color_code,
+        description     = EXCLUDED.description,
+        display_order   = EXCLUDED.display_order,
+        updated_at      = CURRENT_TIMESTAMP
       RETURNING *
     `;
 

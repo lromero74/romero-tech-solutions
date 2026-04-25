@@ -3,15 +3,33 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
+// Match the SES setup used by emailService.js — workflow emails (workflow
+// approvals, escalation notifications, etc.) ride on the same SMTP relay
+// rather than a separate Gmail-style transport. The .env only sets
+// SES_SMTP_USER / SES_SMTP_PASS (the old SMTP_USER / SMTP_PASSWORD vars
+// were never populated, which is why nodemailer threw
+// `Missing credentials for "PLAIN"` on every workflow email).
+const SES_HOST = process.env.SMTP_HOST || `email-smtp.${process.env.AWS_REGION || 'us-east-1'}.amazonaws.com`;
+const SES_PORT = parseInt(process.env.SMTP_PORT || '587', 10);
+const SES_USER = process.env.SES_SMTP_USER || process.env.SMTP_USER || process.env.AWS_ACCESS_KEY_ID;
+const SES_PASS = process.env.SES_SMTP_PASS || process.env.SMTP_PASSWORD || process.env.AWS_SECRET_ACCESS_KEY;
+const FROM_EMAIL = process.env.SES_FROM_EMAIL || 'no-reply@romerotechsolutions.com';
+const FROM_NAME = process.env.SES_FROM_NAME || 'Romero Tech Solutions';
+const FROM_ADDRESS = `"${FROM_NAME}" <${FROM_EMAIL}>`;
+
+if (!SES_USER || !SES_PASS) {
+  console.warn('⚠️  workflowEmailService: no SMTP credentials. Set SES_SMTP_USER/SES_SMTP_PASS in backend/.env');
+}
+
 // Create reusable transporter
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT || '587'),
-  secure: false, // true for 465, false for other ports
+  host: SES_HOST,
+  port: SES_PORT,
+  secure: SES_PORT === 465,
   auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASSWORD
-  }
+    user: SES_USER,
+    pass: SES_PASS,
+  },
 });
 
 // Base URL for action links (from environment or default)
@@ -111,7 +129,7 @@ export async function sendServiceRequestAcknowledgmentEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: employee.email,
     subject,
     html
@@ -173,7 +191,7 @@ export async function sendServiceRequestAcknowledgedClientEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: client.email,
     subject,
     html
@@ -249,7 +267,7 @@ export async function sendServiceRequestStartLinkEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: employee.email,
     subject,
     html
@@ -311,7 +329,7 @@ export async function sendServiceRequestStartReminderEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: employee.email,
     subject,
     html
@@ -373,7 +391,7 @@ export async function sendServiceRequestStartedClientEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: client.email,
     subject,
     html
@@ -428,7 +446,7 @@ export async function sendServiceRequestStartedAdminEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: admin.email,
     subject,
     html
@@ -496,7 +514,7 @@ export async function sendServiceRequestCloseLinkEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: employee.email,
     subject,
     html
@@ -559,7 +577,7 @@ export async function sendServiceRequestClosedClientEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: client.email,
     subject,
     html
@@ -614,7 +632,7 @@ export async function sendServiceRequestClosedAdminEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: admin.email,
     subject,
     html
@@ -677,7 +695,7 @@ export async function sendServiceRequestCancelledClientEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: client.email,
     subject,
     html
@@ -734,7 +752,7 @@ export async function sendServiceRequestCancelledAdminEmail({
   `;
 
   const mailOptions = {
-    from: `"Romero Tech Solutions" <${process.env.SMTP_USER}>`,
+    from: FROM_ADDRESS,
     to: admin.email,
     subject,
     html
