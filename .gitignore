@@ -70,3 +70,6 @@ backend/logs/registration-attempts.log
 
 # User uploaded files
 backend/uploads/
+
+# Frontend production env (vite — values bake into dist/ at build time, not a runtime secret)
+.env.production
