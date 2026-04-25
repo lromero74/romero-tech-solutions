@@ -28,12 +28,16 @@ interface UnbanResponse {
 }
 
 const JAIL_DESCRIPTIONS: Record<string, string> = {
-  'romerotechsolutions-intrusion':
-    'App-emitted bans (failed-login bursts, rate-limit hits, suspicious input). Tied to /var/log/romerotechsolutions/intrusion.log.',
+  'romerotechsolutions-intrusion-hard':
+    'App-emitted bans for adversarial events (malware upload, admin compromise indicators, DB breach probes). 2-year ban.',
+  'romerotechsolutions-intrusion-soft':
+    'App-emitted bans for behavior-class events (3+ failed logins in 5 min, persistent rate-limit hits). 1-hour ban — gives a real user / buggy client room to recover.',
   'nginx-exploit':
-    'Shared OS-wide jail. Bans on the first probe of common exploit patterns (path traversal, .env scrapes, WordPress/PHP probes, SQL injection, etc.).',
+    'Shared OS-wide jail. 2-year ban on the first probe of common exploit patterns (path traversal, .env scrapes, WordPress/PHP probes, SQL injection, etc.).',
   'nginx-bad-request':
     'Shared OS-wide jail. Bans IPs that send 5+ malformed (HTTP 400) requests inside 10 minutes — usually scanners.',
+  sshd:
+    'SSH brute-force protection. Server is key-only (PasswordAuthentication off), so any password / invalid-user attempt = 2-year ban on the first try.',
 };
 
 const AdminIntrusionJails: React.FC = () => {

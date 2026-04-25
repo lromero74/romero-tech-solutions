@@ -9,13 +9,18 @@ import { validateEnvironmentConfig, validateDatabaseSecurity } from '../utils/pr
 const router = express.Router();
 const execFileAsync = promisify(execFile);
 
-// fail2ban jails this UI exposes. The first one is RTS-app-emitted; the
-// rest are the OS-wide jails that protect every site sharing nginx logs
-// (RTS included). Names must match exactly what's in /etc/fail2ban/jail.local.
+// fail2ban jails this UI exposes. The first two are RTS-app-emitted —
+// soft (1h) for behavior issues, hard (2y) for adversarial events.
+// nginx-exploit / nginx-bad-request are shared OS-wide jails (any site
+// behind nginx including RTS). sshd protects the host itself (key-only
+// auth — any password attempt = ban). Names must match exactly what's
+// in /etc/fail2ban/jail.local.
 const RTS_RELEVANT_JAILS = [
-  'romerotechsolutions-intrusion',
+  'romerotechsolutions-intrusion-hard',
+  'romerotechsolutions-intrusion-soft',
   'nginx-exploit',
   'nginx-bad-request',
+  'sshd',
 ];
 
 // Strict pattern guards in addition to the sudoers constraints. We never
