@@ -273,28 +273,23 @@ const CSRF_COOKIE_NAME = process.env.NODE_ENV === 'production' ? '__Host-csrf' :
 const csrfOptions = {
   getSecret: () => process.env.CSRF_SECRET || 'default-csrf-secret-change-in-production',
   getSessionIdentifier: (req) => {
-    // Debug: Log all available cookies (trace level)
-    log.csrf.trace(`All cookies available:`, req.cookies ? Object.keys(req.cookies) : 'NO COOKIES');
-
-    // Use session token if available (post-authentication)
-    // Check both session_token (snake_case) and sessionToken (camelCase)
+    // The identifier is HMAC'd into the CSRF token at generation time and
+    // re-checked at validation time. It MUST be stable across the
+    // generate→validate request pair, otherwise every PUT/POST will fail.
+    //
+    // The previous implementation used the CSRF cookie value itself as the
+    // identifier when no session_token cookie was present. That is
+    // self-referential and broken: at generate time the cookie holds the
+    // OLD value (or nothing), at validate time it holds the NEW value, so
+    // the HMAC never matches. (Auth in this app is Bearer-token based, no
+    // session_token cookie is ever set, so the buggy branch always fired.)
+    //
+    // Use IP+UA as a stable per-browser identifier. The double-submit
+    // pattern's security comes from cookie/header equality + HMAC over the
+    // server secret — the identifier is just minor pinning.
     const sessionToken = req.cookies?.session_token || req.cookies?.sessionToken;
-    if (sessionToken) {
-      log.csrf.trace(`CSRF session identifier: Using session token (authenticated request)`);
-      return sessionToken;
-    }
-
-    // For pre-authentication, use CSRF cookie itself as the session identifier
-    // This ensures the same session identifier is used for the entire pre-auth flow
-    if (req.cookies && req.cookies[CSRF_COOKIE_NAME]) {
-      log.csrf.trace(`CSRF session identifier: Using ${CSRF_COOKIE_NAME} cookie (pre-auth request)`);
-      return req.cookies[CSRF_COOKIE_NAME];
-    }
-
-    // Ultimate fallback for very first request (when no cookies exist yet)
-    const identifier = `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
-    log.csrf.trace(`CSRF session identifier: Using IP+UA (initial request): ${identifier.substring(0, 60)}...`);
-    return identifier;
+    if (sessionToken) return sessionToken;
+    return `${req.ip || 'unknown'}-${req.get('user-agent') || 'unknown'}`;
   },
   // Use __Host- prefix only in production (requires HTTPS)
   cookieName: CSRF_COOKIE_NAME,
