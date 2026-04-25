@@ -563,8 +563,12 @@ const AdminServiceHourRates: React.FC = () => {
               onClick={() => setSelectedCell(null)}
             ></div>
 
-            {/* Modal panel */}
-            <div className={`inline-block align-bottom ${themeClasses.bg.card} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full`}>
+            {/* Modal panel — `relative` is required: the backdrop sibling is
+                position:fixed, which (per CSS stacking rules) paints on top of
+                non-positioned siblings even when DOM order is reversed. Without
+                this, the panel renders behind the backdrop and the screen looks
+                uniformly grey. */}
+            <div className={`relative inline-block align-bottom ${themeClasses.bg.card} rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full`}>
               {/* Header */}
               <div className={`px-6 py-4 border-b ${themeClasses.border.primary}`}>
                 <div className="flex items-center justify-between">
