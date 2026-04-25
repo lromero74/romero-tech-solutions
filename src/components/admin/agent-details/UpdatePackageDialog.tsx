@@ -316,21 +316,21 @@ const ResultBody: React.FC<{
     <div className="max-h-72 overflow-auto border border-gray-200 dark:border-gray-700 rounded">
       <table className="w-full text-xs">
         <thead className="bg-gray-50 dark:bg-gray-800">
-          <tr>
+          <tr className="text-gray-900 dark:text-gray-100">
             <th className="text-left px-2 py-1">Package</th>
             <th className="text-left px-2 py-1">Outcome</th>
             <th className="text-left px-2 py-1">Before</th>
             <th className="text-left px-2 py-1">After</th>
           </tr>
         </thead>
-        <tbody>
+        <tbody className="text-gray-900 dark:text-gray-100">
           {result.results.map(r => (
             <tr key={r.package} className="border-t border-gray-200 dark:border-gray-700">
               <td className="px-2 py-1 font-mono">{r.package}</td>
               <td className={`px-2 py-1 ${
                 r.outcome === 'succeeded' ? 'text-green-600 dark:text-green-400' :
                 r.outcome === 'failed' ? 'text-red-600 dark:text-red-400' :
-                'text-gray-500'
+                'text-gray-600 dark:text-gray-400'
               }`}>
                 {r.outcome}{r.skipped_reason ? ` (${r.skipped_reason})` : ''}
               </td>
