@@ -205,7 +205,7 @@ const ConfirmBody: React.FC<{
     <p className={themeClasses.text.secondary}>
       The agent will run the following command on the device:
     </p>
-    <pre className="bg-gray-100 dark:bg-gray-900 rounded p-3 text-xs overflow-x-auto font-mono">
+    <pre className="bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 rounded p-3 text-xs overflow-x-auto font-mono">
       {cliPreview}
     </pre>
     {scope === 'all' && (
@@ -224,7 +224,7 @@ const ConfirmBody: React.FC<{
     <div className="flex justify-end gap-2 pt-2">
       <button
         onClick={onCancel}
-        className="px-4 py-2 rounded border border-gray-300 dark:border-gray-600">
+        className="px-4 py-2 rounded border border-gray-300 dark:border-gray-600 text-gray-800 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-800">
         Cancel
       </button>
       <button

@@ -3350,15 +3350,24 @@ router.get('/:agent_id/alerts', authMiddleware, async (req, res) => {
 });
 
 /**
- * Create Remote Command (Employee Only)
+ * Create Remote Command
  * POST /api/agents/:agent_id/commands
  *
- * Creates a command for the agent to execute
+ * Creates a command for the agent to execute. Authorized for:
+ *   - Employees: any agent in the system (MSP admins / technicians)
+ *   - Clients (business owners / agent owners): only agents in their
+ *     own business (they can manage their own devices)
+ *
+ * Mirrors the access pattern used by GET /:agent_id/commands/list
+ * above. The /commands route was originally employee-only; opened up
+ * to clients in 2026-04-25 so the device owner can trigger
+ * update_packages from the agent-magic-link dashboard view.
  */
-router.post('/:agent_id/commands', authMiddleware, requireEmployee, async (req, res) => {
+router.post('/:agent_id/commands', authMiddleware, async (req, res) => {
   try {
     const { agent_id } = req.params;
     const { command_type, command_params, requires_approval } = req.body;
+    const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
     if (!command_type) {
       return res.status(400).json({
@@ -3368,16 +3377,21 @@ router.post('/:agent_id/commands', authMiddleware, requireEmployee, async (req, 
       });
     }
 
-    // Verify agent exists
-    const agentResult = await query(
-      'SELECT id, business_id FROM agent_devices WHERE id = $1 AND soft_delete = false',
-      [agent_id]
-    );
+    // Verify agent exists. For non-employees we additionally constrain
+    // to agents in the requester's own business so a client can only
+    // act on their own devices.
+    let accessQuery = 'SELECT id, business_id FROM agent_devices WHERE id = $1 AND soft_delete = false';
+    const accessParams = [agent_id];
+    if (!isEmployee) {
+      accessQuery += ' AND business_id = $2';
+      accessParams.push(req.user.business_id);
+    }
+    const agentResult = await query(accessQuery, accessParams);
 
     if (agentResult.rows.length === 0) {
       return res.status(404).json({
         success: false,
-        message: 'Agent not found',
+        message: 'Agent not found or access denied',
         code: 'AGENT_NOT_FOUND'
       });
     }
