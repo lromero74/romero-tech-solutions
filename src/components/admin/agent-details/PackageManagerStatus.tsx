@@ -68,6 +68,36 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
     return outdatedRaw.filter((p: any) => !hiddenAfterUpdate.has(`${p.package_manager}|${p.name}`));
   }, [outdatedRaw, hiddenAfterUpdate]);
 
+  // Per-manager + total counts derived from visibleOutdated so the
+  // "Total Outdated", "Homebrew", "npm", "pip", "mas" header cards
+  // decrement in sync with the table when we optimistically hide
+  // updated packages. Falls back to the raw heartbeat values when
+  // there's no outdated_packages_data array (older agents). The
+  // hide-set resets on a fresh heartbeat, so once the agent reports
+  // the new ground truth we naturally re-anchor.
+  const displayCounts = useMemo(() => {
+    const counts = {
+      total: latestMetrics?.package_managers_outdated ?? 0,
+      homebrew: latestMetrics?.homebrew_outdated ?? 0,
+      npm: latestMetrics?.npm_outdated ?? 0,
+      pip: latestMetrics?.pip_outdated ?? 0,
+      mas: latestMetrics?.mas_outdated ?? 0,
+    };
+    if (!Array.isArray(outdatedRaw)) return counts;
+    // Recompute from the visible list to honor hiddenAfterUpdate.
+    const visible = visibleOutdated as any[];
+    counts.total = visible.length;
+    counts.homebrew = visible.filter(p => p.package_manager === 'homebrew').length;
+    counts.npm = visible.filter(p => p.package_manager === 'npm').length;
+    counts.pip = visible.filter(p => p.package_manager === 'pip' || p.package_manager === 'pip3').length;
+    counts.mas = visible.filter(p => p.package_manager === 'mas').length;
+    return counts;
+  }, [outdatedRaw, visibleOutdated, latestMetrics]);
+
+  // Render-or-bail check: if the agent hasn't reported any package-
+  // manager data yet, the panel doesn't show at all. We probe the
+  // raw metric (not displayCounts.total, which defaults to 0) so we
+  // can distinguish "no data" from "data showing 0 outdated".
   if (!latestMetrics || latestMetrics.package_managers_outdated === undefined) return null;
 
   // Click handler — maps the manager alias and opens the modal.
@@ -98,18 +128,18 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
               <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>{t('agentDetails.packageManagerStatus.totalOutdatedLabel', undefined, 'Total Outdated:')}</span>
             </div>
             <span className={`text-lg font-bold ${
-              latestMetrics.package_managers_outdated === 0 ? 'text-green-600 dark:text-green-400' :
-              latestMetrics.package_managers_outdated > 10 ? 'text-red-600 dark:text-red-400' :
+              displayCounts.total === 0 ? 'text-green-600 dark:text-green-400' :
+              displayCounts.total > 10 ? 'text-red-600 dark:text-red-400' :
               'text-yellow-600 dark:text-yellow-400'
             }`}>
-              {latestMetrics.package_managers_outdated}
+              {displayCounts.total}
             </span>
           </div>
-          {latestMetrics.package_managers_outdated === 0 ? (
+          {displayCounts.total === 0 ? (
             <p className={`text-xs ${themeClasses.text.muted}`}>{t('agentDetails.packageManagerStatus.allUpToDate', undefined, 'All packages are up to date')}</p>
           ) : (
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.package_managers_outdated} {latestMetrics.package_managers_outdated === 1
+              {displayCounts.total} {displayCounts.total === 1
                 ? t('agentDetails.packageManagerStatus.packageOutdated', undefined, 'package outdated')
                 : t('agentDetails.packageManagerStatus.packagesOutdated', undefined, 'packages outdated')}
             </p>
@@ -125,15 +155,15 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                 <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>Homebrew:</span>
               </div>
               <span className={`text-lg font-bold ${
-                latestMetrics.homebrew_outdated === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+                displayCounts.homebrew === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
               }`}>
-                {latestMetrics.homebrew_outdated}
+                {displayCounts.homebrew}
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.homebrew_outdated === 0
+              {displayCounts.homebrew === 0
                 ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
-                : `${latestMetrics.homebrew_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
+                : `${displayCounts.homebrew} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -147,15 +177,15 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                 <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>npm:</span>
               </div>
               <span className={`text-lg font-bold ${
-                latestMetrics.npm_outdated === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+                displayCounts.npm === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
               }`}>
-                {latestMetrics.npm_outdated}
+                {displayCounts.npm}
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.npm_outdated === 0
+              {displayCounts.npm === 0
                 ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
-                : `${latestMetrics.npm_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
+                : `${displayCounts.npm} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -169,15 +199,15 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                 <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>pip:</span>
               </div>
               <span className={`text-lg font-bold ${
-                latestMetrics.pip_outdated === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+                displayCounts.pip === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
               }`}>
-                {latestMetrics.pip_outdated}
+                {displayCounts.pip}
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.pip_outdated === 0
+              {displayCounts.pip === 0
                 ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
-                : `${latestMetrics.pip_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
+                : `${displayCounts.pip} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
@@ -191,28 +221,28 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                 <span className={`text-sm font-medium ${themeClasses.text.secondary}`}>mas:</span>
               </div>
               <span className={`text-lg font-bold ${
-                latestMetrics.mas_outdated === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
+                displayCounts.mas === 0 ? 'text-green-600 dark:text-green-400' : 'text-yellow-600 dark:text-yellow-400'
               }`}>
-                {latestMetrics.mas_outdated}
+                {displayCounts.mas}
               </span>
             </div>
             <p className={`text-xs ${themeClasses.text.muted}`}>
-              {latestMetrics.mas_outdated === 0
+              {displayCounts.mas === 0
                 ? t('agentDetails.packageManagerStatus.upToDate', undefined, 'Up to date')
-                : `${latestMetrics.mas_outdated} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
+                : `${displayCounts.mas} ${t('agentDetails.packageManagerStatus.outdated', undefined, 'outdated')}`}
             </p>
           </div>
         )}
       </div>
 
       {/* Warning for outdated packages */}
-      {latestMetrics.package_managers_outdated > 0 && (
+      {displayCounts.total > 0 && (
         <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
           <div className="flex items-start">
             <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 mr-2 flex-shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className={`text-sm font-medium text-blue-800 dark:text-blue-200 mb-2`}>
-                {latestMetrics.package_managers_outdated} {latestMetrics.package_managers_outdated === 1
+                {displayCounts.total} {displayCounts.total === 1
                   ? t('agentDetails.packageManagerStatus.outdatedDetected', undefined, 'outdated package detected')
                   : t('agentDetails.packageManagerStatus.outdatedDetectedPlural', undefined, 'outdated packages detected')}
               </p>
