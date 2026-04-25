@@ -19,6 +19,7 @@ type DialogState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'queued'; commandId: string }
+  | { kind: 'running'; commandId: string }
   | { kind: 'completed'; result: UpdateResult }
   | { kind: 'partial'; result: UpdateResult }
   | { kind: 'failed'; error: string; result?: UpdateResult };
@@ -78,14 +79,13 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
     return previewCommand(manager, scope, packages);
   }, [manager, scope, packages]);
 
-  // Subscribe to agent.command.completed once we're queued, so we
-  // catch the result as soon as the agent reports it. Falls back to
-  // polling /commands/list after 60s in case the websocket event
-  // gets lost (page reload, dropped socket, server restart between
-  // queue and result, etc.) — without it the user stares at the
-  // spinner forever.
+  // Subscribe to websocket progress + completion events as soon as
+  // we're queued. Polling /commands/list serves as a fallback in
+  // case the websocket misses (page reload, dropped socket, etc.) —
+  // it kicks in after 5s rather than 60s now that we have richer
+  // state transitions to reach.
   useEffect(() => {
-    if (state.kind !== 'queued') return;
+    if (state.kind !== 'queued' && state.kind !== 'running') return;
     const targetId = state.commandId;
 
     // Translate the agent_commands.status text from the DB into the
@@ -137,18 +137,29 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
       }
     };
 
-    // 1. Live websocket subscription — first to fire wins.
-    const unsubscribe = websocketService.onAgentCommandCompleted((evt) => {
+    // 1a. Progress event — agent picked the command up and started.
+    //     Flips us out of "queued" into "running" so the user sees
+    //     real motion instead of a stuck "Waiting for…" message.
+    const unsubProgress = websocketService.onAgentCommandProgress((evt) => {
+      if (evt.command_id !== targetId) return;
+      // Only advance from queued; ignore late progress events that
+      // arrive after we've already hit a terminal state.
+      setState(prev => prev.kind === 'queued' ? { kind: 'running', commandId: targetId } : prev);
+    });
+
+    // 1b. Completion event — the result is in.
+    const unsubComplete = websocketService.onAgentCommandCompleted((evt) => {
       if (evt.command_id !== targetId) return;
       transition(evt.status, evt.result || undefined, evt.error);
     });
 
-    // 2. Fallback poll. Starts after a 60s grace period (so we don't
-    //    hammer the API while the websocket would have delivered) and
-    //    runs every 10s. Reads /commands/list, finds our id, and if
-    //    its status is terminal we transition. The interval clears
-    //    automatically when the modal unmounts or transitions out
-    //    of "queued" (the useEffect re-runs).
+    // 2. Fallback poll. Starts after a 5s grace period (down from 60s
+    //    — websockets deliver instantly when they work, so 5s is
+    //    plenty of room before we fall back to polling). Runs every
+    //    5s. Reads /commands/list, finds our id, and transitions
+    //    based on its status: `executing` → running stage, terminal
+    //    statuses → final state. Cleared when the modal unmounts or
+    //    transitions out of queued/running.
     let pollTimer: ReturnType<typeof setInterval> | null = null;
     const startPoll = () => {
       if (pollTimer) return;
@@ -160,26 +171,29 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
           if (!row) return;
           if (['completed', 'completed_with_failures', 'failed'].includes(row.status)) {
             // The DB stores the agent's structured result JSON-stringified
-            // in the stdout column (see backend/routes/agents.js:2630).
+            // in the stdout column (see backend/routes/agents.js result handler).
             let parsedResult: UpdateResult | undefined;
             if (row.stdout) {
               try { parsedResult = JSON.parse(row.stdout); } catch { /* leave undefined */ }
             }
             transition(row.status, parsedResult, row.error_message);
+          } else if (row.status === 'executing' || row.status === 'delivered') {
+            setState(prev => prev.kind === 'queued' ? { kind: 'running', commandId: targetId } : prev);
           }
         } catch {
           // Transient errors are fine — we'll try again on the next tick.
         }
-      }, 10_000);
+      }, 5_000);
     };
-    const pollDelay = setTimeout(startPoll, 60_000);
+    const pollDelay = setTimeout(startPoll, 5_000);
 
     return () => {
-      unsubscribe();
+      unsubProgress();
+      unsubComplete();
       clearTimeout(pollDelay);
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [state, agentId]);
+  }, [state, agentId, onResult]);
 
   const onConfirm = async () => {
     setState({ kind: 'submitting' });
@@ -224,6 +238,9 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
           {state.kind === 'submitting' && <Status icon="spin" label="Queueing command…" />}
           {state.kind === 'queued' && (
             <Status icon="spin" label="Waiting for the agent to pick it up. Typically 10–60 seconds." />
+          )}
+          {state.kind === 'running' && (
+            <Status icon="spin" label="Agent is running the update on the device…" />
           )}
           {state.kind === 'completed' && (
             <ResultBody status="completed" result={state.result} onClose={onClose} />

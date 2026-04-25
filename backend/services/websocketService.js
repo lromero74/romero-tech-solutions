@@ -469,22 +469,30 @@ class WebSocketService {
 
   /**
    * Send a message to a specific user (e.g. a client whose own device
-   * just finished a remote command). adminSockets are tracked
-   * separately; non-admin users live in connectedUsers (userId → socketId).
-   * Returns true if the user has an active socket and was emitted to.
+   * just finished a remote command). Walks all the per-user socket
+   * registries we maintain because users land in different ones
+   * depending on auth path:
+   *   - admins / employees → adminSockets (handled by broadcastToAdmins)
+   *   - clients (websocketService.js client-authenticate path) → clientSockets
+   *   - generic logged-in users (user-login event) → connectedUsers
+   * Returns true if at least one socket received the message.
    */
   broadcastToUser(userId, message) {
     if (!userId) return false;
-    const socketId = this.connectedUsers.get(userId);
-    if (!socketId) {
-      // Not currently connected — quietly drop. Caller can fall back
-      // to polling on next page load.
-      return false;
-    }
-    const socket = this.io.sockets.sockets.get(socketId);
-    if (!socket) return false;
-    socket.emit(message.type, message.data);
-    return true;
+    let delivered = false;
+    const socketIds = new Set();
+    const a = this.connectedUsers.get(userId);
+    if (a) socketIds.add(a);
+    const b = this.clientSockets && this.clientSockets.get(userId);
+    if (b) socketIds.add(b);
+    socketIds.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) {
+        socket.emit(message.type, message.data);
+        delivered = true;
+      }
+    });
+    return delivered;
   }
 
   // Get connected user count

@@ -2595,6 +2595,52 @@ router.get('/:agent_id/commands', authenticateAgent, requireAgentMatch, async (r
  * Submit Command Result
  * POST /api/agents/:agent_id/commands/:command_id/result
  *
+ * Agent reports that it has started executing a command. Updates the
+ * row's started_at + status='executing' and broadcasts an
+ * agent.command.progress websocket event so the dashboard modal can
+ * flip from "Waiting for the agent to pick it up" to "Update running…"
+ * without waiting for the final result. Best-effort: a stale row or a
+ * delivery race shouldn't block the agent — we 200 either way.
+ */
+router.post('/:agent_id/commands/:command_id/started', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id, command_id } = req.params;
+    await query(
+      `UPDATE agent_commands
+       SET status = 'executing', started_at = NOW()
+       WHERE id = $1 AND agent_device_id = $2 AND status IN ('pending', 'delivered')`,
+      [command_id, agent_id]
+    );
+    try {
+      const cmdRow = await query(
+        `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
+        [command_id]
+      );
+      const message = {
+        type: 'agent.command.progress',
+        data: {
+          command_id,
+          agent_id,
+          command_type: cmdRow.rows[0]?.command_type,
+          stage: 'executing',
+          started_at: new Date().toISOString(),
+        },
+      };
+      websocketService.broadcastToAdmins(message);
+      const requestedBy = cmdRow.rows[0]?.requested_by;
+      if (requestedBy) websocketService.broadcastToUser(requestedBy, message);
+    } catch (wsErr) {
+      console.error('agent.command.progress broadcast failed:', wsErr);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Command started notification error:', error);
+    // Don't 5xx the agent — this endpoint is informational.
+    res.json({ success: false, message: error?.message });
+  }
+});
+
+/**
  * Agent submits execution result for a command
  */
 router.post('/:agent_id/commands/:command_id/result', authenticateAgent, requireAgentMatch, async (req, res) => {

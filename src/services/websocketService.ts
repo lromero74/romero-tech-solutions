@@ -74,6 +74,19 @@ interface AgentCommandCompleted {
   completed_at: string;
 }
 
+// AgentCommandProgress is emitted by the backend when the agent
+// reports an intermediate stage (currently just "executing", sent the
+// moment the agent picks the command up via /commands/:id/started).
+// Lets the modal show "Update running…" while the agent does its work
+// instead of staying on "Waiting for the agent to pick it up."
+interface AgentCommandProgress {
+  command_id: string;
+  agent_id: string;
+  command_type: string;
+  stage: 'executing';
+  started_at: string;
+}
+
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
 type EmployeeLoginCallback = (change: EmployeeLoginChange) => void;
 type AuthErrorCallback = (error: { message: string }) => void;
@@ -82,6 +95,7 @@ type ServiceRequestViewersCallback = (update: ServiceRequestViewersUpdate) => vo
 type AgentStatusCallback = (update: AgentStatusUpdate) => void;
 type AgentMetricsCallback = (update: AgentMetricsUpdate) => void;
 type AgentCommandCompletedCallback = (update: AgentCommandCompleted) => void;
+type AgentCommandProgressCallback = (update: AgentCommandProgress) => void;
 
 class WebSocketService {
   private socket: Socket | null = null;
@@ -101,6 +115,7 @@ class WebSocketService {
   private onAgentStatusCallbacks: AgentStatusCallback[] = [];
   private onAgentMetricsCallbacks: AgentMetricsCallback[] = [];
   private onAgentCommandCompletedCallbacks: AgentCommandCompletedCallback[] = [];
+  private onAgentCommandProgressCallbacks: AgentCommandProgressCallback[] = [];
 
   connect(serverUrl: string = 'http://localhost:3001'): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -246,6 +261,21 @@ class WebSocketService {
           });
         });
 
+        // Emitted by backend when an agent reports it's started
+        // executing a command (POST /commands/:id/started). Lets the
+        // dashboard modal show "Update running…" instead of leaving
+        // the user staring at "Waiting for the agent to pick it up."
+        this.socket.on('agent.command.progress', (update: AgentCommandProgress) => {
+          console.log(`🛠️  Agent command progress: ${update.command_type} stage=${update.stage} for ${update.agent_id}`);
+          this.onAgentCommandProgressCallbacks.forEach(callback => {
+            try {
+              callback(update);
+            } catch (error) {
+              console.error('❌ Error in agent command progress callback:', error);
+            }
+          });
+        });
+
         // Emitted by backend when an agent posts the result of a remote
         // command (e.g. update_packages). Subscribers (currently the
         // package-update modal) get a real-time flip from running → done.
@@ -358,6 +388,20 @@ class WebSocketService {
       const index = this.onAgentCommandCompletedCallbacks.indexOf(callback);
       if (index > -1) {
         this.onAgentCommandCompletedCallbacks.splice(index, 1);
+      }
+    };
+  }
+
+  /**
+   * Subscribe to agent.command.progress events (currently just the
+   * "executing" stage emitted when the agent picks up the command).
+   */
+  onAgentCommandProgress(callback: AgentCommandProgressCallback): () => void {
+    this.onAgentCommandProgressCallbacks.push(callback);
+    return () => {
+      const index = this.onAgentCommandProgressCallbacks.indexOf(callback);
+      if (index > -1) {
+        this.onAgentCommandProgressCallbacks.splice(index, 1);
       }
     };
   }
