@@ -467,6 +467,26 @@ class WebSocketService {
     });
   }
 
+  /**
+   * Send a message to a specific user (e.g. a client whose own device
+   * just finished a remote command). adminSockets are tracked
+   * separately; non-admin users live in connectedUsers (userId → socketId).
+   * Returns true if the user has an active socket and was emitted to.
+   */
+  broadcastToUser(userId, message) {
+    if (!userId) return false;
+    const socketId = this.connectedUsers.get(userId);
+    if (!socketId) {
+      // Not currently connected — quietly drop. Caller can fall back
+      // to polling on next page load.
+      return false;
+    }
+    const socket = this.io.sockets.sockets.get(socketId);
+    if (!socket) return false;
+    socket.emit(message.type, message.data);
+    return true;
+  }
+
   // Get connected user count
   getConnectedUserCount() {
     return this.connectedUsers.size;

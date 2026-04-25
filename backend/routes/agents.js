@@ -2641,15 +2641,21 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
       error
     );
 
-    // Push to admin sockets so the dashboard can react in real time
-    // without polling. Used by the package-update flow's modal to flip
-    // from "running" to "done" the moment the agent finishes.
+    // Push to whoever's currently watching the dashboard so the modal
+    // flips from "running" to "done" the moment the agent finishes.
+    // We hit BOTH (a) admin sockets (any logged-in employee) AND
+    // (b) the specific requester's socket if the requester is a
+    // client — clients aren't in adminSockets so they'd otherwise
+    // miss the event. Idempotent: a single connected admin who
+    // happens to also be the requester only sees one event because
+    // adminSockets and connectedUsers are tracked under different
+    // socket sets.
     try {
       const cmdRow = await query(
         `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
         [command_id]
       );
-      websocketService.broadcastToAdmins({
+      const message = {
         type: 'agent.command.completed',
         data: {
           command_id,
@@ -2660,7 +2666,12 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
           error,
           completed_at: new Date().toISOString(),
         },
-      });
+      };
+      websocketService.broadcastToAdmins(message);
+      const requestedBy = cmdRow.rows[0]?.requested_by;
+      if (requestedBy) {
+        websocketService.broadcastToUser(requestedBy, message);
+      }
     } catch (wsErr) {
       // Never let websocket failure block the result write — the row
       // is already persisted; the dashboard will catch up on next poll.
