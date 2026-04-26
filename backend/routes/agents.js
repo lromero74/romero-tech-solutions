@@ -1414,15 +1414,43 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
     // agent" action. COALESCE preserves the prior value when an
     // older agent (no agent_version field in payload) checks in,
     // so we don't blow away the registration-time value.
-    await query(
+    //
+    // RETURNING gives us the post-update row so we can broadcast
+    // the freshly-stored agent_version (which may be the new value
+    // we just wrote, or — for older agents — the prior stored
+    // value the COALESCE preserved). Either way the dashboard sees
+    // the truth that's now in the DB.
+    const updateResult = await query(
       `UPDATE agent_devices
        SET last_heartbeat = NOW(),
            status = COALESCE($2, status),
            agent_version = COALESCE($3, agent_version),
            updated_at = NOW()
-       WHERE id = $1`,
+       WHERE id = $1
+       RETURNING device_name, status, agent_version, last_heartbeat`,
       [agent_id, status || 'online', agent_version || null]
     );
+
+    // Push the heartbeat-derived state to the admin dashboards in
+    // real time so the AgentDashboard table refreshes without a
+    // page reload. Particularly important for the "Update agent"
+    // flow: the admin clicks Update, and as soon as the agent
+    // comes back on the new binary the version cell flips. Best-
+    // effort — no broadcast = no UX bug, just no auto-refresh.
+    if (updateResult.rows.length > 0) {
+      const row = updateResult.rows[0];
+      try {
+        websocketService.broadcastAgentStatusUpdate({
+          agentId: agent_id,
+          status: row.status,
+          lastHeartbeat: row.last_heartbeat,
+          deviceName: row.device_name,
+          agentVersion: row.agent_version,
+        });
+      } catch (broadcastErr) {
+        console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
+      }
+    }
 
     // Get subscription information for tray display
     const agentResult = await query(

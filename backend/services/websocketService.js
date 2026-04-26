@@ -405,6 +405,33 @@ class WebSocketService {
   }
 
   /**
+   * Push an agent's heartbeat-derived state to all admin dashboards
+   * so the AgentDashboard table refreshes the row in place — no
+   * manual reload needed. Carries agent_version so the dashboard
+   * can clear an "update in progress" marker as soon as the agent
+   * comes back on the new build.
+   *
+   * Called from the heartbeat handler in routes/agents.js (every
+   * heartbeat). Cheap: emits to the existing admin socket set
+   * with the same payload shape AgentDashboard's
+   * websocketService.onAgentStatusChange already expects.
+   */
+  broadcastAgentStatusUpdate({ agentId, status, lastHeartbeat, deviceName, agentVersion }) {
+    if (this.adminSockets.size === 0) return;
+    const payload = {
+      agentId,
+      status,
+      lastHeartbeat,
+      deviceName,
+      agentVersion,
+    };
+    this.adminSockets.forEach(socketId => {
+      const socket = this.io.sockets.sockets.get(socketId);
+      if (socket) socket.emit('agent-status-update', payload);
+    });
+  }
+
+  /**
    * Broadcast permission-related updates to all connected admin clients
    * Used when permissions or role assignments are updated
    */

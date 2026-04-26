@@ -52,6 +52,11 @@ interface AgentStatusUpdate {
   status: 'online' | 'offline' | 'warning';
   lastHeartbeat: string;
   deviceName: string;
+  // agentVersion is sent on every heartbeat by agents v1.16.77+.
+  // The AgentDashboard uses it to (a) live-refresh the version cell
+  // and (b) clear the "Update in progress" badge once the post-
+  // update agent comes back on the new build.
+  agentVersion?: string;
 }
 
 interface AgentMetricsUpdate {

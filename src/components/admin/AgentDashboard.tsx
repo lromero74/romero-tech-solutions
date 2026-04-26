@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings, Download } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
@@ -67,6 +67,29 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   // null while loading or if the manifest is unreachable — in either case
   // the UI hides the badge rather than guess.
   const [latestAgentVersion, setLatestAgentVersion] = useState<string | null>(null);
+  // Mirror the latest-version state into a ref so long-lived
+  // websocket handlers (which capture state by closure at register
+  // time) can read the *current* value when they fire instead of
+  // the value as of registration. Without this, the listener
+  // registered before the manifest fetch completes would forever
+  // see latestAgentVersion=null and never clear the
+  // updateInProgress marker.
+  const latestAgentVersionRef = useRef<string | null>(null);
+  useEffect(() => {
+    latestAgentVersionRef.current = latestAgentVersion;
+  }, [latestAgentVersion]);
+
+  // Per-agent "update queued" state, keyed by agent.id. Populated when
+  // the admin clicks Update Agent and the install_update command is
+  // accepted by the backend. Cleared when the agent's next heartbeat
+  // arrives carrying agent_version >= latestAgentVersion (which means
+  // the unattended install completed and the OS supervisor has
+  // restarted the agent on the new binary).
+  //
+  // Stored as a Set rather than a flat boolean so two simultaneous
+  // updates (e.g. the admin queues B while A's still going) don't
+  // collide.
+  const [updateInProgress, setUpdateInProgress] = useState<Set<string>>(new Set());
 
   // Confirmation modal state for the dashboard-triggered "Update agent"
   // action. Mirrors the shape of confirmDelete so the rendering pattern
@@ -180,10 +203,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       return;
     }
     if (!confirmInstallUpdate.agentId) return;
+    const targetId = confirmInstallUpdate.agentId;
     try {
-      setActionInProgress(confirmInstallUpdate.agentId);
-      const response = await agentService.requestInstallUpdate(confirmInstallUpdate.agentId);
-      if (!response.success) {
+      setActionInProgress(targetId);
+      const response = await agentService.requestInstallUpdate(targetId);
+      if (response.success) {
+        // Mark the agent as "update in progress" — the badge in
+        // the version column flips from "Update available" to
+        // "Update in progress" until the next heartbeat arrives
+        // with agent_version >= latestAgentVersion (handled in
+        // the websocket listener below).
+        setUpdateInProgress((prev) => {
+          const next = new Set(prev);
+          next.add(targetId);
+          return next;
+        });
+      } else {
         setError(response.message || 'Failed to queue agent update');
       }
     } catch (err) {
@@ -326,11 +361,36 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               ...agent,
               status: update.status,
               last_heartbeat: update.lastHeartbeat,
+              // agent_version is on every heartbeat from agents
+              // v1.16.77+. The conditional update preserves the
+              // old value when an older agent (no agentVersion in
+              // the broadcast payload) checks in, mirroring the
+              // backend's COALESCE.
+              agent_version: update.agentVersion ?? agent.agent_version,
             };
           }
           return agent;
         });
       });
+
+      // If this agent had an "update in progress" marker AND the
+      // heartbeat now reports a version >= the manifest's latest,
+      // the unattended install completed and the supervisor brought
+      // the agent back. Clear the marker so the badge disappears.
+      // Read latestAgentVersion via the ref so we get the current
+      // value, not the closure-captured value from registration.
+      const liveLatest = latestAgentVersionRef.current;
+      if (update.agentVersion && liveLatest) {
+        setUpdateInProgress((prev) => {
+          if (!prev.has(update.agentId)) return prev;
+          if (compareSemverDesc(update.agentVersion!, liveLatest) < 0) {
+            return prev;
+          }
+          const next = new Set(prev);
+          next.delete(update.agentId);
+          return next;
+        });
+      }
     });
 
     // Listen for agent metrics updates
@@ -841,7 +901,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <div className={`text-sm ${themeClasses.text.primary}`}>
                           {agent.agent_version || '—'}
                         </div>
-                        {isAgentOutdated(agent) && (
+                        {updateInProgress.has(agent.id) ? (
+                          <span
+                            className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                            title={`Updating to ${latestAgentVersion}…`}
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                            Update in progress
+                          </span>
+                        ) : isAgentOutdated(agent) && (
                           <span
                             className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
                             title={`Latest released: ${latestAgentVersion}`}
@@ -859,7 +927,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
-                          {canSendCommands && isAgentOutdated(agent) && (
+                          {canSendCommands && isAgentOutdated(agent) && !updateInProgress.has(agent.id) && (
                             <button
                               onClick={() => setConfirmInstallUpdate({
                                 show: true,
@@ -1018,7 +1086,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     <span className={`text-xs ${themeClasses.text.muted}`}>Agent Version</span>
                     <div className={`flex items-center gap-2 ${themeClasses.text.primary}`}>
                       <span>{agent.agent_version || '—'}</span>
-                      {isAgentOutdated(agent) && (
+                      {updateInProgress.has(agent.id) ? (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                          title={`Updating to ${latestAgentVersion}…`}
+                        >
+                          <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                          Update in progress
+                        </span>
+                      ) : isAgentOutdated(agent) && (
                         <span
                           className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
                           title={`Latest released: ${latestAgentVersion}`}
@@ -1042,7 +1118,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         Edit
                       </button>
                     )}
-                    {canSendCommands && isAgentOutdated(agent) && (
+                    {canSendCommands && isAgentOutdated(agent) && !updateInProgress.has(agent.id) && (
                       <button
                         onClick={() => setConfirmInstallUpdate({
                           show: true,
