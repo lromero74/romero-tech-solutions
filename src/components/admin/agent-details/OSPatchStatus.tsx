@@ -256,9 +256,10 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                 </thead>
                 <tbody>
                   {visiblePatches.slice(0, 200).map((p: any, idx: number) => {
+                    const isPendingReboot = p.package_manager === 'winupdate-reboot';
                     const canUpdate = !!agentId && !!p.package_manager && !!managerAlias[p.package_manager];
                     return (
-                      <tr key={idx} className="border-b border-blue-100 dark:border-blue-800/50">
+                      <tr key={idx} className={`border-b border-blue-100 dark:border-blue-800/50 ${isPendingReboot ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}>
                         <td className="py-1 px-2 text-blue-800 dark:text-blue-200">
                           <span className="flex items-center gap-1">
                             {p.security && <Shield className="w-3 h-3 text-red-500" />}
@@ -282,11 +283,17 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                             <span className={themeClasses.text.muted}>—</span>
                           )}
                         </td>
-                        <td className={`py-1 px-2 ${themeClasses.text.muted}`}>{p.source || '—'}</td>
+                        <td className={`py-1 px-2 ${isPendingReboot ? 'text-amber-700 dark:text-amber-300 font-medium' : themeClasses.text.muted}`}>
+                          {p.source || '—'}
+                        </td>
                         <td className={`py-1 px-2 ${themeClasses.text.secondary}`}>{p.package_manager || '—'}</td>
                         {agentId && (
                           <td className="py-1 px-2">
-                            {canUpdate ? (
+                            {isPendingReboot ? (
+                              <span className="inline-flex items-center px-2 py-0.5 text-xs rounded bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200">
+                                Restart to complete
+                              </span>
+                            ) : canUpdate ? (
                               <button
                                 onClick={() => requestUpdate(p.package_manager, p.name)}
                                 className="px-2 py-0.5 text-xs rounded bg-blue-600 text-white hover:bg-blue-700">
