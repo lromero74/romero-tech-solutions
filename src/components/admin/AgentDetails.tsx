@@ -371,6 +371,16 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
           pip_outdated: update.metrics.pip_outdated || 0,
           mas_outdated: update.metrics.mas_outdated || 0,
           outdated_packages_data: update.metrics.outdated_packages_data || null,
+          // Newer fields (added in agent v1.16.49+) that previously
+          // weren't carried through the websocket merge — every
+          // metric tick / heartbeat broadcast was wiping them out
+          // of the in-memory state, which made the OS Patch Status
+          // panel revert from detail-view to count-only the moment
+          // a heartbeat fired (the data was still in the DB and the
+          // initial fetch saw it; the merge below was the dropper).
+          os_patches_data: update.metrics.os_patches_data || null,
+          distro_upgrade: update.metrics.distro_upgrade || null,
+          clt_update_available: update.metrics.clt_update_available || false,
           raw_metrics: update.metrics.raw_metrics || null,
         };
 
