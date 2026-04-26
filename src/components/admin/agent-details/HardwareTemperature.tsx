@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Thermometer, AlertTriangle } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
+import MetricsChartECharts from '../MetricsChartECharts';
 
-export const HardwareTemperature: React.FC<AgentDetailsComponentProps> = ({ latestMetrics, agent }) => {
+export const HardwareTemperature: React.FC<AgentDetailsComponentProps> = ({ latestMetrics, agent, metricsHistory }) => {
   const { t } = useOptionalClientLanguage();
   if (!latestMetrics || (latestMetrics.highest_temperature_c === undefined && !latestMetrics.sensor_data)) {
     return null;
@@ -13,6 +14,59 @@ export const HardwareTemperature: React.FC<AgentDetailsComponentProps> = ({ late
   // Filter out "systeminfo" placeholder sensor
   const realSensors = latestMetrics.sensor_data?.filter(s => s.sensor_type !== 'info') || [];
   const hasSensorData = (latestMetrics.highest_temperature_c && latestMetrics.highest_temperature_c > 0) || realSensors.length > 0;
+
+  // Build per-sensor time series from the metricsHistory window so we
+  // can render charts that mirror CPU/Memory/Disk usage. We chart the
+  // three named hardware temperatures whenever the host reports them
+  // (CPU/GPU/motherboard) plus "highest" as the default rollup. Each
+  // returned array is empty when the history doesn't carry that
+  // field at all, in which case we don't render the chart.
+  const tempSeries = useMemo(() => {
+    if (!Array.isArray(metricsHistory) || metricsHistory.length === 0) {
+      return { highest: [], cpu: [], gpu: [], mobo: [] };
+    }
+    const collect = (key: 'highest_temperature_c' | 'cpu_temperature_c' | 'gpu_temperature_c' | 'motherboard_temperature_c') =>
+      metricsHistory
+        .filter(m => typeof m[key] === 'number' && (m[key] as number) > 0)
+        .map(m => ({ timestamp: m.collected_at, value: Number(m[key]) || 0 }));
+    return {
+      highest: collect('highest_temperature_c'),
+      cpu:     collect('cpu_temperature_c'),
+      gpu:     collect('gpu_temperature_c'),
+      mobo:    collect('motherboard_temperature_c'),
+    };
+  }, [metricsHistory]);
+
+  // Build per-named-fan / per-named-sensor series by walking the
+  // sensor_data array on each historical metric and bucketing by
+  // sensor_name. This lets us chart e.g. each individual fan's RPM
+  // history rather than just the aggregate fan_count. Map keys are
+  // case-sensitive sensor names; values carry the unit + readings so
+  // the chart can label its Y axis correctly.
+  const namedSeries = useMemo(() => {
+    if (!Array.isArray(metricsHistory) || metricsHistory.length === 0) return new Map<string, { unit: string; type: string; points: { timestamp: string; value: number }[] }>();
+    const map = new Map<string, { unit: string; type: string; points: { timestamp: string; value: number }[] }>();
+    for (const m of metricsHistory) {
+      const sensors = (m.sensor_data || []) as Array<{ sensor_name: string; sensor_type: string; unit: string; value: number }>;
+      for (const s of sensors) {
+        if (!s.sensor_name || s.sensor_type === 'info') continue;
+        if (typeof s.value !== 'number') continue;
+        const entry = map.get(s.sensor_name) || { unit: s.unit || '', type: s.sensor_type || '', points: [] };
+        entry.points.push({ timestamp: m.collected_at, value: s.value });
+        map.set(s.sensor_name, entry);
+      }
+    }
+    // Drop sensors that only ever reported a single sample — a chart
+    // of one point isn't helpful. Sort each remaining series by time.
+    for (const [k, v] of Array.from(map.entries())) {
+      if (v.points.length < 2) {
+        map.delete(k);
+        continue;
+      }
+      v.points.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    }
+    return map;
+  }, [metricsHistory]);
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
@@ -233,6 +287,85 @@ export const HardwareTemperature: React.FC<AgentDetailsComponentProps> = ({ late
                   ))}
               </div>
             </div>
+          )}
+
+          {/* Sensor history charts: render below the live snapshot.
+              Three named-rollup charts up top (highest/CPU/GPU/mobo
+              wherever the host reports them) plus per-named-sensor
+              charts when the metricsHistory window is large enough
+              for the points to be meaningful. */}
+          {(tempSeries.highest.length > 1 || tempSeries.cpu.length > 1 || tempSeries.gpu.length > 1 || tempSeries.mobo.length > 1) && (
+            <div className="mt-6 space-y-4">
+              <h4 className={`text-sm font-semibold ${themeClasses.text.primary}`}>
+                {t('agentDetails.hardwareTemperature.history', undefined, 'Sensor history')}
+              </h4>
+              {tempSeries.highest.length > 1 && (
+                <MetricsChartECharts
+                  data={tempSeries.highest}
+                  title="Highest temperature"
+                  dataKey="Temp"
+                  unit="°C"
+                  color="#ef4444"
+                  agentId={agent?.id}
+                  resourceType="cpu"
+                />
+              )}
+              {tempSeries.cpu.length > 1 && (
+                <MetricsChartECharts
+                  data={tempSeries.cpu}
+                  title="CPU temperature"
+                  dataKey="CPU"
+                  unit="°C"
+                  color="#3b82f6"
+                  agentId={agent?.id}
+                  resourceType="cpu"
+                />
+              )}
+              {tempSeries.gpu.length > 1 && (
+                <MetricsChartECharts
+                  data={tempSeries.gpu}
+                  title="GPU temperature"
+                  dataKey="GPU"
+                  unit="°C"
+                  color="#8b5cf6"
+                  agentId={agent?.id}
+                  resourceType="cpu"
+                />
+              )}
+              {tempSeries.mobo.length > 1 && (
+                <MetricsChartECharts
+                  data={tempSeries.mobo}
+                  title="Motherboard temperature"
+                  dataKey="MoBo"
+                  unit="°C"
+                  color="#10b981"
+                  agentId={agent?.id}
+                  resourceType="cpu"
+                />
+              )}
+            </div>
+          )}
+
+          {namedSeries.size > 0 && (
+            <details className="mt-4">
+              <summary className={`cursor-pointer text-sm font-semibold ${themeClasses.text.primary}`}>
+                Per-sensor history ({namedSeries.size} sensors)
+              </summary>
+              <div className="mt-3 space-y-4">
+                {Array.from(namedSeries.entries()).map(([name, entry]) => (
+                  <MetricsChartECharts
+                    key={name}
+                    data={entry.points}
+                    title={name}
+                    dataKey={entry.type === 'fan' ? 'RPM' : 'Value'}
+                    unit={entry.unit}
+                    color={entry.type === 'fan' ? '#f59e0b' : '#06b6d4'}
+                    agentId={agent?.id}
+                    resourceType="cpu"
+                  />
+                ))}
+              </div>
+            </details>
           )}
 
           {/* Temperature Alert */}

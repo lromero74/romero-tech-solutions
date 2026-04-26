@@ -1212,10 +1212,10 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       {/* Network Connectivity Status - Placeholder */}
 
       {/* Hardware Temperature & Sensors */}
-      <HardwareTemperature latestMetrics={latestMetrics} agent={agent} />
+      <HardwareTemperature latestMetrics={latestMetrics} agent={agent} metricsHistory={metricsHistory} />
 
       {/* latestMetrics={latestMetrics} */}
-      <SystemEventLogs latestMetrics={latestMetrics} />
+      <SystemEventLogs latestMetrics={latestMetrics} metricsHistory={metricsHistory} />
       {/* latestMetrics={latestMetrics} */}
       <DiskHealthStatus latestMetrics={latestMetrics} />
       {/* Tabs */}
