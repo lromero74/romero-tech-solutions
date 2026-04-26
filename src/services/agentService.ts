@@ -25,6 +25,17 @@ export interface AgentDevice {
   created_by: string | null;
   agent_token?: string; // Only returned on registration
   agent_version?: string; // Reported by the agent on every heartbeat (v1.16.77+)
+  // Pending action commands (install_update, reboot_host) currently in
+  // pending/delivered/executing status. Surfaced in the GET /api/agents
+  // list response so the dashboard's "Update in progress" / "Reboot
+  // scheduled" badges survive a page refresh.
+  pending_action_commands?: Array<{
+    command_id: string;
+    command_type: 'install_update' | 'reboot_host';
+    status: 'pending' | 'delivered' | 'executing';
+    requested_at: string;
+    command_params?: Record<string, unknown> | null;
+  }>;
   business_name?: string; // Joined from businesses table
   is_individual?: boolean; // From businesses table
   individual_first_name?: string; // From users table JOIN (for individuals only)

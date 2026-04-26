@@ -11,6 +11,7 @@ import {
   normalizeProgressPayload,
   buildProgressWsMessage,
   buildStartedWsMessage,
+  buildRebootCancelledWsMessage,
 } from '../utils/agentCommandPayloads.cjs';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
@@ -1450,6 +1451,45 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
       } catch (broadcastErr) {
         console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
       }
+
+      // Sweep stale 'executing' install_update rows for this agent.
+      // The agent leaves them in 'executing' on purpose (so a
+      // dashboard refresh keeps the "Update in progress" badge
+      // alive while the install runs); we mark them 'completed'
+      // once the agent comes back heartbeating, so the badge
+      // doesn't stick forever after the upgrade.
+      //
+      // 90s is the right threshold: long enough to cover a typical
+      // dpkg/rpm install + postinst (3s grace + ~30s install +
+      // service restart + first heartbeat ~10s after restart),
+      // short enough that the dashboard's "in progress" state
+      // clears promptly. If the install actually takes longer
+      // (slow network, large package), the badge is shown for an
+      // extra heartbeat cycle — annoying but correct.
+      try {
+        await query(
+          `UPDATE agent_commands
+           SET status = 'completed',
+               completed_at = NOW(),
+               result_payload = jsonb_set(
+                 COALESCE(result_payload, '{}'::jsonb),
+                 '{completion}',
+                 $2::jsonb,
+                 true
+               )
+           WHERE agent_device_id = $1
+             AND command_type = 'install_update'
+             AND status = 'executing'
+             AND requested_at < NOW() - INTERVAL '90 seconds'`,
+          [agent_id, JSON.stringify({
+            source: 'heartbeat-sweep',
+            agent_version_observed: row.agent_version,
+            swept_at: new Date().toISOString(),
+          })]
+        );
+      } catch (sweepErr) {
+        console.warn('⚠ Failed to sweep stale install_update rows:', sweepErr.message);
+      }
     }
 
     // Get subscription information for tray display
@@ -2739,6 +2779,62 @@ router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requi
 });
 
 /**
+ * POST /api/agents/:agent_id/commands/:command_id/reboot-cancelled
+ *
+ * Agent reports that a previously-scheduled reboot was cancelled at
+ * the host (e.g. user ran `shutdown -c` on Linux/macOS or `shutdown
+ * /a` on Windows). The agent detects this by waking up after the
+ * scheduled delay + 30s grace and finding itself still alive — the
+ * host clearly didn't reboot, so a human cancelled.
+ *
+ * We mark the command row as 'failed' with a 'cancelled-by-user'
+ * status, and broadcast an agent.command.progress event with
+ * stage='cancelled' so the dashboard can flip the per-row "Reboot
+ * scheduled" badge to "Reboot cancelled".
+ *
+ * Best-effort like /started + /progress — never 5xx the agent.
+ */
+router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id, command_id } = req.params;
+    const { detected_at } = req.body || {};
+    await query(
+      `UPDATE agent_commands
+       SET status = 'cancelled',
+           completed_at = NOW(),
+           result_payload = jsonb_set(
+             COALESCE(result_payload, '{}'::jsonb),
+             '{cancellation}',
+             $1::jsonb,
+             true
+           )
+       WHERE id = $2 AND agent_device_id = $3`,
+      [JSON.stringify({ source: 'host', detected_at: detected_at || new Date().toISOString() }), command_id, agent_id]
+    );
+    try {
+      const cmdRow = await query(
+        `SELECT requested_by FROM agent_commands WHERE id = $1`,
+        [command_id]
+      );
+      const message = buildRebootCancelledWsMessage({
+        command_id,
+        agent_id,
+        detected_at,
+      });
+      websocketService.broadcastToAdmins(message);
+      const requestedBy = cmdRow.rows[0]?.requested_by;
+      if (requestedBy) websocketService.broadcastToUser(requestedBy, message);
+    } catch (wsErr) {
+      console.error('reboot-cancelled broadcast failed:', wsErr);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    console.error('reboot-cancelled notification error:', error);
+    res.json({ success: false, message: error?.message });
+  }
+});
+
+/**
  * Agent submits execution result for a command
  */
 router.post('/:agent_id/commands/:command_id/result', authenticateAgent, requireAgentMatch, async (req, res) => {
@@ -2930,7 +3026,30 @@ router.get('/', authMiddleware, async (req, res) => {
         sl.city as location_city,
         sl.state as location_state,
         sl.zip_code as location_zip,
-        sl.country as location_country
+        sl.country as location_country,
+        -- Pending action commands surfaced for the dashboard so the
+        -- "Update in progress" / "Reboot scheduled" badges survive
+        -- a page refresh. We only include actionable types here
+        -- (install_update, reboot_host) and only the most recent
+        -- still-in-flight row per type — older rows aren't relevant
+        -- once the agent has moved on. requested_at is included so
+        -- the UI can render "scheduled at HH:MM".
+        (
+          SELECT COALESCE(json_agg(row_to_json(p)), '[]'::json)
+          FROM (
+            SELECT DISTINCT ON (command_type)
+              id AS command_id,
+              command_type,
+              status,
+              requested_at,
+              command_params
+            FROM agent_commands
+            WHERE agent_device_id = ad.id
+              AND command_type IN ('install_update', 'reboot_host')
+              AND status IN ('pending', 'delivered', 'executing')
+            ORDER BY command_type, requested_at DESC
+          ) p
+        ) AS pending_action_commands
       FROM agent_devices ad
       LEFT JOIN businesses b ON ad.business_id = b.id
       LEFT JOIN users u ON b.id = u.business_id AND b.is_individual = true AND u.is_primary_contact = true

@@ -55,8 +55,32 @@ function buildStartedWsMessage({ command_id, agent_id, command_type, started_at 
   };
 }
 
+/**
+ * Built when an agent reports that a scheduled reboot was cancelled
+ * at the host (the user ran `shutdown -c` / `shutdown /a` before the
+ * scheduled time). The dashboard listens for this to flip its
+ * "Reboot scheduled at HH:MM" badge into "Reboot cancelled".
+ *
+ * Uses agent.command.progress as the wrapping event type so it
+ * reuses the existing dashboard-side dispatcher; stage='cancelled'
+ * is the discriminator.
+ */
+function buildRebootCancelledWsMessage({ command_id, agent_id, detected_at }) {
+  return {
+    type: 'agent.command.progress',
+    data: {
+      command_id,
+      agent_id,
+      command_type: 'reboot_host',
+      stage: 'cancelled',
+      cancelled_at: detected_at || new Date().toISOString(),
+    },
+  };
+}
+
 module.exports = {
   normalizeProgressPayload,
   buildProgressWsMessage,
   buildStartedWsMessage,
+  buildRebootCancelledWsMessage,
 };

@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.80 Release Notes
+RTS Monitoring Agent - Version 1.16.81 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 20:46:36 UTC
-Previous Version: v1.16.79
-Git Commit: f2c3f30
+Release Date: 2026-04-26 21:04:23 UTC
+Previous Version: v1.16.80
+Git Commit: ccf11a9
 
-Changes Since v1.16.79:
+Changes Since v1.16.80:
 ───────────────────────────────────────────────────────────
 
-• v1.16.80: fix Linux unattended install — escape systemd cgroup
+• v1.16.81: stop tray clobbering agent_version, restart trays post-upgrade
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

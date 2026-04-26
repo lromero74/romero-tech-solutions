@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings, Download } from 'lucide-react';
+import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings, Download, RotateCw, Clock } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
@@ -148,6 +148,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const response = await agentService.listAgents();
       if (response.success && response.data) {
         setAgents(response.data.agents);
+        // Re-seed updateInProgress from the server so a page refresh
+        // doesn't lose the "Update in progress" badge while an
+        // install_update command is still mid-flight on the agent
+        // (pending/delivered/executing in agent_commands).
+        const seededUpdates = new Set<string>();
+        for (const a of response.data.agents) {
+          const pending = a.pending_action_commands ?? [];
+          if (pending.some((c) => c.command_type === 'install_update')) {
+            seededUpdates.add(a.id);
+          }
+        }
+        setUpdateInProgress(seededUpdates);
       } else {
         setError(response.message || 'Failed to load agents');
       }
