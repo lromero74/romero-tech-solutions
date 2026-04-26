@@ -89,12 +89,18 @@ interface AgentCommandCompleted {
 //                    every ~1.5s during install); the `progress`
 //                    field carries the percent + phase + current
 //                    update title for the dashboard's progress bar.
+//   - "cancelled"  — only fires for reboot_host: the agent's
+//                    cancellation watchdog noticed the host didn't
+//                    reboot when scheduled (user ran shutdown -c /
+//                    shutdown /a). cancelled_at carries the
+//                    detection timestamp.
 interface AgentCommandProgress {
   command_id: string;
   agent_id: string;
   command_type: string;
-  stage: 'executing';
+  stage: 'executing' | 'cancelled';
   started_at?: string;
+  cancelled_at?: string;
   progress?: {
     phase: string;          // 'download' | 'install' | 'reboot'
     percent: number;        // 0..100

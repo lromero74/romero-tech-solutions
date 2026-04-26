@@ -102,6 +102,26 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     fromVersion?: string;
   }>({ show: false });
 
+  // Per-agent rebootScheduled state: agentId → { scheduledFor, message }.
+  // Seeded from pending_action_commands on load (so it survives a page
+  // refresh) and updated when admin schedules / agent cancels a reboot.
+  // The unix-ms timestamp lets the badge render "in N minutes" / "at HH:MM"
+  // without needing the agent to send updates.
+  const [rebootScheduled, setRebootScheduled] = useState<Record<string, { scheduledForMs: number; message: string }>>({});
+
+  // Reboot Device modal state. delayMode chooses between "in N minutes"
+  // and a wall-clock time picker. The actual delay sent to the agent is
+  // always derived in seconds at submit time.
+  const [confirmReboot, setConfirmReboot] = useState<{
+    show: boolean;
+    agentId?: string;
+    agentName?: string;
+  }>({ show: false });
+  const [rebootDelayMode, setRebootDelayMode] = useState<'minutes' | 'time'>('minutes');
+  const [rebootMinutes, setRebootMinutes] = useState<number>(5);
+  const [rebootTime, setRebootTime] = useState<string>(''); // HH:MM 24h
+  const [rebootMessage, setRebootMessage] = useState<string>('Scheduled reboot from RTS dashboard');
+
   // Get businesses and service locations for the edit modal
   const { businesses, serviceLocations } = useAdminData();
 
@@ -153,13 +173,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         // install_update command is still mid-flight on the agent
         // (pending/delivered/executing in agent_commands).
         const seededUpdates = new Set<string>();
+        const seededReboots: Record<string, { scheduledForMs: number; message: string }> = {};
         for (const a of response.data.agents) {
           const pending = a.pending_action_commands ?? [];
-          if (pending.some((c) => c.command_type === 'install_update')) {
-            seededUpdates.add(a.id);
+          for (const c of pending) {
+            if (c.command_type === 'install_update') {
+              seededUpdates.add(a.id);
+            } else if (c.command_type === 'reboot_host') {
+              // Scheduled-for time = requested_at + delay_seconds.
+              // Falls back to "5 min from request" if delay missing.
+              const params = (c.command_params ?? {}) as Record<string, unknown>;
+              const delaySec = typeof params.delay_seconds === 'number' ? params.delay_seconds : 300;
+              const message = typeof params.message === 'string' ? params.message : '(no message)';
+              const requestedMs = new Date(c.requested_at).getTime();
+              seededReboots[a.id] = {
+                scheduledForMs: requestedMs + delaySec * 1000,
+                message,
+              };
+            }
           }
         }
         setUpdateInProgress(seededUpdates);
+        setRebootScheduled(seededReboots);
       } else {
         setError(response.message || 'Failed to load agents');
       }
@@ -195,6 +230,76 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const isAgentOutdated = (agent: AgentDevice): boolean => {
     if (!latestAgentVersion || !agent.agent_version) return false;
     return compareSemverDesc(agent.agent_version, latestAgentVersion) < 0;
+  };
+
+  // computeRebootDelaySeconds reads the modal state (mode + minutes
+  // OR specific HH:MM time) and returns the seconds-until-reboot
+  // that the agent expects in command_params.delay_seconds. Returns
+  // a clamped minimum of 60 — the agent rounds anything <60s up to
+  // 1 minute on Linux/macOS anyway.
+  const computeRebootDelaySeconds = (): number => {
+    if (rebootDelayMode === 'minutes') {
+      return Math.max(60, Math.round(rebootMinutes * 60));
+    }
+    // mode === 'time'
+    if (!rebootTime) return 60;
+    const [hh, mm] = rebootTime.split(':').map((s) => parseInt(s, 10));
+    if (isNaN(hh) || isNaN(mm)) return 60;
+    const target = new Date();
+    target.setHours(hh, mm, 0, 0);
+    if (target.getTime() <= Date.now()) {
+      // The picked time is in the past (or right now) — assume
+      // tomorrow so we don't fire immediately.
+      target.setDate(target.getDate() + 1);
+    }
+    return Math.max(60, Math.round((target.getTime() - Date.now()) / 1000));
+  };
+
+  // Reboot the agent's host. Uses the same command-enqueue plumbing
+  // as update_packages / install_update. The agent calls the OS
+  // shutdown command with the requested delay, then watches for
+  // cancellation — if the user at the host runs `shutdown -c` /
+  // `shutdown /a`, the agent posts to /reboot-cancelled and the
+  // dashboard flips this badge to "Cancelled".
+  const handleRebootHost = async () => {
+    if (!canSendCommands) {
+      setPermissionDenied({
+        show: true,
+        action: 'Reboot Device',
+        requiredPermission: 'send.agent_commands.enable',
+        message: 'You do not have permission to issue agent commands',
+      });
+      setConfirmReboot({ show: false });
+      return;
+    }
+    if (!confirmReboot.agentId) return;
+    const targetId = confirmReboot.agentId;
+    const delaySeconds = computeRebootDelaySeconds();
+    const message = rebootMessage.trim() || 'Scheduled reboot from RTS dashboard';
+    try {
+      setActionInProgress(targetId);
+      const response = await agentService.requestRebootHost(targetId, {
+        delay_seconds: delaySeconds,
+        message,
+      });
+      if (response.success) {
+        setRebootScheduled((prev) => ({
+          ...prev,
+          [targetId]: {
+            scheduledForMs: Date.now() + delaySeconds * 1000,
+            message,
+          },
+        }));
+      } else {
+        setError(response.message || 'Failed to schedule reboot');
+      }
+    } catch (err) {
+      console.error('Error scheduling reboot:', err);
+      setError(err instanceof Error ? err.message : 'Failed to schedule reboot');
+    } finally {
+      setActionInProgress(null);
+      setConfirmReboot({ show: false });
+    }
   };
 
   // Trigger a dashboard-initiated agent update. Uses the same
@@ -424,11 +529,36 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       });
     });
 
+    // Listen for agent.command.progress events. The interesting case
+    // for the dashboard list view is stage='cancelled' on a
+    // reboot_host command — that means the user at the host ran
+    // shutdown -c / shutdown /a before the scheduled time. Clear
+    // the per-row "Reboot scheduled" badge so the admin sees the
+    // cancellation immediately instead of waiting for the badge's
+    // own clock to tick past zero (and incorrectly showing "Rebooting
+    // now…" for a reboot that never actually happened).
+    const unsubscribeProgress = websocketService.onAgentCommandProgress((update) => {
+      if (update.command_type === 'reboot_host' && update.stage === 'cancelled') {
+        setRebootScheduled((prev) => {
+          if (!(update.agent_id in prev)) return prev;
+          const next = { ...prev };
+          delete next[update.agent_id];
+          return next;
+        });
+        // Surface the cancellation as a transient banner so the
+        // admin knows it didn't fire (vs. the badge just disappearing
+        // and looking like the reboot completed).
+        setError(`Reboot was cancelled at the host`);
+        setTimeout(() => setError(null), 5000);
+      }
+    });
+
     // Cleanup
     return () => {
       console.log('🧹 Cleaning up WebSocket listeners for agent updates');
       unsubscribeStatus();
       unsubscribeMetrics();
+      unsubscribeProgress();
     };
   }, [canViewAgents]);
 
@@ -913,22 +1043,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                         <div className={`text-sm ${themeClasses.text.primary}`}>
                           {agent.agent_version || '—'}
                         </div>
-                        {updateInProgress.has(agent.id) ? (
-                          <span
-                            className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
-                            title={`Updating to ${latestAgentVersion}…`}
-                          >
-                            <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
-                            Update in progress
-                          </span>
-                        ) : isAgentOutdated(agent) && (
-                          <span
-                            className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
-                            title={`Latest released: ${latestAgentVersion}`}
-                          >
-                            Update available
-                          </span>
-                        )}
+                        <div className="flex flex-col gap-1 mt-1">
+                          {updateInProgress.has(agent.id) ? (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+                              title={`Updating to ${latestAgentVersion}…`}
+                            >
+                              <RefreshCw className="w-3 h-3 mr-1 animate-spin" />
+                              Update in progress
+                            </span>
+                          ) : isAgentOutdated(agent) && (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                              title={`Latest released: ${latestAgentVersion}`}
+                            >
+                              Update available
+                            </span>
+                          )}
+                          {rebootScheduled[agent.id] && (
+                            <span
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+                              title={rebootScheduled[agent.id].message}
+                            >
+                              <Clock className="w-3 h-3 mr-1" />
+                              {(() => {
+                                const ms = rebootScheduled[agent.id].scheduledForMs - Date.now();
+                                if (ms <= 0) return 'Rebooting…';
+                                const mins = Math.round(ms / 60000);
+                                if (mins < 60) return `Reboot in ${mins} min`;
+                                const t = new Date(rebootScheduled[agent.id].scheduledForMs);
+                                return `Reboot at ${t.getHours().toString().padStart(2, '0')}:${t.getMinutes().toString().padStart(2, '0')}`;
+                              })()}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium`}>
                         <div className="flex items-center gap-2">
@@ -952,6 +1100,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                               title={`Update agent to ${latestAgentVersion}`}
                             >
                               <Download className="w-4 h-4" />
+                            </button>
+                          )}
+                          {canSendCommands && !rebootScheduled[agent.id] && (
+                            <button
+                              onClick={() => {
+                                // Reset modal defaults for each open
+                                setRebootDelayMode('minutes');
+                                setRebootMinutes(5);
+                                setRebootTime('');
+                                setRebootMessage('Scheduled reboot from RTS dashboard');
+                                setConfirmReboot({ show: true, agentId: agent.id, agentName: agent.device_name });
+                              }}
+                              disabled={actionInProgress === agent.id}
+                              className="text-orange-600 hover:text-orange-800 dark:text-orange-400 dark:hover:text-orange-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Reboot device"
+                            >
+                              <RotateCw className="w-4 h-4" />
                             </button>
                           )}
                           {canEditAgents && (
@@ -1226,6 +1391,107 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 className="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionInProgress === confirmDelete.agentId ? 'Deleting...' : 'Delete Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reboot Device Modal */}
+      {confirmReboot.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${themeClasses.bg.card} rounded-lg p-6 max-w-md w-full mx-4 ${themeClasses.shadow.xl}`}>
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <RotateCw className="h-6 w-6 text-orange-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Reboot Device
+                </h3>
+                <p className={`mt-1 text-sm ${themeClasses.text.secondary}`}>
+                  <strong>{confirmReboot.agentName}</strong>
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <fieldset>
+                <legend className={`text-sm font-medium ${themeClasses.text.primary} mb-2`}>When</legend>
+                <label className="flex items-center gap-2 mb-2">
+                  <input
+                    type="radio"
+                    name="rebootMode"
+                    checked={rebootDelayMode === 'minutes'}
+                    onChange={() => setRebootDelayMode('minutes')}
+                  />
+                  <span className={`text-sm ${themeClasses.text.primary}`}>In</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1440}
+                    value={rebootMinutes}
+                    onChange={(e) => setRebootMinutes(parseInt(e.target.value || '5', 10))}
+                    onFocus={() => setRebootDelayMode('minutes')}
+                    className={`w-20 px-2 py-1 border ${themeClasses.border.primary} rounded text-sm ${themeClasses.bg.primary} ${themeClasses.text.primary}`}
+                  />
+                  <span className={`text-sm ${themeClasses.text.primary}`}>minutes</span>
+                </label>
+                <label className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="rebootMode"
+                    checked={rebootDelayMode === 'time'}
+                    onChange={() => setRebootDelayMode('time')}
+                  />
+                  <span className={`text-sm ${themeClasses.text.primary}`}>At specific time today</span>
+                  <input
+                    type="time"
+                    value={rebootTime}
+                    onChange={(e) => setRebootTime(e.target.value)}
+                    onFocus={() => setRebootDelayMode('time')}
+                    className={`px-2 py-1 border ${themeClasses.border.primary} rounded text-sm ${themeClasses.bg.primary} ${themeClasses.text.primary}`}
+                  />
+                </label>
+                {rebootDelayMode === 'time' && rebootTime && (
+                  <p className={`text-xs ${themeClasses.text.muted} mt-1 ml-5`}>
+                    If the time has already passed today, reboot will be scheduled for tomorrow.
+                  </p>
+                )}
+              </fieldset>
+
+              <div>
+                <label className={`block text-sm font-medium ${themeClasses.text.primary} mb-1`}>
+                  Message shown to user
+                </label>
+                <textarea
+                  value={rebootMessage}
+                  onChange={(e) => setRebootMessage(e.target.value)}
+                  rows={2}
+                  maxLength={200}
+                  className={`w-full px-2 py-1 border ${themeClasses.border.primary} rounded text-sm ${themeClasses.bg.primary} ${themeClasses.text.primary}`}
+                />
+                <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+                  Shown in the OS shutdown dialog. The user can run <code>shutdown -c</code> (Linux/macOS) or
+                  <code> shutdown /a</code> (Windows) to cancel; you'll see "Cancelled" here.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmReboot({ show: false })}
+                disabled={actionInProgress === confirmReboot.agentId}
+                className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md text-sm font-medium ${themeClasses.text.primary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleRebootHost}
+                disabled={actionInProgress === confirmReboot.agentId}
+                className="px-4 py-2 bg-orange-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionInProgress === confirmReboot.agentId ? 'Scheduling…' : 'Schedule Reboot'}
               </button>
             </div>
           </div>
