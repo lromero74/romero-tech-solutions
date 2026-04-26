@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.60 Release Notes
+RTS Monitoring Agent - Version 1.16.72 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 03:06:37 UTC
-Previous Version: v1.16.59
-Git Commit: 52f6782
+Release Date: 2026-04-26 04:50:44 UTC
+Previous Version: v1.16.71
+Git Commit: 11dcef0
 
-Changes Since v1.16.59:
+Changes Since v1.16.71:
 ───────────────────────────────────────────────────────────
 
-• v1.16.60: wrap tray icon PNG in ICO container on Windows
+• v1.16.72: force JSON-array output for the Windows patch list
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
