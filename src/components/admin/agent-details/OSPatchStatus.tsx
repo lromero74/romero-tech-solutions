@@ -33,7 +33,7 @@ interface ChangelogTarget {
   toVersion: string;
 }
 
-export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: string }> = ({ latestMetrics, agentId }) => {
+export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: string }> = ({ latestMetrics, agentId, agent, commands }) => {
   const { t } = useOptionalClientLanguage();
   const [dialog, setDialog] = useState<DialogTarget | null>(null);
   const [changelog, setChangelog] = useState<ChangelogTarget | null>(null);
@@ -58,6 +58,16 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   // Track Reboot button state up here (before any early returns) so
   // the React hook order stays stable across render passes.
   const [rebootRequested, setRebootRequested] = useState(false);
+  const [rebootMinutes, setRebootMinutes] = useState(1);
+  // Tick state forces a re-render once a second while a reboot is
+  // in progress, so the "Rebooting since X:XX" elapsed counter
+  // stays current without needing a websocket event for every
+  // second.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick(t => t + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   if (!latestMetrics || latestMetrics.patches_available === undefined) return null;
 
@@ -65,18 +75,40 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   const securityCount = latestMetrics.security_patches_available || 0;
   const pendingRebootPatches = visiblePatches.filter((p: any) => p.package_manager === 'winupdate-reboot');
 
+  // Detect "the agent is rebooting because we asked it to" by
+  // correlating the most recent reboot_host command with the
+  // agent's last_heartbeat. If the command completed AFTER the
+  // last heartbeat AND we're still inside a reasonable window
+  // (15 minutes — well past any realistic reboot duration),
+  // treat the agent as Rebooting rather than just Offline.
+  // Rendering this distinction is the difference between a planned
+  // restart that you asked for vs an unplanned outage.
+  const rebootInfo = (() => {
+    if (!Array.isArray(commands) || commands.length === 0) return null;
+    const recent = commands
+      .filter(c => c.command_type === 'reboot_host')
+      .filter(c => c.status === 'completed' && c.executed_at)
+      .sort((a, b) => new Date(b.executed_at as string).getTime() - new Date(a.executed_at as string).getTime())[0];
+    if (!recent || !recent.executed_at) return null;
+    const completedAt = new Date(recent.executed_at).getTime();
+    const lastHb = agent?.last_heartbeat ? new Date(agent.last_heartbeat).getTime() : 0;
+    if (lastHb > completedAt) return null; // agent already came back
+    const elapsedMs = Date.now() - completedAt;
+    if (elapsedMs > 15 * 60 * 1000) return null; // give up after 15 min
+    return { startedAt: completedAt, elapsedMs };
+  })();
+
   const handleRebootHost = async () => {
     if (!agentId) return;
-    if (!confirm('Reboot this device in 60 seconds?\n\nAny installed-but-pending Windows updates will take effect after the restart.')) return;
+    const minutes = Math.max(1, Math.min(60, rebootMinutes || 1));
+    if (!confirm(`Reboot this device in ${minutes} minute${minutes === 1 ? '' : 's'}?\n\nAny installed-but-pending Windows updates will take effect after the restart.`)) return;
     setRebootRequested(true);
     try {
-      await agentService.requestRebootHost(agentId);
+      await agentService.requestRebootHost(agentId, { delay_seconds: minutes * 60 });
     } catch {
       // The dashboard will surface failures via the standard
       // command-history flow; nothing meaningful to do here.
     } finally {
-      // Clear the requested flag after a beat so the user can
-      // retry if their first request was declined / lost.
       setTimeout(() => setRebootRequested(false), 5000);
     }
   };
@@ -141,13 +173,36 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
         </div>
       )}
 
+      {/* Reboot-in-progress banner: agent picked up a reboot_host
+          command and we're inside the post-command window where it
+          should be coming back up. Distinct from "Offline" so the
+          user can see this is an expected outage they triggered. */}
+      {rebootInfo && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="flex items-center gap-3">
+            <RefreshCw className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 animate-spin" style={{ animationDuration: '3s' }} />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-blue-900 dark:text-blue-200">
+                Rebooting since {formatElapsed(rebootInfo.elapsedMs)}…
+              </p>
+              <p className="text-xs text-blue-800 dark:text-blue-300">
+                The agent will reconnect automatically once the host comes back up.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Reboot-required banner: shown when there are installed
           updates waiting for a system restart, OR when the agent
           set patches_require_reboot=true (meaning a pending update
-          will require a reboot once installed). The button fires
-          the reboot_host command to the agent, which schedules a
-          shutdown /r with a 60-second grace period. */}
-      {agentId && (pendingRebootPatches.length > 0 || latestMetrics.patches_require_reboot) && (
+          will require a reboot once installed). Hidden while a
+          reboot is already in progress (rebootInfo above takes
+          over). The form lets the user pick a delay in minutes
+          (default 1) before clicking; the agent's shutdown
+          command fires after that delay so the user has time to
+          save work / close apps. */}
+      {agentId && !rebootInfo && (pendingRebootPatches.length > 0 || latestMetrics.patches_require_reboot) && (
         <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
           <div className="flex items-start gap-3">
             <RefreshCw className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
@@ -160,12 +215,29 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
               <p className="text-xs text-amber-800 dark:text-amber-300 mb-2">
                 Restarting will close any open applications on the device. The agent reconnects automatically once the host comes back up.
               </p>
-              <button
-                onClick={handleRebootHost}
-                disabled={rebootRequested}
-                className="px-3 py-1.5 text-xs font-medium rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                {rebootRequested ? 'Reboot scheduled…' : 'Restart device now'}
-              </button>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-amber-900 dark:text-amber-200">
+                  Restart in
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={rebootMinutes}
+                  onChange={(e) => setRebootMinutes(Math.max(1, Math.min(60, parseInt(e.target.value, 10) || 1)))}
+                  className="w-16 px-2 py-1 text-xs rounded border border-amber-300 dark:border-amber-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                  disabled={rebootRequested}
+                />
+                <span className="text-xs text-amber-900 dark:text-amber-200">
+                  minute{rebootMinutes === 1 ? '' : 's'}
+                </span>
+                <button
+                  onClick={handleRebootHost}
+                  disabled={rebootRequested}
+                  className="px-3 py-1.5 text-xs font-medium rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                  {rebootRequested ? 'Reboot scheduled…' : 'Restart device now'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -405,3 +477,16 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
     </div>
   );
 };
+
+// formatElapsed renders a milliseconds duration as a "Mm Ss" or
+// "Hh Mm" stamp for the rebooting-since banner. Used to give the
+// user a sense of how long the host has been down so they know
+// when something is taking unusually long.
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m ${s.toString().padStart(2, '0')}s`;
+}
