@@ -16,6 +16,7 @@ const managerAlias: Record<string, string> = {
   yum: 'dnf',
   pacman: 'pacman',
   zypper: 'zypper',
+  winupdate: 'winupdate',
 };
 
 interface DialogTarget {
