@@ -43,15 +43,32 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           // Debug: Log the COMPLETE user data to verify all fields are present
           console.log('🔍 Agent magic-link authentication result (FULL):', result.user);
 
-          // CRITICAL: Store agentId and businessId in sessionStorage before auth context update
-          // This ensures they're available immediately for routing and permission checks
-          if (result.user.agentId) {
-            sessionStorage.setItem('pendingAgentId', result.user.agentId);
-            console.log('💾 Stored agentId in sessionStorage for routing:', result.user.agentId);
-          }
+          // Store businessId in sessionStorage for permission checks. This
+          // is always safe — the user's business doesn't change based on
+          // which dashboard view they're heading to.
           if (result.user.businessId) {
             sessionStorage.setItem('pendingBusinessId', result.user.businessId);
             console.log('💾 Stored businessId in sessionStorage for permissions:', result.user.businessId);
+          }
+
+          // pendingAgentId tells ClientDashboard to auto-open the
+          // AgentDetails view for that specific agent. We ONLY want
+          // that when the magic link's intent is "show me this
+          // device" (no redirect, or a redirect that's about the
+          // device itself). When the intent is to land on a tab —
+          // e.g. /schedule-service — setting pendingAgentId
+          // hijacks the render and the user sees AgentDetails with
+          // a "Back to Dashboard" button instead of the tab they
+          // asked for. That was the bug behind the user's report
+          // of being dropped on "the Dashboard" with a back link
+          // when clicking "Schedule Service Request" in the tray.
+          const tokenRedirect = result.redirect || null;
+          const skipAgentDetails = tokenRedirect === '/schedule-service';
+          if (result.user.agentId && !skipAgentDetails) {
+            sessionStorage.setItem('pendingAgentId', result.user.agentId);
+            console.log('💾 Stored agentId in sessionStorage for routing:', result.user.agentId);
+          } else if (result.user.agentId) {
+            console.log('⏭ Skipping pendingAgentId because redirect=', tokenRedirect);
           }
 
           // Store user info in auth context using setUserFromTrustedDevice
