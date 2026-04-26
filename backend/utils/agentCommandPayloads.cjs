@@ -65,7 +65,7 @@ function buildStartedWsMessage({ command_id, agent_id, command_type, started_at 
  * reuses the existing dashboard-side dispatcher; stage='cancelled'
  * is the discriminator.
  */
-function buildRebootCancelledWsMessage({ command_id, agent_id, detected_at }) {
+function buildRebootCancelledWsMessage({ command_id, agent_id, detected_at, source }) {
   return {
     type: 'agent.command.progress',
     data: {
@@ -74,6 +74,9 @@ function buildRebootCancelledWsMessage({ command_id, agent_id, detected_at }) {
       command_type: 'reboot_host',
       stage: 'cancelled',
       cancelled_at: detected_at || new Date().toISOString(),
+      // 'admin' = dashboard-initiated cancel; 'host' = user at the
+      // host ran shutdown -c. Drives different copy in the UI banner.
+      cancelled_by: source === 'admin' ? 'admin' : 'host',
     },
   };
 }

@@ -101,6 +101,10 @@ interface AgentCommandProgress {
   stage: 'executing' | 'cancelled';
   started_at?: string;
   cancelled_at?: string;
+  // 'admin' = dashboard-issued cancel_reboot; 'host' = user at the
+  // host ran shutdown -c / shutdown /a. Drives different copy in
+  // the dashboard's transient cancellation banner.
+  cancelled_by?: 'admin' | 'host';
   progress?: {
     phase: string;          // 'download' | 'install' | 'reboot'
     percent: number;        // 0..100

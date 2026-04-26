@@ -2797,7 +2797,12 @@ router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requi
 router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id, command_id } = req.params;
-    const { detected_at } = req.body || {};
+    const { detected_at, source } = req.body || {};
+    // 'host' = user ran shutdown -c at the host; 'admin' = the
+    // dashboard issued a cancel_reboot command. Either way the
+    // command_id row's status flips to 'cancelled' and a
+    // websocket fires.
+    const cancellationSource = source === 'admin' ? 'admin' : 'host';
     await query(
       `UPDATE agent_commands
        SET status = 'cancelled',
@@ -2809,7 +2814,7 @@ router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgen
              true
            )
        WHERE id = $2 AND agent_device_id = $3`,
-      [JSON.stringify({ source: 'host', detected_at: detected_at || new Date().toISOString() }), command_id, agent_id]
+      [JSON.stringify({ source: cancellationSource, detected_at: detected_at || new Date().toISOString() }), command_id, agent_id]
     );
     try {
       const cmdRow = await query(
@@ -2820,6 +2825,7 @@ router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgen
         command_id,
         agent_id,
         detected_at,
+        source: cancellationSource,
       });
       websocketService.broadcastToAdmins(message);
       const requestedBy = cmdRow.rows[0]?.requested_by;

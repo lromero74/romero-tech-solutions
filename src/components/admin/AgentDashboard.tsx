@@ -102,12 +102,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     fromVersion?: string;
   }>({ show: false });
 
-  // Per-agent rebootScheduled state: agentId → { scheduledFor, message }.
-  // Seeded from pending_action_commands on load (so it survives a page
-  // refresh) and updated when admin schedules / agent cancels a reboot.
-  // The unix-ms timestamp lets the badge render "in N minutes" / "at HH:MM"
-  // without needing the agent to send updates.
-  const [rebootScheduled, setRebootScheduled] = useState<Record<string, { scheduledForMs: number; message: string }>>({});
+  // Per-agent rebootScheduled state: agentId → { scheduledFor, message,
+  // commandId }. Seeded from pending_action_commands on load (so it
+  // survives a page refresh) and updated when admin schedules / agent
+  // cancels a reboot. commandId is required so the admin's "Cancel
+  // Reboot" can target the original reboot_host row.
+  const [rebootScheduled, setRebootScheduled] = useState<Record<string, { scheduledForMs: number; message: string; commandId: string }>>({});
+
+  // Confirmation modal for the dashboard-initiated "Cancel Reboot"
+  // action. Mirrors confirmInstallUpdate / confirmReboot shape.
+  const [confirmCancelReboot, setConfirmCancelReboot] = useState<{
+    show: boolean;
+    agentId?: string;
+    agentName?: string;
+    commandId?: string;
+  }>({ show: false });
 
   // Reboot Device modal state. delayMode chooses between "in N minutes"
   // and a wall-clock time picker. The actual delay sent to the agent is
@@ -173,7 +182,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         // install_update command is still mid-flight on the agent
         // (pending/delivered/executing in agent_commands).
         const seededUpdates = new Set<string>();
-        const seededReboots: Record<string, { scheduledForMs: number; message: string }> = {};
+        const seededReboots: Record<string, { scheduledForMs: number; message: string; commandId: string }> = {};
         for (const a of response.data.agents) {
           const pending = a.pending_action_commands ?? [];
           for (const c of pending) {
@@ -189,6 +198,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               seededReboots[a.id] = {
                 scheduledForMs: requestedMs + delaySec * 1000,
                 message,
+                commandId: c.command_id,
               };
             }
           }
@@ -282,15 +292,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         delay_seconds: delaySeconds,
         message,
       });
-      if (response.success) {
+      if (response.success && response.data?.command_id) {
         setRebootScheduled((prev) => ({
           ...prev,
           [targetId]: {
             scheduledForMs: Date.now() + delaySeconds * 1000,
             message,
+            commandId: response.data!.command_id,
           },
         }));
-      } else {
+      } else if (!response.success) {
         setError(response.message || 'Failed to schedule reboot');
       }
     } catch (err) {
@@ -299,6 +310,43 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     } finally {
       setActionInProgress(null);
       setConfirmReboot({ show: false });
+    }
+  };
+
+  // Cancel a pending reboot. Sends a cancel_reboot agent command
+  // referencing the original reboot_host command's id; the agent
+  // runs the OS-specific cancel (`shutdown -c` / `shutdown /a` /
+  // `killall shutdown`) and POSTs to /reboot-cancelled with
+  // source='admin'. The websocket listener clears the badge.
+  const handleCancelReboot = async () => {
+    if (!canSendCommands) {
+      setPermissionDenied({
+        show: true,
+        action: 'Cancel Reboot',
+        requiredPermission: 'send.agent_commands.enable',
+        message: 'You do not have permission to issue agent commands',
+      });
+      setConfirmCancelReboot({ show: false });
+      return;
+    }
+    if (!confirmCancelReboot.agentId || !confirmCancelReboot.commandId) return;
+    const targetId = confirmCancelReboot.agentId;
+    try {
+      setActionInProgress(targetId);
+      const response = await agentService.requestCancelReboot(targetId, confirmCancelReboot.commandId);
+      if (!response.success) {
+        setError(response.message || 'Failed to send cancel');
+      }
+      // Don't optimistically clear the badge — the websocket
+      // listener will drop it when the agent confirms cancellation.
+      // Clearing eagerly would briefly show "no reboot scheduled"
+      // even if the cancel command failed at the agent.
+    } catch (err) {
+      console.error('Error cancelling reboot:', err);
+      setError(err instanceof Error ? err.message : 'Failed to cancel reboot');
+    } finally {
+      setActionInProgress(null);
+      setConfirmCancelReboot({ show: false });
     }
   };
 
@@ -547,8 +595,12 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         });
         // Surface the cancellation as a transient banner so the
         // admin knows it didn't fire (vs. the badge just disappearing
-        // and looking like the reboot completed).
-        setError(`Reboot was cancelled at the host`);
+        // and looking like the reboot completed). Different copy
+        // depending on whether the admin or the host user cancelled.
+        const banner = update.cancelled_by === 'admin'
+          ? 'Reboot cancelled'
+          : 'Reboot was cancelled at the host';
+        setError(banner);
         setTimeout(() => setError(null), 5000);
       }
     });
@@ -1061,9 +1113,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                             </span>
                           )}
                           {rebootScheduled[agent.id] && (
-                            <span
-                              className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
-                              title={rebootScheduled[agent.id].message}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!canSendCommands) return;
+                                const r = rebootScheduled[agent.id];
+                                setConfirmCancelReboot({
+                                  show: true,
+                                  agentId: agent.id,
+                                  agentName: agent.device_name,
+                                  commandId: r.commandId,
+                                });
+                              }}
+                              className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200 ${canSendCommands ? 'hover:bg-orange-200 dark:hover:bg-orange-800 cursor-pointer' : 'cursor-default'}`}
+                              title={canSendCommands ? `${rebootScheduled[agent.id].message}\nClick to cancel reboot` : rebootScheduled[agent.id].message}
+                              disabled={!canSendCommands}
                             >
                               <Clock className="w-3 h-3 mr-1" />
                               {(() => {
@@ -1074,7 +1138,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                                 const t = new Date(rebootScheduled[agent.id].scheduledForMs);
                                 return `Reboot at ${t.getHours().toString().padStart(2, '0')}:${t.getMinutes().toString().padStart(2, '0')}`;
                               })()}
-                            </span>
+                            </button>
                           )}
                         </div>
                       </td>
@@ -1391,6 +1455,49 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 className="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionInProgress === confirmDelete.agentId ? 'Deleting...' : 'Delete Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Reboot Modal */}
+      {confirmCancelReboot.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${themeClasses.bg.card} rounded-lg p-6 max-w-md w-full mx-4 ${themeClasses.shadow.xl}`}>
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <X className="h-6 w-6 text-orange-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Cancel Reboot
+                </h3>
+                <p className={`mt-2 text-sm ${themeClasses.text.secondary}`}>
+                  Cancel the scheduled reboot for <strong>{confirmCancelReboot.agentName}</strong>?
+                </p>
+                <p className={`mt-2 text-xs ${themeClasses.text.muted}`}>
+                  The agent will run the OS-specific cancel
+                  (<code>shutdown -c</code> on Linux, <code>killall shutdown</code> on
+                  macOS, <code>shutdown /a</code> on Windows). The badge clears as
+                  soon as the agent confirms cancellation.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmCancelReboot({ show: false })}
+                disabled={actionInProgress === confirmCancelReboot.agentId}
+                className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md text-sm font-medium ${themeClasses.text.primary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Keep reboot scheduled
+              </button>
+              <button
+                onClick={handleCancelReboot}
+                disabled={actionInProgress === confirmCancelReboot.agentId}
+                className="px-4 py-2 bg-orange-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionInProgress === confirmCancelReboot.agentId ? 'Cancelling…' : 'Cancel Reboot'}
               </button>
             </div>
           </div>

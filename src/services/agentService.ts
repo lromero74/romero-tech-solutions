@@ -592,6 +592,31 @@ class AgentService {
   }
 
   /**
+   * Cancel a previously-scheduled reboot. The agent runs the OS-
+   * specific cancel command (`shutdown -c` on Linux, `killall
+   * shutdown` on macOS, `shutdown /a` on Windows) and POSTs to the
+   * original reboot command's /reboot-cancelled endpoint with
+   * source='admin' so the dashboard's "Reboot scheduled" badge
+   * clears immediately.
+   *
+   * originalCommandId is the agent_commands.id of the reboot_host
+   * row we're cancelling — required so the agent knows which row
+   * to mark cancelled in the dashboard.
+   */
+  async requestCancelReboot(
+    agentId: string,
+    originalCommandId: string
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'cancel_reboot',
+      command_params: {
+        original_command_id: originalCommandId,
+      },
+      requires_approval: false,
+    });
+  }
+
+  /**
    * Force an immediate OS-patch re-scan on the agent. The agent's
    * patch cache normally refreshes hourly (or after a successful
    * update_packages). This command-driven path is for "I want to
