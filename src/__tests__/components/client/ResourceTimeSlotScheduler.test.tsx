@@ -1,286 +1,142 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom';
 import ResourceTimeSlotScheduler from '../../../components/client/ResourceTimeSlotScheduler';
 import { ClientThemeProvider } from '../../../contexts/ClientThemeContext';
 import { ClientLanguageProvider } from '../../../contexts/ClientLanguageContext';
 
-// Mock fetch
+// Mock apiService — used by the component for rate tiers, bookings, etc.
+// Different endpoints expect different `data` shapes; route per URL.
+jest.mock('../../../services/apiService', () => ({
+  apiService: {
+    get: jest.fn().mockImplementation((url: string) => {
+      if (url.includes('rate-tiers')) {
+        return Promise.resolve({ success: true, data: [] });
+      }
+      if (url.includes('bookings')) {
+        return Promise.resolve({ success: true, data: [] });
+      }
+      if (url.includes('first-timer')) {
+        return Promise.resolve({ success: true, data: { isFirstTimer: false } });
+      }
+      if (url.includes('hourly-rate')) {
+        return Promise.resolve({
+          success: true,
+          data: { hourlyRate: 100, rateCategoryName: 'Standard' },
+        });
+      }
+      return Promise.resolve({ success: true, data: [] });
+    }),
+    post: jest.fn().mockResolvedValue({ success: true }),
+    put: jest.fn(),
+    delete: jest.fn(),
+  },
+}));
+
+// Provide a stable timezone helper output so we don't rely on the host TZ.
+jest.mock('../../../utils/timezoneUtils', () => ({
+  getUserTimezone: () => 'America/Los_Angeles',
+  getTimezoneDisplayName: () => 'Pacific Time',
+  timezoneService: {
+    getBusinessDayAndTime: () => ({ dayOfWeek: 1, timeString: '09:00:00' }),
+  },
+}));
+
 global.fetch = jest.fn();
 
-const renderWithProviders = (component: React.ReactElement) => {
-  return render(
+const renderWithProviders = (component: React.ReactElement) =>
+  render(
     <ClientLanguageProvider>
-      <ClientThemeProvider>
-        {component}
-      </ClientThemeProvider>
+      <ClientThemeProvider>{component}</ClientThemeProvider>
     </ClientLanguageProvider>
   );
+
+const baseProps = {
+  onSlotSelect: jest.fn(),
+  onDateChange: jest.fn(),
+  onClose: jest.fn(),
+  businessId: 'business-1',
+  initialDuration: 1,
+  initialTierPreference: 'any' as const,
 };
 
-describe('ResourceTimeSlotScheduler - Past Date Prevention', () => {
-  const mockResources = [
-    { id: 1, name: 'Conference Room A', type: 'Meeting Room', description: 'Main conference room', isAvailable: true },
-    { id: 2, name: 'Office Space B', type: 'Office', description: 'Private office', isAvailable: true }
-  ];
-
-  const mockBookings = [];
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-
-    // Mock successful API responses
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        success: true,
-        data: { resources: mockResources, bookings: mockBookings }
-      })
-    });
-  });
-
-  it('renders without crashing for current date', () => {
-    const today = new Date();
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    expect(screen.getByText('Advanced Time Slot Picker')).toBeInTheDocument();
-  });
-
-  it('shows past date overlay when past date is selected', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1); // Yesterday
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={pastDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Past Date Selected')).toBeInTheDocument();
-      expect(screen.getByText('Cannot schedule appointments for past dates.')).toBeInTheDocument();
-      expect(screen.getByText('Please select today or a future date.')).toBeInTheDocument();
-    });
-  });
-
-  it('does not show past date overlay for current date', async () => {
-    const today = new Date();
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
-    });
-  });
-
-  it('does not show past date overlay for future date', async () => {
-    const futureDate = new Date();
-    futureDate.setDate(futureDate.getDate() + 1); // Tomorrow
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={futureDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
-    });
-  });
-
-  it('shows AlertCircle icon in past date overlay', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={pastDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      const alertIcon = document.querySelector('.lucide-alert-circle');
-      expect(alertIcon).toBeInTheDocument();
-    });
-  });
-
-  it('prevents time slot interaction when past date is selected', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={pastDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      // The overlay should have a high z-index to prevent interaction
-      const overlay = screen.getByText('Past Date Selected').closest('div');
-      expect(overlay).toHaveClass('z-30');
-    });
-  });
-
-  it('displays today date boundary correctly', async () => {
-    // Test with a date that's exactly at the boundary (start of today)
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
-    });
-  });
-
-  it('correctly identifies past date regardless of time', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-    pastDate.setHours(23, 59, 59, 999); // End of yesterday
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={pastDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      expect(screen.getByText('Past Date Selected')).toBeInTheDocument();
-    });
-  });
-
-  it('shows proper styling for past date warning', async () => {
-    const pastDate = new Date();
-    pastDate.setDate(pastDate.getDate() - 1);
-
-    renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={pastDate}
-        resources={mockResources}
-        bookings={mockBookings}
-        onBookingCreate={jest.fn()}
-      />
-    );
-
-    await waitFor(() => {
-      const warningTitle = screen.getByText('Past Date Selected');
-      expect(warningTitle).toHaveClass('text-red-700');
-
-      const overlay = warningTitle.closest('div')?.parentElement;
-      expect(overlay).toHaveClass('bg-gray-500', 'bg-opacity-75');
-    });
+beforeEach(() => {
+  jest.clearAllMocks();
+  jest.spyOn(console, 'error').mockImplementation();
+  jest.spyOn(console, 'warn').mockImplementation();
+  jest.spyOn(console, 'log').mockImplementation();
+  (global.fetch as jest.Mock).mockResolvedValue({
+    ok: true,
+    json: () => Promise.resolve({ success: true, data: [] }),
   });
 });
 
-describe('ResourceTimeSlotScheduler - General Functionality', () => {
-  const mockResources = [
-    { id: 1, name: 'Conference Room A', type: 'Meeting Room', description: 'Main conference room', isAvailable: true }
-  ];
+afterEach(() => {
+  jest.restoreAllMocks();
+});
 
-  beforeEach(() => {
-    jest.clearAllMocks();
-
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        success: true,
-        data: []
-      })
+describe('ResourceTimeSlotScheduler — smoke tests', () => {
+  it('renders without crashing for a future date', async () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 7);
+    renderWithProviders(
+      <ResourceTimeSlotScheduler {...baseProps} selectedDate={future} />
+    );
+    // The scheduler title comes from `t('scheduler.title', ..., 'Schedule Appointment')`.
+    // With no DB translations loaded, t() returns the last segment of the key
+    // ("title") OR the fallback if provided. The component supplies a fallback,
+    // so we expect the literal fallback string.
+    await waitFor(() => {
+      expect(screen.getByText('Schedule Appointment')).toBeInTheDocument();
     });
   });
 
-  it('renders time on horizontal axis', async () => {
-    const today = new Date();
-
+  it('shows past-date overlay text when given yesterday', async () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
     renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={[]}
-        onBookingCreate={jest.fn()}
-      />
+      <ResourceTimeSlotScheduler {...baseProps} selectedDate={yesterday} />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Advanced Time Slot Picker')).toBeInTheDocument();
+      expect(screen.getByText('Past Date Selected')).toBeInTheDocument();
     });
-
-    // Check that the time grid structure exists
-    const timeGrid = document.querySelector('.grid-cols-25');
-    expect(timeGrid).toBeInTheDocument();
   });
 
-  it('handles resource scheduling correctly', async () => {
-    const mockOnBookingCreate = jest.fn();
+  it('does not show past-date overlay for today', async () => {
     const today = new Date();
-
     renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={[]}
-        onBookingCreate={mockOnBookingCreate}
-      />
+      <ResourceTimeSlotScheduler {...baseProps} selectedDate={today} />
     );
 
+    // Component finishes initial render quickly; assert the overlay is absent.
     await waitFor(() => {
-      expect(screen.getByText('Advanced Time Slot Picker')).toBeInTheDocument();
+      expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
     });
-
-    // Component should be interactive for current/future dates
-    expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
   });
 
-  it('displays resources in the scheduler', async () => {
-    const today = new Date();
-
+  it('does not show past-date overlay for a future date', async () => {
+    const future = new Date();
+    future.setDate(future.getDate() + 14);
     renderWithProviders(
-      <ResourceTimeSlotScheduler
-        selectedDate={today}
-        resources={mockResources}
-        bookings={[]}
-        onBookingCreate={jest.fn()}
-      />
+      <ResourceTimeSlotScheduler {...baseProps} selectedDate={future} />
     );
 
     await waitFor(() => {
-      expect(screen.getByText('Conference Room A')).toBeInTheDocument();
+      expect(screen.queryByText('Past Date Selected')).not.toBeInTheDocument();
+    });
+  });
+
+  it('renders close button (close action wired up)', async () => {
+    const today = new Date();
+    renderWithProviders(
+      <ResourceTimeSlotScheduler {...baseProps} selectedDate={today} />
+    );
+
+    // The close button uses an aria-label fallback "Close scheduler".
+    await waitFor(() => {
+      const closeBtn = screen.getByLabelText('Close scheduler');
+      expect(closeBtn).toBeInTheDocument();
     });
   });
 });

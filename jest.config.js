@@ -18,7 +18,7 @@ const config = {
 
   // Transform files
   transform: {
-    '^.+\\.(ts|tsx)$': 'ts-jest',
+    '^.+\\.(ts|tsx)$': '<rootDir>/src/test-utils/importMetaTransform.cjs',
     '^.+\\.(js|jsx)$': 'babel-jest'
   },
 

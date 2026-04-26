@@ -6,19 +6,13 @@ import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageConte
 import { UpdatePackageDialog } from './UpdatePackageDialog';
 import { ChangelogDialog } from './ChangelogDialog';
 import { agentService } from '../../../services/agentService';
-
-// Maps the agent's package_manager values to the canonical key the
-// agent's update_packages handler accepts. Only Linux distro
-// managers fire actionable buttons in this panel; macOS
-// softwareupdate links to System Settings instead.
-const managerAlias: Record<string, string> = {
-  apt: 'apt',
-  dnf: 'dnf',
-  yum: 'dnf',
-  pacman: 'pacman',
-  zypper: 'zypper',
-  winupdate: 'winupdate',
-};
+import {
+  formatElapsed,
+  computeRebootInfo,
+  managerAlias,
+  filterVisiblePatches,
+  getUpdatableManagers,
+} from './osPatchUtils';
 
 interface DialogTarget {
   manager: string;
@@ -49,10 +43,10 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
     setHidden(new Set());
   }, [patchesRaw]);
 
-  const visiblePatches = useMemo(() => {
-    if (!Array.isArray(patchesRaw)) return [];
-    return patchesRaw.filter((p: any) => !hidden.has(`${p.package_manager}|${p.name}`));
-  }, [patchesRaw, hidden]);
+  const visiblePatches = useMemo(
+    () => filterVisiblePatches(patchesRaw as any[], hidden),
+    [patchesRaw, hidden]
+  );
 
   const distroUpgrade = latestMetrics?.distro_upgrade;
   // Track Reboot button state up here (before any early returns) so
@@ -75,28 +69,8 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   const securityCount = latestMetrics.security_patches_available || 0;
   const pendingRebootPatches = visiblePatches.filter((p: any) => p.package_manager === 'winupdate-reboot');
 
-  // Detect "the agent is rebooting because we asked it to" by
-  // correlating the most recent reboot_host command with the
-  // agent's last_heartbeat. If the command completed AFTER the
-  // last heartbeat AND we're still inside a reasonable window
-  // (15 minutes — well past any realistic reboot duration),
-  // treat the agent as Rebooting rather than just Offline.
-  // Rendering this distinction is the difference between a planned
-  // restart that you asked for vs an unplanned outage.
-  const rebootInfo = (() => {
-    if (!Array.isArray(commands) || commands.length === 0) return null;
-    const recent = commands
-      .filter(c => c.command_type === 'reboot_host')
-      .filter(c => c.status === 'completed' && c.executed_at)
-      .sort((a, b) => new Date(b.executed_at as string).getTime() - new Date(a.executed_at as string).getTime())[0];
-    if (!recent || !recent.executed_at) return null;
-    const completedAt = new Date(recent.executed_at).getTime();
-    const lastHb = agent?.last_heartbeat ? new Date(agent.last_heartbeat).getTime() : 0;
-    if (lastHb > completedAt) return null; // agent already came back
-    const elapsedMs = Date.now() - completedAt;
-    if (elapsedMs > 15 * 60 * 1000) return null; // give up after 15 min
-    return { startedAt: completedAt, elapsedMs };
-  })();
+  // "Rebooting since…" badge — see computeRebootInfo for the rule.
+  const rebootInfo = computeRebootInfo(commands, agent);
 
   const handleRebootHost = async () => {
     if (!agentId) return;
@@ -113,10 +87,8 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
     }
   };
 
-  // Group visible patches by package_manager so we can render a
-  // single "Update all <manager>" button per family.
-  const managers = Array.from(new Set(visiblePatches.map((p: any) => p.package_manager).filter(Boolean)));
-  const updatableManagers = managers.filter(m => m && managerAlias[m as string]);
+  // Distinct managers that have an actionable "Update all <mgr>" button.
+  const updatableManagers = getUpdatableManagers(visiblePatches as any[]);
 
   // "Refresh now" — fires a refresh_patches command at the agent.
   // The agent's response invalidates its patch cache and submits a
@@ -527,15 +499,3 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   );
 };
 
-// formatElapsed renders a milliseconds duration as a "Mm Ss" or
-// "Hh Mm" stamp for the rebooting-since banner. Used to give the
-// user a sense of how long the host has been down so they know
-// when something is taking unusually long.
-function formatElapsed(ms: number): string {
-  const totalSec = Math.floor(ms / 1000);
-  const h = Math.floor(totalSec / 3600);
-  const m = Math.floor((totalSec % 3600) / 60);
-  const s = totalSec % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m ${s.toString().padStart(2, '0')}s`;
-}

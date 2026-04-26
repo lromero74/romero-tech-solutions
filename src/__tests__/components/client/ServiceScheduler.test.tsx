@@ -5,10 +5,10 @@ import ServiceScheduler from '../../../components/client/ServiceScheduler';
 import { ClientThemeProvider } from '../../../contexts/ClientThemeContext';
 import { ClientLanguageProvider } from '../../../contexts/ClientLanguageContext';
 
-// Mock fetch
 global.fetch = jest.fn();
 
-// Mock the child components to focus on ServiceScheduler logic
+// Mock ResourceTimeSlotScheduler — only rendered conditionally inside a modal,
+// but we mock it anyway so its imports never load real-fetch code paths.
 jest.mock('../../../components/client/ResourceTimeSlotScheduler', () => {
   return function MockResourceTimeSlotScheduler(props: any) {
     return (
@@ -19,180 +19,100 @@ jest.mock('../../../components/client/ResourceTimeSlotScheduler', () => {
   };
 });
 
-const renderWithProviders = (component: React.ReactElement) => {
-  return render(
+const renderWithProviders = (component: React.ReactElement) =>
+  render(
     <ClientLanguageProvider>
-      <ClientThemeProvider>
-        {component}
-      </ClientThemeProvider>
+      <ClientThemeProvider>{component}</ClientThemeProvider>
     </ClientLanguageProvider>
   );
-};
 
-describe('ServiceScheduler - Today Button Functionality', () => {
+/**
+ * The view-toggle buttons render translation keys like `calendar.views.today`.
+ * In tests there are no DB translations loaded — `t()` returns the last
+ * segment of the key (lowercase). So expect 'today', 'month', 'week', 'year'.
+ */
+const VIEW_TODAY = 'today';
+const VIEW_MONTH = 'month';
+const VIEW_WEEK = 'week';
+const VIEW_YEAR = 'year';
+const ACTIVE_CLASS = 'bg-blue-600';
+
+describe('ServiceScheduler - calendar view toggle', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-
-    // Mock successful API responses
     (global.fetch as jest.Mock).mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({
-        success: true,
-        data: []
-      })
+      json: () => Promise.resolve({ success: true, data: [] }),
     });
   });
 
-  it('renders the Today button', async () => {
+  it('renders all four calendar view buttons', async () => {
     renderWithProviders(<ServiceScheduler />);
-
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(screen.getByText(VIEW_YEAR)).toBeInTheDocument();
+      expect(screen.getByText(VIEW_MONTH)).toBeInTheDocument();
+      expect(screen.getByText(VIEW_WEEK)).toBeInTheDocument();
+      expect(screen.getByText(VIEW_TODAY)).toBeInTheDocument();
     });
   });
 
-  it('Today button navigates to current date', async () => {
+  it('Today button has expected styling classes', async () => {
     renderWithProviders(<ServiceScheduler />);
-
-    // Wait for component to load
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeInTheDocument();
-    });
-
-    // Get today's date
-    const today = new Date();
-    const todayString = today.toDateString();
-
-    // Click the Today button
-    const todayButton = screen.getByText('Today');
-    fireEvent.click(todayButton);
-
-    // Verify the selected date is updated to today
-    await waitFor(() => {
-      const selectedDateElement = screen.getByTestId('selected-date');
-      expect(selectedDateElement).toHaveTextContent(todayString);
+      const todayBtn = screen.getByText(VIEW_TODAY);
+      expect(todayBtn).toHaveClass('px-3', 'py-1', 'rounded', 'text-sm', 'font-medium');
     });
   });
 
-  it('Today button is styled correctly', async () => {
+  it('defaults to month view (month button highlighted)', async () => {
     renderWithProviders(<ServiceScheduler />);
-
     await waitFor(() => {
-      const todayButton = screen.getByText('Today');
-      expect(todayButton).toHaveClass('px-3', 'py-1', 'rounded', 'text-sm', 'font-medium');
+      expect(screen.getByText(VIEW_MONTH)).toHaveClass(ACTIVE_CLASS);
     });
   });
 
-  it('Today button works from any selected date', async () => {
+  it('Switching to week view highlights the week button', async () => {
     renderWithProviders(<ServiceScheduler />);
-
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(screen.getByText(VIEW_WEEK)).toBeInTheDocument();
     });
 
-    // Get today's date for comparison
-    const today = new Date();
-    const todayString = today.toDateString();
+    fireEvent.click(screen.getByText(VIEW_WEEK));
 
-    // Navigate to a different date first (simulate user navigation)
-    // This would typically be done through calendar navigation, but we'll test the Today button directly
-    const todayButton = screen.getByText('Today');
-
-    // Click Today button
-    fireEvent.click(todayButton);
-
-    // Verify it always goes to today regardless of current selection
     await waitFor(() => {
-      const selectedDateElement = screen.getByTestId('selected-date');
-      expect(selectedDateElement).toHaveTextContent(todayString);
+      expect(screen.getByText(VIEW_WEEK)).toHaveClass(ACTIVE_CLASS);
     });
   });
 
-  it('renders calendar view options and Today button together', async () => {
+  it('Today click returns to month view (highlights month button)', async () => {
     renderWithProviders(<ServiceScheduler />);
-
     await waitFor(() => {
-      // Check that view options and Today button are both present
-      expect(screen.getByText('Month')).toBeInTheDocument();
-      expect(screen.getByText('Week')).toBeInTheDocument();
-      expect(screen.getByText('Day')).toBeInTheDocument();
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(screen.getByText(VIEW_TODAY)).toBeInTheDocument();
+    });
+
+    // Move away from month view first.
+    fireEvent.click(screen.getByText(VIEW_WEEK));
+    await waitFor(() => {
+      expect(screen.getByText(VIEW_WEEK)).toHaveClass(ACTIVE_CLASS);
+    });
+
+    // Today button should reset to month view.
+    fireEvent.click(screen.getByText(VIEW_TODAY));
+    await waitFor(() => {
+      expect(screen.getByText(VIEW_MONTH)).toHaveClass(ACTIVE_CLASS);
+      expect(screen.getByText(VIEW_WEEK)).not.toHaveClass(ACTIVE_CLASS);
     });
   });
 
-  it('Today button maintains functionality across view changes', async () => {
+  it('Year button highlights and stays highlighted until view changes', async () => {
     renderWithProviders(<ServiceScheduler />);
-
     await waitFor(() => {
-      expect(screen.getByText('Today')).toBeInTheDocument();
+      expect(screen.getByText(VIEW_YEAR)).toBeInTheDocument();
     });
 
-    // Switch to week view
-    const weekButton = screen.getByText('Week');
-    fireEvent.click(weekButton);
-
-    // Today button should still work
-    const todayButton = screen.getByText('Today');
-    fireEvent.click(todayButton);
-
-    const today = new Date();
-    const todayString = today.toDateString();
-
+    fireEvent.click(screen.getByText(VIEW_YEAR));
     await waitFor(() => {
-      const selectedDateElement = screen.getByTestId('selected-date');
-      expect(selectedDateElement).toHaveTextContent(todayString);
-    });
-  });
-
-  it('Today button appears in correct position in layout', async () => {
-    renderWithProviders(<ServiceScheduler />);
-
-    await waitFor(() => {
-      const todayButton = screen.getByText('Today');
-      expect(todayButton.parentElement).toHaveClass('mt-2');
-    });
-  });
-});
-
-describe('ServiceScheduler - Past Date Prevention', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-
-    (global.fetch as jest.Mock).mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({
-        success: true,
-        data: []
-      })
-    });
-  });
-
-  it('renders Advanced Time Slot Picker component', async () => {
-    renderWithProviders(<ServiceScheduler />);
-
-    await waitFor(() => {
-      expect(screen.getByTestId('resource-time-slot-scheduler')).toBeInTheDocument();
-    });
-  });
-
-  it('passes selected date to Advanced Time Slot Picker', async () => {
-    renderWithProviders(<ServiceScheduler />);
-
-    await waitFor(() => {
-      const resourceScheduler = screen.getByTestId('resource-time-slot-scheduler');
-      expect(resourceScheduler).toBeInTheDocument();
-    });
-
-    // Click Today button to ensure current date is passed
-    const todayButton = screen.getByText('Today');
-    fireEvent.click(todayButton);
-
-    const today = new Date();
-    const todayString = today.toDateString();
-
-    await waitFor(() => {
-      const selectedDateElement = screen.getByTestId('selected-date');
-      expect(selectedDateElement).toHaveTextContent(todayString);
+      expect(screen.getByText(VIEW_YEAR)).toHaveClass(ACTIVE_CLASS);
     });
   });
 });

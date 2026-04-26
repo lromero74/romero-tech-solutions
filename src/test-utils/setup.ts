@@ -39,7 +39,7 @@ global.IntersectionObserver = class IntersectionObserver {
   unobserve() {}
   disconnect() {}
   takeRecords() { return []; }
-} as MutationObserver;
+} as unknown as typeof IntersectionObserver;
 
 // Mock scrollTo
 global.scrollTo = jest.fn();

@@ -7,6 +7,11 @@ import { authenticateAgent, requireAgentMatch } from '../middleware/agentAuthMid
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
+import {
+  normalizeProgressPayload,
+  buildProgressWsMessage,
+  buildStartedWsMessage,
+} from '../utils/agentCommandPayloads.cjs';
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
 import { candleAggregationService } from '../services/candleAggregationService.js';
@@ -2622,16 +2627,11 @@ router.post('/:agent_id/commands/:command_id/started', authenticateAgent, requir
         `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
         [command_id]
       );
-      const message = {
-        type: 'agent.command.progress',
-        data: {
-          command_id,
-          agent_id,
-          command_type: cmdRow.rows[0]?.command_type,
-          stage: 'executing',
-          started_at: new Date().toISOString(),
-        },
-      };
+      const message = buildStartedWsMessage({
+        command_id,
+        agent_id,
+        command_type: cmdRow.rows[0]?.command_type,
+      });
       websocketService.broadcastToAdmins(message);
       const requestedBy = cmdRow.rows[0]?.requested_by;
       if (requestedBy) websocketService.broadcastToUser(requestedBy, message);
@@ -2661,17 +2661,7 @@ router.post('/:agent_id/commands/:command_id/started', authenticateAgent, requir
 router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id, command_id } = req.params;
-    const { phase, percent, current_index, total, package: pkg, message } = req.body || {};
-
-    const progress = {
-      phase: phase || '',
-      percent: typeof percent === 'number' ? percent : 0,
-      current_index: typeof current_index === 'number' ? current_index : -1,
-      total: typeof total === 'number' ? total : 0,
-      package: pkg || '',
-      message: message || '',
-      updated_at: new Date().toISOString(),
-    };
+    const progress = normalizeProgressPayload(req.body);
 
     // Merge progress into result_payload.progress so a dashboard
     // that mounts mid-install can read the latest tick from the
@@ -2694,16 +2684,12 @@ router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requi
         `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
         [command_id]
       );
-      const wsMessage = {
-        type: 'agent.command.progress',
-        data: {
-          command_id,
-          agent_id,
-          command_type: cmdRow.rows[0]?.command_type,
-          stage: 'executing',
-          progress,
-        },
-      };
+      const wsMessage = buildProgressWsMessage({
+        command_id,
+        agent_id,
+        command_type: cmdRow.rows[0]?.command_type,
+        progress,
+      });
       websocketService.broadcastToAdmins(wsMessage);
       const requestedBy = cmdRow.rows[0]?.requested_by;
       if (requestedBy) websocketService.broadcastToUser(requestedBy, wsMessage);

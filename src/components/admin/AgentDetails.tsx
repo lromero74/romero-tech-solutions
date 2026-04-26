@@ -17,6 +17,7 @@ import MetricsChartECharts from './MetricsChartECharts';
 import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus, CommandDetailsDialog } from './agent-details';
 import AssetInventory from './agent-details/AssetInventory';
 import AlertHistory from './agent-details/AlertHistory';
+import { mergeAgentMetrics, coerceMetricNumerics } from './agent-details/agentMetricMerge';
 import { websocketService } from '../../services/websocketService';
 import { useSharedChartSettings } from './MetricsChartECharts/hooks/useSharedChartSettings';
 import ExecutionDetailsModal from './modals/ExecutionDetailsModal';
@@ -187,30 +188,8 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
         // Use latest_metric if available (when aggregation is used), otherwise use last item from array
         const rawMetrics = metricsResponse.data.latest_metric ||
                           metricsResponse.data.metrics[metricsResponse.data.metrics.length - 1];
-
-        // Ensure numeric fields are properly converted (PostgreSQL may return strings)
-        setLatestMetrics({
-          ...rawMetrics,
-          cpu_percent: Number(rawMetrics.cpu_percent) || 0,
-          memory_percent: Number(rawMetrics.memory_percent) || 0,
-          disk_percent: Number(rawMetrics.disk_percent) || 0,
-          memory_used_gb: rawMetrics.memory_used_gb ? Number(rawMetrics.memory_used_gb) : undefined,
-          disk_used_gb: rawMetrics.disk_used_gb ? Number(rawMetrics.disk_used_gb) : undefined,
-          network_rx_bytes: rawMetrics.network_rx_bytes ? Number(rawMetrics.network_rx_bytes) : null,
-          network_tx_bytes: rawMetrics.network_tx_bytes ? Number(rawMetrics.network_tx_bytes) : null,
-        });
-
-        // Store full metrics history for charts
-        setMetricsHistory(metricsResponse.data.metrics.map(m => ({
-          ...m,
-          cpu_percent: Number(m.cpu_percent) || 0,
-          memory_percent: Number(m.memory_percent) || 0,
-          disk_percent: Number(m.disk_percent) || 0,
-          memory_used_gb: m.memory_used_gb ? Number(m.memory_used_gb) : undefined,
-          disk_used_gb: m.disk_used_gb ? Number(m.disk_used_gb) : undefined,
-          network_rx_bytes: m.network_rx_bytes ? Number(m.network_rx_bytes) : null,
-          network_tx_bytes: m.network_tx_bytes ? Number(m.network_tx_bytes) : null,
-        })));
+        setLatestMetrics(coerceMetricNumerics(rawMetrics));
+        setMetricsHistory(metricsResponse.data.metrics.map(coerceMetricNumerics));
       }
 
       // Load active alerts
@@ -290,100 +269,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       // Only update if this is for our current agent
       if (update.agentId === agentId) {
         console.log(`✅ Metrics update is for current agent, updating state`);
-
-        // Update latest metrics with the new data
-        const newMetrics: AgentMetric = {
-          id: '', // Not needed for display
-          agent_device_id: agentId,
-          cpu_percent: Number(update.metrics.cpu_percent) || 0,
-          memory_percent: Number(update.metrics.memory_percent) || 0,
-          disk_percent: Number(update.metrics.disk_percent) || 0,
-          memory_used_gb: update.metrics.memory_used_gb ? Number(update.metrics.memory_used_gb) : undefined,
-          disk_used_gb: update.metrics.disk_used_gb ? Number(update.metrics.disk_used_gb) : undefined,
-          network_rx_bytes: update.metrics.network_rx_bytes ? Number(update.metrics.network_rx_bytes) : null,
-          network_tx_bytes: update.metrics.network_tx_bytes ? Number(update.metrics.network_tx_bytes) : null,
-          collected_at: update.timestamp,
-          // Include all other metric fields
-          patches_available: update.metrics.patches_available || 0,
-          security_patches_available: update.metrics.security_patches_available || 0,
-          patches_require_reboot: update.metrics.patches_require_reboot || false,
-          eol_status: update.metrics.eol_status || null,
-          eol_date: update.metrics.eol_date || null,
-          security_eol_date: update.metrics.security_eol_date || null,
-          days_until_eol: update.metrics.days_until_eol || null,
-          days_until_sec_eol: update.metrics.days_until_sec_eol || null,
-          eol_message: update.metrics.eol_message || null,
-          disk_health_status: update.metrics.disk_health_status || null,
-          disk_health_data: update.metrics.disk_health_data || null,
-          disk_failures_predicted: update.metrics.disk_failures_predicted || 0,
-          disk_temperature_max: update.metrics.disk_temperature_max || null,
-          disk_reallocated_sectors_total: update.metrics.disk_reallocated_sectors_total || 0,
-          system_uptime_seconds: update.metrics.system_uptime_seconds || null,
-          last_boot_time: update.metrics.last_boot_time || null,
-          unexpected_reboot: update.metrics.unexpected_reboot || false,
-          services_monitored: update.metrics.services_monitored || 0,
-          services_running: update.metrics.services_running || 0,
-          services_failed: update.metrics.services_failed || 0,
-          services_data: update.metrics.services_data || null,
-          network_devices_monitored: update.metrics.network_devices_monitored || 0,
-          network_devices_online: update.metrics.network_devices_online || 0,
-          network_devices_offline: update.metrics.network_devices_offline || 0,
-          network_devices_data: update.metrics.network_devices_data || null,
-          backups_detected: update.metrics.backups_detected || 0,
-          backups_running: update.metrics.backups_running || 0,
-          backups_with_issues: update.metrics.backups_with_issues || 0,
-          backup_data: update.metrics.backup_data || null,
-          antivirus_installed: update.metrics.antivirus_installed || false,
-          antivirus_enabled: update.metrics.antivirus_enabled || false,
-          antivirus_up_to_date: update.metrics.antivirus_up_to_date || false,
-          firewall_enabled: update.metrics.firewall_enabled || false,
-          security_products_count: update.metrics.security_products_count || 0,
-          security_issues_count: update.metrics.security_issues_count || 0,
-          security_data: update.metrics.security_data || null,
-          failed_login_attempts: update.metrics.failed_login_attempts || 0,
-          failed_login_last_24h: update.metrics.failed_login_last_24h || 0,
-          unique_attacking_ips: update.metrics.unique_attacking_ips || 0,
-          failed_login_data: update.metrics.failed_login_data || null,
-          internet_connected: update.metrics.internet_connected !== undefined ? update.metrics.internet_connected : true,
-          gateway_reachable: update.metrics.gateway_reachable !== undefined ? update.metrics.gateway_reachable : true,
-          dns_working: update.metrics.dns_working !== undefined ? update.metrics.dns_working : true,
-          avg_latency_ms: update.metrics.avg_latency_ms || null,
-          packet_loss_percent: update.metrics.packet_loss_percent || null,
-          connectivity_issues_count: update.metrics.connectivity_issues_count || 0,
-          connectivity_data: update.metrics.connectivity_data || null,
-          cpu_temperature_c: update.metrics.cpu_temperature_c || null,
-          gpu_temperature_c: update.metrics.gpu_temperature_c || null,
-          motherboard_temperature_c: update.metrics.motherboard_temperature_c || null,
-          highest_temperature_c: update.metrics.highest_temperature_c || 0,
-          temperature_critical_count: update.metrics.temperature_critical_count || 0,
-          fan_count: update.metrics.fan_count || 0,
-          fan_speeds_rpm: update.metrics.fan_speeds_rpm || null,
-          fan_failure_count: update.metrics.fan_failure_count || 0,
-          sensor_data: update.metrics.sensor_data || null,
-          critical_events_count: update.metrics.critical_events_count || 0,
-          error_events_count: update.metrics.error_events_count || 0,
-          warning_events_count: update.metrics.warning_events_count || 0,
-          last_critical_event: update.metrics.last_critical_event || null,
-          last_critical_event_message: update.metrics.last_critical_event_message || null,
-          package_managers_outdated: update.metrics.package_managers_outdated || 0,
-          homebrew_outdated: update.metrics.homebrew_outdated || 0,
-          npm_outdated: update.metrics.npm_outdated || 0,
-          pip_outdated: update.metrics.pip_outdated || 0,
-          mas_outdated: update.metrics.mas_outdated || 0,
-          outdated_packages_data: update.metrics.outdated_packages_data || null,
-          // Newer fields (added in agent v1.16.49+) that previously
-          // weren't carried through the websocket merge — every
-          // metric tick / heartbeat broadcast was wiping them out
-          // of the in-memory state, which made the OS Patch Status
-          // panel revert from detail-view to count-only the moment
-          // a heartbeat fired (the data was still in the DB and the
-          // initial fetch saw it; the merge below was the dropper).
-          os_patches_data: update.metrics.os_patches_data || null,
-          distro_upgrade: update.metrics.distro_upgrade || null,
-          clt_update_available: update.metrics.clt_update_available || false,
-          raw_metrics: update.metrics.raw_metrics || null,
-        };
-
+        const newMetrics = mergeAgentMetrics(update, agentId);
         setLatestMetrics(newMetrics);
 
         // Append to metrics history for charts, but trim to maintain METRICS_FETCH_WINDOW

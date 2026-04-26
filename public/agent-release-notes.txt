@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.72 Release Notes
+RTS Monitoring Agent - Version 1.16.74 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 04:50:44 UTC
-Previous Version: v1.16.71
-Git Commit: 11dcef0
+Release Date: 2026-04-26 05:26:51 UTC
+Previous Version: v1.16.73
+Git Commit: 0735477
 
-Changes Since v1.16.71:
+Changes Since v1.16.73:
 ───────────────────────────────────────────────────────────
 
-• v1.16.72: force JSON-array output for the Windows patch list
+• v1.16.74: refresh_patches command type
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
