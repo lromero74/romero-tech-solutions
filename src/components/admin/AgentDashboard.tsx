@@ -79,6 +79,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  // Additional faceted filters. Each defaults to "all" so adding
+  // new ones in the future can be done without breaking the
+  // existing URL/state shape. Filters compose with AND semantics
+  // — narrowing as you select more.
+  const [osFilter, setOsFilter] = useState<string>('all');               // 'all' | 'windows' | 'darwin' | 'linux'
+  const [deviceTypeFilter, setDeviceTypeFilter] = useState<string>('all'); // 'all' | 'desktop' | 'laptop' | 'server' | 'mobile'
+  const [updateFilter, setUpdateFilter] = useState<string>('all');       // 'all' | 'outdated' | 'current' | 'in_progress' | 'unknown'
+  const [monitoringFilter, setMonitoringFilter] = useState<string>('all'); // 'all' | 'enabled' | 'disabled'
+  const [seenFilter, setSeenFilter] = useState<string>('all');           // 'all' | '1h' | '24h' | '7d' | '30d' | 'never'
+  const [businessFilter, setBusinessFilter] = useState<string>('all');   // 'all' | <business_id>
+  const [locationFilter, setLocationFilter] = useState<string>('all');   // 'all' | <location_name>
   const [sortBy, setSortBy] = useState<string>('device_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
@@ -832,20 +843,101 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const getFilteredAndSortedAgents = (): AgentDevice[] => {
     let filtered = agents;
 
-    // Apply search filter
+    // Free-text search hits more fields than before — anything an
+    // admin might reasonably type in the box should narrow the
+    // list. Extra fields covered: device_type, agent_version,
+    // os_version (so "11 Pro" matches Windows 11 Pro hosts),
+    // and the individual contact name for individual businesses.
     if (searchTerm) {
       const search = searchTerm.toLowerCase();
-      filtered = filtered.filter(agent =>
-        agent.device_name.toLowerCase().includes(search) ||
-        agent.business_name?.toLowerCase().includes(search) ||
-        agent.location_name?.toLowerCase().includes(search) ||
-        agent.os_type.toLowerCase().includes(search)
+      filtered = filtered.filter((agent) => {
+        const haystack = [
+          agent.device_name,
+          agent.business_name,
+          agent.location_name,
+          agent.os_type,
+          agent.os_version,
+          agent.device_type,
+          agent.agent_version,
+          agent.individual_first_name,
+          agent.individual_last_name,
+        ]
+          .filter(Boolean)
+          .map((s) => String(s).toLowerCase());
+        return haystack.some((s) => s.includes(search));
+      });
+    }
+
+    // Status (online/offline/warning/critical)
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter((agent) => agent.status === statusFilter);
+    }
+
+    // OS family. Matches Go's runtime.GOOS values which is what
+    // os_type stores.
+    if (osFilter !== 'all') {
+      filtered = filtered.filter((agent) => agent.os_type === osFilter);
+    }
+
+    // Device type — desktop / laptop / server / mobile.
+    if (deviceTypeFilter !== 'all') {
+      filtered = filtered.filter((agent) => agent.device_type === deviceTypeFilter);
+    }
+
+    // Update status. Computes against the manifest's latestAgentVersion
+    // (already fetched and held in state) plus the live updateInProgress
+    // map. Buckets:
+    //   outdated     — version < latest, no update in flight
+    //   in_progress  — admin clicked Update, agent hasn't returned new version yet
+    //   current      — version >= latest
+    //   unknown      — no agent_version reported (very old agent or
+    //                  registered but never heartbeated)
+    if (updateFilter !== 'all') {
+      filtered = filtered.filter((agent) => {
+        if (!agent.agent_version) return updateFilter === 'unknown';
+        if (updateInProgress.has(agent.id)) return updateFilter === 'in_progress';
+        if (!latestAgentVersion) return updateFilter === 'unknown';
+        const cmp = compareSemverDesc(agent.agent_version, latestAgentVersion);
+        if (cmp < 0) return updateFilter === 'outdated';
+        return updateFilter === 'current';
+      });
+    }
+
+    // Monitoring toggle
+    if (monitoringFilter !== 'all') {
+      filtered = filtered.filter((agent) =>
+        monitoringFilter === 'enabled' ? agent.monitoring_enabled : !agent.monitoring_enabled
       );
     }
 
-    // Apply status filter
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(agent => agent.status === statusFilter);
+    // Last-seen recency. Computed off last_heartbeat (NOT created_at —
+    // we want "have we heard from it recently", not "when was it
+    // registered"). 'never' picks rows where last_heartbeat is null.
+    if (seenFilter !== 'all') {
+      const now = Date.now();
+      const window: Record<string, number> = {
+        '1h': 60 * 60 * 1000,
+        '24h': 24 * 60 * 60 * 1000,
+        '7d': 7 * 24 * 60 * 60 * 1000,
+        '30d': 30 * 24 * 60 * 60 * 1000,
+      };
+      filtered = filtered.filter((agent) => {
+        if (seenFilter === 'never') return !agent.last_heartbeat;
+        if (!agent.last_heartbeat) return false;
+        const ms = window[seenFilter];
+        if (!ms) return true;
+        return now - new Date(agent.last_heartbeat).getTime() <= ms;
+      });
+    }
+
+    // Business / location filters. Useful for big fleets; both are
+    // populated from the agents themselves so we never offer a
+    // value that wouldn't return rows.
+    if (businessFilter !== 'all') {
+      filtered = filtered.filter((agent) => agent.business_id === businessFilter);
+    }
+    if (locationFilter !== 'all') {
+      filtered = filtered.filter((agent) => (agent.location_name || '') === locationFilter);
     }
 
     // Sort
@@ -1047,18 +1139,58 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
       {/* Filters */}
       <div className={`${themeClasses.bg.card} p-4 rounded-lg ${themeClasses.shadow.md}`}>
-        <h3 className={`text-lg font-medium ${themeClasses.text.primary} mb-4 flex items-center`}>
-          <Filter className="w-5 h-5 mr-2" />
-          Filters
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h3 className={`text-lg font-medium ${themeClasses.text.primary} flex items-center`}>
+            <Filter className="w-5 h-5 mr-2" />
+            Filters
+            {(() => {
+              // Active-filter count badge so the admin sees at a
+              // glance how many narrowing filters are applied.
+              const active = [
+                searchTerm,
+                statusFilter !== 'all' ? statusFilter : '',
+                osFilter !== 'all' ? osFilter : '',
+                deviceTypeFilter !== 'all' ? deviceTypeFilter : '',
+                updateFilter !== 'all' ? updateFilter : '',
+                monitoringFilter !== 'all' ? monitoringFilter : '',
+                seenFilter !== 'all' ? seenFilter : '',
+                businessFilter !== 'all' ? businessFilter : '',
+                locationFilter !== 'all' ? locationFilter : '',
+              ].filter(Boolean).length;
+              if (active === 0) return null;
+              return (
+                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+                  {active} active
+                </span>
+              );
+            })()}
+          </h3>
+          <button
+            onClick={() => {
+              setSearchTerm('');
+              setStatusFilter('all');
+              setOsFilter('all');
+              setDeviceTypeFilter('all');
+              setUpdateFilter('all');
+              setMonitoringFilter('all');
+              setSeenFilter('all');
+              setBusinessFilter('all');
+              setLocationFilter('all');
+            }}
+            className={`inline-flex items-center px-3 py-2 border ${themeClasses.border.primary} shadow-sm text-sm font-medium rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} ${themeClasses.bg.hover}`}
+          >
+            <X className="w-4 h-4 mr-2" />
+            Clear all
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           <div>
             <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Search</label>
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Search devices, businesses..."
+              placeholder="Name, business, OS, version…"
               className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
             />
           </div>
@@ -1069,24 +1201,121 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               onChange={(e) => setStatusFilter(e.target.value)}
               className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
             >
-              <option value="all">All Status</option>
+              <option value="all">All statuses</option>
               <option value="online">Online</option>
               <option value="offline">Offline</option>
               <option value="warning">Warning</option>
               <option value="critical">Critical</option>
             </select>
           </div>
-          <div className="flex items-end">
-            <button
-              onClick={() => {
-                setSearchTerm('');
-                setStatusFilter('all');
-              }}
-              className={`inline-flex items-center px-3 py-2 border ${themeClasses.border.primary} shadow-sm text-sm font-medium rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} ${themeClasses.bg.hover}`}
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>OS</label>
+            <select
+              value={osFilter}
+              onChange={(e) => setOsFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
             >
-              <X className="w-4 h-4 mr-2" />
-              Clear Filters
-            </button>
+              <option value="all">All OS families</option>
+              <option value="windows">Windows</option>
+              <option value="darwin">macOS</option>
+              <option value="linux">Linux</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Device type</label>
+            <select
+              value={deviceTypeFilter}
+              onChange={(e) => setDeviceTypeFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">All types</option>
+              <option value="desktop">Desktop</option>
+              <option value="laptop">Laptop</option>
+              <option value="server">Server</option>
+              <option value="mobile">Mobile</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Update status</label>
+            <select
+              value={updateFilter}
+              onChange={(e) => setUpdateFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">All update states</option>
+              <option value="outdated">Update available</option>
+              <option value="in_progress">Update in progress</option>
+              <option value="current">Up to date</option>
+              <option value="unknown">Unknown / never seen</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Last seen</label>
+            <select
+              value={seenFilter}
+              onChange={(e) => setSeenFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">Any time</option>
+              <option value="1h">Within 1 hour</option>
+              <option value="24h">Within 24 hours</option>
+              <option value="7d">Within 7 days</option>
+              <option value="30d">Within 30 days</option>
+              <option value="never">Never seen</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Monitoring</label>
+            <select
+              value={monitoringFilter}
+              onChange={(e) => setMonitoringFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">All</option>
+              <option value="enabled">Monitoring enabled</option>
+              <option value="disabled">Monitoring disabled</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Business</label>
+            <select
+              value={businessFilter}
+              onChange={(e) => setBusinessFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">All businesses</option>
+              {(() => {
+                // Derive options from the loaded agents so we never
+                // show a value that returns zero rows.
+                const seen = new Map<string, string>();
+                for (const a of agents) {
+                  if (a.business_id && a.business_name) {
+                    seen.set(a.business_id, getBusinessDisplayName(a));
+                  }
+                }
+                return Array.from(seen.entries())
+                  .sort((a, b) => a[1].localeCompare(b[1]))
+                  .map(([id, name]) => (
+                    <option key={id} value={id}>{name}</option>
+                  ));
+              })()}
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Location</label>
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">All locations</option>
+              {(() => {
+                const names = Array.from(
+                  new Set(agents.map((a) => a.location_name).filter(Boolean) as string[])
+                ).sort();
+                return names.map((n) => <option key={n} value={n}>{n}</option>);
+              })()}
+            </select>
           </div>
         </div>
       </div>
@@ -1113,7 +1342,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className={themeClasses.bg.secondary}>
                 <tr>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     <button
                       onClick={() => handleSort('device_name')}
                       className={`flex items-center hover:${themeClasses.text.accent}`}
@@ -1122,7 +1351,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <span className="ml-1">{getSortIndicator('device_name')}</span>
                     </button>
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     <button
                       onClick={() => handleSort('business_name')}
                       className={`flex items-center hover:${themeClasses.text.accent}`}
@@ -1131,13 +1360,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <span className="ml-1">{getSortIndicator('business_name')}</span>
                     </button>
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary} hidden xl:table-cell`}>
                     Location
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     Type / OS
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     <button
                       onClick={() => handleSort('status')}
                       className={`flex items-center hover:${themeClasses.text.accent}`}
@@ -1146,7 +1375,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <span className="ml-1">{getSortIndicator('status')}</span>
                     </button>
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     <button
                       onClick={() => handleSort('last_heartbeat')}
                       className={`flex items-center hover:${themeClasses.text.accent}`}
@@ -1155,10 +1384,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <span className="ml-1">{getSortIndicator('last_heartbeat')}</span>
                     </button>
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
                     Agent Version
                   </th>
-                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
+                  <th className={`px-3 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
                     Actions
                   </th>
                 </tr>
@@ -1168,7 +1397,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   const statusDisplay = getStatusDisplay(agent.status);
                   return (
                     <tr key={agent.id} className={themeClasses.bg.hover}>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         <div className="flex items-center">
                           <button
                             onClick={() => onViewAgentDetails?.(agent.id)}
@@ -1184,7 +1413,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           </div>
                         </div>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         {agent.business_id && agent.business_name ? (
                           <button
                             onClick={() => onViewBusiness?.(agent.business_id)}
@@ -1204,7 +1433,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className={`px-6 py-4 border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary} hidden xl:table-cell`}>
                         {agent.location_street && agent.location_city ? (
                           <button
                             onClick={() => {
@@ -1234,7 +1463,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           </div>
                         )}
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         <div className={`text-sm ${themeClasses.text.primary}`}>
                           {agent.device_type}
                         </div>
@@ -1242,18 +1471,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           {formatAgentOS(agent.os_type, agent.os_version)}
                         </div>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${statusDisplay.bgColor} ${statusDisplay.color}`}>
                           <span className="mr-1">{statusDisplay.icon}</span>
                           {statusDisplay.label}
                         </span>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         <div className={`text-sm ${themeClasses.text.secondary}`}>
                           {formatLastSeen(agent.last_heartbeat, agent.created_at)}
                         </div>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                      <td className={`px-3 py-4 border-r ${themeClasses.border.primary}`}>
                         <div className={`text-sm ${themeClasses.text.primary}`}>
                           {agent.agent_version || '—'}
                         </div>
@@ -1304,7 +1533,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           )}
                         </div>
                       </td>
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium`}>
+                      <td className={`px-3 py-4 whitespace-nowrap text-sm font-medium`}>
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => onViewAgentDetails?.(agent.id)}
