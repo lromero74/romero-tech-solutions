@@ -5,6 +5,7 @@ import { AgentDetailsComponentProps } from './types';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 import { UpdatePackageDialog } from './UpdatePackageDialog';
 import { ChangelogDialog } from './ChangelogDialog';
+import { agentService } from '../../../services/agentService';
 
 // Maps the agent's package_manager values to the canonical key the
 // agent's update_packages handler accepts. Only Linux distro
@@ -54,11 +55,31 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   }, [patchesRaw, hidden]);
 
   const distroUpgrade = latestMetrics?.distro_upgrade;
+  // Track Reboot button state up here (before any early returns) so
+  // the React hook order stays stable across render passes.
+  const [rebootRequested, setRebootRequested] = useState(false);
 
   if (!latestMetrics || latestMetrics.patches_available === undefined) return null;
 
   const hasList = visiblePatches.length > 0;
   const securityCount = latestMetrics.security_patches_available || 0;
+  const pendingRebootPatches = visiblePatches.filter((p: any) => p.package_manager === 'winupdate-reboot');
+
+  const handleRebootHost = async () => {
+    if (!agentId) return;
+    if (!confirm('Reboot this device in 60 seconds?\n\nAny installed-but-pending Windows updates will take effect after the restart.')) return;
+    setRebootRequested(true);
+    try {
+      await agentService.requestRebootHost(agentId);
+    } catch {
+      // The dashboard will surface failures via the standard
+      // command-history flow; nothing meaningful to do here.
+    } finally {
+      // Clear the requested flag after a beat so the user can
+      // retry if their first request was declined / lost.
+      setTimeout(() => setRebootRequested(false), 5000);
+    }
+  };
 
   // Group visible patches by package_manager so we can render a
   // single "Update all <manager>" button per family.
@@ -115,6 +136,36 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                 Run this on the agent host as root. Auto-execution is intentionally disabled — release
                 upgrades benefit from human-in-the-loop monitoring.
               </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reboot-required banner: shown when there are installed
+          updates waiting for a system restart, OR when the agent
+          set patches_require_reboot=true (meaning a pending update
+          will require a reboot once installed). The button fires
+          the reboot_host command to the agent, which schedules a
+          shutdown /r with a 60-second grace period. */}
+      {agentId && (pendingRebootPatches.length > 0 || latestMetrics.patches_require_reboot) && (
+        <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <div className="flex items-start gap-3">
+            <RefreshCw className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm font-semibold text-amber-900 dark:text-amber-200 mb-1">
+                {pendingRebootPatches.length > 0
+                  ? `${pendingRebootPatches.length} update${pendingRebootPatches.length === 1 ? '' : 's'} installed and waiting for restart`
+                  : 'A reboot is required to complete pending updates'}
+              </p>
+              <p className="text-xs text-amber-800 dark:text-amber-300 mb-2">
+                Restarting will close any open applications on the device. The agent reconnects automatically once the host comes back up.
+              </p>
+              <button
+                onClick={handleRebootHost}
+                disabled={rebootRequested}
+                className="px-3 py-1.5 text-xs font-medium rounded bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                {rebootRequested ? 'Reboot scheduled…' : 'Restart device now'}
+              </button>
             </div>
           </div>
         </div>

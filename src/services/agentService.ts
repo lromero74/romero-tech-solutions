@@ -555,6 +555,31 @@ class AgentService {
   }
 
   /**
+   * Reboot the agent's host machine. Used after Windows updates that
+   * are installed but waiting for a reboot to take effect, or as a
+   * general "force reboot this device" admin action.
+   *
+   * The agent schedules the reboot with the requested delay (default
+   * 60s) so it has time to POST a successful result back before the
+   * host actually shuts down. Cross-platform: shutdown.exe /r on
+   * Windows, `shutdown -r +N` on Linux/macOS. Linux/macOS round the
+   * delay up to a whole minute (their shutdown command's minimum).
+   */
+  async requestRebootHost(
+    agentId: string,
+    payload: { delay_seconds?: number; message?: string } = {}
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'reboot_host',
+      command_params: {
+        delay_seconds: payload.delay_seconds ?? 60,
+        message: payload.message ?? 'RTS Agent: rebooting to apply pending updates',
+      },
+      requires_approval: false,
+    });
+  }
+
+  /**
    * Get alerts for a specific agent
    */
   async getAgentAlerts(
