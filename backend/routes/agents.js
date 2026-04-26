@@ -1406,16 +1406,22 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
 router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const { status } = req.body;
+    const { status, agent_version } = req.body;
 
-    // Update agent status and last_heartbeat
+    // Update agent status and last_heartbeat. agent_version is
+    // included on every heartbeat from agents v1.16.77+ so the
+    // dashboard can flag outdated builds and offer an "Update
+    // agent" action. COALESCE preserves the prior value when an
+    // older agent (no agent_version field in payload) checks in,
+    // so we don't blow away the registration-time value.
     await query(
       `UPDATE agent_devices
        SET last_heartbeat = NOW(),
            status = COALESCE($2, status),
+           agent_version = COALESCE($3, agent_version),
            updated_at = NOW()
        WHERE id = $1`,
-      [agent_id, status || 'online']
+      [agent_id, status || 'online', agent_version || null]
     );
 
     // Get subscription information for tray display
@@ -2884,6 +2890,7 @@ router.get('/', authMiddleware, async (req, res) => {
         ad.last_heartbeat,
         ad.monitoring_enabled,
         ad.is_active,
+        ad.agent_version,
         ad.created_at,
         b.business_name,
         b.is_individual,

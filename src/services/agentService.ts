@@ -24,6 +24,7 @@ export interface AgentDevice {
   updated_at: string;
   created_by: string | null;
   agent_token?: string; // Only returned on registration
+  agent_version?: string; // Reported by the agent on every heartbeat (v1.16.77+)
   business_name?: string; // Joined from businesses table
   is_individual?: boolean; // From businesses table
   individual_first_name?: string; // From users table JOIN (for individuals only)
@@ -594,6 +595,48 @@ class AgentService {
       command_params: {},
       requires_approval: false,
     });
+  }
+
+  /**
+   * Trigger a self-update on the agent. The agent's command-poll
+   * loop picks this up and runs internal/updater.AutoUpdateUnattended
+   * — same pipeline as the background auto-update loop, but bypasses
+   * the agent-side cfg.Advanced.AutoUpdate gate (the explicit
+   * dashboard click IS the consent).
+   *
+   * The agent posts a "queued" result back immediately and then the
+   * install kills the agent process. The OS service supervisor
+   * (launchd / systemd / Windows SCM) restarts it on the new binary.
+   * Success is observed via the next heartbeat carrying the new
+   * agent_version.
+   */
+  async requestInstallUpdate(
+    agentId: string
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'install_update',
+      command_params: {},
+      requires_approval: false,
+    });
+  }
+
+  /**
+   * Get the current "latest" agent version from the download manifest
+   * (version.json on the API host's static download directory). Used
+   * to compute the "Update available" badge in the AgentDashboard
+   * table. Returns null if the manifest is unreachable — the UI
+   * treats null as "we don't know" and skips the outdated badge.
+   */
+  async getLatestAgentVersion(): Promise<string | null> {
+    try {
+      const resp = await apiService.get<{
+        success: boolean;
+        current_version: string | null;
+      }>('/agent/latest-version');
+      return resp?.current_version ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /**

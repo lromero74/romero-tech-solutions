@@ -301,6 +301,44 @@ router.get('/versions/:platform', async (req, res) => {
 });
 
 /**
+ * GET /api/agent/latest-version
+ *
+ * Returns the contents of the agent download manifest (version.json)
+ * that's also served from /downloads/agent/version.json for the
+ * agents themselves to poll. The dashboard calls this to figure out
+ * which installed agents are running an outdated build so the admin
+ * UI can flag them and offer a one-click "Update agent" action that
+ * enqueues an install_update command.
+ *
+ * Served from the API surface (rather than the dashboard fetching
+ * version.json directly from the static download host) so we
+ * sidestep cross-origin / cache-header concerns and keep the API
+ * the single source of truth for "which version is current".
+ */
+router.get('/latest-version', async (req, res) => {
+  try {
+    const manifestPath = path.join(getAgentBinariesDir(), 'version.json');
+    const raw = await fs.readFile(manifestPath, 'utf-8');
+    const manifest = JSON.parse(raw);
+    res.json({
+      success: true,
+      current_version: manifest.current_version || null,
+      release_date: manifest.release_date || null,
+    });
+  } catch (error) {
+    // The most common cause is the file genuinely not existing yet
+    // (e.g. dev environment without /tmp/agent-binaries seeded). The
+    // dashboard treats a non-200 from this endpoint as "we don't
+    // know the latest version" and skips the outdated-badge logic.
+    console.error('❌ Error reading agent version.json:', error);
+    res.status(404).json({
+      success: false,
+      message: 'agent version manifest not available',
+    });
+  }
+});
+
+/**
  * GET /api/agent/detect
  * Auto-detect platform and architecture from User-Agent
  */

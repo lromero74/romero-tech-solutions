@@ -1,13 +1,14 @@
-RTS Monitoring Agent - Version 1.16.76 Release Notes
+RTS Monitoring Agent - Version 1.16.77 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 UTC
-Previous Version: v1.16.75
+Release Date: 2026-04-26 19:39:18 UTC
+Previous Version: v1.16.76
+Git Commit: f66f1ef
 
-Changes Since v1.16.75:
+Changes Since v1.16.76:
 ───────────────────────────────────────────────────────────
 
-• v1.16.76: silence repeating Windows event-log warning + use Get-WinEvent
+• v1.16.77: unattended auto-update + dashboard-triggered updates
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

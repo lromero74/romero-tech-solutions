@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings } from 'lucide-react';
+import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, Plus, RefreshCw, Filter, X, Eye, Power, Trash2, MapPin, Edit, User, Building, Settings, Download } from 'lucide-react';
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
@@ -13,6 +13,30 @@ interface AgentDashboardProps {
   onViewAgentDetails?: (agentId: string) => void;
   onCreateRegistrationToken?: () => void;
   onViewBusiness?: (businessId: string) => void;
+}
+
+// compareSemverDesc compares two dotted-integer version strings the
+// same way the Go agent does in internal/updater.compareSemver:
+// numeric per-segment, missing segments treated as 0, leading "v"
+// tolerated. Returns >0 if a > b, <0 if a < b, 0 if equal. We do this
+// rather than naive string compare because "1.16.10" > "1.16.9"
+// lexically gives the wrong answer (tested against in agent's
+// updater_test.go — same regression class).
+function compareSemverDesc(a: string, b: string): number {
+  const split = (v: string) =>
+    v.replace(/^v/, '').trim().split('.').map((s) => {
+      const n = parseInt(s, 10);
+      return Number.isNaN(n) ? 0 : n;
+    });
+  const pa = split(a);
+  const pb = split(b);
+  const n = Math.max(pa.length, pb.length);
+  for (let i = 0; i < n; i++) {
+    const ai = pa[i] ?? 0;
+    const bi = pb[i] ?? 0;
+    if (ai !== bi) return ai - bi;
+  }
+  return 0;
 }
 
 const AgentDashboard: React.FC<AgentDashboardProps> = ({
@@ -38,6 +62,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [showAggregationModal, setShowAggregationModal] = useState(false);
   const [aggregationModalAgent, setAggregationModalAgent] = useState<AgentDevice | null>(null);
 
+  // Latest released agent version, fetched from /api/agent/latest-version.
+  // Used to compute the "Update available" badge in the version column.
+  // null while loading or if the manifest is unreachable — in either case
+  // the UI hides the badge rather than guess.
+  const [latestAgentVersion, setLatestAgentVersion] = useState<string | null>(null);
+
+  // Confirmation modal state for the dashboard-triggered "Update agent"
+  // action. Mirrors the shape of confirmDelete so the rendering pattern
+  // is consistent. fromVersion is shown in the modal copy so the admin
+  // can sanity-check before they click "Update".
+  const [confirmInstallUpdate, setConfirmInstallUpdate] = useState<{
+    show: boolean;
+    agentId?: string;
+    agentName?: string;
+    fromVersion?: string;
+  }>({ show: false });
+
   // Get businesses and service locations for the edit modal
   const { businesses, serviceLocations } = useAdminData();
 
@@ -47,6 +88,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const canManageAgents = checkPermission('manage.agents.enable');
   const canCreateTokens = checkPermission('create.agent_tokens.enable');
   const canEditAgents = checkPermission('modify.agents.enable');
+  // Same permission gate used for update_packages, reboot_host, and
+  // refresh_patches commands — install_update is the same kind of
+  // remote action so it should follow the same rule.
+  const canSendCommands = checkPermission('send.agent_commands.enable');
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -94,6 +139,61 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   useEffect(() => {
     loadAgents();
   }, [loadAgents]);
+
+  // Fetch the latest published agent version once on mount. The
+  // value rarely changes and a stale read just means an agent that
+  // was outdated 30 minutes ago might briefly look up-to-date — both
+  // caller and server treat the badge as advisory, not authoritative.
+  useEffect(() => {
+    let cancelled = false;
+    agentService.getLatestAgentVersion().then((v) => {
+      if (!cancelled) setLatestAgentVersion(v);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
+  // isAgentOutdated returns true when we know both sides of the
+  // comparison and the agent's reported version is lexicographically
+  // older. Returns false in any "we don't know" case (no manifest,
+  // no agent_version on the row, or an agent ahead of the manifest
+  // — e.g. a dev build) so the badge never lies.
+  const isAgentOutdated = (agent: AgentDevice): boolean => {
+    if (!latestAgentVersion || !agent.agent_version) return false;
+    return compareSemverDesc(agent.agent_version, latestAgentVersion) < 0;
+  };
+
+  // Trigger a dashboard-initiated agent update. Uses the same
+  // command-enqueue plumbing as update_packages / reboot_host. The
+  // agent's command-poll loop picks it up within
+  // CommandPollInterval seconds and runs the unattended install
+  // path; success is observed when the agent's next heartbeat
+  // arrives carrying the new agent_version.
+  const handleInstallUpdate = async () => {
+    if (!canSendCommands) {
+      setPermissionDenied({
+        show: true,
+        action: 'Update Agent',
+        requiredPermission: 'send.agent_commands.enable',
+        message: 'You do not have permission to issue agent commands',
+      });
+      setConfirmInstallUpdate({ show: false });
+      return;
+    }
+    if (!confirmInstallUpdate.agentId) return;
+    try {
+      setActionInProgress(confirmInstallUpdate.agentId);
+      const response = await agentService.requestInstallUpdate(confirmInstallUpdate.agentId);
+      if (!response.success) {
+        setError(response.message || 'Failed to queue agent update');
+      }
+    } catch (err) {
+      console.error('Error queueing agent update:', err);
+      setError(err instanceof Error ? err.message : 'Failed to queue agent update');
+    } finally {
+      setActionInProgress(null);
+      setConfirmInstallUpdate({ show: false });
+    }
+  };
 
   // Toggle agent monitoring (enable/disable)
   const handleToggleMonitoring = async (agent: AgentDevice) => {
@@ -639,6 +739,9 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       <span className="ml-1">{getSortIndicator('last_heartbeat')}</span>
                     </button>
                   </th>
+                  <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider border-r ${themeClasses.border.primary}`}>
+                    Agent Version
+                  </th>
                   <th className={`px-6 py-3 text-left text-xs font-medium ${themeClasses.text.tertiary} uppercase tracking-wider`}>
                     Actions
                   </th>
@@ -734,6 +837,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           {formatLastSeen(agent.last_heartbeat)}
                         </div>
                       </td>
+                      <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
+                        <div className={`text-sm ${themeClasses.text.primary}`}>
+                          {agent.agent_version || '—'}
+                        </div>
+                        {isAgentOutdated(agent) && (
+                          <span
+                            className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                            title={`Latest released: ${latestAgentVersion}`}
+                          >
+                            Update available
+                          </span>
+                        )}
+                      </td>
                       <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium`}>
                         <div className="flex items-center gap-2">
                           <button
@@ -743,6 +859,21 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           >
                             <Eye className="w-4 h-4" />
                           </button>
+                          {canSendCommands && isAgentOutdated(agent) && (
+                            <button
+                              onClick={() => setConfirmInstallUpdate({
+                                show: true,
+                                agentId: agent.id,
+                                agentName: agent.device_name,
+                                fromVersion: agent.agent_version,
+                              })}
+                              disabled={actionInProgress === agent.id}
+                              className="text-amber-600 hover:text-amber-800 dark:text-amber-400 dark:hover:text-amber-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title={`Update agent to ${latestAgentVersion}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </button>
+                          )}
                           {canEditAgents && (
                             <button
                               onClick={() => handleEditAgent(agent)}
@@ -883,6 +1014,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                     <span className={`text-xs ${themeClasses.text.muted}`}>Last Seen</span>
                     <div className={themeClasses.text.primary}>{formatLastSeen(agent.last_heartbeat)}</div>
                   </div>
+                  <div className="col-span-2">
+                    <span className={`text-xs ${themeClasses.text.muted}`}>Agent Version</span>
+                    <div className={`flex items-center gap-2 ${themeClasses.text.primary}`}>
+                      <span>{agent.agent_version || '—'}</span>
+                      {isAgentOutdated(agent) && (
+                        <span
+                          className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                          title={`Latest released: ${latestAgentVersion}`}
+                        >
+                          Update available
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex justify-between items-center pt-3 border-t border-gray-200 dark:border-gray-700">
@@ -895,6 +1040,22 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       >
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
+                      </button>
+                    )}
+                    {canSendCommands && isAgentOutdated(agent) && (
+                      <button
+                        onClick={() => setConfirmInstallUpdate({
+                          show: true,
+                          agentId: agent.id,
+                          agentName: agent.device_name,
+                          fromVersion: agent.agent_version,
+                        })}
+                        disabled={actionInProgress === agent.id}
+                        className="inline-flex items-center px-3 py-2 text-sm font-medium text-amber-600 hover:text-amber-800 dark:text-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={`Update agent to ${latestAgentVersion}`}
+                      >
+                        <Download className="w-4 h-4 mr-1" />
+                        Update
                       </button>
                     )}
                     {canManageAgents && (
@@ -977,6 +1138,55 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 className="px-4 py-2 bg-red-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionInProgress === confirmDelete.agentId ? 'Deleting...' : 'Delete Agent'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Update Agent Confirmation Modal */}
+      {confirmInstallUpdate.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${themeClasses.bg.card} rounded-lg p-6 max-w-md w-full mx-4 ${themeClasses.shadow.xl}`}>
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <Download className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="ml-3">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Update Agent
+                </h3>
+                <p className={`mt-2 text-sm ${themeClasses.text.secondary}`}>
+                  Queue an unattended self-update on <strong>{confirmInstallUpdate.agentName}</strong>?
+                </p>
+                <p className={`mt-2 text-sm ${themeClasses.text.secondary}`}>
+                  Current: <code>{confirmInstallUpdate.fromVersion || 'unknown'}</code><br />
+                  Target: <code>{latestAgentVersion || 'latest'}</code>
+                </p>
+                <p className={`mt-2 text-xs ${themeClasses.text.muted}`}>
+                  The agent will pick up the command on its next poll
+                  (within ~30 seconds), download the new package,
+                  install it silently, and the OS service supervisor
+                  will restart it on the new binary. The dashboard
+                  shows success once the next heartbeat carries the
+                  new version.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmInstallUpdate({ show: false })}
+                disabled={actionInProgress === confirmInstallUpdate.agentId}
+                className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md text-sm font-medium ${themeClasses.text.primary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleInstallUpdate}
+                disabled={actionInProgress === confirmInstallUpdate.agentId}
+                className="px-4 py-2 bg-amber-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionInProgress === confirmInstallUpdate.agentId ? 'Queueing…' : 'Update Agent'}
               </button>
             </div>
           </div>
