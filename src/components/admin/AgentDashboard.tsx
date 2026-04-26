@@ -90,6 +90,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [seenFilter, setSeenFilter] = useState<string>('all');           // 'all' | '1h' | '24h' | '7d' | '30d' | 'never'
   const [businessFilter, setBusinessFilter] = useState<string>('all');   // 'all' | <business_id>
   const [locationFilter, setLocationFilter] = useState<string>('all');   // 'all' | <location_name>
+  // Patch availability filter — separate from agent-version updates
+  // (which already have their own filter). Buckets:
+  //   any         — at least one OS patch OR package update OR distro upgrade
+  //   os          — has OS patches (apt/dnf/pacman/Windows Update/softwareupdate)
+  //   security    — has security-classified OS patches specifically
+  //   reboot      — has patches that require a reboot
+  //   packages    — has third-party package updates (brew/npm/pip/mas)
+  //   distro      — has a major distro / OS release upgrade pending
+  //   none        — no patches/updates pending
+  const [patchFilter, setPatchFilter] = useState<string>('all');
   const [sortBy, setSortBy] = useState<string>('device_name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
@@ -940,6 +950,35 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       filtered = filtered.filter((agent) => (agent.location_name || '') === locationFilter);
     }
 
+    // Patch availability. Pulls from the latest agent_metrics row
+    // surfaced by the backend's patch_summary subquery. Agents that
+    // never reported metrics (patch_summary === null) are treated
+    // as "unknown" and only included in the 'all' bucket.
+    if (patchFilter !== 'all') {
+      filtered = filtered.filter((agent) => {
+        const p = agent.patch_summary;
+        if (!p) return false;
+        switch (patchFilter) {
+          case 'any':
+            return p.os_patches > 0 || p.package_updates > 0 || p.distro_upgrade_available;
+          case 'os':
+            return p.os_patches > 0;
+          case 'security':
+            return p.os_security_patches > 0;
+          case 'reboot':
+            return p.os_patches_reboot;
+          case 'packages':
+            return p.package_updates > 0;
+          case 'distro':
+            return p.distro_upgrade_available;
+          case 'none':
+            return p.os_patches === 0 && p.package_updates === 0 && !p.distro_upgrade_available;
+          default:
+            return true;
+        }
+      });
+    }
+
     // Sort
     filtered.sort((a, b) => {
       let compareA: string | number = '';
@@ -1156,6 +1195,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 seenFilter !== 'all' ? seenFilter : '',
                 businessFilter !== 'all' ? businessFilter : '',
                 locationFilter !== 'all' ? locationFilter : '',
+                patchFilter !== 'all' ? patchFilter : '',
               ].filter(Boolean).length;
               if (active === 0) return null;
               return (
@@ -1176,6 +1216,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               setSeenFilter('all');
               setBusinessFilter('all');
               setLocationFilter('all');
+              setPatchFilter('all');
             }}
             className={`inline-flex items-center px-3 py-2 border ${themeClasses.border.primary} shadow-sm text-sm font-medium rounded-md ${themeClasses.text.secondary} ${themeClasses.bg.primary} ${themeClasses.bg.hover}`}
           >
@@ -1274,6 +1315,23 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               <option value="all">All</option>
               <option value="enabled">Monitoring enabled</option>
               <option value="disabled">Monitoring disabled</option>
+            </select>
+          </div>
+          <div>
+            <label className={`block text-sm font-medium ${themeClasses.text.secondary}`}>Pending patches</label>
+            <select
+              value={patchFilter}
+              onChange={(e) => setPatchFilter(e.target.value)}
+              className={`mt-1 block w-full rounded-md border ${themeClasses.border.primary} ${themeClasses.bg.primary} ${themeClasses.text.primary} shadow-sm focus:border-blue-500 focus:ring-blue-500`}
+            >
+              <option value="all">Any</option>
+              <option value="any">Has any pending</option>
+              <option value="os">Has OS patches</option>
+              <option value="security">Has security patches</option>
+              <option value="reboot">Patches need reboot</option>
+              <option value="packages">Has package updates</option>
+              <option value="distro">Has distro upgrade</option>
+              <option value="none">Fully patched</option>
             </select>
           </div>
           <div>
@@ -1531,6 +1589,36 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                               })()}
                             </button>
                           )}
+                          {(() => {
+                            // OS / package patch counts. Distinct from
+                            // the agent_version "Update available"
+                            // badge above — those are the agent
+                            // upgrading itself, these are the OS / 3rd-
+                            // party packages on the host.
+                            const p = agent.patch_summary;
+                            if (!p) return null;
+                            const parts: string[] = [];
+                            if (p.os_patches > 0) parts.push(`${p.os_patches} OS`);
+                            if (p.package_updates > 0) parts.push(`${p.package_updates} pkg`);
+                            if (parts.length === 0 && !p.distro_upgrade_available) return null;
+                            const isSecurity = p.os_security_patches > 0;
+                            const cls = p.distro_upgrade_available
+                              ? 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200'
+                              : isSecurity
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+                                : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+                            const label = p.distro_upgrade_available
+                              ? 'Distro upgrade'
+                              : (isSecurity ? `${parts.join(' + ')} (security)` : parts.join(' + '));
+                            return (
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${cls}`}
+                                title={`OS patches: ${p.os_patches}${p.os_security_patches > 0 ? ` (${p.os_security_patches} security)` : ''}${p.os_patches_reboot ? ' • reboot required' : ''}\nPackage updates: ${p.package_updates}${p.homebrew_outdated ? ` (brew ${p.homebrew_outdated})` : ''}${p.npm_outdated ? ` (npm ${p.npm_outdated})` : ''}${p.pip_outdated ? ` (pip ${p.pip_outdated})` : ''}${p.mas_outdated ? ` (mas ${p.mas_outdated})` : ''}${p.distro_upgrade_available ? '\nDistro upgrade available' : ''}`}
+                              >
+                                {label}
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className={`px-3 py-4 whitespace-nowrap text-sm font-medium`}>

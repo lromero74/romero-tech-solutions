@@ -3046,7 +3046,33 @@ router.get('/', authMiddleware, async (req, res) => {
               AND status IN ('pending', 'delivered', 'executing')
             ORDER BY command_type, created_at DESC
           ) p
-        ) AS pending_action_commands
+        ) AS pending_action_commands,
+        -- Latest patch / package-update counts pulled from the
+        -- most-recent agent_metrics row. Surfaced so the
+        -- AgentDashboard can filter by "Has OS patches" / "Has
+        -- package updates" / "Has distro upgrade" without the
+        -- frontend having to hit the per-agent metrics endpoint
+        -- for every row.
+        (
+          SELECT row_to_json(latest)
+          FROM (
+            SELECT
+              COALESCE(am.patches_available, 0) AS os_patches,
+              COALESCE(am.security_patches_available, 0) AS os_security_patches,
+              COALESCE(am.patches_require_reboot, false) AS os_patches_reboot,
+              COALESCE(am.package_managers_outdated, 0) AS package_updates,
+              COALESCE(am.homebrew_outdated, 0) AS homebrew_outdated,
+              COALESCE(am.npm_outdated, 0) AS npm_outdated,
+              COALESCE(am.pip_outdated, 0) AS pip_outdated,
+              COALESCE(am.mas_outdated, 0) AS mas_outdated,
+              (am.distro_upgrade IS NOT NULL) AS distro_upgrade_available,
+              am.collected_at AS observed_at
+            FROM agent_metrics am
+            WHERE am.agent_device_id = ad.id
+            ORDER BY am.collected_at DESC
+            LIMIT 1
+          ) latest
+        ) AS patch_summary
       FROM agent_devices ad
       LEFT JOIN businesses b ON ad.business_id = b.id
       LEFT JOIN users u ON b.id = u.business_id AND b.is_individual = true AND u.is_primary_contact = true

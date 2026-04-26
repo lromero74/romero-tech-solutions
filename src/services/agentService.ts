@@ -36,6 +36,21 @@ export interface AgentDevice {
     requested_at: string;
     command_params?: Record<string, unknown> | null;
   }>;
+  // Patch / package-update summary derived from the latest
+  // agent_metrics row. Lets the dashboard filter / badge agents
+  // without round-tripping to the metrics endpoint per row.
+  patch_summary?: {
+    os_patches: number;
+    os_security_patches: number;
+    os_patches_reboot: boolean;
+    package_updates: number;
+    homebrew_outdated: number;
+    npm_outdated: number;
+    pip_outdated: number;
+    mas_outdated: number;
+    distro_upgrade_available: boolean;
+    observed_at: string | null;
+  } | null;
   business_name?: string; // Joined from businesses table
   is_individual?: boolean; // From businesses table
   individual_first_name?: string; // From users table JOIN (for individuals only)
