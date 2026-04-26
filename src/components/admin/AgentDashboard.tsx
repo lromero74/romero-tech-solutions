@@ -79,17 +79,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     latestAgentVersionRef.current = latestAgentVersion;
   }, [latestAgentVersion]);
 
-  // Per-agent "update queued" state, keyed by agent.id. Populated when
-  // the admin clicks Update Agent and the install_update command is
-  // accepted by the backend. Cleared when the agent's next heartbeat
-  // arrives carrying agent_version >= latestAgentVersion (which means
-  // the unattended install completed and the OS supervisor has
-  // restarted the agent on the new binary).
+  // Per-agent "update queued" state, keyed by agent.id with value =
+  // the agent_version observed at the moment the admin clicked
+  // Update Agent (or what the server told us when seeding from
+  // pending_action_commands). Cleared on the next heartbeat that
+  // reports a DIFFERENT version — that's the proof the unattended
+  // install completed and the OS supervisor restarted on the new
+  // binary. Comparing to "latest" alone was wrong: if a newer
+  // release ships mid-update, the agent reaches v(N) but latest is
+  // now v(N+1), and the badge would stick forever.
   //
-  // Stored as a Set rather than a flat boolean so two simultaneous
-  // updates (e.g. the admin queues B while A's still going) don't
-  // collide.
-  const [updateInProgress, setUpdateInProgress] = useState<Set<string>>(new Set());
+  // Map (not Set) because we need the from-version for the version-
+  // changed comparison.
+  const [updateInProgress, setUpdateInProgress] = useState<Map<string, string | undefined>>(new Map());
 
   // Confirmation modal state for the dashboard-triggered "Update agent"
   // action. Mirrors the shape of confirmDelete so the rendering pattern
@@ -190,13 +192,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         // doesn't lose the "Update in progress" badge while an
         // install_update command is still mid-flight on the agent
         // (pending/delivered/executing in agent_commands).
-        const seededUpdates = new Set<string>();
+        const seededUpdates = new Map<string, string | undefined>();
         const seededReboots: Record<string, { scheduledForMs: number; message: string; commandId: string }> = {};
         for (const a of response.data.agents) {
           const pending = a.pending_action_commands ?? [];
           for (const c of pending) {
             if (c.command_type === 'install_update') {
-              seededUpdates.add(a.id);
+              // Seed with the agent's current version as the
+              // "from" version. Won't match the actual pre-click
+              // version if the install already advanced — that's
+              // OK, the badge clears on the NEXT version change.
+              seededUpdates.set(a.id, a.agent_version);
             } else if (c.command_type === 'reboot_host') {
               // Scheduled-for time = requested_at + delay_seconds.
               // Falls back to "5 min from request" if delay missing.
@@ -385,19 +391,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       const results = await Promise.allSettled(
         targets.map((t) => agentService.requestInstallUpdate(t.id))
       );
-      const queued = new Set<string>();
+      const queued = new Map<string, string | undefined>();
       let failures = 0;
       results.forEach((r, i) => {
         if (r.status === 'fulfilled' && r.value?.success) {
-          queued.add(targets[i].id);
+          queued.set(targets[i].id, targets[i].agent_version);
         } else {
           failures++;
         }
       });
       if (queued.size > 0) {
         setUpdateInProgress((prev) => {
-          const next = new Set(prev);
-          queued.forEach((id) => next.add(id));
+          const next = new Map(prev);
+          queued.forEach((fromV, id) => next.set(id, fromV));
           return next;
         });
       }
@@ -436,14 +442,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       setActionInProgress(targetId);
       const response = await agentService.requestInstallUpdate(targetId);
       if (response.success) {
-        // Mark the agent as "update in progress" — the badge in
-        // the version column flips from "Update available" to
-        // "Update in progress" until the next heartbeat arrives
-        // with agent_version >= latestAgentVersion (handled in
-        // the websocket listener below).
+        // Mark the agent as "update in progress". Store the
+        // version we observed pre-click as the "from" version —
+        // the websocket listener clears the entry when a heartbeat
+        // arrives reporting a different version (proof the install
+        // completed and the supervisor brought the agent back).
+        const fromV = agents.find((a) => a.id === targetId)?.agent_version;
         setUpdateInProgress((prev) => {
-          const next = new Set(prev);
-          next.add(targetId);
+          const next = new Map(prev);
+          next.set(targetId, fromV);
           return next;
         });
       } else {
@@ -602,19 +609,25 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       });
 
       // If this agent had an "update in progress" marker AND the
-      // heartbeat now reports a version >= the manifest's latest,
-      // the unattended install completed and the supervisor brought
-      // the agent back. Clear the marker so the badge disappears.
-      // Read latestAgentVersion via the ref so we get the current
-      // value, not the closure-captured value from registration.
-      const liveLatest = latestAgentVersionRef.current;
-      if (update.agentVersion && liveLatest) {
+      // heartbeat now reports a DIFFERENT version than what we had
+      // when the user clicked, the unattended install completed
+      // and the supervisor brought the agent back on the new build.
+      // Clear the marker so the badge disappears.
+      //
+      // Comparing to the manifest's latest is wrong — if a newer
+      // release ships mid-update, the agent reaches v(N) but
+      // latest is now v(N+1) and the badge would stick forever
+      // even though the install obviously succeeded.
+      if (update.agentVersion) {
         setUpdateInProgress((prev) => {
           if (!prev.has(update.agentId)) return prev;
-          if (compareSemverDesc(update.agentVersion!, liveLatest) < 0) {
+          const fromV = prev.get(update.agentId);
+          // If we don't know the from-version (shouldn't happen
+          // post-fix, but defensive), clear on any heartbeat.
+          if (fromV != null && fromV === update.agentVersion) {
             return prev;
           }
-          const next = new Set(prev);
+          const next = new Map(prev);
           next.delete(update.agentId);
           return next;
         });

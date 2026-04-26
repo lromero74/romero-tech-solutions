@@ -1467,25 +1467,21 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
       // (slow network, large package), the badge is shown for an
       // extra heartbeat cycle — annoying but correct.
       try {
+        // agent_commands has no JSONB result_payload — record the
+        // completion context in stdout (free-form text column) and
+        // just bump status + completed_at.
         await query(
           `UPDATE agent_commands
            SET status = 'completed',
                completed_at = NOW(),
-               result_payload = jsonb_set(
-                 COALESCE(result_payload, '{}'::jsonb),
-                 '{completion}',
-                 $2::jsonb,
-                 true
-               )
+               stdout = COALESCE(stdout, '') ||
+                        E'\n[heartbeat-sweep] agent_version=' || COALESCE($2, 'unknown') ||
+                        E'\n[heartbeat-sweep] swept_at=' || to_char(NOW(), 'YYYY-MM-DD"T"HH24:MI:SS')
            WHERE agent_device_id = $1
              AND command_type = 'install_update'
              AND status = 'executing'
              AND created_at < NOW() - INTERVAL '90 seconds'`,
-          [agent_id, JSON.stringify({
-            source: 'heartbeat-sweep',
-            agent_version_observed: row.agent_version,
-            swept_at: new Date().toISOString(),
-          })]
+          [agent_id, row.agent_version || null]
         );
       } catch (sweepErr) {
         console.warn('⚠ Failed to sweep stale install_update rows:', sweepErr.message);
@@ -2737,21 +2733,14 @@ router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requi
     const { agent_id, command_id } = req.params;
     const progress = normalizeProgressPayload(req.body);
 
-    // Merge progress into result_payload.progress so a dashboard
-    // that mounts mid-install can read the latest tick from the
-    // command row without waiting for the next websocket event.
-    // jsonb_set + COALESCE handles the "no result_payload yet" case.
-    await query(
-      `UPDATE agent_commands
-       SET result_payload = jsonb_set(
-             COALESCE(result_payload, '{}'::jsonb),
-             '{progress}',
-             $1::jsonb,
-             true
-           )
-       WHERE id = $2 AND agent_device_id = $3`,
-      [JSON.stringify(progress), command_id, agent_id]
-    );
+    // No agent_commands.result_payload column exists in this schema —
+    // we used to write progress JSONB there but the writes silently
+    // 5xx'd. The dashboard observes progress via the websocket
+    // broadcast below, which is the path the UpdatePackageDialog
+    // actually subscribes to. If a refresh-after-mount source of
+    // truth is needed later, add a result_payload JSONB column via
+    // migration first.
+    void progress;
 
     try {
       const cmdRow = await query(
@@ -2803,18 +2792,20 @@ router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgen
     // command_id row's status flips to 'cancelled' and a
     // websocket fires.
     const cancellationSource = source === 'admin' ? 'admin' : 'host';
+    // No result_payload JSONB column in this schema — record the
+    // cancellation source/timestamp in stdout (free-form text)
+    // alongside flipping status. The dashboard learns about the
+    // cancellation via the websocket broadcast below; this is just
+    // an audit trail on the row.
     await query(
       `UPDATE agent_commands
        SET status = 'cancelled',
            completed_at = NOW(),
-           result_payload = jsonb_set(
-             COALESCE(result_payload, '{}'::jsonb),
-             '{cancellation}',
-             $1::jsonb,
-             true
-           )
-       WHERE id = $2 AND agent_device_id = $3`,
-      [JSON.stringify({ source: cancellationSource, detected_at: detected_at || new Date().toISOString() }), command_id, agent_id]
+           stdout = COALESCE(stdout, '') ||
+                    E'\n[reboot-cancelled] source=' || $1 ||
+                    E'\n[reboot-cancelled] detected_at=' || $2
+       WHERE id = $3 AND agent_device_id = $4`,
+      [cancellationSource, detected_at || new Date().toISOString(), command_id, agent_id]
     );
     try {
       const cmdRow = await query(
