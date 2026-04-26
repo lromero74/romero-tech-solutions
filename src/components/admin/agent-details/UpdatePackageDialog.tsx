@@ -15,11 +15,25 @@ import { websocketService } from '../../../services/websocketService';
  *   .plan/2026.04.25.01-remote-package-updates-PRP.md (PRP §6.3.2).
  */
 
+// ProgressTick mirrors the backend agent.command.progress payload's
+// `progress` field. Surfaced on the running state so the UI can
+// render a percent + phase + currently-installing item without
+// having to re-fetch the command row on every websocket event.
+interface ProgressTick {
+  phase: string;
+  percent: number;
+  current_index: number;
+  total: number;
+  package: string;
+  message: string;
+  updated_at: string;
+}
+
 type DialogState =
   | { kind: 'idle' }
   | { kind: 'submitting' }
   | { kind: 'queued'; commandId: string }
-  | { kind: 'running'; commandId: string }
+  | { kind: 'running'; commandId: string; progress?: ProgressTick }
   | { kind: 'completed'; result: UpdateResult }
   | { kind: 'partial'; result: UpdateResult }
   | { kind: 'failed'; error: string; result?: UpdateResult };
@@ -137,14 +151,19 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
       }
     };
 
-    // 1a. Progress event — agent picked the command up and started.
-    //     Flips us out of "queued" into "running" so the user sees
-    //     real motion instead of a stuck "Waiting for…" message.
+    // 1a. Progress event — agent picked the command up and started,
+    //     OR is reporting a percent-complete tick mid-install.
+    //     Flips us out of "queued" into "running" on the first
+    //     event and updates the progress payload on subsequent
+    //     ticks. Ignored after we've reached a terminal state.
     const unsubProgress = websocketService.onAgentCommandProgress((evt) => {
       if (evt.command_id !== targetId) return;
-      // Only advance from queued; ignore late progress events that
-      // arrive after we've already hit a terminal state.
-      setState(prev => prev.kind === 'queued' ? { kind: 'running', commandId: targetId } : prev);
+      setState(prev => {
+        if (prev.kind === 'queued' || prev.kind === 'running') {
+          return { kind: 'running', commandId: targetId, progress: evt.progress };
+        }
+        return prev;
+      });
     });
 
     // 1b. Completion event — the result is in.
@@ -178,7 +197,17 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
             }
             transition(row.status, parsedResult, row.error_message);
           } else if (row.status === 'executing' || row.status === 'delivered') {
-            setState(prev => prev.kind === 'queued' ? { kind: 'running', commandId: targetId } : prev);
+            // Carry over any progress payload the agent has posted to
+            // result_payload.progress so a dashboard that mounted
+            // mid-install picks up the current percent without
+            // waiting for the next websocket tick.
+            const rowProgress = row?.result_payload?.progress as ProgressTick | undefined;
+            setState(prev => {
+              if (prev.kind === 'queued' || prev.kind === 'running') {
+                return { kind: 'running', commandId: targetId, progress: rowProgress };
+              }
+              return prev;
+            });
           }
         } catch {
           // Transient errors are fine — we'll try again on the next tick.
@@ -240,7 +269,7 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
             <Status icon="spin" label="Waiting for the agent to pick it up. Typically 10–60 seconds." />
           )}
           {state.kind === 'running' && (
-            <Status icon="spin" label="Agent is running the update on the device…" />
+            <RunningBody progress={state.progress} />
           )}
           {state.kind === 'completed' && (
             <ResultBody status="completed" result={state.result} onClose={onClose} />
@@ -303,6 +332,54 @@ const Status: React.FC<{ icon: 'spin' | 'check' | 'fail'; label: string }> = ({ 
     <span className={themeClasses.text.primary}>{label}</span>
   </div>
 );
+
+// RunningBody renders the in-flight update status: spinner + label,
+// plus a progress bar / current-update title when the agent has
+// started reporting per-tick progress (Windows Update install
+// surface; some Linux managers will follow). Falls back to the
+// plain "running" message when no progress payload has been
+// received yet.
+const RunningBody: React.FC<{ progress?: ProgressTick }> = ({ progress }) => {
+  if (!progress) {
+    return <Status icon="spin" label="Agent is running the update on the device…" />;
+  }
+  const phaseLabel = progress.phase === 'download'
+    ? 'Downloading'
+    : progress.phase === 'install'
+    ? 'Installing'
+    : progress.phase === 'reboot'
+    ? 'Rebooting'
+    : 'Working';
+  const pct = Math.max(0, Math.min(100, progress.percent || 0));
+  const itemNote = progress.total > 0 && progress.current_index >= 0
+    ? `update ${progress.current_index + 1} of ${progress.total}`
+    : '';
+  return (
+    <div className="py-6 px-2">
+      <div className="flex items-center gap-3 mb-3">
+        <Loader2 className="w-5 h-5 animate-spin text-blue-500 flex-shrink-0" />
+        <div className="flex-1">
+          <div className={`text-sm font-medium ${themeClasses.text.primary}`}>
+            {phaseLabel}{itemNote ? ` (${itemNote})` : ''}…
+          </div>
+          {progress.message && (
+            <div className={`text-xs mt-0.5 truncate ${themeClasses.text.secondary}`}
+                 title={progress.message}>
+              {progress.message}
+            </div>
+          )}
+        </div>
+        <div className={`text-sm font-mono ${themeClasses.text.secondary}`}>{pct}%</div>
+      </div>
+      <div className="w-full h-2 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+        <div
+          className="h-full bg-blue-500 transition-all duration-500 ease-out"
+          style={{ width: `${pct}%` }}
+        />
+      </div>
+    </div>
+  );
+};
 
 const ConfirmBody: React.FC<{
   manager: string;

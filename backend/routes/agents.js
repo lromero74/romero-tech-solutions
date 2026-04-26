@@ -2647,6 +2647,78 @@ router.post('/:agent_id/commands/:command_id/started', authenticateAgent, requir
 });
 
 /**
+ * Agent posts progress for a long-running command (currently used
+ * by the Windows Update flow which can run 10+ minutes). Stores the
+ * latest tick on agent_commands.result_payload.progress so a
+ * dashboard that opens mid-install can pull it from the row, and
+ * broadcasts an agent.command.progress websocket event so any
+ * dashboard already viewing the modal updates in real time.
+ *
+ * Best-effort like /started — we never 5xx the agent on failures
+ * since the install continues regardless of whether progress
+ * updates land.
+ */
+router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id, command_id } = req.params;
+    const { phase, percent, current_index, total, package: pkg, message } = req.body || {};
+
+    const progress = {
+      phase: phase || '',
+      percent: typeof percent === 'number' ? percent : 0,
+      current_index: typeof current_index === 'number' ? current_index : -1,
+      total: typeof total === 'number' ? total : 0,
+      package: pkg || '',
+      message: message || '',
+      updated_at: new Date().toISOString(),
+    };
+
+    // Merge progress into result_payload.progress so a dashboard
+    // that mounts mid-install can read the latest tick from the
+    // command row without waiting for the next websocket event.
+    // jsonb_set + COALESCE handles the "no result_payload yet" case.
+    await query(
+      `UPDATE agent_commands
+       SET result_payload = jsonb_set(
+             COALESCE(result_payload, '{}'::jsonb),
+             '{progress}',
+             $1::jsonb,
+             true
+           )
+       WHERE id = $2 AND agent_device_id = $3`,
+      [JSON.stringify(progress), command_id, agent_id]
+    );
+
+    try {
+      const cmdRow = await query(
+        `SELECT command_type, requested_by FROM agent_commands WHERE id = $1`,
+        [command_id]
+      );
+      const wsMessage = {
+        type: 'agent.command.progress',
+        data: {
+          command_id,
+          agent_id,
+          command_type: cmdRow.rows[0]?.command_type,
+          stage: 'executing',
+          progress,
+        },
+      };
+      websocketService.broadcastToAdmins(wsMessage);
+      const requestedBy = cmdRow.rows[0]?.requested_by;
+      if (requestedBy) websocketService.broadcastToUser(requestedBy, wsMessage);
+    } catch (wsErr) {
+      console.error('agent.command.progress broadcast failed:', wsErr);
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Command progress notification error:', error);
+    res.json({ success: false, message: error?.message });
+  }
+});
+
+/**
  * Agent submits execution result for a command
  */
 router.post('/:agent_id/commands/:command_id/result', authenticateAgent, requireAgentMatch, async (req, res) => {

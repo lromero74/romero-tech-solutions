@@ -75,16 +75,30 @@ interface AgentCommandCompleted {
 }
 
 // AgentCommandProgress is emitted by the backend when the agent
-// reports an intermediate stage (currently just "executing", sent the
-// moment the agent picks the command up via /commands/:id/started).
-// Lets the modal show "Update running…" while the agent does its work
-// instead of staying on "Waiting for the agent to pick it up."
+// reports an intermediate stage:
+//
+//   - "executing"  — agent picked up the command (no progress yet);
+//                    sent once via /commands/:id/started.
+//   - "executing"  — agent posts a progress tick mid-run via
+//                    /commands/:id/progress (Windows Update polls
+//                    every ~1.5s during install); the `progress`
+//                    field carries the percent + phase + current
+//                    update title for the dashboard's progress bar.
 interface AgentCommandProgress {
   command_id: string;
   agent_id: string;
   command_type: string;
   stage: 'executing';
-  started_at: string;
+  started_at?: string;
+  progress?: {
+    phase: string;          // 'download' | 'install' | 'reboot'
+    percent: number;        // 0..100
+    current_index: number;  // 0-based index into the batch, -1 = unknown
+    total: number;          // total updates in the batch
+    package: string;
+    message: string;
+    updated_at: string;
+  };
 }
 
 type EmployeeStatusCallback = (update: EmployeeStatusUpdate) => void;
