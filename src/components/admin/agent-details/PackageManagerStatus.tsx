@@ -428,7 +428,24 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                           <tr key={idx} className={`border-b ${themeClasses.border.primary}`}>
                             <td className={`py-1 px-2 ${themeClasses.text.secondary}`}>{pkg.name}</td>
                             <td className="py-1 px-2 text-red-500/70 dark:text-red-400/70">{pkg.installed_version}</td>
-                            <td className={`py-1 px-2 ${themeClasses.text.secondary}`}>{pkg.latest_version}</td>
+                            <td className="py-1 px-2">
+                              {/* Even on vendor-managed packages the
+                                  user wants to see what's in the new
+                                  version. The button opens the same
+                                  ChangelogDialog the actionable table
+                                  uses — just no Update button next to
+                                  it because pip can't replace these. */}
+                              <button
+                                onClick={() => setChangelog({
+                                  manager: pkg.package_manager,
+                                  packageName: pkg.name,
+                                  fromVersion: pkg.installed_version,
+                                  toVersion: pkg.latest_version,
+                                })}
+                                className="text-green-600 dark:text-green-400 hover:underline">
+                                {pkg.latest_version}
+                              </button>
+                            </td>
                             <td className={`py-1 px-2 ${themeClasses.text.muted}`}>{pkg.package_manager}</td>
                           </tr>
                         ))}

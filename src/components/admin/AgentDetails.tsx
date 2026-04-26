@@ -14,7 +14,7 @@ import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, Agent
 import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChartECharts from './MetricsChartECharts';
-import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus } from './agent-details';
+import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus, CommandDetailsDialog } from './agent-details';
 import AssetInventory from './agent-details/AssetInventory';
 import AlertHistory from './agent-details/AlertHistory';
 import { websocketService } from '../../services/websocketService';
@@ -69,6 +69,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [executions, setExecutions] = useState<PolicyExecutionHistory[]>([]);
   const [loadingExecutions, setLoadingExecutions] = useState(false);
   const [selectedExecutionId, setSelectedExecutionId] = useState<string | null>(null);
+  const [selectedCommand, setSelectedCommand] = useState<AgentCommand | null>(null);
 
   // Chart settings management (shared across resource types)
   const {
@@ -551,6 +552,25 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-700';
     }
+  };
+
+  // Pretty-print the agent's command_type token for the Commands
+  // tab. We don't push these through the t() translation system
+  // because there are only a handful and they describe agent
+  // capabilities, not user-facing copy that gets translated.
+  const formatCommandType = (raw: string | null | undefined): string => {
+    if (!raw) return '—';
+    const map: Record<string, string> = {
+      ping: 'Ping',
+      run_script: 'Run script',
+      get_system_info: 'Get system info',
+      restart_agent: 'Restart agent',
+      update_packages: 'Update packages',
+    };
+    if (map[raw]) return map[raw];
+    // Fallback: snake_case → Title Case so unknown verbs still
+    // render legibly without a code change.
+    return raw.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
   };
 
   // Get command status badge
@@ -1157,7 +1177,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
       )}
 
       {/* OS Patch Status */}
-      <OSPatchStatus latestMetrics={latestMetrics} />
+      <OSPatchStatus latestMetrics={latestMetrics} agentId={agentId} />
 
       {/* Package Manager Status */}
       <PackageManagerStatus latestMetrics={latestMetrics} agentId={agentId} />
@@ -1320,19 +1340,32 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                   <p className={`${themeClasses.text.secondary}`}>{t('agentDetails.messages.noCommands', undefined, 'No commands yet')}</p>
                 </div>
               ) : (
-                commands.slice(0, 10).map((command) => (
+                commands.slice(0, 10).map((command) => {
+                  // Any status that has structured detail behind it
+                  // (failed, completed_with_failures, or completed
+                  // with a result_payload) becomes clickable to open
+                  // the per-package detail view. The status badge gets
+                  // an underline hint so the affordance is obvious.
+                  const hasDetails = command.result_payload != null
+                    || command.error_message != null
+                    || command.status === 'failed'
+                    || command.status === 'completed_with_failures';
+                  return (
                   <div
                     key={command.id}
-                    className={`p-4 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover}`}
+                    className={`p-4 rounded-lg border ${themeClasses.border.primary} ${themeClasses.bg.hover} ${hasDetails ? 'cursor-pointer' : ''}`}
+                    onClick={() => hasDetails && setSelectedCommand(command)}
+                    role={hasDetails ? 'button' : undefined}
+                    tabIndex={hasDetails ? 0 : undefined}
                   >
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
                         <Terminal className={`w-4 h-4 ${themeClasses.text.muted}`} />
                         <span className={`text-sm font-medium ${themeClasses.text.primary}`}>
-                          {command.command_type}
+                          {formatCommandType(command.command_type)}
                         </span>
                       </div>
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${getCommandStatusBadge(command.status)}`}>
+                      <span className={`px-2 py-1 rounded text-xs font-medium ${getCommandStatusBadge(command.status)} ${hasDetails ? 'underline decoration-dotted' : ''}`}>
                         {command.status}
                       </span>
                     </div>
@@ -1359,10 +1392,22 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                         {command.error_message}
                       </div>
                     )}
+                    {hasDetails && (
+                      <p className={`mt-2 text-xs italic ${themeClasses.text.muted}`}>
+                        Click for failure details
+                      </p>
+                    )}
                   </div>
-                ))
+                  );
+                })
               )}
             </div>
+          )}
+          {selectedCommand && (
+            <CommandDetailsDialog
+              command={selectedCommand}
+              onClose={() => setSelectedCommand(null)}
+            />
           )}
 
           {/* Inventory Tab */}

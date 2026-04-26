@@ -20,6 +20,25 @@ interface ClientLanguageProviderProps {
 // In-memory cache for translations
 const translationCache: { [languageCode: string]: { [key: string]: string } } = {};
 
+// interpolate substitutes named placeholders in `template`. Two
+// placeholder formats are supported because the codebase grew up with
+// `{{name}}` (handlebars-style, used in older fallback strings) but
+// the DB-backed translations were authored with `{name}` (single
+// curlies). Substitute both so neither set leaks the literal token to
+// the user. The double-curly pass runs first so a `{{name}}` is
+// consumed in one go and we don't end up trying to interpret the
+// remaining `{name}` boundary characters.
+const interpolate = (template: string, variables: { [key: string]: string }): string => {
+  let out = template;
+  for (const k of Object.keys(variables)) {
+    const v = variables[k];
+    out = out
+      .replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v)
+      .replace(new RegExp(`\\{${k}\\}`, 'g'), v);
+  }
+  return out;
+};
+
 // Helper function to flatten nested translation objects to dot notation keys
 const flattenTranslations = (obj: any, prefix = ''): { [key: string]: string } => {
   const result: { [key: string]: string } = {};
@@ -170,25 +189,17 @@ export const ClientLanguageProvider: React.FC<ClientLanguageProviderProps> = ({ 
     let translation = translations[key];
 
     if (translation) {
-      // Handle variable interpolation
       if (variables) {
-        Object.keys(variables).forEach(varKey => {
-          const placeholder = `{{${varKey}}}`;
-          translation = translation.replace(new RegExp(placeholder, 'g'), variables[varKey]);
-        });
+        translation = interpolate(translation, variables);
       }
       return translation;
     }
 
     // If no translation found, return fallback or key
     if (fallback) {
-      // Apply variable interpolation to fallback string too
       let interpolatedFallback = fallback;
       if (variables) {
-        Object.keys(variables).forEach(varKey => {
-          const placeholder = `{{${varKey}}}`;
-          interpolatedFallback = interpolatedFallback.replace(new RegExp(placeholder, 'g'), variables[varKey]);
-        });
+        interpolatedFallback = interpolate(interpolatedFallback, variables);
       }
       return interpolatedFallback;
     }
@@ -279,16 +290,8 @@ export const useOptionalClientLanguage = (): LanguageContextType => {
       language: 'en',
       setLanguage: () => {},
       t: (key: string, variables?: { [key: string]: string }, fallback?: string): string => {
-        // Return fallback if provided, otherwise extract key name
         if (fallback) {
-          let interpolatedFallback = fallback;
-          if (variables) {
-            Object.keys(variables).forEach(varKey => {
-              const placeholder = `{{${varKey}}}`;
-              interpolatedFallback = interpolatedFallback.replace(new RegExp(placeholder, 'g'), variables[varKey]);
-            });
-          }
-          return interpolatedFallback;
+          return variables ? interpolate(fallback, variables) : fallback;
         }
         return key.split('.').pop()?.replace(/([A-Z])/g, ' $1').trim() || key;
       },

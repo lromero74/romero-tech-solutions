@@ -266,6 +266,24 @@ export interface AgentMetric {
   // softwareupdate --list. Drives the "Update via Software Update"
   // prompt under the macOS CommandLineTools group.
   clt_update_available?: boolean;
+  // Structured per-update list captured by the agent (v1.16.49+) from
+  // apt/dnf/pacman/softwareupdate. The dashboard renders this as a
+  // browsable table with clickable version links.
+  os_patches_data?: Array<{
+    name: string;
+    current_version?: string;
+    available_version?: string;
+    security?: boolean;
+    source?: string;
+    package_manager?: string;
+  }> | null;
+  // Linux release upgrade descriptor. nil when none pending.
+  distro_upgrade?: {
+    current_release: string;
+    available_release: string;
+    upgrade_command?: string;
+    distro?: string;
+  } | null;
   raw_metrics?: Record<string, unknown> | null;
   collected_at: string;
   // Backward compatibility (deprecated)
@@ -307,7 +325,7 @@ export interface AgentCommand {
   agent_device_id: string;
   command_type: string;
   command_payload: Record<string, unknown> | null;
-  status: 'pending' | 'delivered' | 'acknowledged' | 'completed' | 'failed';
+  status: 'pending' | 'delivered' | 'acknowledged' | 'executing' | 'completed' | 'completed_with_failures' | 'failed';
   requested_by: string;
   approved_by: string | null;
   requires_approval: boolean;
