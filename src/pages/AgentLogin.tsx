@@ -66,6 +66,12 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           let finalRedirect = null;
 
           if (redirect === '/schedule-service') {
+            // Always preserve the user's intent (?tab=schedule-service)
+            // even if the profile-completion check fails. Previously
+            // the catch fallback dropped the tab param and dropped
+            // the user on the default dashboard pane, which is the
+            // bug the user hit ("It just opens the dashboard").
+            finalRedirect = '/dashboard?tab=schedule-service';
             try {
               const profileStatus = await apiService.get<{
                 success: boolean;
@@ -78,21 +84,20 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
               console.log('📋 Profile status:', profileStatus.data);
 
               if (profileStatus.success && profileStatus.data.requiresOnboarding) {
-                // User needs onboarding - redirect to onboarding with next parameter
+                // User needs onboarding first — onboarding's `next`
+                // param ensures we still land on the schedule pane
+                // once the profile is complete.
                 setMessage('Setting up your profile...');
                 setStatus('success');
                 setTimeout(() => {
                   window.location.href = '/onboarding?next=schedule-service';
                 }, 1000);
                 return;
-              } else {
-                // User has service location - go directly to service request
-                finalRedirect = '/dashboard?tab=schedule-service';
               }
+              // Profile complete: finalRedirect already set above.
             } catch (error) {
-              console.error('Error checking profile status:', error);
-              // Fallback to dashboard if profile check fails
-              finalRedirect = '/dashboard';
+              console.error('Error checking profile status (using direct schedule redirect):', error);
+              // finalRedirect already includes the tab.
             }
           } else if (redirect) {
             finalRedirect = redirect;
