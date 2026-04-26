@@ -118,6 +118,28 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   const managers = Array.from(new Set(visiblePatches.map((p: any) => p.package_manager).filter(Boolean)));
   const updatableManagers = managers.filter(m => m && managerAlias[m as string]);
 
+  // "Refresh now" — fires a refresh_patches command at the agent.
+  // The agent's response invalidates its patch cache and submits a
+  // fresh metric within ~1s, replacing the stale cached list. Used
+  // mainly for post-reboot verification (the cache would otherwise
+  // hold the pre-reboot list for up to an hour).
+  const [refreshing, setRefreshing] = useState(false);
+  const handleRefreshPatches = async () => {
+    if (!agentId || refreshing) return;
+    setRefreshing(true);
+    try {
+      await agentService.requestRefreshPatches(agentId);
+    } catch {
+      // Refresh failures aren't actionable — the next regular
+      // metric tick will eventually catch up.
+    } finally {
+      // Clear the spinner after a short window. The fresh metric
+      // typically lands within 1-2s; longer than that and the
+      // refresh probably hit a transient error worth retrying.
+      setTimeout(() => setRefreshing(false), 5000);
+    }
+  };
+
   const requestUpdate = (manager: string, pkg: string | null) => {
     const mapped = managerAlias[manager];
     if (!mapped || !agentId) return;
@@ -130,10 +152,22 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
 
   return (
     <div className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}>
-      <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-4 flex items-center`}>
-        <Shield className="w-5 h-5 mr-2" />
-        {t('agentDetails.osPatchStatus.title', undefined, 'OS Patch Status')}
-      </h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className={`text-lg font-semibold ${themeClasses.text.primary} flex items-center`}>
+          <Shield className="w-5 h-5 mr-2" />
+          {t('agentDetails.osPatchStatus.title', undefined, 'OS Patch Status')}
+        </h3>
+        {agentId && (
+          <button
+            onClick={handleRefreshPatches}
+            disabled={refreshing}
+            title="Force the agent to re-scan for OS patches now (otherwise refreshes hourly)"
+            className={`flex items-center gap-1 px-2 py-1 text-xs rounded ${themeClasses.bg.hover} ${themeClasses.text.secondary} disabled:opacity-50 disabled:cursor-not-allowed`}>
+            <RefreshCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </button>
+        )}
+      </div>
 
       {/* Distro release upgrade banner — surfaced first because it's
           the highest-impact action available on this panel. */}
@@ -381,12 +415,27 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                   {visiblePatches.slice(0, 200).map((p: any, idx: number) => {
                     const isPendingReboot = p.package_manager === 'winupdate-reboot';
                     const canUpdate = !!agentId && !!p.package_manager && !!managerAlias[p.package_manager];
+                    // Defender / Windows Update titles often embed
+                    // a version in parentheses like "(Version
+                    // 1.405.1234.0)". Extract it so the package
+                    // column doesn't look like the same row coming
+                    // back day after day — Microsoft re-releases
+                    // KB2267602 (Defender definitions) several
+                    // times per day, with the KB number unchanged
+                    // but the version stepping up each release.
+                    const versionMatch = (p.available_version || '').match(/Version\s+([\d.]+)/i);
+                    const versionTag = versionMatch ? versionMatch[1] : '';
                     return (
                       <tr key={idx} className={`border-b border-blue-100 dark:border-blue-800/50 ${isPendingReboot ? 'bg-amber-50 dark:bg-amber-900/10' : ''}`}>
                         <td className="py-1 px-2 text-blue-800 dark:text-blue-200">
                           <span className="flex items-center gap-1">
                             {p.security && <Shield className="w-3 h-3 text-red-500" />}
-                            {p.name}
+                            <span>{p.name}</span>
+                            {versionTag && (
+                              <span className={`text-xs ${themeClasses.text.muted}`}>
+                                v{versionTag}
+                              </span>
+                            )}
                           </span>
                         </td>
                         <td className="py-1 px-2 text-red-600 dark:text-red-400">{p.current_version || '—'}</td>

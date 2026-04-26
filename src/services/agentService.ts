@@ -580,6 +580,23 @@ class AgentService {
   }
 
   /**
+   * Force an immediate OS-patch re-scan on the agent. The agent's
+   * patch cache normally refreshes hourly (or after a successful
+   * update_packages). This command-driven path is for "I want to
+   * see the post-reboot state right now" — the dashboard's
+   * "Refresh now" button on the OS Patch panel header.
+   */
+  async requestRefreshPatches(
+    agentId: string
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'refresh_patches',
+      command_params: {},
+      requires_approval: false,
+    });
+  }
+
+  /**
    * Get alerts for a specific agent
    */
   async getAgentAlerts(
