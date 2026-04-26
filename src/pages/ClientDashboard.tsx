@@ -122,15 +122,30 @@ const ClientDashboard: React.FC<ClientDashboardProps> = ({ onNavigate }) => {
     RoleBasedStorage.setItem('clientActiveTab', tab);
   };
 
-  // Check for tab parameter in URL on mount (for magic link redirects)
+  // Check for tab parameter in URL on mount (for magic link redirects).
+  // Two sources are consulted:
+  //   1. ?tab=schedule-service in the URL — what AgentLogin sets
+  //      via window.location.href.
+  //   2. sessionStorage.pendingScheduleService — belt-and-suspenders
+  //      fallback that AgentLogin also sets, in case the URL query
+  //      gets stripped by a router re-render, a language-context
+  //      re-mount, or any other effect before this component sees
+  //      the URL. (Spanish-language users were hitting that exact
+  //      drop-the-query symptom and landing on the default tab.)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const tabParam = params.get('tab');
+    const pendingSchedule = sessionStorage.getItem('pendingScheduleService') === '1';
 
-    if (tabParam === 'schedule-service') {
+    if (tabParam === 'schedule-service' || pendingSchedule) {
       setActiveTab('schedule');
-      // Clean up URL parameter after reading it
-      window.history.replaceState({}, '', window.location.pathname);
+      // Clean up URL parameter and sessionStorage flag after
+      // reading them so a later /dashboard visit doesn't keep
+      // yanking the user back to the schedule pane.
+      sessionStorage.removeItem('pendingScheduleService');
+      if (tabParam) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
     }
   }, []);
 

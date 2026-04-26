@@ -89,6 +89,16 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
             // the user on the default dashboard pane, which is the
             // bug the user hit ("It just opens the dashboard").
             finalRedirect = '/dashboard?tab=schedule-service';
+            // Belt-and-suspenders: also stash the intent in
+            // sessionStorage. If anything downstream strips the URL
+            // query (an effect that pushes a clean path, a router
+            // re-render, a language-change re-render that re-reads
+            // window.location.search after the URL was already
+            // cleaned, …), ClientDashboard's mount-time tab probe
+            // can still recover the user's intent. Cleared by the
+            // dashboard once consumed so a later /dashboard visit
+            // doesn't keep yanking the user to the schedule pane.
+            sessionStorage.setItem('pendingScheduleService', '1');
             try {
               const profileStatus = await apiService.get<{
                 success: boolean;
