@@ -102,6 +102,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     fromVersion?: string;
   }>({ show: false });
 
+  // Confirmation modal for the bulk "Update all outdated" action.
+  // Targets are computed at click time from the currently-filtered
+  // agent list and frozen here so the modal copy doesn't drift if
+  // the filter changes between open and confirm.
+  const [confirmBulkUpdate, setConfirmBulkUpdate] = useState<{
+    show: boolean;
+    targets: Array<{ id: string; device_name: string; agent_version?: string }>;
+  }>({ show: false, targets: [] });
+
   // Per-agent rebootScheduled state: agentId → { scheduledFor, message,
   // commandId }. Seeded from pending_action_commands on load (so it
   // survives a page refresh) and updated when admin schedules / agent
@@ -347,6 +356,60 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     } finally {
       setActionInProgress(null);
       setConfirmCancelReboot({ show: false });
+    }
+  };
+
+  // Bulk-trigger install_update for every agent in confirmBulkUpdate.targets.
+  // Concurrent dispatch via Promise.allSettled so a single failure
+  // doesn't block the rest. Each successful enqueue gets added to
+  // updateInProgress optimistically; the websocket / page-refresh
+  // path keeps things consistent if any optimism is wrong.
+  const handleBulkInstallUpdate = async () => {
+    if (!canSendCommands) {
+      setPermissionDenied({
+        show: true,
+        action: 'Update Agents',
+        requiredPermission: 'send.agent_commands.enable',
+        message: 'You do not have permission to issue agent commands',
+      });
+      setConfirmBulkUpdate({ show: false, targets: [] });
+      return;
+    }
+    const targets = confirmBulkUpdate.targets;
+    if (targets.length === 0) {
+      setConfirmBulkUpdate({ show: false, targets: [] });
+      return;
+    }
+    try {
+      setActionInProgress('__bulk_update__');
+      const results = await Promise.allSettled(
+        targets.map((t) => agentService.requestInstallUpdate(t.id))
+      );
+      const queued = new Set<string>();
+      let failures = 0;
+      results.forEach((r, i) => {
+        if (r.status === 'fulfilled' && r.value?.success) {
+          queued.add(targets[i].id);
+        } else {
+          failures++;
+        }
+      });
+      if (queued.size > 0) {
+        setUpdateInProgress((prev) => {
+          const next = new Set(prev);
+          queued.forEach((id) => next.add(id));
+          return next;
+        });
+      }
+      if (failures > 0) {
+        setError(`${queued.size} update${queued.size === 1 ? '' : 's'} queued; ${failures} failed`);
+      }
+    } catch (err) {
+      console.error('Bulk update error:', err);
+      setError(err instanceof Error ? err.message : 'Bulk update failed');
+    } finally {
+      setActionInProgress(null);
+      setConfirmBulkUpdate({ show: false, targets: [] });
     }
   };
 
@@ -832,6 +895,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             <RefreshCw className="w-4 h-4 mr-2" />
             Refresh
           </button>
+          {(() => {
+            // Bulk update is offered only when:
+            //  - The user can issue agent commands at all
+            //  - At least one currently-filtered agent is online,
+            //    outdated, and not already mid-update.
+            // Offline agents are skipped because they can't poll
+            // for the install_update command — queueing one would
+            // just sit in the agent_commands table indefinitely.
+            if (!canSendCommands) return null;
+            const targets = filteredAgents.filter((a) =>
+              a.status === 'online' &&
+              isAgentOutdated(a) &&
+              !updateInProgress.has(a.id)
+            );
+            if (targets.length === 0) return null;
+            return (
+              <button
+                onClick={() => setConfirmBulkUpdate({
+                  show: true,
+                  targets: targets.map((a) => ({
+                    id: a.id,
+                    device_name: a.device_name,
+                    agent_version: a.agent_version,
+                  })),
+                })}
+                disabled={actionInProgress === '__bulk_update__'}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                title={`Update ${targets.length} outdated online agent${targets.length === 1 ? '' : 's'} (current filter)`}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Update {targets.length} outdated
+              </button>
+            );
+          })()}
           {canCreateTokens ? (
             <button
               onClick={onCreateRegistrationToken}
@@ -1599,6 +1696,68 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 className="px-4 py-2 bg-orange-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {actionInProgress === confirmReboot.agentId ? 'Scheduling…' : 'Schedule Reboot'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Update Confirmation Modal */}
+      {confirmBulkUpdate.show && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className={`${themeClasses.bg.card} rounded-lg p-6 max-w-lg w-full mx-4 ${themeClasses.shadow.xl}`}>
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0">
+                <Download className="h-6 w-6 text-amber-600" />
+              </div>
+              <div className="ml-3 flex-1">
+                <h3 className={`text-lg font-medium ${themeClasses.text.primary}`}>
+                  Update {confirmBulkUpdate.targets.length} agent{confirmBulkUpdate.targets.length === 1 ? '' : 's'}
+                </h3>
+                <p className={`mt-2 text-sm ${themeClasses.text.secondary}`}>
+                  Queue an unattended self-update on every outdated online agent in
+                  the current filter. Each will independently download
+                  the latest release ({latestAgentVersion ?? 'latest'}), install
+                  it silently, and the OS service supervisor will
+                  restart on the new binary.
+                </p>
+              </div>
+            </div>
+
+            <div className={`max-h-48 overflow-y-auto border ${themeClasses.border.primary} rounded mt-3 mb-2`}>
+              <table className="min-w-full text-xs">
+                <tbody className={`divide-y ${themeClasses.border.primary}`}>
+                  {confirmBulkUpdate.targets.map((t) => (
+                    <tr key={t.id}>
+                      <td className={`px-3 py-1.5 ${themeClasses.text.primary}`}>{t.device_name}</td>
+                      <td className={`px-3 py-1.5 ${themeClasses.text.muted}`}>
+                        <code>{t.agent_version || '?'}</code> → <code>{latestAgentVersion ?? '?'}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <p className={`text-xs ${themeClasses.text.muted} mt-1`}>
+              Offline agents are excluded — they can't poll for the command.
+            </p>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setConfirmBulkUpdate({ show: false, targets: [] })}
+                disabled={actionInProgress === '__bulk_update__'}
+                className={`px-4 py-2 border ${themeClasses.border.primary} rounded-md text-sm font-medium ${themeClasses.text.primary} ${themeClasses.bg.primary} ${themeClasses.bg.hover} disabled:opacity-50 disabled:cursor-not-allowed`}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleBulkInstallUpdate}
+                disabled={actionInProgress === '__bulk_update__'}
+                className="px-4 py-2 bg-amber-600 border border-transparent rounded-md text-sm font-medium text-white hover:bg-amber-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {actionInProgress === '__bulk_update__'
+                  ? 'Queueing…'
+                  : `Update ${confirmBulkUpdate.targets.length} agent${confirmBulkUpdate.targets.length === 1 ? '' : 's'}`}
               </button>
             </div>
           </div>

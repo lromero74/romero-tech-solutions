@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.82 Release Notes
+RTS Monitoring Agent - Version 1.16.84 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 21:21:04 UTC
-Previous Version: v1.16.81
-Git Commit: e0c84f2
+Release Date: 2026-04-26 21:59:29 UTC
+Previous Version: v1.16.83
+Git Commit: 89ea675
 
-Changes Since v1.16.81:
+Changes Since v1.16.83:
 ───────────────────────────────────────────────────────────
 
-• v1.16.82: keep install_update row 'executing'; reboot cancellation watcher
+• v1.16.84: fix tray-restart self-pkill bug
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
