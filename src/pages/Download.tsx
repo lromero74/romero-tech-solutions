@@ -173,9 +173,13 @@ const Download: React.FC = () => {
     }
   }, [selectedPlatform, apiBaseUrl]);
 
-  // Fetch release notes
+  // Fetch release notes. cache: 'no-store' bypasses the browser's
+  // disk cache so visitors always see the latest notes after we
+  // push a new release; without it browsers happily serve a copy
+  // that's hours/days/weeks stale (we hit exactly that — the page
+  // showed v1.16.32 notes long after v1.16.59 had shipped).
   useEffect(() => {
-    fetch('/agent-release-notes.txt')
+    fetch('/agent-release-notes.txt', { cache: 'no-store' })
       .then(res => res.ok ? res.text() : '')
       .then(notes => setReleaseNotes(notes))
       .catch(() => setReleaseNotes(''));
