@@ -15,6 +15,36 @@ interface AgentDashboardProps {
   onViewBusiness?: (businessId: string) => void;
 }
 
+// formatAgentOS produces the user-facing OS label for an agent row.
+// Prefers os_version when it already carries a marketing name
+// (recognized by starting with macOS / Microsoft / Ubuntu / Fedora /
+// etc. — what Get-CimInstance, sw_vers, or /etc/os-release's
+// PRETTY_NAME naturally produces). Falls back to "<os_type>
+// <os_version>" only for legacy agents whose os_version is just a
+// bare semver (e.g. "26.0.1") so the display still tells you which
+// OS family it is.
+//
+// "darwin" / "linux" / "windows" are kernel identifiers Go uses
+// internally, NOT what end users would recognize. Showing those
+// as the headline OS name was wrong (Louis flagged "darwin 26.0.1"
+// — that's macOS Sequoia, not "darwin").
+function formatAgentOS(osType: string | null | undefined, osVersion: string | null | undefined): string {
+  const v = (osVersion || '').trim();
+  const t = (osType || '').trim();
+  if (!v && !t) return '';
+  if (!v) return t;
+  // Friendly version strings already include the OS family name.
+  // Heuristic: if the first word is one of the known marketing
+  // names, render the version on its own.
+  const friendly = /^(macOS|Mac OS X|Microsoft|Windows|Ubuntu|Debian|Fedora|CentOS|Red Hat|RHEL|Rocky|AlmaLinux|openSUSE|SUSE|Arch|Manjaro|Pop!_OS|elementary|Linux Mint|Kali|Alpine|FreeBSD|OpenBSD|NetBSD)\b/i;
+  if (friendly.test(v)) return v;
+  // Legacy agents (pre-v1.16.87 on Windows/macOS) report a bare
+  // semver in os_version. Combine with os_type for at least some
+  // signal — it'll show as "darwin 26.0.1" but that's better than
+  // showing nothing while we wait for the agent to upgrade.
+  return t ? `${t} ${v}` : v;
+}
+
 // compareSemverDesc compares two dotted-integer version strings the
 // same way the Go agent does in internal/updater.compareSemver:
 // numeric per-segment, missing segments treated as 0, leading "v"
@@ -1204,7 +1234,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                           {agent.device_type}
                         </div>
                         <div className={`text-xs ${themeClasses.text.secondary}`}>
-                          {agent.os_type} {agent.os_version}
+                          {formatAgentOS(agent.os_type, agent.os_version)}
                         </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>

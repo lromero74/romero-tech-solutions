@@ -822,7 +822,20 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 {agent.device_name}
               </h2>
               <p className={`text-sm ${themeClasses.text.secondary}`}>
-                {agent.device_type} • {agent.os_type} {agent.os_version}
+                {agent.device_type} • {(() => {
+                  // Same logic as AgentDashboard.formatAgentOS — show
+                  // os_version on its own when it carries a marketing
+                  // name (e.g. "macOS 14.5.0", "Microsoft Windows 11
+                  // Pro Build 26200.8246"); fall back to "<os_type>
+                  // <os_version>" only for legacy agents reporting a
+                  // bare semver. "darwin", "linux", "windows" are
+                  // kernel identifiers, not user-facing OS names.
+                  const v = (agent.os_version || '').trim();
+                  const t = (agent.os_type || '').trim();
+                  if (!v) return t;
+                  const friendly = /^(macOS|Mac OS X|Microsoft|Windows|Ubuntu|Debian|Fedora|CentOS|Red Hat|RHEL|Rocky|AlmaLinux|openSUSE|SUSE|Arch|Manjaro|Pop!_OS|elementary|Linux Mint|Kali|Alpine|FreeBSD|OpenBSD|NetBSD)\b/i;
+                  return friendly.test(v) ? v : (t ? `${t} ${v}` : v);
+                })()}
                 {getOSCommonName() && (
                   <span className={`ml-2 text-xs font-medium ${themeClasses.text.muted}`}>
                     ({getOSCommonName()})
