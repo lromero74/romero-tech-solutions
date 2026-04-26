@@ -758,22 +758,39 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   };
 
   // Format last heartbeat time
-  const formatLastSeen = (lastHeartbeat: string | null): string => {
-    if (!lastHeartbeat) return 'Never';
+  const formatLastSeen = (lastHeartbeat: string | null, createdAt?: string | null): string => {
+    // If we never received a heartbeat at all, fall back to the
+    // registration timestamp so the cell isn't a useless "Never"
+    // for an agent that registered (we have a version, OS, etc.
+    // for it) but somehow never checked in. Common cause: agent
+    // installed and registered, then immediately uninstalled or
+    // the host shut down before the first heartbeat tick.
+    const ts = lastHeartbeat || createdAt;
+    if (!ts) return 'Never';
+    const isHeartbeat = !!lastHeartbeat;
 
     const now = new Date();
-    const heartbeatDate = new Date(lastHeartbeat);
-    const diffMs = now.getTime() - heartbeatDate.getTime();
+    const tsDate = new Date(ts);
+    const diffMs = now.getTime() - tsDate.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
+    let relative: string;
+    if (diffMins < 1) relative = 'Just now';
+    else if (diffMins < 60) relative = `${diffMins}m ago`;
+    else {
+      const diffHours = Math.floor(diffMins / 60);
+      if (diffHours < 24) relative = `${diffHours}h ago`;
+      else {
+        const diffDays = Math.floor(diffHours / 24);
+        relative = `${diffDays}d ago`;
+      }
+    }
 
-    const diffHours = Math.floor(diffMins / 60);
-    if (diffHours < 24) return `${diffHours}h ago`;
-
-    const diffDays = Math.floor(diffHours / 24);
-    return `${diffDays}d ago`;
+    // Distinguish the two cases visually so the admin knows the
+    // shown timestamp is a registration date, not a recent
+    // heartbeat. Heartbeats just show "5m ago"; registration-
+    // fallback shows "Registered 90d ago, never seen".
+    return isHeartbeat ? relative : `Registered ${relative}, never seen`;
   };
 
   // Filter and sort agents
@@ -1198,7 +1215,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
                         <div className={`text-sm ${themeClasses.text.secondary}`}>
-                          {formatLastSeen(agent.last_heartbeat)}
+                          {formatLastSeen(agent.last_heartbeat, agent.created_at)}
                         </div>
                       </td>
                       <td className={`px-6 py-4 whitespace-nowrap border-r ${themeClasses.border.primary}`}>
@@ -1431,7 +1448,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   </div>
                   <div className="col-span-2">
                     <span className={`text-xs ${themeClasses.text.muted}`}>Last Seen</span>
-                    <div className={themeClasses.text.primary}>{formatLastSeen(agent.last_heartbeat)}</div>
+                    <div className={themeClasses.text.primary}>{formatLastSeen(agent.last_heartbeat, agent.created_at)}</div>
                   </div>
                   <div className="col-span-2">
                     <span className={`text-xs ${themeClasses.text.muted}`}>Agent Version</span>

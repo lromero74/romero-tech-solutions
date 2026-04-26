@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.84 Release Notes
+RTS Monitoring Agent - Version 1.16.86 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 21:59:29 UTC
-Previous Version: v1.16.83
-Git Commit: 89ea675
+Release Date: 2026-04-26 22:29:40 UTC
+Previous Version: v1.16.85
+Git Commit: b770842
 
-Changes Since v1.16.83:
+Changes Since v1.16.85:
 ───────────────────────────────────────────────────────────
 
-• v1.16.84: fix tray-restart self-pkill bug
+• v1.16.86: also sed-substitute $RPM_ROOT in distrobox spec
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

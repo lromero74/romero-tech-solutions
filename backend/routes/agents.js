@@ -1407,29 +1407,28 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
 router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const { status, agent_version } = req.body;
+    const { status, agent_version, os_version } = req.body;
 
-    // Update agent status and last_heartbeat. agent_version is
-    // included on every heartbeat from agents v1.16.77+ so the
-    // dashboard can flag outdated builds and offer an "Update
-    // agent" action. COALESCE preserves the prior value when an
-    // older agent (no agent_version field in payload) checks in,
-    // so we don't blow away the registration-time value.
+    // Update agent status and last_heartbeat. agent_version (v1.16.77+)
+    // and os_version (v1.16.87+) are included on every heartbeat
+    // from the daemon process so the dashboard can flag outdated
+    // builds and reflect post-Windows-Update OS changes without
+    // requiring re-registration. COALESCE preserves the prior
+    // value when an older agent (no field in payload) checks in.
     //
     // RETURNING gives us the post-update row so we can broadcast
-    // the freshly-stored agent_version (which may be the new value
-    // we just wrote, or — for older agents — the prior stored
-    // value the COALESCE preserved). Either way the dashboard sees
+    // the freshly-stored values. Either way the dashboard sees
     // the truth that's now in the DB.
     const updateResult = await query(
       `UPDATE agent_devices
        SET last_heartbeat = NOW(),
            status = COALESCE($2, status),
            agent_version = COALESCE($3, agent_version),
+           os_version = COALESCE($4, os_version),
            updated_at = NOW()
        WHERE id = $1
-       RETURNING device_name, status, agent_version, last_heartbeat`,
-      [agent_id, status || 'online', agent_version || null]
+       RETURNING device_name, status, agent_version, os_version, last_heartbeat`,
+      [agent_id, status || 'online', agent_version || null, os_version || null]
     );
 
     // Push the heartbeat-derived state to the admin dashboards in
