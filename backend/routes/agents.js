@@ -1446,6 +1446,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
           lastHeartbeat: row.last_heartbeat,
           deviceName: row.device_name,
           agentVersion: row.agent_version,
+          osVersion: row.os_version,
         });
       } catch (broadcastErr) {
         console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);

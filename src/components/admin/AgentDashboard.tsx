@@ -632,6 +632,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               // the broadcast payload) checks in, mirroring the
               // backend's COALESCE.
               agent_version: update.agentVersion ?? agent.agent_version,
+              // os_version is on every heartbeat from agents
+              // v1.16.87+. Same conditional-overwrite pattern so
+              // older agents don't blow away the value with a
+              // missing field.
+              os_version: update.osVersion ?? agent.os_version,
             };
           }
           return agent;

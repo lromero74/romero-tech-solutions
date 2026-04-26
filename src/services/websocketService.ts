@@ -57,6 +57,12 @@ interface AgentStatusUpdate {
   // and (b) clear the "Update in progress" badge once the post-
   // update agent comes back on the new build.
   agentVersion?: string;
+  // osVersion is sent on every heartbeat by agents v1.16.87+.
+  // Without it the "Type / OS" cell would only refresh on full
+  // page reload after a Windows Update / OS upgrade — meaning
+  // the dashboard kept showing stale OS info long after the
+  // agent was reporting the new value to the DB.
+  osVersion?: string;
 }
 
 interface AgentMetricsUpdate {

@@ -407,16 +407,17 @@ class WebSocketService {
   /**
    * Push an agent's heartbeat-derived state to all admin dashboards
    * so the AgentDashboard table refreshes the row in place — no
-   * manual reload needed. Carries agent_version so the dashboard
-   * can clear an "update in progress" marker as soon as the agent
-   * comes back on the new build.
+   * manual reload needed. Carries agent_version (so the dashboard
+   * can clear an "update in progress" marker when the new build
+   * comes back) AND os_version (so a Windows Update / OS upgrade
+   * reflects in the "Type / OS" cell without a page refresh).
    *
    * Called from the heartbeat handler in routes/agents.js (every
    * heartbeat). Cheap: emits to the existing admin socket set
    * with the same payload shape AgentDashboard's
    * websocketService.onAgentStatusChange already expects.
    */
-  broadcastAgentStatusUpdate({ agentId, status, lastHeartbeat, deviceName, agentVersion }) {
+  broadcastAgentStatusUpdate({ agentId, status, lastHeartbeat, deviceName, agentVersion, osVersion }) {
     if (this.adminSockets.size === 0) return;
     const payload = {
       agentId,
@@ -424,6 +425,7 @@ class WebSocketService {
       lastHeartbeat,
       deviceName,
       agentVersion,
+      osVersion,
     };
     this.adminSockets.forEach(socketId => {
       const socket = this.io.sockets.sockets.get(socketId);
