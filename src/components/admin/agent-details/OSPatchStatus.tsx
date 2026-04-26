@@ -53,24 +53,33 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   // the React hook order stays stable across render passes.
   const [rebootRequested, setRebootRequested] = useState(false);
   const [rebootMinutes, setRebootMinutes] = useState(1);
-  // Tick state forces a re-render once a second while a reboot is
-  // in progress, so the "Rebooting since X:XX" elapsed counter
-  // stays current without needing a websocket event for every
-  // second.
+
+  // "Rebooting since…" badge — computed before the early return so
+  // the tick-effect below has a stable dependency. computeRebootInfo
+  // tolerates an undefined latestMetrics.
+  const rebootInfo = computeRebootInfo(commands, agent);
+  const isRebooting = !!rebootInfo;
+
+  // Tick state forces a re-render once a second WHILE a reboot is in
+  // progress, so the "Rebooting since X:XX" elapsed counter stays
+  // current without needing a websocket event for every second.
+  // Gated on isRebooting so the rest of the page doesn't re-render
+  // every second — that previously caused UpdatePackageDialog's
+  // 5-second poll-fallback delay to reset before it could fire,
+  // leaving the modal stuck on "Waiting for the agent to pick it up"
+  // any time a websocket completion event was missed.
   const [, setNowTick] = useState(0);
   useEffect(() => {
+    if (!isRebooting) return;
     const id = setInterval(() => setNowTick(t => t + 1), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [isRebooting]);
 
   if (!latestMetrics || latestMetrics.patches_available === undefined) return null;
 
   const hasList = visiblePatches.length > 0;
   const securityCount = latestMetrics.security_patches_available || 0;
   const pendingRebootPatches = visiblePatches.filter((p: any) => p.package_manager === 'winupdate-reboot');
-
-  // "Rebooting since…" badge — see computeRebootInfo for the rule.
-  const rebootInfo = computeRebootInfo(commands, agent);
 
   const handleRebootHost = async () => {
     if (!agentId) return;

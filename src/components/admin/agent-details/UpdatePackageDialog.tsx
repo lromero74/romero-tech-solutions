@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Loader2, X } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import agentService from '../../../services/agentService';
@@ -87,6 +87,18 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
 }) => {
   const [state, setState] = useState<DialogState>({ kind: 'idle' });
 
+  // Stash the latest onResult in a ref so the WS-subscribe effect
+  // below depends only on identifiers that actually change with
+  // command lifecycle (commandId, agentId), not on the parent's
+  // closure identity. The parent (OSPatchStatus) supplies onResult
+  // as an inline arrow function so its identity changes every
+  // render — without this ref, every parent re-render would clear
+  // the effect's 5-second poll-fallback timer before it ever fired,
+  // and the modal would be stuck at "Waiting for the agent to pick
+  // it up" any time a websocket completion event was missed.
+  const onResultRef = useRef(onResult);
+  useEffect(() => { onResultRef.current = onResult; }, [onResult]);
+
   // Build a human preview of what's about to run. The actual CLI runs
   // on the device; this is just for the user's confirmation.
   const cliPreview = useMemo(() => {
@@ -98,9 +110,15 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
   // case the websocket misses (page reload, dropped socket, etc.) —
   // it kicks in after 5s rather than 60s now that we have richer
   // state transitions to reach.
+  // Pull commandId out so the effect's deps don't include the whole
+  // `state` object — that would re-run the effect (and reset the 5s
+  // poll-fallback delay) on every progress-tick state change.
+  const inFlightCommandId =
+    state.kind === 'queued' || state.kind === 'running' ? state.commandId : null;
+
   useEffect(() => {
-    if (state.kind !== 'queued' && state.kind !== 'running') return;
-    const targetId = state.commandId;
+    if (!inFlightCommandId) return;
+    const targetId = inFlightCommandId;
 
     // Translate the agent_commands.status text from the DB into the
     // dialog's terminal state machine. Tolerant of either the new
@@ -109,7 +127,8 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
     // optimistically remove them from the outdated list.
     const transition = (status: string, result: UpdateResult | undefined, error?: string) => {
       const notify = (terminalStatus: 'completed' | 'completed_with_failures' | 'failed') => {
-        if (!onResult) return;
+        const cb = onResultRef.current;
+        if (!cb) return;
         // Hide rows whose per-package outcome was either:
         //   - succeeded: the agent actually upgraded it
         //   - skipped + already_at_latest: the package was already
@@ -122,7 +141,7 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
           .filter(r => r.outcome === 'succeeded'
             || (r.outcome === 'skipped' && r.skipped_reason === 'already_at_latest'))
           .map(r => r.package);
-        onResult(noLongerOutdated, terminalStatus);
+        cb(noLongerOutdated, terminalStatus);
       };
       switch (status) {
         case 'completed':
@@ -222,7 +241,7 @@ export const UpdatePackageDialog: React.FC<UpdatePackageDialogProps> = ({
       clearTimeout(pollDelay);
       if (pollTimer) clearInterval(pollTimer);
     };
-  }, [state, agentId, onResult]);
+  }, [inFlightCommandId, agentId]);
 
   const onConfirm = async () => {
     setState({ kind: 'submitting' });
