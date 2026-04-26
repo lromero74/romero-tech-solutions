@@ -1,18 +1,14 @@
-RTS Monitoring Agent - Version 1.16.32 Release Notes
+RTS Monitoring Agent - Version 1.16.60 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2025-10-22 00:27:50 UTC
-Previous Version: v1.16.20
-Git Commit: a7f1476
+Release Date: 2026-04-26 03:06:37 UTC
+Previous Version: v1.16.59
+Git Commit: 52f6782
 
-Changes Since v1.16.20:
+Changes Since v1.16.59:
 ───────────────────────────────────────────────────────────
 
-• feat: Add 'Schedule Service Request' menu item with magic link redirect
-• fix: Parse device limit error before generic error check
-• fix: Improve device limit flow - retry same code after device removal
-• feat: Add passwordless magic link auto-login for free tier device management
-• docs: Add comprehensive Windows security documentation and signing guide (v1.16.20)
+• v1.16.60: wrap tray icon PNG in ICO container on Windows
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
