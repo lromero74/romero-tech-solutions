@@ -1480,7 +1480,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
            WHERE agent_device_id = $1
              AND command_type = 'install_update'
              AND status = 'executing'
-             AND requested_at < NOW() - INTERVAL '90 seconds'`,
+             AND created_at < NOW() - INTERVAL '90 seconds'`,
           [agent_id, JSON.stringify({
             source: 'heartbeat-sweep',
             agent_version_observed: row.agent_version,
@@ -3041,13 +3041,13 @@ router.get('/', authMiddleware, async (req, res) => {
               id AS command_id,
               command_type,
               status,
-              requested_at,
+              created_at AS requested_at,
               command_params
             FROM agent_commands
             WHERE agent_device_id = ad.id
               AND command_type IN ('install_update', 'reboot_host')
               AND status IN ('pending', 'delivered', 'executing')
-            ORDER BY command_type, requested_at DESC
+            ORDER BY command_type, created_at DESC
           ) p
         ) AS pending_action_commands
       FROM agent_devices ad
