@@ -25,6 +25,12 @@ export interface AgentDevice {
   created_by: string | null;
   agent_token?: string; // Only returned on registration
   agent_version?: string; // Reported by the agent on every heartbeat (v1.16.77+)
+  // End-user opt-out toggle for remote control (set via the agent
+  // tray menu, propagated via heartbeat v1.18.1+). When false the
+  // dashboard greys out + disables the Remote Control button.
+  // Defaults true on the server side; older agents that don't send
+  // the field preserve the existing DB value via COALESCE.
+  remote_control_enabled?: boolean;
   // Pending action commands (install_update, reboot_host) currently in
   // pending/delivered/executing status. Surfaced in the GET /api/agents
   // list response so the dashboard's "Update in progress" / "Reboot

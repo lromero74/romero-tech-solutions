@@ -63,6 +63,9 @@ interface AgentStatusUpdate {
   // the dashboard kept showing stale OS info long after the
   // agent was reporting the new value to the DB.
   osVersion?: string;
+  // remoteControlEnabled — heartbeated by agents v1.18.1+. When
+  // false, AgentDashboard greys out the Remote Control button.
+  remoteControlEnabled?: boolean;
 }
 
 interface AgentMetricsUpdate {

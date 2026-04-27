@@ -727,6 +727,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               // older agents don't blow away the value with a
               // missing field.
               os_version: update.osVersion ?? agent.os_version,
+              // remote_control_enabled flips when the end-user
+              // toggles via the agent tray menu (v1.18.1+).
+              // ?? preserves the existing value when older agents
+              // (no field) heartbeat — same pattern as above.
+              remote_control_enabled: update.remoteControlEnabled ?? agent.remote_control_enabled,
             };
           }
           return agent;
@@ -1731,16 +1736,32 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                               <RotateCw className="w-4 h-4" />
                             </button>
                           )}
-                          {canRemoteControl && agent.status === 'online' && (
-                            <button
-                              onClick={() => handleStartRemoteControl(agent)}
-                              disabled={remoteControl.starting}
-                              className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Remote control (browser desktop session)"
-                            >
-                              <Monitor className="w-4 h-4" />
-                            </button>
-                          )}
+                          {canRemoteControl && agent.status === 'online' && (() => {
+                            // remote_control_enabled comes from the agent's
+                            // heartbeat. Default true (older agents that don't
+                            // send the field).  When the end-user has flipped
+                            // it OFF in the tray menu, gray out + disable
+                            // rather than hide entirely so the admin sees
+                            // "this host has remote control turned off" not
+                            // "where did the button go".
+                            const rcEnabled = agent.remote_control_enabled !== false;
+                            return (
+                              <button
+                                onClick={() => rcEnabled && handleStartRemoteControl(agent)}
+                                disabled={!rcEnabled || remoteControl.starting}
+                                className={
+                                  rcEnabled
+                                    ? 'text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed'
+                                    : 'text-gray-400 dark:text-gray-600 cursor-not-allowed opacity-50'
+                                }
+                                title={rcEnabled
+                                  ? 'Remote control (browser desktop session)'
+                                  : 'Remote control disabled by end-user (tray menu)'}
+                              >
+                                <Monitor className="w-4 h-4" />
+                              </button>
+                            );
+                          })()}
                           {canEditAgents && (
                             <button
                               onClick={() => handleEditAgent(agent)}
