@@ -155,6 +155,16 @@ const WaylandRemoteControlClient = forwardRef<
     rfb.addEventListener('disconnect', handleDisconnect);
     rfb.addEventListener('securityfailure', handleSecurityFailure);
 
+    // Diagnostic: log every other RFB event so we can see how far
+    // the protocol gets when the modal is stuck at "Connecting…".
+    // (Cheap to keep — these events only fire during/after a
+    // successful handshake, never in tight loops.)
+    const diagEvents = ['credentialsrequired', 'desktopname', 'capabilities', 'bell', 'clipboard'];
+    const diagHandler = (ev: Event) => {
+      console.log('[wayland-novnc]', ev.type, (ev as { detail?: unknown }).detail ?? '');
+    };
+    diagEvents.forEach(name => rfb.addEventListener(name, diagHandler));
+
     return () => {
       rfb.removeEventListener('connect', handleConnect);
       rfb.removeEventListener('disconnect', handleDisconnect);
