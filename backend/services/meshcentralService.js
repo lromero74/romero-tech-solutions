@@ -7,20 +7,21 @@
  * MeshCentral exposes a single WebSocket control channel at
  * `/control.ashx` over which all admin operations flow as JSON
  * messages. Auth is via per-user Login Tokens generated in the
- * MeshCentral web UI (My Account → Crear token de inicio de sesión).
+ * MeshCentral web UI (My Account → Create login token).
  *
  * The token comes in two parts:
- *   - tokenname (short string, the "username")
- *   - hexkey    (160 hex chars, the secret)
+ *   - tokenName  (e.g. "~t:pN4VLOTid553hQjX" — username field)
+ *   - tokenPass  (short alphanumeric — password field)
  *
  * They go in our backend's .env as:
- *   MESHCENTRAL_TOKEN_NAME=...
- *   MESHCENTRAL_TOKEN_KEY=...
  *   MESHCENTRAL_URL=https://mesh.romerotechsolutions.com
+ *   MESHCENTRAL_TOKEN_NAME=~t:...
+ *   MESHCENTRAL_TOKEN_PASS=...
  *
- * The auth pattern follows meshctrl.js:
- *   - HTTP request to /control.ashx with cookie auth derived from the key
- *   - Upgrade to WebSocket
+ * Auth handshake (mirrors meshctrl.js):
+ *   - Open WSS to /control.ashx with header
+ *     `x-meshauth: <base64(name)>,<base64(pass)>`
+ *   - Server validates, upgrades to WebSocket
  *   - Send {action, ...} messages, receive responses
  *
  * For Phase 2 we implement only the methods we need today:
@@ -44,37 +45,30 @@ import crypto from 'crypto';
 function getConfig() {
   const url = process.env.MESHCENTRAL_URL;
   const tokenName = process.env.MESHCENTRAL_TOKEN_NAME;
-  const tokenKey = process.env.MESHCENTRAL_TOKEN_KEY;
-  if (!url || !tokenName || !tokenKey) {
+  const tokenPass = process.env.MESHCENTRAL_TOKEN_PASS;
+  if (!url || !tokenName || !tokenPass) {
     throw new Error(
       'meshcentralService: MESHCENTRAL_URL / MESHCENTRAL_TOKEN_NAME / ' +
-      'MESHCENTRAL_TOKEN_KEY env vars must be set. Generate the token ' +
-      'via MeshCentral web UI: My Account → Crear token de inicio de sesión.'
+      'MESHCENTRAL_TOKEN_PASS env vars must be set. Generate the token ' +
+      'via MeshCentral web UI: My Account → Create login token.'
     );
   }
-  if (!/^[0-9a-fA-F]{160}$/.test(tokenKey)) {
-    throw new Error(
-      `meshcentralService: MESHCENTRAL_TOKEN_KEY must be 160 hex chars (got ${tokenKey.length})`
-    );
-  }
-  return { url, tokenName, tokenKey };
+  return { url, tokenName, tokenPass };
 }
 
 // ──── WebSocket connection helper ────────────────────────────────────
 //
-// MeshCentral's /control.ashx authenticates via a `auth` cookie
-// computed from the user's login key. Format (per meshctrl.js):
-//   - 32 random bytes ("nonce") + HMAC-SHA384(key, nonce + "user" + tokenName)
-//   - encoded as hex, sent as `auth=<hex>` cookie
-//
-// The cookie is verified server-side; if valid, the WebSocket
-// upgrade succeeds and we can send/receive control messages.
-function buildAuthCookie(tokenName, tokenKey) {
-  const keyBytes = Buffer.from(tokenKey, 'hex');
-  const nonce = crypto.randomBytes(32);
-  const userBytes = Buffer.from('user/' + tokenName, 'utf8');
-  const hmac = crypto.createHmac('sha384', keyBytes).update(Buffer.concat([nonce, userBytes])).digest();
-  return Buffer.concat([nonce, hmac]).toString('hex');
+// MeshCentral's /control.ashx accepts authentication via the
+// `x-meshauth` HTTP header during the WebSocket upgrade. Format
+// (per meshctrl.js):
+//   x-meshauth: <base64(username)>,<base64(password)>
+// Optional 2FA token can be appended as a third comma-separated
+// base64 field, but login tokens are exempt from 2FA so we don't
+// need it here.
+function buildAuthHeader(tokenName, tokenPass) {
+  const u = Buffer.from(String(tokenName), 'utf8').toString('base64');
+  const p = Buffer.from(String(tokenPass), 'utf8').toString('base64');
+  return `${u},${p}`;
 }
 
 /**
@@ -84,13 +78,12 @@ function buildAuthCookie(tokenName, tokenKey) {
  * Caller is responsible for calling ws.close() when done.
  */
 async function openControlWebSocket() {
-  const { url, tokenName, tokenKey } = getConfig();
+  const { url, tokenName, tokenPass } = getConfig();
   const wssUrl = url.replace(/^https?:/, 'wss:').replace(/\/+$/, '') + '/control.ashx';
-  const cookie = `auth=${buildAuthCookie(tokenName, tokenKey)}`;
 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(wssUrl, {
-      headers: { Cookie: cookie },
+      headers: { 'x-meshauth': buildAuthHeader(tokenName, tokenPass) },
       // 10s hard timeout on the connection attempt — if MeshCentral
       // is down or unreachable, fail fast rather than hang the
       // backend's request handler indefinitely.
@@ -116,20 +109,34 @@ async function openControlWebSocket() {
  * Resolves with the parsed response object; rejects on timeout
  * or socket error.
  *
- * MeshCentral responses arrive on the same WebSocket as the
- * request, identified by either `responseid` (when we set one)
- * or by `action` matching. We use responseid because it's
- * unambiguous — multiple in-flight requests don't get crossed.
+ * MeshCentral has two response-correlation patterns and they're
+ * inconsistent across actions:
+ *   1. Echo of `responseid` in the response (most actions support this)
+ *   2. Just the same `action` name in the response (some don't echo)
+ *
+ * We accept either. Race condition risk: if two in-flight requests
+ * use the SAME action name with no responseid echo, the first
+ * response delivers to whichever caller is waiting. We avoid this
+ * by serializing per-WebSocket — caller opens fresh ws per action,
+ * which is the existing public-API pattern.
+ *
+ * `pushOnly` mode: skip the send and just wait for an action of the
+ * given name to arrive (used for server-pushed messages like
+ * `serverinfo` that the server emits unsolicited after auth).
  */
-async function sendActionAndWait(ws, request, timeoutMs = 15_000) {
+async function sendActionAndWait(ws, request, timeoutMs = 15_000, pushOnly = false) {
   const responseId = crypto.randomBytes(8).toString('hex');
-  const message = { ...request, responseid: responseId };
+  const message = pushOnly ? null : { ...request, responseid: responseId };
 
   return new Promise((resolve, reject) => {
     const onMessage = (data) => {
       let parsed;
       try { parsed = JSON.parse(data.toString('utf8')); } catch { return; }
-      if (parsed.responseid !== responseId) return;
+      // Match priority: explicit responseid echo wins; otherwise
+      // accept the first message whose action matches our request.
+      const responseIdMatch = parsed.responseid && parsed.responseid === responseId;
+      const actionMatch = parsed.action && parsed.action === request.action;
+      if (!responseIdMatch && !actionMatch) return;
       cleanup();
       resolve(parsed);
     };
@@ -148,36 +155,72 @@ async function sendActionAndWait(ws, request, timeoutMs = 15_000) {
     ws.on('message', onMessage);
     ws.once('error', onError);
     ws.once('close', onClose);
-    ws.send(JSON.stringify(message));
+    if (message) ws.send(JSON.stringify(message));
   });
 }
 
 // ──── Public API ─────────────────────────────────────────────────────
 
 /**
- * Verify connectivity + return MeshCentral version + cert hash info.
- * Used by /api/admin/remote-control/server-health for ops dashboards.
+ * Verify connectivity + return MeshCentral server info.
+ *
+ * Subtle contract — MeshCentral PUSHES a `serverinfo` message
+ * unsolicited right after the WebSocket auth handshake completes,
+ * so we don't send anything; we just open the socket and wait
+ * for the first `action: 'serverinfo'` frame (no responseid on
+ * push messages, hence the bypass of sendActionAndWait).
  */
 export async function serverInfo() {
   const ws = await openControlWebSocket();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      ws.close();
+      reject(new Error('MeshCentral serverinfo push timeout (10s)'));
+    }, 10_000);
+    ws.on('message', (data) => {
+      let parsed;
+      try { parsed = JSON.parse(data.toString('utf8')); } catch { return; }
+      if (parsed.action !== 'serverinfo') return;
+      clearTimeout(timer);
+      ws.close();
+      resolve(parsed);
+    });
+    ws.once('error', (err) => { clearTimeout(timer); reject(err); });
+  });
+}
+
+/**
+ * List all device groups (meshes) the authenticated user can see.
+ * Returns the parsed `meshes` action response from MeshCentral.
+ */
+export async function listDeviceGroups() {
+  const ws = await openControlWebSocket();
   try {
-    const resp = await sendActionAndWait(ws, { action: 'serverinfo' });
-    return resp;
+    return await sendActionAndWait(ws, { action: 'meshes' });
   } finally {
     ws.close();
   }
 }
 
 /**
- * List all devices in a given mesh (device group).
- * meshId format: full mesh ID with the 'mesh//' prefix, OR just the
- * suffix portion. We accept either and normalize.
+ * List all devices ("nodes") visible to the authenticated user,
+ * optionally filtered by mesh id. The MeshCentral protocol returns
+ * all visible nodes via the `nodes` action; we filter client-side.
+ *
+ * meshId is optional — pass without it for the full list.
  */
 export async function listDevices(meshId) {
   const ws = await openControlWebSocket();
   try {
-    const resp = await sendActionAndWait(ws, { action: 'nodes', meshid: meshId });
-    return resp;
+    const resp = await sendActionAndWait(ws, { action: 'nodes' });
+    if (!meshId || !resp || !resp.nodes) return resp;
+    // Normalize meshId — accept full "mesh//xyz" or bare "xyz".
+    const normalized = meshId.startsWith('mesh//') ? meshId : `mesh//${meshId}`;
+    const filtered = {};
+    for (const [k, v] of Object.entries(resp.nodes)) {
+      if (k === normalized) filtered[k] = v;
+    }
+    return { ...resp, nodes: filtered };
   } finally {
     ws.close();
   }
@@ -188,13 +231,10 @@ export async function listDevices(meshId) {
  * can open MeshCentral inside our dashboard's iframe without seeing
  * a separate MeshCentral login prompt.
  *
- * `targetUserId` is the MeshCentral user we want the technician to
- * impersonate (typically a service-account user with view-only
- * permissions on the device groups they're allowed to manage).
  * `expirySeconds` defaults to 60 — the token is consumed once when
  * the iframe loads.
  */
-export async function mintLoginToken(targetUserId, expirySeconds = 60) {
+export async function mintLoginToken(expirySeconds = 60) {
   const ws = await openControlWebSocket();
   try {
     const resp = await sendActionAndWait(ws, {
@@ -230,6 +270,7 @@ export async function disconnectSession(sessionId) {
 // Default export bundles the public API for easy importing.
 export default {
   serverInfo,
+  listDeviceGroups,
   listDevices,
   mintLoginToken,
   disconnectSession,
