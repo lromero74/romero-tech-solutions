@@ -92,7 +92,12 @@ router.post(
         return fail(res, 502, 'MESHCENTRAL_UNREACHABLE',
           'Could not contact MeshCentral to mint session URL', e);
       }
-      const tokenName = tokenResp?.tokenName || tokenResp?.username;
+      // MeshCentral's createLoginToken response uses `tokenUser`
+      // (NOT `tokenName` or `username` — verified against the live
+      // 1.1.59 server during Phase 5 dogfood). Fall through to the
+      // legacy field names so a future MC version that switches
+      // back doesn't silently break.
+      const tokenName = tokenResp?.tokenUser || tokenResp?.tokenName || tokenResp?.username;
       const tokenPass = tokenResp?.tokenPass || tokenResp?.password;
       if (!tokenName || !tokenPass) {
         return fail(res, 502, 'MESHCENTRAL_TOKEN_MALFORMED',
