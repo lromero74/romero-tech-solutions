@@ -587,13 +587,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         }
         // Build the wss URL noVNC connects to. Backend may return
         // either relay_url (absolute) or relay_path (relative).
-        // Relative path is preferred because it implicitly uses
-        // the same host the dashboard is loaded from — works
-        // identically in dev (localhost) and prod (api.).
+        // For relay_path, derive the host from VITE_API_BASE_URL —
+        // the dashboard is served from www., but the WebSocket relay
+        // lives on api. (where the backend is). Falling back to
+        // window.location.host would dial the static-frontend host
+        // which doesn't speak WS.
         let relayUrl: string | null = data.relay_url ?? null;
         if (!relayUrl && data.relay_path) {
-          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          relayUrl = `${proto}//${window.location.host}${data.relay_path}`;
+          const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+          // Strip a trailing /api so we land on the host root that
+          // the backend listens on (e.g. https://api.example.com).
+          const apiOrigin = apiBase.replace(/\/api$/, '');
+          const u = new URL(apiOrigin || window.location.origin);
+          const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
+          relayUrl = `${proto}//${u.host}${data.relay_path}`;
         }
         setRemoteControl({
           show: true,
