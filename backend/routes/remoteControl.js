@@ -31,6 +31,7 @@ import { query } from '../config/database.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import meshcentral from '../services/meshcentralService.js';
+import { issueDashboardTicket } from '../services/waylandTunnelService.js';
 
 const router = express.Router();
 
@@ -399,7 +400,12 @@ router.post(
       // the dev (localhost) and prod (api.) deployments both work.
       // Backend just returns the path; dashboard prepends the wss
       // host on its end.
-      const relayPath = `/ws/wayland-tunnel/${audit.id}/dashboard`;
+      // Mint a one-shot ticket so the dashboard can authenticate
+      // its WS upgrade — the browser is on www. and the relay is
+      // on api., which is cross-site for SameSite=Lax cookies.
+      // Ticket is bound to (audit_id, user_id) and expires in 60s.
+      const ticket = issueDashboardTicket(audit.id, req.user.id);
+      const relayPath = `/ws/wayland-tunnel/${audit.id}/dashboard?ticket=${ticket}`;
 
       return res.json({
         success: true,

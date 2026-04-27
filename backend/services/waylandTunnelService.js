@@ -55,6 +55,23 @@ import { sessionService } from './sessionService.js';
 // for v1.19.
 const pairs = new Map();
 
+// One-shot tickets for dashboard authentication. The browser
+// runs at www.romerotechsolutions.com and the relay lives at
+// api.romerotechsolutions.com — that's a cross-site WebSocket
+// handshake, on which SameSite=Lax cookies are NOT sent. So we
+// can't authenticate the dashboard via the regular session
+// cookie. Instead, the /wayland/start route mints a short-lived
+// ticket bound to (audit_id, user_id), and the dashboard appends
+// it as ?ticket=... to the wss URL. The upgrade handler accepts
+// either a valid ticket OR a session cookie (for same-origin
+// dev where the cookie does flow).
+//
+// Why not just relax the cookie's SameSite? That would weaken
+// every other auth surface in the app. A scoped ticket is the
+// least-surface change.
+const tickets = new Map(); // ticket -> { auditId, userId, expiresAt }
+const TICKET_TTL_MS = 60_000;
+
 /**
  * Returns the entry for an audit_id, creating an empty one if
  * needed. Mutating callers hold no lock — JS is single-threaded
@@ -145,13 +162,78 @@ function authenticateAgent(req) {
 }
 
 /**
- * Validate the dashboard's session cookie. Reuses sessionService.
+ * Mint a one-shot dashboard ticket for an audit_id + user pair.
+ * Returned to the dashboard from /wayland/start; appended to the
+ * relay URL as ?ticket=...
+ *
+ * Tickets are random 24-byte hex (192 bits, no collision risk),
+ * one-shot (consumed on first successful auth), TTL 60s.
+ */
+export function issueDashboardTicket(auditId, userId) {
+  const ticket = randomTicket();
+  tickets.set(ticket, {
+    auditId,
+    userId,
+    expiresAt: Date.now() + TICKET_TTL_MS,
+  });
+  // Lazy reaping — at most a few stale entries before next mint.
+  if (tickets.size > 64) reapExpiredTickets();
+  return ticket;
+}
+
+function randomTicket() {
+  // 24 bytes → 48 hex chars. crypto is built-in; no extra deps.
+  const { randomBytes } = require('crypto');
+  return randomBytes(24).toString('hex');
+}
+
+function reapExpiredTickets() {
+  const now = Date.now();
+  for (const [k, v] of tickets) {
+    if (v.expiresAt < now) tickets.delete(k);
+  }
+}
+
+/**
+ * Consume a ticket if present + valid for this audit_id.
+ * Returns the userId or throws. One-shot: a valid ticket is
+ * deleted on first use so a leaked URL can't be replayed.
+ */
+function consumeTicket(ticket, auditId) {
+  const entry = tickets.get(ticket);
+  if (!entry) throw new Error('unknown ticket');
+  tickets.delete(ticket);
+  if (entry.expiresAt < Date.now()) throw new Error('ticket expired');
+  if (entry.auditId !== auditId) throw new Error('ticket audit mismatch');
+  return entry.userId;
+}
+
+/**
+ * Validate the dashboard's auth. Two paths:
+ *
+ *   (1) ?ticket=... query param — preferred, works cross-site
+ *       (e.g. browser at www. dialing wss to api.).
+ *   (2) sessionId cookie — same-origin dev fallback. Only fires
+ *       when no ticket was provided.
+ *
  * Returns user object or throws.
  */
-async function authenticateDashboard(req) {
-  // Express-style cookie parsing is wired in the main app; here
-  // we look for the cookie ourselves since the WS upgrade runs
-  // outside the express middleware chain.
+async function authenticateDashboard(req, auditId) {
+  // (1) Query-param ticket. The req.url here is the path+query
+  // after the host, so URL parsing needs a base.
+  try {
+    const u = new URL(req.url, 'http://localhost');
+    const ticket = u.searchParams.get('ticket');
+    if (ticket) {
+      const userId = consumeTicket(ticket, auditId);
+      return { id: userId, source: 'ticket' };
+    }
+  } catch {
+    // fall through to cookie
+  }
+
+  // (2) Express-style cookie parsing — the WS upgrade runs
+  // outside the express middleware chain so we parse manually.
   const cookieHeader = req.headers.cookie || '';
   const cookies = Object.fromEntries(
     cookieHeader.split(';').map(c => {
@@ -159,9 +241,8 @@ async function authenticateDashboard(req) {
       return [k, decodeURIComponent(v.join('='))];
     })
   );
-  // sessionId cookie name matches what authMiddleware checks.
   const sessionId = cookies.sessionId || cookies.session_id;
-  if (!sessionId) throw new Error('no session cookie');
+  if (!sessionId) throw new Error('no session cookie or ticket');
   const user = await sessionService.validateSession(sessionId);
   if (!user) throw new Error('invalid session');
   return user;
@@ -224,7 +305,7 @@ export function attachToHttpServer(httpServer) {
       if (role === 'agent') {
         identity = { kind: 'agent', agentId: authenticateAgent(req) };
       } else {
-        identity = { kind: 'dashboard', user: await authenticateDashboard(req) };
+        identity = { kind: 'dashboard', user: await authenticateDashboard(req, auditId) };
       }
       const audit = await loadAudit(auditId);
       if (role === 'agent' && audit.agent_device_id !== identity.agentId) {
@@ -305,4 +386,4 @@ function handleConnection(ws, auditId, role) {
   }
 }
 
-export default { attachToHttpServer };
+export default { attachToHttpServer, issueDashboardTicket };
