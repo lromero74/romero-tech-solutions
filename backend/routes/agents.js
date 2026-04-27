@@ -1155,6 +1155,7 @@ router.post('/register', async (req, res) => {
       device_type,
       os_type,
       os_version,
+      agent_version,
       system_info
     } = req.body;
 
@@ -1259,7 +1260,7 @@ router.post('/register', async (req, res) => {
         cpu_model,
         total_memory_gb,
         total_disk_gb,
-        '1.0.0', // Default agent version
+        agent_version || '1.0.0', // Honour what the agent reported; pre-1.16.93 agents didn't send it
         'online',
         tokenData.created_by,
         true,
@@ -1294,6 +1295,83 @@ router.post('/register', async (req, res) => {
       success: false,
       message: 'Agent registration failed',
       code: 'REGISTRATION_ERROR',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
+ * Release Registration (rollback)
+ * POST /api/agents/:agent_id/release-registration
+ *
+ * The agent calls this when local setup fails AFTER /register
+ * succeeded — typically because the just-issued JWT couldn't be
+ * persisted to disk (e.g. polkit prompt cancelled, /etc not
+ * writable). Effect: deletes the orphan agent_devices row and
+ * frees the registration_token for re-use.
+ *
+ * Guarded against undoing a real, working registration:
+ *   - last_heartbeat must still be NULL
+ *   - row must be < 1h old
+ *   - JWT in Authorization header authenticates the agent
+ *
+ * Best-effort: failures are not surfaced to the agent's UX (the
+ * underlying save failure is what gets shown). The endpoint is
+ * idempotent — calling it twice on the same agent returns 404
+ * the second time.
+ */
+router.post('/:agent_id/release-registration', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+
+    // Confirm the agent has never heartbeated and is recent. The
+    // 1h cap stops a misbehaving agent from being able to release
+    // long after the fact (defense-in-depth — the JWT is good for
+    // 10y but the rollback window is narrow).
+    const agentRow = await query(
+      `SELECT id, last_heartbeat, created_at
+         FROM agent_devices
+        WHERE id = $1
+          AND last_heartbeat IS NULL
+          AND created_at > NOW() - INTERVAL '1 hour'`,
+      [agent_id]
+    );
+
+    if (agentRow.rows.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: 'No releasable registration found for this agent',
+        code: 'NOT_RELEASABLE'
+      });
+    }
+
+    // Free the token first (so a retry can immediately reuse it).
+    // This UPDATE is idempotent — if for some reason the agent
+    // row has no associated token row, we still delete the orphan.
+    await query(
+      `UPDATE agent_registration_tokens
+          SET is_used = false,
+              used_at = NULL,
+              used_by_agent_id = NULL
+        WHERE used_by_agent_id = $1
+          AND is_used = true`,
+      [agent_id]
+    );
+
+    // Drop the orphan device row.
+    await query(`DELETE FROM agent_devices WHERE id = $1`, [agent_id]);
+
+    console.log(`↩️  Registration released: agent ${agent_id} (token freed, orphan row deleted)`);
+
+    res.json({
+      success: true,
+      message: 'Registration released'
+    });
+  } catch (error) {
+    console.error('Release registration error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Release registration failed',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.86 Release Notes
+RTS Monitoring Agent - Version 1.16.92 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-26 22:29:40 UTC
-Previous Version: v1.16.85
-Git Commit: b770842
+Release Date: 2026-04-27 00:01:28 UTC
+Previous Version: v1.16.91
+Git Commit: a735b31
 
-Changes Since v1.16.85:
+Changes Since v1.16.91:
 ───────────────────────────────────────────────────────────
 
-• v1.16.86: also sed-substitute $RPM_ROOT in distrobox spec
+• v1.16.92: GUI registration auto-elevates to write system config
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
