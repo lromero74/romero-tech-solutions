@@ -250,13 +250,18 @@ const WaylandRemoteControlClient = forwardRef<
   // WebCodecs VideoDecoder API. RFB stays the input transport;
   // this just paints frames on top.
   useEffect(() => {
-    if (!videoUrl) return;
+    if (!videoUrl) {
+      console.log('[wayland-h264] videoUrl not provided — using RFB display path');
+      return;
+    }
     // Capability gate: WebCodecs is Chrome/Edge stable, Safari TP,
     // Firefox 130+. On older browsers we silently skip and let
     // noVNC drive the display.
     if (typeof window === 'undefined' || typeof (window as unknown as { VideoDecoder?: unknown }).VideoDecoder === 'undefined') {
+      console.warn('[wayland-h264] window.VideoDecoder unavailable — falling back to RFB display');
       return;
     }
+    console.log('[wayland-h264] opening video WS:', videoUrl);
 
     const VideoDecoderCtor = (window as unknown as {
       VideoDecoder: new (init: { output: (frame: unknown) => void; error: (e: Error) => void }) => unknown;
@@ -297,6 +302,7 @@ const WaylandRemoteControlClient = forwardRef<
         if (!firstFrameSeen) {
           firstFrameSeen = true;
           setVideoActive(true);
+          console.log('[wayland-h264] first frame decoded —', f.codedWidth, 'x', f.codedHeight);
         }
       },
       error: (e: Error) => {
