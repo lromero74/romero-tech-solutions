@@ -391,21 +391,24 @@ router.post(
         `agent=${agent.device_name}/${agent_id} port=${port}`
       );
 
+      // Build the relay URL the dashboard's noVNC client connects
+      // to. The agent's command handler also dials this same audit
+      // ID's /agent endpoint as a reverse tunnel; the backend
+      // pairs them in waylandTunnelService.js. Browser-origin URL
+      // construction handled client-side via location.origin so
+      // the dev (localhost) and prod (api.) deployments both work.
+      // Backend just returns the path; dashboard prepends the wss
+      // host on its end.
+      const relayPath = `/ws/wayland-tunnel/${audit.id}/dashboard`;
+
       return res.json({
         success: true,
         audit_id: audit.id,
         device_name: agent.device_name,
         vnc_port: port,
-        // TODO(v1.19-rc): mint a real MeshCentral relay tunnel
-        // URL and return it here. Until then, the dashboard
-        // expects the operator to set up an SSH tunnel manually
-        // (or this only works on a flat LAN). The component's
-        // url prop accepts any wss/ws URL.
+        relay_path: relayPath,
+        // Kept for backward-compat with v1.19-alpha dashboards.
         relay_url: null,
-        relay_url_note:
-          'v1.19 alpha: relay-tunnel orchestration not yet wired. Use ' +
-          'an SSH-forwarded ws://localhost:6080 → fedora.local:6080 + ' +
-          'vnc-ws-bridge stack for now. See docs/wayland-remote-control-client.md.',
       });
     } catch (e) {
       return fail(res, 500, 'INTERNAL', 'Failed to initiate Wayland Remote Control session', e);

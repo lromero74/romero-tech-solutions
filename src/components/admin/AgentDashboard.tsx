@@ -585,10 +585,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (!data?.audit_id) {
           throw new Error((resp as any)?.message || 'Wayland Remote Control did not return an audit_id');
         }
+        // Build the wss URL noVNC connects to. Backend may return
+        // either relay_url (absolute) or relay_path (relative).
+        // Relative path is preferred because it implicitly uses
+        // the same host the dashboard is loaded from — works
+        // identically in dev (localhost) and prod (api.).
+        let relayUrl: string | null = data.relay_url ?? null;
+        if (!relayUrl && data.relay_path) {
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          relayUrl = `${proto}//${window.location.host}${data.relay_path}`;
+        }
         setRemoteControl({
           show: true,
           starting: false,
-          waylandRelayUrl: data.relay_url ?? null,
+          waylandRelayUrl: relayUrl,
           waylandRelayNote: data.relay_url_note,
           auditId: data.audit_id,
           deviceName: data.device_name || agent.device_name,

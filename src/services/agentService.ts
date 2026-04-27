@@ -781,6 +781,12 @@ class AgentService {
       audit_id: string;
       device_name: string;
       vnc_port: number;
+      // v1.19+ returns relay_path. Caller prepends location.origin
+      // (with http→ws / https→wss) to build the WS URL noVNC
+      // connects to. relay_url is the older absolute-URL field
+      // kept for backward compat; if both are present, relay_url
+      // wins.
+      relay_path?: string;
       relay_url: string | null;
       relay_url_note?: string;
     }>
