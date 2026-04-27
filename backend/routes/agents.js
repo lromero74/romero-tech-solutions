@@ -1485,14 +1485,15 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
 router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;
-    const { status, agent_version, os_version } = req.body;
+    const { status, agent_version, os_version, remote_control_enabled } = req.body;
 
-    // Update agent status and last_heartbeat. agent_version (v1.16.77+)
-    // and os_version (v1.16.87+) are included on every heartbeat
-    // from the daemon process so the dashboard can flag outdated
-    // builds and reflect post-Windows-Update OS changes without
-    // requiring re-registration. COALESCE preserves the prior
-    // value when an older agent (no field in payload) checks in.
+    // Update agent status and last_heartbeat. agent_version (v1.16.77+),
+    // os_version (v1.16.87+), and remote_control_enabled (v1.18.1+)
+    // are included on every heartbeat from the daemon process so the
+    // dashboard can flag outdated builds, reflect post-Windows-Update
+    // OS changes, and gray out the Remote Control button when the
+    // end-user has opted out. COALESCE preserves the prior value when
+    // an older agent (no field in payload) checks in.
     //
     // RETURNING gives us the post-update row so we can broadcast
     // the freshly-stored values. Either way the dashboard sees
@@ -1503,10 +1504,12 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
            status = COALESCE($2, status),
            agent_version = COALESCE($3, agent_version),
            os_version = COALESCE($4, os_version),
+           remote_control_enabled = COALESCE($5, remote_control_enabled),
            updated_at = NOW()
        WHERE id = $1
-       RETURNING device_name, status, agent_version, os_version, last_heartbeat`,
-      [agent_id, status || 'online', agent_version || null, os_version || null]
+       RETURNING device_name, status, agent_version, os_version, last_heartbeat, remote_control_enabled`,
+      [agent_id, status || 'online', agent_version || null, os_version || null,
+       (remote_control_enabled === true || remote_control_enabled === false) ? remote_control_enabled : null]
     );
 
     // Push the heartbeat-derived state to the admin dashboards in
@@ -1525,6 +1528,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
           deviceName: row.device_name,
           agentVersion: row.agent_version,
           osVersion: row.os_version,
+          remoteControlEnabled: row.remote_control_enabled,
         });
       } catch (broadcastErr) {
         console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
@@ -3090,6 +3094,7 @@ router.get('/', authMiddleware, async (req, res) => {
         ad.monitoring_enabled,
         ad.is_active,
         ad.agent_version,
+        ad.remote_control_enabled,
         ad.created_at,
         b.business_name,
         b.is_individual,
