@@ -66,6 +66,14 @@ interface AgentStatusUpdate {
   // remoteControlEnabled — heartbeated by agents v1.18.1+. When
   // false, AgentDashboard greys out the Remote Control button.
   remoteControlEnabled?: boolean;
+  // Linux display-server snapshot — heartbeated by agents v1.18.6+.
+  // The dashboard's Remote Control modal uses these to surface the
+  // MeshCentral Wayland limitation up-front instead of opening a
+  // session that would black-screen. Empty/undefined for non-Linux
+  // hosts and older agents.
+  displayServer?: 'x11' | 'wayland' | 'headless' | 'unknown';
+  xauthStatus?: 'ok' | 'missing' | 'unknown';
+  compositor?: string;
 }
 
 interface AgentMetricsUpdate {

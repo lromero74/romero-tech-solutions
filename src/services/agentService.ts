@@ -31,6 +31,14 @@ export interface AgentDevice {
   // Defaults true on the server side; older agents that don't send
   // the field preserve the existing DB value via COALESCE.
   remote_control_enabled?: boolean;
+  // Linux display-server snapshot (v1.18.6+ agents). Only meaningful
+  // for os_type=linux; null/undefined on macOS/Windows. The dashboard
+  // uses these to surface the MeshCentral Wayland limitation in the
+  // Remote Control modal instead of opening a session that would
+  // black-screen.
+  display_server?: 'x11' | 'wayland' | 'headless' | 'unknown' | null;
+  xauth_status?: 'ok' | 'missing' | 'unknown' | null;
+  compositor?: string | null;
   // Pending action commands (install_update, reboot_host) currently in
   // pending/delivered/executing status. Surfaced in the GET /api/agents
   // list response so the dashboard's "Update in progress" / "Reboot

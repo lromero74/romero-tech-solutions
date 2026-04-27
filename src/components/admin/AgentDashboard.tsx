@@ -205,6 +205,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     auditId?: string;
     deviceName?: string;
     error?: string;
+    // Pre-flight compatibility warning. When the target is a Linux
+    // host on Wayland (or an X11 host whose xauth is missing), we
+    // show a warning instead of opening an iframe that would
+    // black-screen. The "Proceed anyway" button on the warning
+    // calls back into handleStartRemoteControl with skipPreflight
+    // so the admin can override after reading the explanation.
+    preflight?: {
+      kind: 'wayland' | 'xauth-missing';
+      compositor?: string | null;
+      pendingAgent?: AgentDevice;
+    };
   }>({ show: false });
 
   // Get businesses and service locations for the edit modal
@@ -537,7 +548,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   // Initiate a remote-control session against an agent host.
   // Mints the MeshCentral session URL via the backend, then opens
   // the iframe modal.
-  const handleStartRemoteControl = async (agent: AgentDevice) => {
+  const handleStartRemoteControl = async (agent: AgentDevice, skipPreflight = false) => {
     if (!canRemoteControl) {
       setPermissionDenied({
         show: true,
@@ -545,6 +556,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         permission: 'manage.remote_control.enable',
       });
       return;
+    }
+    // Pre-flight Wayland / X-auth check on Linux hosts. Surfaces the
+    // limitation to the admin BEFORE opening the iframe — opening
+    // an iframe that black-screens then disconnects is a worse UX
+    // than a clear "this won't work and here's why" modal. Admin
+    // can still proceed via the modal's "Proceed anyway" button
+    // (skipPreflight=true) for cases where they know the agent is
+    // capable but the heartbeat snapshot is stale.
+    if (!skipPreflight && agent.os_type === 'linux') {
+      if (agent.display_server === 'wayland') {
+        setRemoteControl({
+          show: true,
+          starting: false,
+          deviceName: agent.device_name,
+          preflight: {
+            kind: 'wayland',
+            compositor: agent.compositor,
+            pendingAgent: agent,
+          },
+        });
+        return;
+      }
+      if (agent.display_server === 'x11' && agent.xauth_status === 'missing') {
+        setRemoteControl({
+          show: true,
+          starting: false,
+          deviceName: agent.device_name,
+          preflight: {
+            kind: 'xauth-missing',
+            pendingAgent: agent,
+          },
+        });
+        return;
+      }
     }
     setRemoteControl({ show: true, starting: true, deviceName: agent.device_name });
     try {
@@ -732,6 +777,14 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               // ?? preserves the existing value when older agents
               // (no field) heartbeat — same pattern as above.
               remote_control_enabled: update.remoteControlEnabled ?? agent.remote_control_enabled,
+              // Linux display-server snapshot (v1.18.6+). Same
+              // conditional pattern — older agents that don't
+              // send these fields preserve whatever was last
+              // stored, so a Linux host on Wayland keeps its
+              // wayland marker until that's no longer true.
+              display_server: update.displayServer ?? agent.display_server,
+              xauth_status: update.xauthStatus ?? agent.xauth_status,
+              compositor: update.compositor ?? agent.compositor,
             };
           }
           return agent;
@@ -2321,15 +2374,106 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             </button>
           </div>
 
-          {/* Body: starting spinner / error / iframe */}
+          {/* Body: preflight warning / starting spinner / error / iframe */}
           <div className="flex-1 relative bg-gray-800">
-            {remoteControl.starting && (
+            {remoteControl.preflight?.kind === 'wayland' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
+                <AlertTriangle className="w-10 h-10 text-amber-400 mb-3" />
+                <div className="text-base font-semibold mb-2">
+                  Wayland session detected — Remote Control will not display
+                </div>
+                <div className="text-sm text-gray-300 max-w-2xl text-center space-y-2">
+                  <p>
+                    <strong>{remoteControl.deviceName || 'This Linux host'}</strong> is running a
+                    {remoteControl.preflight.compositor ? ` ${remoteControl.preflight.compositor} ` : ' '}
+                    Wayland session. The current Remote Control engine (MeshCentral KVM)
+                    only supports X11 — opening a session here would result in a black screen
+                    or a "configure to use Xorg" error.
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    Native Wayland support (xdg-desktop-portal + PipeWire bridge) is planned
+                    for a future release. In the meantime, you have three options:
+                  </p>
+                  <ul className="text-left text-gray-300 text-sm list-disc list-inside max-w-xl mx-auto space-y-1">
+                    <li>
+                      Have the end-user log out and pick "GNOME on Xorg" (or equivalent) at
+                      the login screen — the agent will report <code>x11</code> on its next
+                      heartbeat and Remote Control will work.
+                    </li>
+                    <li>
+                      SSH into the host and use a CLI-based remote tool instead.
+                    </li>
+                    <li>
+                      Proceed anyway — useful only if you suspect the heartbeat snapshot is
+                      stale and the host has actually switched to X11.
+                    </li>
+                  </ul>
+                </div>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setRemoteControl({ show: false })}
+                    className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const a = remoteControl.preflight?.pendingAgent;
+                      if (a) handleStartRemoteControl(a, true);
+                    }}
+                    className="px-4 py-2 text-sm rounded bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    Proceed anyway
+                  </button>
+                </div>
+              </div>
+            )}
+            {remoteControl.preflight?.kind === 'xauth-missing' && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
+                <AlertTriangle className="w-10 h-10 text-amber-400 mb-3" />
+                <div className="text-base font-semibold mb-2">
+                  X-auth not yet configured — Remote Control may show a black screen
+                </div>
+                <div className="text-sm text-gray-300 max-w-2xl text-center space-y-2">
+                  <p>
+                    <strong>{remoteControl.deviceName || 'This Linux host'}</strong> is on X11,
+                    but the agent's helper hasn't yet authorized root to read the user's X
+                    server (this happens automatically on the first login after the v1.18.6
+                    upgrade).
+                  </p>
+                  <p className="text-gray-400 text-xs">
+                    Have the end-user log out of their desktop and log back in once. The
+                    next heartbeat will report <code>xauth=ok</code> and this warning will
+                    go away. If you can't wait, proceeding anyway might still work — but
+                    expect a black screen if it doesn't.
+                  </p>
+                </div>
+                <div className="mt-6 flex gap-3">
+                  <button
+                    onClick={() => setRemoteControl({ show: false })}
+                    className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const a = remoteControl.preflight?.pendingAgent;
+                      if (a) handleStartRemoteControl(a, true);
+                    }}
+                    className="px-4 py-2 text-sm rounded bg-amber-600 text-white hover:bg-amber-700"
+                  >
+                    Proceed anyway
+                  </button>
+                </div>
+              </div>
+            )}
+            {remoteControl.starting && !remoteControl.preflight && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
                 <RefreshCw className="w-8 h-8 animate-spin mb-3" />
                 <div className="text-sm">Establishing session — usually takes ~5 seconds…</div>
               </div>
             )}
-            {remoteControl.error && (
+            {remoteControl.error && !remoteControl.preflight && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
                 <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
                 <div className="text-base font-semibold mb-2">Could not start remote-control session</div>
@@ -2342,7 +2486,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 </button>
               </div>
             )}
-            {remoteControl.iframeUrl && !remoteControl.error && (
+            {remoteControl.iframeUrl && !remoteControl.error && !remoteControl.preflight && (
               <iframe
                 src={remoteControl.iframeUrl}
                 className="w-full h-full border-0"
