@@ -801,7 +801,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       // release ships mid-update, the agent reaches v(N) but
       // latest is now v(N+1) and the badge would stick forever
       // even though the install obviously succeeded.
-      if (update.agentVersion) {
+      // Prefer server-derived openCommandTypes (v1.20+ backend) over
+      // the legacy version-comparison heuristic. The version compare
+      // gets stuck whenever the heartbeat lands AFTER the install
+      // already advanced (Albondigas 2026-04-27): seeding picks up
+      // the new version as the "from" version and the broadcast then
+      // compares it against itself. With openCommandTypes we just
+      // mirror server state directly.
+      if (update.openCommandTypes !== undefined) {
+        setUpdateInProgress((prev) => {
+          if (!prev.has(update.agentId)) return prev;
+          if (update.openCommandTypes!.includes('install_update')) return prev;
+          const next = new Map(prev);
+          next.delete(update.agentId);
+          return next;
+        });
+        setRebootScheduled((prev) => {
+          if (!(update.agentId in prev)) return prev;
+          if (update.openCommandTypes!.includes('reboot_host')) return prev;
+          const next = { ...prev };
+          delete next[update.agentId];
+          return next;
+        });
+      } else if (update.agentVersion) {
+        // Legacy path for older backends that don't send
+        // openCommandTypes. Same behavior as before.
         setUpdateInProgress((prev) => {
           if (!prev.has(update.agentId)) return prev;
           const fromV = prev.get(update.agentId);

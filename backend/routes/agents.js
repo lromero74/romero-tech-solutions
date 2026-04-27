@@ -1553,29 +1553,21 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
     // effort — no broadcast = no UX bug, just no auto-refresh.
     if (updateResult.rows.length > 0) {
       const row = updateResult.rows[0];
-      try {
-        websocketService.broadcastAgentStatusUpdate({
-          agentId: agent_id,
-          status: row.status,
-          lastHeartbeat: row.last_heartbeat,
-          deviceName: row.device_name,
-          agentVersion: row.agent_version,
-          osVersion: row.os_version,
-          remoteControlEnabled: row.remote_control_enabled,
-          displayServer: row.display_server,
-          xauthStatus: row.xauth_status,
-          compositor: row.compositor,
-        });
-      } catch (broadcastErr) {
-        console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
-      }
-
       // Sweep stale 'executing' install_update rows for this agent.
       // The agent leaves them in 'executing' on purpose (so a
       // dashboard refresh keeps the "Update in progress" badge
       // alive while the install runs); we mark them 'completed'
       // once the agent comes back heartbeating, so the badge
       // doesn't stick forever after the upgrade.
+      //
+      // Order matters: sweep BEFORE the websocket broadcast so the
+      // openCommandTypes derivation below sees the post-sweep state.
+      // Without this ordering, the dashboard's local
+      // `updateInProgress` Map sees the broadcast first (still
+      // carrying the stale "executing" hint) and never clears,
+      // because the agent_version comparison the clear logic relies
+      // on is identity if the heartbeat lands AFTER the install
+      // already advanced (Albondigas 2026-04-27 incident).
       //
       // 90s is the right threshold: long enough to cover a typical
       // dpkg/rpm install + postinst (3s grace + ~30s install +
@@ -1603,6 +1595,53 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
         );
       } catch (sweepErr) {
         console.warn('⚠ Failed to sweep stale install_update rows:', sweepErr.message);
+      }
+
+      // Re-derive the open-command-types set AFTER the sweep so the
+      // dashboard's badges (Update in progress / Reboot scheduled)
+      // can clear from server truth instead of sticky local state.
+      // Without this signal, the dashboard's local updateInProgress
+      // Map disagrees with reality whenever the version-comparison
+      // clear logic happens to compare the agent's just-heartbeated
+      // version against itself (the case that bit Albondigas
+      // 2026-04-27 — the install completed via .pkg before the
+      // dashboard's first post-update heartbeat broadcast landed,
+      // so the seeding picked up the new version as the "from"
+      // version and the badge stuck forever).
+      let openCommandTypes = [];
+      try {
+        const openResult = await query(
+          `SELECT DISTINCT command_type
+             FROM agent_commands
+            WHERE agent_device_id = $1
+              AND status IN ('pending', 'delivered', 'executing')
+              AND command_type IN ('install_update', 'reboot_host')`,
+          [agent_id]
+        );
+        openCommandTypes = openResult.rows.map(r => r.command_type);
+      } catch (e) {
+        // Read failure here doesn't block the heartbeat — the
+        // dashboard simply falls back to the (stale) local state
+        // and a page refresh fixes it.
+        console.warn('⚠ Failed to derive openCommandTypes:', e.message);
+      }
+
+      try {
+        websocketService.broadcastAgentStatusUpdate({
+          agentId: agent_id,
+          status: row.status,
+          lastHeartbeat: row.last_heartbeat,
+          deviceName: row.device_name,
+          agentVersion: row.agent_version,
+          osVersion: row.os_version,
+          remoteControlEnabled: row.remote_control_enabled,
+          displayServer: row.display_server,
+          xauthStatus: row.xauth_status,
+          compositor: row.compositor,
+          openCommandTypes,
+        });
+      } catch (broadcastErr) {
+        console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
       }
     }
 

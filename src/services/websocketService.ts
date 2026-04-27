@@ -74,6 +74,14 @@ interface AgentStatusUpdate {
   displayServer?: 'x11' | 'wayland' | 'headless' | 'unknown';
   xauthStatus?: 'ok' | 'missing' | 'unknown';
   compositor?: string;
+  // Server-derived set of command types still open for this agent
+  // (subset of {'install_update', 'reboot_host'}) AFTER the
+  // heartbeat-sweep ran. The dashboard uses this as the source of
+  // truth for the "Update in progress" / "Reboot scheduled"
+  // badges instead of relying on its sticky local Map state.
+  // Absent from older backends — dashboard falls back to local
+  // state in that case (existing behavior).
+  openCommandTypes?: Array<'install_update' | 'reboot_host'>;
 }
 
 interface AgentMetricsUpdate {
