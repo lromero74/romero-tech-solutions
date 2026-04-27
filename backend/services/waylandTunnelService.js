@@ -95,23 +95,23 @@ function getPair(auditId) {
 function pipeFrames(from, to, label) {
   let totalBytes = 0;
   let messageCount = 0;
-  let lastReportedAt = Date.now();
+  console.log(`[waylandTunnel] ${label} pipe attached`);
   from.on('message', (data, isBinary) => {
-    if (to.readyState !== to.OPEN) return;
-    // Always forward as binary — RFB doesn't use text frames.
-    // Some clients send text "ping" probes; we just drop those.
+    if (to.readyState !== to.OPEN) {
+      console.warn(`[waylandTunnel] ${label} drop msg (len=${data.length}): peer not OPEN, state=${to.readyState}`);
+      return;
+    }
     if (!isBinary) {
-      console.warn(`[waylandTunnel] ${label} dropping non-binary frame (len=${data.length})`);
+      console.warn(`[waylandTunnel] ${label} drop non-binary frame (len=${data.length})`);
       return;
     }
     totalBytes += data.length;
     messageCount++;
-    // Diagnostic: log throughput every ~2s. Helps confirm the
-    // tunnel is actually moving bytes when noVNC appears stuck.
-    const now = Date.now();
-    if (now - lastReportedAt > 2000) {
-      console.log(`[waylandTunnel] ${label} ${messageCount} msgs, ${totalBytes} bytes total`);
-      lastReportedAt = now;
+    // Log first 5 messages individually, then every ~2s. Useful
+    // for debugging RFB handshake stalls — first 5 cover the
+    // version exchange + security handshake + ServerInit.
+    if (messageCount <= 5) {
+      console.log(`[waylandTunnel] ${label} msg #${messageCount} (len=${data.length}, total=${totalBytes})`);
     }
     try {
       to.send(data, { binary: true });
