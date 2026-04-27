@@ -325,8 +325,16 @@ const WaylandRemoteControlClient = forwardRef<
 
     const ws = new WebSocket(videoUrl);
     ws.binaryType = 'arraybuffer';
+    let messageCount = 0;
+    ws.onopen = () => {
+      console.log('[wayland-h264] WS open');
+    };
     ws.onmessage = (ev: MessageEvent) => {
       const data = new Uint8Array(ev.data as ArrayBuffer);
+      messageCount++;
+      if (messageCount <= 3) {
+        console.log('[wayland-h264] WS msg #' + messageCount + ' len=' + data.length);
+      }
       // Append to pending buffer.
       const merged = new Uint8Array(pending.length + data.length);
       merged.set(pending, 0);
@@ -349,7 +357,8 @@ const WaylandRemoteControlClient = forwardRef<
       console.error('[wayland-h264] WS error:', e);
       setVideoActive(false);
     };
-    ws.onclose = () => {
+    ws.onclose = (e) => {
+      console.log('[wayland-h264] WS close code=' + e.code + ' reason=' + e.reason + ' wasClean=' + e.wasClean);
       setVideoActive(false);
     };
 
