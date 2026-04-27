@@ -249,6 +249,56 @@ export async function mintLoginToken(expirySeconds = 60) {
 }
 
 /**
+ * Remove a device from MeshCentral. Used when an agent is
+ * soft-deleted from our dashboard so the corresponding MeshCentral
+ * record doesn't linger as an orphan device the technician could
+ * still see / connect to.
+ *
+ * Looks up the device by name (matches our agent_devices.device_name
+ * == MeshAgent's reported computer name), then issues a `removedevice`
+ * action. If multiple meshes contain the same device-named node we
+ * remove all matches (defense-in-depth — an MSP could have multiple
+ * customers with a "WinVM" but each is in their own mesh).
+ *
+ * Best-effort: returns the count of removed nodes. Caller should log
+ * + continue on errors rather than block the parent operation.
+ */
+export async function removeDeviceByName(deviceName) {
+  if (!deviceName) return { removed: 0 };
+  const ws = await openControlWebSocket();
+  try {
+    const list = await sendActionAndWait(ws, { action: 'nodes' });
+    const matches = [];
+    for (const meshId of Object.keys(list?.nodes || {})) {
+      for (const n of list.nodes[meshId]) {
+        if (n && n.name === deviceName) {
+          matches.push(n._id);
+        }
+      }
+    }
+    if (matches.length === 0) {
+      return { removed: 0 };
+    }
+    for (const nodeId of matches) {
+      try {
+        // 'removedevice' is the canonical action; send + don't wait
+        // for a strict response (MeshCentral acks via an event on
+        // the socket, not a responseid echo). The action propagates
+        // through the agent + DB regardless.
+        ws.send(JSON.stringify({ action: 'removedevice', nodeids: [nodeId] }));
+      } catch (e) {
+        console.warn(`[meshcentralService] removedevice failed for ${nodeId}:`, e.message);
+      }
+    }
+    // Small grace so the writes flush before we close.
+    await new Promise(r => setTimeout(r, 250));
+    return { removed: matches.length, nodeIds: matches };
+  } finally {
+    ws.close();
+  }
+}
+
+/**
  * Force-disconnect an in-flight remote session.
  * sessionId is MeshCentral's internal session identifier we stored
  * in remote_control_sessions.meshcentral_session_id when we minted
@@ -273,5 +323,6 @@ export default {
   listDeviceGroups,
   listDevices,
   mintLoginToken,
+  removeDeviceByName,
   disconnectSession,
 };

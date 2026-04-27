@@ -7,6 +7,7 @@ import { authenticateAgent, requireAgentMatch } from '../middleware/agentAuthMid
 import { authMiddleware, requireEmployee } from '../middleware/authMiddleware.js';
 import jwt from 'jsonwebtoken';
 import { websocketService } from '../services/websocketService.js';
+import meshcentralService from '../services/meshcentralService.js';
 import {
   normalizeProgressPayload,
   buildProgressWsMessage,
@@ -3492,6 +3493,21 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
     );
 
     console.log(`🗑️  Agent removed (soft deleted): ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+
+    // Cleanup: also remove the matching node from MeshCentral so
+    // the orphan device record doesn't linger as a connectable
+    // node a technician could still reach. Best-effort — if
+    // MeshCentral is down or the node was never enrolled (free
+    // tier, never enabled remote control), the soft-delete still
+    // succeeds and we just log.
+    try {
+      const result = await meshcentralService.removeDeviceByName(agent.device_name);
+      if (result.removed > 0) {
+        console.log(`🗑️  MeshCentral cleanup: removed ${result.removed} node(s) named "${agent.device_name}"`);
+      }
+    } catch (mcErr) {
+      console.warn(`⚠ MeshCentral cleanup for "${agent.device_name}" failed (non-fatal):`, mcErr.message);
+    }
 
     res.json({
       success: true,
