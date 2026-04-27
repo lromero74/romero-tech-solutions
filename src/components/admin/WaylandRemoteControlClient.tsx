@@ -91,6 +91,23 @@ const WaylandRemoteControlClient = forwardRef<
     [],
   );
 
+  // Pin callbacks in refs so the connection effect can be keyed
+  // on `url` alone. If we depended on the callbacks directly, every
+  // parent re-render that creates new arrow-function identities
+  // (which is what AgentDashboard does for onDisconnect, and which
+  // happens on every agent metrics WS broadcast — i.e. every few
+  // seconds) would re-run the effect, calling rfb.disconnect() and
+  // trying to reopen the WS with an already-consumed one-shot ticket.
+  // That manifested as "PAIRED" then 1006 close ~13s later.
+  const onConnectRef = useRef(onConnect);
+  const onDisconnectRef = useRef(onDisconnect);
+  const onSecurityFailureRef = useRef(onSecurityFailure);
+  useEffect(() => {
+    onConnectRef.current = onConnect;
+    onDisconnectRef.current = onDisconnect;
+    onSecurityFailureRef.current = onSecurityFailure;
+  }, [onConnect, onDisconnect, onSecurityFailure]);
+
   useEffect(() => {
     if (!containerRef.current) {
       return;
@@ -120,24 +137,18 @@ const WaylandRemoteControlClient = forwardRef<
 
     const handleConnect = () => {
       setState('connected');
-      if (onConnect) {
-        onConnect();
-      }
+      onConnectRef.current?.();
     };
     const handleDisconnect = (ev: Event) => {
       const clean = (ev as { detail?: { clean?: boolean } }).detail?.clean ?? false;
       setState('disconnected');
-      if (onDisconnect) {
-        onDisconnect(clean);
-      }
+      onDisconnectRef.current?.(clean);
     };
     const handleSecurityFailure = (ev: Event) => {
       const detail = (ev as { detail?: { status?: number; reason?: string } }).detail ?? {};
       setState('error');
       setErrorMessage(detail.reason ?? 'security failure');
-      if (onSecurityFailure) {
-        onSecurityFailure(detail.status ?? -1, detail.reason ?? '');
-      }
+      onSecurityFailureRef.current?.(detail.status ?? -1, detail.reason ?? '');
     };
 
     rfb.addEventListener('connect', handleConnect);
@@ -155,7 +166,9 @@ const WaylandRemoteControlClient = forwardRef<
       }
       rfbRef.current = null;
     };
-  }, [url, onConnect, onDisconnect, onSecurityFailure]);
+    // url is the only thing that should retrigger a reconnect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [url]);
 
   return (
     <div className={className} style={{ position: 'relative', width: '100%', height: '100%' }}>
