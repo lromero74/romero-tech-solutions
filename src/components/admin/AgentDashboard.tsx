@@ -193,6 +193,20 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [rebootTime, setRebootTime] = useState<string>(''); // HH:MM 24h
   const [rebootMessage, setRebootMessage] = useState<string>('Scheduled reboot from RTS dashboard');
 
+  // Remote-control session state. iframeUrl + auditId are populated
+  // when /remote-control/agents/:id/start succeeds; the iframe is
+  // shown until the user clicks Disconnect (which fires
+  // /remote-control/sessions/:id/end). starting flag covers the
+  // ~1s gap between click and modal open.
+  const [remoteControl, setRemoteControl] = useState<{
+    show: boolean;
+    starting?: boolean;
+    iframeUrl?: string;
+    auditId?: string;
+    deviceName?: string;
+    error?: string;
+  }>({ show: false });
+
   // Get businesses and service locations for the edit modal
   const { businesses, serviceLocations } = useAdminData();
 
@@ -206,6 +220,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   // refresh_patches commands — install_update is the same kind of
   // remote action so it should follow the same rule.
   const canSendCommands = checkPermission('send.agent_commands.enable');
+  // Higher-privilege gate for browser-based remote control
+  // (equivalent to physical-console access). Granted to admin +
+  // executive only (see migration 074).
+  const canRemoteControl = checkPermission('manage.remote_control.enable');
 
   // Permission denied modal
   const [permissionDenied, setPermissionDenied] = useState<{
@@ -513,6 +531,57 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     } finally {
       setActionInProgress(null);
       setConfirmInstallUpdate({ show: false });
+    }
+  };
+
+  // Initiate a remote-control session against an agent host.
+  // Mints the MeshCentral session URL via the backend, then opens
+  // the iframe modal.
+  const handleStartRemoteControl = async (agent: AgentDevice) => {
+    if (!canRemoteControl) {
+      setPermissionDenied({
+        show: true,
+        action: 'Remote Control',
+        permission: 'manage.remote_control.enable',
+      });
+      return;
+    }
+    setRemoteControl({ show: true, starting: true, deviceName: agent.device_name });
+    try {
+      const resp = await agentService.requestRemoteControl(agent.id);
+      const data: any = (resp as any)?.data || resp;
+      if (!data?.session_url) {
+        throw new Error((resp as any)?.message || 'No session URL returned');
+      }
+      setRemoteControl({
+        show: true,
+        starting: false,
+        iframeUrl: data.session_url,
+        auditId: data.audit_id,
+        deviceName: data.device_name || agent.device_name,
+      });
+    } catch (e: any) {
+      setRemoteControl({
+        show: true,
+        starting: false,
+        deviceName: agent.device_name,
+        error: e?.response?.data?.message || e?.message || 'Failed to start remote-control session',
+      });
+    }
+  };
+
+  // Close the remote-control modal AND notify the backend so the
+  // audit row gets ended_at/disconnect_reason set. Best-effort —
+  // network failure on /end doesn't block the UI close.
+  const handleEndRemoteControl = async () => {
+    const auditId = remoteControl.auditId;
+    setRemoteControl({ show: false });
+    if (auditId) {
+      try {
+        await agentService.requestEndRemoteControl(auditId);
+      } catch (e) {
+        console.warn('Failed to end remote-control session cleanly:', e);
+      }
     }
   };
 
@@ -1662,6 +1731,16 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                               <RotateCw className="w-4 h-4" />
                             </button>
                           )}
+                          {canRemoteControl && agent.status === 'online' && (
+                            <button
+                              onClick={() => handleStartRemoteControl(agent)}
+                              disabled={remoteControl.starting}
+                              className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Remote control (browser desktop session)"
+                            >
+                              <Monitor className="w-4 h-4" />
+                            </button>
+                          )}
                           {canEditAgents && (
                             <button
                               onClick={() => handleEditAgent(agent)}
@@ -2191,6 +2270,65 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 {actionInProgress === confirmInstallUpdate.agentId ? 'Queueing…' : 'Update Agent'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remote Control Session Modal — full-viewport iframe */}
+      {remoteControl.show && (
+        <div className="fixed inset-0 z-50 bg-black bg-opacity-90 flex flex-col">
+          {/* Top bar: device name + technician indicator + disconnect button */}
+          <div className="flex items-center justify-between bg-gray-900 text-white px-4 py-2 border-b border-indigo-500">
+            <div className="flex items-center gap-3">
+              <Monitor className="w-5 h-5 text-indigo-400" />
+              <div>
+                <div className="text-sm font-semibold">
+                  Remote Control: {remoteControl.deviceName || 'Device'}
+                </div>
+                <div className="text-xs text-gray-400">
+                  Live session via MeshCentral · session id {remoteControl.auditId?.slice(0, 8) || '…'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={handleEndRemoteControl}
+              className="px-4 py-1.5 text-sm font-semibold rounded bg-red-600 text-white hover:bg-red-700 flex items-center gap-2"
+              title="End the remote-control session"
+            >
+              <X className="w-4 h-4" />
+              Disconnect
+            </button>
+          </div>
+
+          {/* Body: starting spinner / error / iframe */}
+          <div className="flex-1 relative bg-gray-800">
+            {remoteControl.starting && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
+                <RefreshCw className="w-8 h-8 animate-spin mb-3" />
+                <div className="text-sm">Establishing session — usually takes ~5 seconds…</div>
+              </div>
+            )}
+            {remoteControl.error && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
+                <AlertTriangle className="w-10 h-10 text-red-400 mb-3" />
+                <div className="text-base font-semibold mb-2">Could not start remote-control session</div>
+                <div className="text-sm text-gray-300 max-w-lg text-center">{remoteControl.error}</div>
+                <button
+                  onClick={() => setRemoteControl({ show: false })}
+                  className="mt-6 px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
+                >
+                  Close
+                </button>
+              </div>
+            )}
+            {remoteControl.iframeUrl && !remoteControl.error && (
+              <iframe
+                src={remoteControl.iframeUrl}
+                className="w-full h-full border-0"
+                title={`Remote control of ${remoteControl.deviceName || 'device'}`}
+                allow="fullscreen; clipboard-read; clipboard-write"
+              />
+            )}
           </div>
         </div>
       )}

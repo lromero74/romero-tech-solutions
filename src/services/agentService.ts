@@ -709,6 +709,65 @@ class AgentService {
   }
 
   /**
+   * Start a remote-control session against an agent host. Backend
+   * mints a short-lived MeshCentral login URL the dashboard opens
+   * in an iframe. Auth: requires `manage.remote_control.enable`
+   * permission (granted to admin + executive roles by default).
+   *
+   * On success the response carries:
+   *   - session_url: the MeshCentral URL with login token embedded
+   *   - expires_at:  ISO timestamp when the URL stops working (~5 min)
+   *   - audit_id:    UUID of the remote_control_sessions row, used
+   *                  to call requestEndRemoteControl() to force-end
+   *
+   * Failure modes returned with explicit codes:
+   *   AGENT_NOT_FOUND      — bad agentId or soft-deleted device
+   *   AGENT_OFFLINE        — agent isn't currently heartbeating
+   *   FEATURE_DISABLED     — backend feature flag is off
+   *   MESHCENTRAL_UNREACHABLE — backend couldn't reach MeshCentral
+   */
+  async requestRemoteControl(agentId: string): Promise<
+    ApiResponse<{
+      session_url: string;
+      expires_at: string;
+      audit_id: string;
+      device_name: string;
+    }>
+  > {
+    return apiService.post(`/remote-control/agents/${agentId}/start`, {});
+  }
+
+  /**
+   * Force-end an in-flight remote-control session. The dashboard
+   * calls this when the technician clicks Disconnect, AND when the
+   * iframe modal is closed (any way). Idempotent — already-ended
+   * sessions return success.
+   *
+   * auditId is the UUID returned from requestRemoteControl.
+   */
+  async requestEndRemoteControl(auditId: string): Promise<
+    ApiResponse<{ ended_at: string; duration_seconds: number }>
+  > {
+    return apiService.post(`/remote-control/sessions/${auditId}/end`, {});
+  }
+
+  /**
+   * Health check for the MeshCentral integration. Used by the
+   * admin diagnostics page to surface "Remote Control unavailable"
+   * before a technician clicks the button and gets a confusing
+   * 502.
+   */
+  async getRemoteControlServerHealth(): Promise<
+    ApiResponse<{
+      status: string;
+      meshcentral_version: string;
+      device_groups_visible: number;
+    }>
+  > {
+    return apiService.get('/remote-control/server-health');
+  }
+
+  /**
    * Get the current "latest" agent version from the download manifest
    * (version.json on the API host's static download directory). Used
    * to compute the "Update available" badge in the AgentDashboard
