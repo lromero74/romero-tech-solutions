@@ -2464,8 +2464,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             </button>
           </div>
 
-          {/* Body: preflight warning / starting spinner / error / iframe / Wayland noVNC */}
-          <div className="flex-1 relative bg-gray-800">
+          {/* Body: preflight warning / starting spinner / error / iframe / Wayland noVNC.
+              min-h-0 + overflow-hidden are the magic combo that lets a
+              flex-1 child of a flex-col parent actually shrink to fit
+              the available space (without it, the body's intrinsic
+              content size — driven by the noVNC canvas — wins and
+              pushes siblings off-screen). */}
+          <div className="flex-1 relative bg-gray-800 min-h-0 overflow-hidden">
             {/* Wayland session: render noVNC against the relay URL.
                 When relayUrl is null (v1.19 alpha) we surface the
                 note explaining the operator needs an SSH tunnel. */}
