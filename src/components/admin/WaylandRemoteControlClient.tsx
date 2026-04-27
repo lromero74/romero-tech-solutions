@@ -426,9 +426,14 @@ const WaylandRemoteControlClient = forwardRef<
           width: '100%',
           height: '100%',
           background: 'rgb(40, 40, 40)',
-          // Visibility, not display:none — the canvas needs to keep
-          // its layout box so noVNC's pointer events still fire.
-          visibility: videoActive ? 'hidden' : 'visible',
+          // opacity: 0 (not visibility: hidden) — visibility: hidden
+          // blocks pointer events, which means noVNC's canvas
+          // wouldn't receive mouse/keyboard input when the video
+          // overlay is active. opacity hides the noVNC pixels
+          // while keeping the canvas hit-testable; the video
+          // overlay above has pointer-events:none so events fall
+          // through to noVNC underneath.
+          opacity: videoActive ? 0 : 1,
         }}
       />
       {/* Always render the video canvas. Earlier we conditionally
