@@ -81,7 +81,21 @@ const TICKET_TTL_MS = 60_000;
 function getPair(auditId) {
   let p = pairs.get(auditId);
   if (!p) {
-    p = { agent: null, dashboard: null, parkedTimer: null };
+    p = {
+      agent: null,
+      dashboard: null,
+      parkedTimer: null,
+      // Pre-pair message buffers. The agent typically connects
+      // first and immediately sends RFB version greeting bytes
+      // ("RFB 003.008\n") before the dashboard's WS even opens.
+      // Without buffering, those early bytes hit a connected ws
+      // with no 'message' listener attached yet and are silently
+      // dropped by Node's `ws` library, which leaves noVNC stuck
+      // at "Connecting…" because the version greeting never
+      // arrived.
+      bufferedFromAgent: [],
+      bufferedFromDashboard: [],
+    };
     pairs.set(auditId, p);
   }
   return p;
@@ -373,6 +387,20 @@ function handleConnection(ws, auditId, role) {
     console.warn(`[waylandTunnel] ${role} error for audit=${auditId}:`, e.message);
   });
 
+  // Pre-pair buffer: capture any incoming bytes before the
+  // counterpart connects so we don't lose them. This listener
+  // gets removed and replaced by the real pipeFrames listener
+  // once both sides are present.
+  const bufferKey = role === 'agent' ? 'bufferedFromAgent' : 'bufferedFromDashboard';
+  const preBufRef = role === 'agent' ? '_agentPreBuf' : '_dashboardPreBuf';
+  const preBuf = (data, isBinary) => {
+    if (!isBinary) return;
+    pair[bufferKey].push(data);
+    console.log(`[waylandTunnel] ${role} pre-pair buffer +${data.length} bytes (total queued: ${pair[bufferKey].length} msgs)`);
+  };
+  ws.on('message', preBuf);
+  pair[preBufRef] = preBuf;
+
   // Both sides present? Pipe.
   if (pair.agent && pair.dashboard) {
     if (pair.parkedTimer) {
@@ -380,6 +408,39 @@ function handleConnection(ws, auditId, role) {
       pair.parkedTimer = null;
     }
     console.log(`[waylandTunnel] PAIRED audit=${auditId}`);
+    // Detach the pre-pair buffering listeners on both sides so
+    // pipeFrames takes over cleanly.
+    if (pair._agentPreBuf) {
+      pair.agent.off('message', pair._agentPreBuf);
+      pair._agentPreBuf = null;
+    }
+    if (pair._dashboardPreBuf) {
+      pair.dashboard.off('message', pair._dashboardPreBuf);
+      pair._dashboardPreBuf = null;
+    }
+
+    // Replay any buffered bytes BEFORE attaching pipeFrames so
+    // they go out in the right order.
+    for (const msg of pair.bufferedFromAgent) {
+      if (pair.dashboard.readyState === pair.dashboard.OPEN) {
+        try { pair.dashboard.send(msg, { binary: true }); } catch (e) {
+          console.warn('[waylandTunnel] replay agent→dashboard error:', e.message);
+        }
+      }
+    }
+    for (const msg of pair.bufferedFromDashboard) {
+      if (pair.agent.readyState === pair.agent.OPEN) {
+        try { pair.agent.send(msg, { binary: true }); } catch (e) {
+          console.warn('[waylandTunnel] replay dashboard→agent error:', e.message);
+        }
+      }
+    }
+    if (pair.bufferedFromAgent.length || pair.bufferedFromDashboard.length) {
+      console.log(`[waylandTunnel] replayed ${pair.bufferedFromAgent.length} agent + ${pair.bufferedFromDashboard.length} dashboard pre-pair msgs`);
+    }
+    pair.bufferedFromAgent = [];
+    pair.bufferedFromDashboard = [];
+
     pipeFrames(pair.agent, pair.dashboard, 'agent→dashboard');
     pipeFrames(pair.dashboard, pair.agent, 'dashboard→agent');
     // Mark the audit row paired-at so dashboards can show a
