@@ -105,19 +105,26 @@ router.post(
           new Error(JSON.stringify(tokenResp)));
       }
 
-      // 3. Build the iframe URL. MeshCentral's login-token URL format
-      // is: https://<server>/?login=<base64(name:pass)>&node=<nodeid>
-      // The node= parameter pre-selects the device so the iframe
-      // lands on the device's page rather than the My Devices home.
+      // 3. Build the iframe URL.
+      //
+      // MeshCentral supports several URL params after login:
+      //   ?login=<base64(user:pass)>      — auto-login
+      //   &gotodevicename=<name>          — deep-link by device name
+      //                                     (matched against nodes[].name)
+      //   &viewmode=11                    — land on the Desktop tab
+      //                                     directly (1=MyDevices, 10=info,
+      //                                     11=Desktop, 12=Terminal, etc.)
+      //
+      // We use gotodevicename rather than gotonode because the
+      // agent device_name maps cleanly to MeshCentral's node name
+      // (the MeshAgent installer registers under the host's
+      // computer name) — no extra lookup needed.
       const meshUrl = process.env.MESHCENTRAL_URL ||
         'https://mesh.romerotechsolutions.com';
       const credBlob = Buffer.from(`${tokenName}:${tokenPass}`, 'utf8').toString('base64');
-      // Note: we don't have the agent's MeshCentral node id stored
-      // anywhere yet — Phase 3 will plumb that through. For now the
-      // iframe lands on My Devices and the technician picks the
-      // device. v2 acceptance criterion is to land directly on the
-      // device's Desktop tab.
-      const sessionUrl = `${meshUrl}/?login=${encodeURIComponent(credBlob)}`;
+      const sessionUrl = `${meshUrl}/?login=${encodeURIComponent(credBlob)}` +
+        `&gotodevicename=${encodeURIComponent(agent.device_name)}` +
+        `&viewmode=11`;
 
       // 4. INSERT audit row.
       const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
