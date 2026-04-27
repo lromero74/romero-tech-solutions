@@ -332,11 +332,13 @@ router.post(
       );
 
       // 4. Poll the command row for completion. Daemon poll
-      // interval is ~5s, command itself takes ~10s once running
-      // (consent dialog + gst init), so a 90s overall budget is
-      // plenty. If the user denies the dialog the command will
-      // fail and we surface the error.
-      const deadline = Date.now() + 90_000;
+      // 240s budget covers worst-case path: the agent picks up
+      // commands on its 60s heartbeat tick, the user can take up
+      // to 120s to find and click the GNOME consent dialog, plus
+      // ~10s for screencast-live's PipeWire+gst pipeline to come
+      // up. Earlier 90s was sized for an in-process command queue
+      // ("interval ~5s") that doesn't reflect the agent reality.
+      const deadline = Date.now() + 240_000;
       let port = null;
       let cmdErr = null;
       while (Date.now() < deadline) {
