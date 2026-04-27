@@ -441,11 +441,28 @@ const WaylandRemoteControlClient = forwardRef<
     }
     console.log('[wayland-audio] opening audio WS:', audioUrl);
 
+    // Per-effect "alive" flag. React 18's strict mode (and various
+    // re-render scenarios) can fire effect cleanup → re-run while
+    // the previous instance is still mid-setup. Setting alive=false
+    // in the cleanup ensures stale callbacks bail without
+    // double-creating a SourceBuffer or spamming appendBuffer on
+    // an errored MediaElement.
+    let alive = true;
+    let sourceBufferAdded = false;
+    let abortedDueToError = false;
+
     const audioEl = document.createElement('audio');
     audioEl.autoplay = true;
-    // Hidden — we don't want a control bar floating in the modal.
     audioEl.style.display = 'none';
     document.body.appendChild(audioEl);
+
+    audioEl.addEventListener('error', () => {
+      if (audioEl.error) {
+        console.error('[wayland-audio] HTMLMediaElement error:',
+          audioEl.error.code, audioEl.error.message);
+        abortedDueToError = true;
+      }
+    });
 
     const ms = new MediaSource();
     audioEl.src = URL.createObjectURL(ms);
@@ -457,45 +474,57 @@ const WaylandRemoteControlClient = forwardRef<
     const queue: ArrayBuffer[] = [];
 
     const flushQueue = () => {
+      if (!alive || abortedDueToError) {
+        queue.length = 0;
+        return;
+      }
       if (!sourceBuffer || sourceBuffer.updating) return;
       const next = queue.shift();
-      if (next) {
-        try {
-          sourceBuffer.appendBuffer(next);
-        } catch (e) {
-          console.error('[wayland-audio] appendBuffer error:', e);
+      if (!next) return;
+      try {
+        sourceBuffer.appendBuffer(next);
+      } catch (e) {
+        // The first appendBuffer failure puts the SourceBuffer
+        // into a state where every subsequent attempt also fails.
+        // Mark aborted and stop draining — silences the cascade.
+        if (!abortedDueToError) {
+          console.error('[wayland-audio] appendBuffer error (further errors suppressed):', e);
         }
+        abortedDueToError = true;
+        queue.length = 0;
       }
     };
 
     ms.addEventListener('sourceopen', () => {
+      if (!alive || sourceBufferAdded) return;
+      sourceBufferAdded = true;
       try {
         sourceBuffer = ms.addSourceBuffer(mimeType);
-        sourceBuffer.mode = 'sequence'; // ignore stream timestamps; play in arrival order
+        sourceBuffer.mode = 'sequence';
         sourceBuffer.addEventListener('updateend', flushQueue);
         flushQueue();
       } catch (e) {
         console.error('[wayland-audio] addSourceBuffer failed:', e);
+        abortedDueToError = true;
       }
     });
 
     ws.onopen = () => console.log('[wayland-audio] WS open');
     ws.onmessage = (ev: MessageEvent) => {
+      if (!alive || abortedDueToError) return;
       queue.push(ev.data as ArrayBuffer);
       flushQueue();
     };
     ws.onerror = (e) => console.error('[wayland-audio] WS error:', e);
     ws.onclose = (e) => console.log('[wayland-audio] WS close code=' + e.code);
 
-    // play() may reject on browsers that decided this isn't a
-    // valid gesture chain — we just log; the audio element will
-    // attempt to autoplay too.
     audioEl.play().catch((e) => {
       console.warn('[wayland-audio] audioEl.play rejected:', e?.message ?? e);
     });
 
     return () => {
       console.log('[wayland-audio] cleanup');
+      alive = false;
       try { ws.close(); } catch { /* ignore */ }
       try {
         if (ms.readyState === 'open') ms.endOfStream();
