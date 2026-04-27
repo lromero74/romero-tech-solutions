@@ -507,7 +507,7 @@ export class AuthService {
         return null;
       }
 
-      console.log('Attempting to get current user from localStorage...');
+      // console.log('Attempting to get current user from localStorage...');
 
       // Check localStorage for stored authentication state (role-based)
       const storedUser = this.getStorageItem('authUser');
@@ -531,7 +531,7 @@ export class AuthService {
       }
 
       const authUser = JSON.parse(storedUser) as AuthUser;
-      console.log('Returning stored auth user:', authUser);
+      // console.log('Returning stored auth user:', authUser);
       return authUser;
     } catch (error) {
       console.log('Error reading stored auth user:', (error as Error).message);

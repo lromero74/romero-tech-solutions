@@ -144,14 +144,6 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
       const isAgentLoginPath = window.location.pathname.includes('/agent/login') ||
                                window.location.pathname === '/agent-magic-login';
 
-      // DEBUG: Log detection logic
-      console.log('🔍 [EnhancedAuthContext] Magic link detection:', {
-        pathname: window.location.pathname,
-        hasToken: hasMagicLinkToken,
-        isAgentLoginPath,
-        fullUrl: window.location.href
-      });
-
       if (hasMagicLinkToken && isAgentLoginPath) {
         console.log('🚫 EnhancedAuthContext: Skipping auth state check - magic link will handle authentication');
         setIsLoading(false);
@@ -276,7 +268,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
           if (cachedConfig) {
             try {
               sessionConfig = JSON.parse(cachedConfig);
-              console.log('📦 Using localStorage cached session config');
+              // console.log('📦 Using localStorage cached session config');
             } catch {
               sessionConfig = defaultConfig;
             }
@@ -288,7 +280,7 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
               sessionConfig = defaultConfig;
             } else {
               try {
-                console.log('🔍 Loading session config from database...');
+                // console.log('🔍 Loading session config from database...');
                 const dbConfig = await systemSettingsService.getSessionConfig();
                 if (dbConfig) {
                   sessionConfig = dbConfig;
@@ -638,17 +630,17 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
     setSessionConfig(newConfig);
     sessionConfigRef.current = newConfig;
     sessionManager.updateConfig(newConfig);
-    console.log('✅ Session config updated in context:', newConfig);
+    // console.log('✅ Session config updated in context:', newConfig);
 
     // Also save to database (skip if this is just an initial load, not a user change)
     if (sessionConfig) {
       try {
         await systemSettingsService.updateSessionConfig(newConfig);
-        console.log('✅ Session config saved to database:', newConfig);
+        // console.log('✅ Session config saved to database:', newConfig);
 
         // Update localStorage cache so it's correct on next page load
         RoleBasedStorage.setItem('sessionConfig', JSON.stringify(newConfig));
-        console.log('✅ Session config cache updated in localStorage');
+        // console.log('✅ Session config cache updated in localStorage');
       } catch (error) {
         console.error('❌ Failed to save session config to database:', error);
         // Don't revert local changes - they'll still work for this session

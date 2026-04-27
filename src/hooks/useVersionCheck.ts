@@ -96,7 +96,7 @@ export function useVersionCheck() {
             console.log('Version mismatch detected on initial check - will prompt on next check');
           }
         } else {
-          console.log(`✅ Version check: Already on latest (${CURRENT_VERSION})`);
+          // console.log(`✅ Version check: Already on latest (${CURRENT_VERSION})`);
         }
 
         hasCheckedRef.current = true;

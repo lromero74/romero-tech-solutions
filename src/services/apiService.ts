@@ -36,17 +36,17 @@ class ApiService {
    */
   private async fetchCsrfToken(): Promise<void> {
     try {
-      console.log('🔐 Fetching CSRF token from:', `${this.baseUrl}/csrf-token`);
+      // console.log('🔐 Fetching CSRF token from:', `${this.baseUrl}/csrf-token`);
 
       const response = await fetch(`${this.baseUrl}/csrf-token`, {
         credentials: 'include', // Include cookies (session_token cookie provides session identifier)
       });
-      console.log('🔐 CSRF token response status:', response.status);
+      // console.log('🔐 CSRF token response status:', response.status);
       const data = await response.json();
-      console.log('🔐 CSRF token response data:', data);
+      // console.log('🔐 CSRF token response data:', data);
       if (data.success && data.csrfToken) {
         this.csrfToken = data.csrfToken;
-        console.log('✅ CSRF token fetched successfully');
+        // console.log('✅ CSRF token fetched successfully');
       } else {
         console.warn('⚠️ CSRF token response missing success or token');
       }
@@ -202,7 +202,7 @@ class ApiService {
       console.log(`🔐 ${method} request - CSRF token:`, csrfToken ? `${csrfToken.substring(0, 20)}...` : 'NOT AVAILABLE');
       if (csrfToken) {
         Object.assign(headers, { 'x-csrf-token': csrfToken });
-        console.log('✅ Added CSRF token to request headers');
+        // console.log('✅ Added CSRF token to request headers');
       } else {
         console.warn('⚠️ CSRF token not available for POST request!');
       }

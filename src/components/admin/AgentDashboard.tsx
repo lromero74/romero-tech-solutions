@@ -830,11 +830,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   useEffect(() => {
     if (!canViewAgents) return;
 
-    console.log('🔌 Setting up WebSocket listeners for agent updates');
+//    console.log('🔌 Setting up WebSocket listeners for agent updates');
 
     // Listen for agent status updates
     const unsubscribeStatus = websocketService.onAgentStatusChange((update) => {
-      console.log(`🤖 Agent status update received: ${update.agentId} = ${update.status}`);
+//      console.log(`🤖 Agent status update received: ${update.agentId} = ${update.status}`);
 
       setAgents((prevAgents) => {
         return prevAgents.map((agent) => {
@@ -925,7 +925,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
     // Listen for agent metrics updates
     const unsubscribeMetrics = websocketService.onAgentMetricsChange((update) => {
-      console.log(`📊 Agent metrics update received: ${update.agentId}`);
+//      console.log(`📊 Agent metrics update received: ${update.agentId}`);
 
       setAgents((prevAgents) => {
         return prevAgents.map((agent) => {

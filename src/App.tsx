@@ -38,26 +38,12 @@ function AppContent() {
   const [currentPage, setCurrentPage] = useState<AppPage>(() => {
     const initialPath = window.location.pathname;
     const initialPage = getPageFromPath(initialPath);
-    console.log('🎯 [App.tsx] Initial page calculation:', {
-      pathname: initialPath,
-      href: window.location.href,
-      calculatedPage: initialPage,
-      hasToken: new URLSearchParams(window.location.search).has('token')
-    });
     return initialPage;
   });
 
   const { isLoading, isAuthenticated, isAdmin, isTechnician, isExecutive, isSales, isClient, isSigningOut, authUser } = useEnhancedAuth();
 
   // Log whenever currentPage changes to track navigation
-  useEffect(() => {
-    console.log('🔄 [App.tsx] currentPage changed:', {
-      page: currentPage,
-      url: window.location.href,
-      isAuthenticated,
-      isClient
-    });
-  }, [currentPage, isAuthenticated, isClient]);
   const { language, t } = useLanguage();
 
   // Automatically check for new versions and reload when deployed

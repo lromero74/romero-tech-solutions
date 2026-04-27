@@ -19,7 +19,6 @@ export class RoleBasedStorage {
         try {
           const parsed = JSON.parse(storedUser);
           if (parsed.role) {
-            console.log(`🔑 [RoleBasedStorage] Found role from ${role}_authUser:`, parsed.role);
             return parsed.role;
           }
         } catch (e) {

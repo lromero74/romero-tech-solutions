@@ -1048,7 +1048,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
 
   // WebSocket connection for real-time employee status updates
   useEffect(() => {
-    console.log('🔌 WebSocket useEffect triggered, sessionToken:', sessionToken ? '***EXISTS***' : 'NULL');
+    // console.log('🔌 WebSocket useEffect triggered, sessionToken:', sessionToken ? '***EXISTS***' : 'NULL');
 
     // 🚀 OPTIMIZATION: Skip if sessionToken hasn't actually changed
     if (prevSessionTokenRef.current === sessionToken && sessionToken) {
@@ -1073,7 +1073,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
       try {
         // Connect to WebSocket server - construct WebSocket URL from API URL
         const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
-        console.log('🔍 Raw API base URL from env:', apiBaseUrl);
+        // console.log('🔍 Raw API base URL from env:', apiBaseUrl);
 
         // Extract the WebSocket URL by removing /api suffix
         let websocketUrl;
@@ -1090,16 +1090,16 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
           websocketUrl = apiBaseUrl.replace('/api', '').replace(/\/$/, '');
         }
 
-        console.log('🔌 Connecting to WebSocket server:', websocketUrl);
+        // console.log('🔌 Connecting to WebSocket server:', websocketUrl);
         await websocketService.connect(websocketUrl);
 
         // Authenticate as admin
-        console.log('🔐 Attempting WebSocket authentication with session token:', sessionToken ? 'PRESENT' : 'MISSING');
+        // console.log('🔐 Attempting WebSocket authentication with session token:', sessionToken ? 'PRESENT' : 'MISSING');
         websocketService.authenticateAdmin(sessionToken);
 
         // Set up event handlers
         websocketService.onEmployeeStatusChange((update) => {
-          console.log('📊 Received employee status update via WebSocket');
+          // console.log('📊 Received employee status update via WebSocket');
 
           // Transform WebSocket data to match our Employee interface
           const transformedEmployees = update.employees.map(emp => ({
@@ -1403,7 +1403,7 @@ export const AdminDataProvider: React.FC<AdminDataProviderProps> = ({ children }
           refreshOnlineStatus();
         });
 
-        console.log('✅ WebSocket initialized for real-time employee status updates');
+        // console.log('✅ WebSocket initialized for real-time employee status updates');
 
       } catch (error) {
         console.error('❌ Failed to initialize WebSocket:', error);

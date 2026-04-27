@@ -111,7 +111,7 @@ class SessionManager {
 
     // Reduced logging for activity updates to prevent spam
     if (timeSinceLastActivity > 60000) { // Only log if more than 1 minute since last
-      console.log(`🔄 Activity detected - updating session timer (${Math.round(timeSinceLastActivity/1000)}s since last update)`);
+      // console.log(`🔄 Activity detected - updating session timer (${Math.round(timeSinceLastActivity/1000)}s since last update)`);
     }
 
     this.sessionData.lastActivity = now;
@@ -178,7 +178,7 @@ class SessionManager {
     const timeoutMs = timeout * 60 * 1000;
     const warningMs = warningTime * 60 * 1000;
 
-    console.log(`🕒 Scheduling timeout: ${timeout} minutes, warning: ${warningTime} minutes before`);
+    // console.log(`🕒 Scheduling timeout: ${timeout} minutes, warning: ${warningTime} minutes before`);
 
     // Schedule warning
     if (warningMs < timeoutMs) {
@@ -264,7 +264,7 @@ class SessionManager {
     // Immediately reschedule timeouts with new config
     this.scheduleTimeout();
 
-    console.log(`✅ Session config updated and timeouts rescheduled`);
+    // console.log(`✅ Session config updated and timeouts rescheduled`);
   }
 
   getConfig(): SessionConfig | null {

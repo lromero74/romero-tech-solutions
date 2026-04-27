@@ -109,12 +109,6 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
       setRoles(userPermissions.roles);
       setIsExecutive(userPermissions.isExecutive);
 
-      console.log('✅ Loaded permissions for user:', {
-        roles: userPermissions.roles.map(r => r.displayName).join(', '),
-        permissionCount: userPermissions.permissionCount,
-        isExecutive: userPermissions.isExecutive
-      });
-
     } catch (err: any) {
       // If it's a permission error (403), silently set empty permissions (user has no permissions)
       if (err.message?.includes('Insufficient permissions') || err.message?.includes('403')) {
@@ -200,7 +194,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
     // 🚀 OPTIMIZATION: Skip if sessionToken and role haven't changed
     if (prevSessionTokenRef.current === sessionToken && prevUserRoleRef.current === user.role && socket) {
-      console.log('✅ SessionToken and role unchanged, reusing existing WebSocket connection');
+      // console.log('✅ SessionToken and role unchanged, reusing existing WebSocket connection');
       return;
     }
 
@@ -210,14 +204,14 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
     // Connect to WebSocket server
     const websocketUrl = getWebSocketUrl();
-    console.log('🔌 Connecting to WebSocket for permission updates:', websocketUrl);
+    // console.log('🔌 Connecting to WebSocket for permission updates:', websocketUrl);
     const newSocket = io(websocketUrl, {
       transports: ['websocket', 'polling'],
       withCredentials: true
     });
 
     newSocket.on('connect', () => {
-      console.log('✅ WebSocket connected for permission updates');
+      // console.log('✅ WebSocket connected for permission updates');
       // Authenticate with session token
       newSocket.emit('admin-authenticate', { sessionToken });
     });
@@ -264,7 +258,7 @@ export const PermissionProvider: React.FC<PermissionProviderProps> = ({ children
 
     // Cleanup on unmount - only disconnect if session/role actually changed
     return () => {
-      console.log('🔌 Permission WebSocket cleanup called');
+      // console.log('🔌 Permission WebSocket cleanup called');
       // Only disconnect on actual logout or role change, not on re-renders
       if (socket && (prevSessionTokenRef.current !== sessionToken || prevUserRoleRef.current !== user?.role)) {
         newSocket.disconnect();

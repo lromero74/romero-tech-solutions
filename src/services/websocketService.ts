@@ -216,7 +216,7 @@ class WebSocketService {
         });
 
         this.socket.on('connect', () => {
-          console.log('🔌 WebSocket connected to server');
+          // console.log('🔌 WebSocket connected to server');
           this.isConnected = true;
           this.isConnecting = false;
           this.reconnectAttempts = 0;
@@ -238,7 +238,7 @@ class WebSocketService {
         });
 
         this.socket.on('admin-authenticated', (data) => {
-          console.log('🔐 Admin WebSocket authenticated:', data.email);
+          // console.log('🔐 Admin WebSocket authenticated:', data.email);
         });
 
         this.socket.on('client-authenticated', (data) => {
@@ -253,7 +253,7 @@ class WebSocketService {
         });
 
         this.socket.on('employee-status-update', (update: EmployeeStatusUpdate) => {
-          console.log('📊 Received employee status update:', update.employees.length, 'employees');
+          // console.log('📊 Received employee status update:', update.employees.length, 'employees');
           if (this.onEmployeeStatusUpdate) {
             this.onEmployeeStatusUpdate(update);
           }
@@ -294,7 +294,7 @@ class WebSocketService {
         });
 
         this.socket.on('agent-status-update', (update: AgentStatusUpdate) => {
-          console.log(`🤖 Agent status update: ${update.agentId} = ${update.status}`);
+//          console.log(`🤖 Agent status update: ${update.agentId} = ${update.status}`);
           this.onAgentStatusCallbacks.forEach(callback => {
             try {
               callback(update);
@@ -305,7 +305,7 @@ class WebSocketService {
         });
 
         this.socket.on('agent-metrics-update', (update: AgentMetricsUpdate) => {
-          console.log(`📊 Agent metrics update: ${update.agentId}`);
+//          console.log(`📊 Agent metrics update: ${update.agentId}`);
           this.onAgentMetricsCallbacks.forEach(callback => {
             try {
               callback(update);
@@ -361,7 +361,7 @@ class WebSocketService {
       return;
     }
 
-    console.log('🔐 Authenticating admin WebSocket connection...');
+    // console.log('🔐 Authenticating admin WebSocket connection...');
     this.socket.emit('admin-authenticate', { sessionToken });
   }
 
@@ -396,7 +396,7 @@ class WebSocketService {
   }
 
   onEntityDataChange(callback: EntityDataChangedCallback): () => void {
-    console.log('📝 Registering onEntityDataChange callback (total:', this.onEntityDataChangedCallbacks.length + 1, ')');
+    // console.log('📝 Registering onEntityDataChange callback (total:', this.onEntityDataChangedCallbacks.length + 1, ')');
     this.onEntityDataChangedCallbacks.push(callback);
 
     // Return unsubscribe function
@@ -418,7 +418,7 @@ class WebSocketService {
   }
 
   onAgentStatusChange(callback: AgentStatusCallback): () => void {
-    console.log('📝 Registering onAgentStatusChange callback');
+    // console.log('📝 Registering onAgentStatusChange callback');
     this.onAgentStatusCallbacks.push(callback);
 
     // Return unsubscribe function
@@ -461,7 +461,7 @@ class WebSocketService {
   }
 
   onAgentMetricsChange(callback: AgentMetricsCallback): () => void {
-    console.log('📝 Registering onAgentMetricsChange callback');
+    // console.log('📝 Registering onAgentMetricsChange callback');
     this.onAgentMetricsCallbacks.push(callback);
 
     // Return unsubscribe function
@@ -508,7 +508,7 @@ class WebSocketService {
       console.error(`❌ Cannot register listener for '${eventName}': WebSocket not initialized`);
       return;
     }
-    console.log(`📝 Registering custom event listener: ${eventName}`);
+    // console.log(`📝 Registering custom event listener: ${eventName}`);
     this.socket.on(eventName, callback);
   }
 
