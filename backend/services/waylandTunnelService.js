@@ -107,26 +107,10 @@ function getPair(auditId) {
  * close semantics for the other side after this returns.
  */
 function pipeFrames(from, to, label) {
-  let totalBytes = 0;
-  let messageCount = 0;
-  console.log(`[waylandTunnel] ${label} pipe attached`);
   from.on('message', (data, isBinary) => {
-    if (to.readyState !== to.OPEN) {
-      console.warn(`[waylandTunnel] ${label} drop msg (len=${data.length}): peer not OPEN, state=${to.readyState}`);
-      return;
-    }
-    if (!isBinary) {
-      console.warn(`[waylandTunnel] ${label} drop non-binary frame (len=${data.length})`);
-      return;
-    }
-    totalBytes += data.length;
-    messageCount++;
-    // Log first 5 messages individually, then every ~2s. Useful
-    // for debugging RFB handshake stalls — first 5 cover the
-    // version exchange + security handshake + ServerInit.
-    if (messageCount <= 5) {
-      console.log(`[waylandTunnel] ${label} msg #${messageCount} (len=${data.length}, total=${totalBytes})`);
-    }
+    if (to.readyState !== to.OPEN) return;
+    // RFB doesn't use text frames; drop them.
+    if (!isBinary) return;
     try {
       to.send(data, { binary: true });
     } catch (e) {
@@ -396,7 +380,6 @@ function handleConnection(ws, auditId, role) {
   const preBuf = (data, isBinary) => {
     if (!isBinary) return;
     pair[bufferKey].push(data);
-    console.log(`[waylandTunnel] ${role} pre-pair buffer +${data.length} bytes (total queued: ${pair[bufferKey].length} msgs)`);
   };
   ws.on('message', preBuf);
   pair[preBufRef] = preBuf;
@@ -434,9 +417,6 @@ function handleConnection(ws, auditId, role) {
           console.warn('[waylandTunnel] replay dashboard→agent error:', e.message);
         }
       }
-    }
-    if (pair.bufferedFromAgent.length || pair.bufferedFromDashboard.length) {
-      console.log(`[waylandTunnel] replayed ${pair.bufferedFromAgent.length} agent + ${pair.bufferedFromDashboard.length} dashboard pre-pair msgs`);
     }
     pair.bufferedFromAgent = [];
     pair.bufferedFromDashboard = [];

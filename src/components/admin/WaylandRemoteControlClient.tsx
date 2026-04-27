@@ -18,10 +18,11 @@ import RFB from '@novnc/novnc/lib/rfb';
  *     Caller is responsible for providing an authenticated wss URL
  *     (in production, that's MeshCentral's relay tunnel; in dev,
  *     it's a localhost websockify endpoint).
- *   - viewOnly is hard-coded true. Input forwarding goes through
- *     the agent's portal RemoteDesktop interface separately. We
- *     never want noVNC to send PointerEvent / KeyEvent over RFB
- *     because the agent's VNC server explicitly drops those.
+ *   - Input flows: noVNC sends RFB PointerEvent / KeyEvent over the
+ *     wire, the agent's VNC server reads them and dispatches to the
+ *     screencast-live helper's portalInputForwarder, which translates
+ *     to xdg-desktop-portal RemoteDesktop Notify*Motion / NotifyKeyboardKeysym.
+ *     End result: the operator's mouse and keyboard reach the host.
  *   - On unmount, RFB.disconnect() is called to terminate the
  *     WebSocket cleanly. If disconnect happens to fail (already
  *     closed, etc.) we swallow the error.
@@ -130,8 +131,10 @@ const WaylandRemoteControlClient = forwardRef<
       setErrorMessage(e instanceof Error ? e.message : String(e));
       return;
     }
-    // Always view-only — input goes via portal RemoteDesktop, not RFB.
-    rfb.viewOnly = true;
+    // Input enabled — RFB PointerEvent / KeyEvent flow through to
+    // the agent's VNC server, which forwards them to xdg-desktop-portal
+    // RemoteDesktop on the host.
+    rfb.viewOnly = false;
     rfb.scaleViewport = true;
     rfbRef.current = rfb;
 
@@ -154,16 +157,6 @@ const WaylandRemoteControlClient = forwardRef<
     rfb.addEventListener('connect', handleConnect);
     rfb.addEventListener('disconnect', handleDisconnect);
     rfb.addEventListener('securityfailure', handleSecurityFailure);
-
-    // Diagnostic: log every other RFB event so we can see how far
-    // the protocol gets when the modal is stuck at "Connecting…".
-    // (Cheap to keep — these events only fire during/after a
-    // successful handshake, never in tight loops.)
-    const diagEvents = ['credentialsrequired', 'desktopname', 'capabilities', 'bell', 'clipboard'];
-    const diagHandler = (ev: Event) => {
-      console.log('[wayland-novnc]', ev.type, (ev as { detail?: unknown }).detail ?? '');
-    };
-    diagEvents.forEach(name => rfb.addEventListener(name, diagHandler));
 
     return () => {
       rfb.removeEventListener('connect', handleConnect);
