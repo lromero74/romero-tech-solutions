@@ -46,6 +46,7 @@ import employeeSettingsRoutes from './routes/employeeSettings.js';
 import clientSettingsRoutes from './routes/clientSettings.js';
 import agentRoutes from './routes/agents.js';
 import agentDownloadRoutes from './routes/agentDownloads.js';
+import remoteControlRoutes from './routes/remoteControl.js';
 import automationRoutes from './routes/automation.js';
 import deploymentRoutes from './routes/deployment.js';
 import subscriptionRoutes from './routes/subscription.js';
@@ -525,6 +526,7 @@ app.use('/api/employees', adminLimiter, adminIPWhitelist, doubleCsrfProtection, 
 app.use('/api/client/settings', generalLimiter, doubleCsrfProtection, clientSettingsRoutes); // Client settings (timezone, preferences)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
+app.use('/api/remote-control', generalLimiter, doubleCsrfProtection, remoteControlRoutes); // MeshCentral remote-control sessions
 app.use('/api/automation', generalLimiter, methodBasedCsrfProtection, automationRoutes); // Policy automation and script library
 app.use('/api/deployment', generalLimiter, methodBasedCsrfProtection, deploymentRoutes); // Software deployment and package management
 app.use('/api/subscription', generalLimiter, subscriptionRoutes); // Subscription management (mixed auth: pricing public, status/upgrade authenticated)
