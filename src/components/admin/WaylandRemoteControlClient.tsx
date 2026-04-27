@@ -405,6 +405,7 @@ const WaylandRemoteControlClient = forwardRef<
     }
 
     return () => {
+      console.log('[wayland-h264] cleanup — closing WS (readyState=' + ws.readyState + ') and decoder');
       try { ws.close(); } catch { /* ignore */ }
       try { decoder.close(); } catch { /* ignore */ }
     };
@@ -430,23 +431,33 @@ const WaylandRemoteControlClient = forwardRef<
           visibility: videoActive ? 'hidden' : 'visible',
         }}
       />
-      {videoActive && (
-        <canvas
-          ref={videoCanvasRef}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            width: '100%',
-            height: '100%',
-            objectFit: 'contain',
-            // Pointer events go through to the RFB canvas
-            // underneath. We're a pure display layer.
-            pointerEvents: 'none',
-            cursor: 'crosshair',
-            background: 'rgb(20, 20, 20)',
-          }}
-        />
-      )}
+      {/* Always render the video canvas. Earlier we conditionally
+          mounted it on `videoActive` — but that meant `videoCanvasRef.current`
+          was null when the H.264 useEffect first ran, the effect
+          bailed early, and the WebSocket was never opened. Now the
+          canvas is always in the DOM; we toggle visibility based
+          on whether decoded frames are flowing. */}
+      <canvas
+        ref={videoCanvasRef}
+        style={{
+          position: 'absolute',
+          inset: 0,
+          width: '100%',
+          height: '100%',
+          objectFit: 'contain',
+          // Pointer events go through to the RFB canvas
+          // underneath. We're a pure display layer.
+          pointerEvents: 'none',
+          cursor: 'crosshair',
+          background: 'rgb(20, 20, 20)',
+          // Hide until we have actual video frames to show.
+          display: videoActive ? 'block' : 'none',
+        }}
+      />
+      {/* When videoUrl is set but H.264 hasn't yet started, keep
+          videoCanvasRef alive but invisible. The useEffect needs
+          the ref populated to set up the decoder. */}
+      {!videoActive && videoUrl && false}
       {state !== 'connected' && (
         <div
           style={{
