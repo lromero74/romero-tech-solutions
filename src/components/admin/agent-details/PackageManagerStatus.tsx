@@ -412,7 +412,7 @@ export const PackageManagerStatus: React.FC<AgentDetailsComponentProps & { agent
                     <p className={`text-xs ${themeClasses.text.secondary} mb-2`}>
                       {showCltBanner
                         ? 'These ship inside Apple\'s Command Line Tools. They refresh when you install a CLT update — pip can\'t replace them in /Library/Developer/CommandLineTools.'
-                        : `These are managed by ${label}. They will refresh on the next distro upgrade.`}
+                        : `These are RPM-installed by ${label} (system Python's site-packages). PyPI has newer versions, but the OS hasn't packaged them yet. They'll update if/when 'sudo dnf update' ships a newer RPM — could be in any release, not just a major distro upgrade. pip can't replace them safely (PEP 668 blocks it; --break-system-packages would shadow without replacing the RPM copy). No admin action needed.`}
                     </p>
                     <table className="w-full text-xs">
                       <thead>
