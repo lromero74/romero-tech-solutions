@@ -122,9 +122,21 @@ router.post(
       const meshUrl = process.env.MESHCENTRAL_URL ||
         'https://mesh.romerotechsolutions.com';
       const credBlob = Buffer.from(`${tokenName}:${tokenPass}`, 'utf8').toString('base64');
+      // hide=63 strips MeshCentral's own UI chrome so the iframe
+      // shows just the device's desktop view + the bottom toolbar
+      // (Send Ctrl+Alt+Del, Clipboard, etc.). Bitmask:
+      //   1=masthead (top "RTS Remote Control" bar with logo+user)
+      //   2=topbar (search/filter row)
+      //   4=footer (MeshCentral footer + Powered-By)
+      //   8=title bar ("Desktop - WinVM" header)
+      //   16=leftbar (main navigation column)
+      //   32=back-button arrow
+      // Sum=63 = full chrome strip. Our dashboard modal already
+      // shows device name + Disconnect, so the embedded view can
+      // be stripped clean.
       const sessionUrl = `${meshUrl}/?login=${encodeURIComponent(credBlob)}` +
         `&gotodevicename=${encodeURIComponent(agent.device_name)}` +
-        `&viewmode=11`;
+        `&viewmode=11&hide=63`;
 
       // 4. INSERT audit row.
       const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
