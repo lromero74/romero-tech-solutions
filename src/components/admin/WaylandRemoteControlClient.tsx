@@ -140,6 +140,17 @@ const WaylandRemoteControlClient = forwardRef<
 
     const handleConnect = () => {
       setState('connected');
+      // Show the operator's local OS cursor (as a crosshair) over
+      // the canvas so they can see exactly where they're aiming.
+      // noVNC's default is `cursor: none` because the server
+      // typically draws its own cursor via the cursor pseudo-
+      // encoding — but we keep the local cursor visible too, which
+      // makes targeting feel direct on remote sessions where the
+      // server-side cursor lags slightly behind input.
+      const canvas = containerRef.current?.querySelector('canvas');
+      if (canvas) {
+        canvas.style.cursor = 'crosshair';
+      }
       onConnectRef.current?.();
     };
     const handleDisconnect = (ev: Event) => {
