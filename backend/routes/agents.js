@@ -1483,38 +1483,6 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
   }
 });
 
-// One-time probe: does agent_devices have the v1.18.6+ Linux
-// display-server columns? Cached on the module so we only pay the
-// information_schema lookup once per process. If the migration
-// (077_add_display_server_to_agent_devices.sql) hasn't been applied
-// yet, the heartbeat handler falls back to the v1.18.1 SQL shape so
-// the deployment ordering "code before migration" doesn't break all
-// agent heartbeats. Once the migration runs, restart the backend
-// (or wait for next process restart) and the new columns get
-// written.
-let displayServerColsPresent = null;
-async function probeDisplayServerCols() {
-  if (displayServerColsPresent !== null) return displayServerColsPresent;
-  try {
-    const r = await query(
-      `SELECT 1 FROM information_schema.columns
-       WHERE table_name = 'agent_devices' AND column_name = 'display_server'
-       LIMIT 1`
-    );
-    displayServerColsPresent = r.rows.length > 0;
-    if (!displayServerColsPresent) {
-      console.warn('⚠ agent_devices.display_server column missing — apply migration 077 to enable Wayland-aware Remote Control routing');
-    }
-  } catch (e) {
-    // information_schema lookup failure is itself a problem worth
-    // surfacing, but we shouldn't block heartbeats over it. Default
-    // to "absent" so the safer SQL shape runs.
-    console.warn('⚠ Could not probe agent_devices schema:', e.message);
-    displayServerColsPresent = false;
-  }
-  return displayServerColsPresent;
-}
-
 router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async (req, res) => {
   try {
     const { agent_id } = req.params;
@@ -1558,40 +1526,24 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
     // RETURNING gives us the post-update row so we can broadcast
     // the freshly-stored values. Either way the dashboard sees
     // the truth that's now in the DB.
-    const hasDisplayServerCols = await probeDisplayServerCols();
-    const updateResult = hasDisplayServerCols
-      ? await query(
-          `UPDATE agent_devices
-           SET last_heartbeat = NOW(),
-               status = COALESCE($2, status),
-               agent_version = COALESCE($3, agent_version),
-               os_version = COALESCE($4, os_version),
-               remote_control_enabled = COALESCE($5, remote_control_enabled),
-               display_server = COALESCE($6, display_server),
-               xauth_status = COALESCE($7, xauth_status),
-               compositor = COALESCE($8, compositor),
-               updated_at = NOW()
-           WHERE id = $1
-           RETURNING device_name, status, agent_version, os_version, last_heartbeat,
-                     remote_control_enabled, display_server, xauth_status, compositor`,
-          [agent_id, status || 'online', agent_version || null, os_version || null,
-           (remote_control_enabled === true || remote_control_enabled === false) ? remote_control_enabled : null,
-           safeDisplayServer, safeXauth, safeCompositor]
-        )
-      : await query(
-          `UPDATE agent_devices
-           SET last_heartbeat = NOW(),
-               status = COALESCE($2, status),
-               agent_version = COALESCE($3, agent_version),
-               os_version = COALESCE($4, os_version),
-               remote_control_enabled = COALESCE($5, remote_control_enabled),
-               updated_at = NOW()
-           WHERE id = $1
-           RETURNING device_name, status, agent_version, os_version, last_heartbeat,
-                     remote_control_enabled`,
-          [agent_id, status || 'online', agent_version || null, os_version || null,
-           (remote_control_enabled === true || remote_control_enabled === false) ? remote_control_enabled : null]
-        );
+    const updateResult = await query(
+      `UPDATE agent_devices
+       SET last_heartbeat = NOW(),
+           status = COALESCE($2, status),
+           agent_version = COALESCE($3, agent_version),
+           os_version = COALESCE($4, os_version),
+           remote_control_enabled = COALESCE($5, remote_control_enabled),
+           display_server = COALESCE($6, display_server),
+           xauth_status = COALESCE($7, xauth_status),
+           compositor = COALESCE($8, compositor),
+           updated_at = NOW()
+       WHERE id = $1
+       RETURNING device_name, status, agent_version, os_version, last_heartbeat,
+                 remote_control_enabled, display_server, xauth_status, compositor`,
+      [agent_id, status || 'online', agent_version || null, os_version || null,
+       (remote_control_enabled === true || remote_control_enabled === false) ? remote_control_enabled : null,
+       safeDisplayServer, safeXauth, safeCompositor]
+    );
 
     // Push the heartbeat-derived state to the admin dashboards in
     // real time so the AgentDashboard table refreshes without a
@@ -3163,18 +3115,6 @@ router.get('/', authMiddleware, async (req, res) => {
   try {
     const { business_id, service_location_id, status } = req.query;
     const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
-    // Same migration-tolerance pattern as the heartbeat handler:
-    // skip the v1.18.6 display-server columns from the SELECT list
-    // when migration 077 hasn't been applied yet, so the dashboard
-    // still renders agents (just without Wayland-aware Remote
-    // Control routing) until the DBA runs the migration.
-    const hasDisplayServerCols = await probeDisplayServerCols();
-    const displayServerSelect = hasDisplayServerCols
-      ? `        ad.display_server,
-        ad.xauth_status,
-        ad.compositor,
-`
-      : '';
 
     let queryText = `
       SELECT
@@ -3191,7 +3131,10 @@ router.get('/', authMiddleware, async (req, res) => {
         ad.is_active,
         ad.agent_version,
         ad.remote_control_enabled,
-${displayServerSelect}        ad.created_at,
+        ad.display_server,
+        ad.xauth_status,
+        ad.compositor,
+        ad.created_at,
         b.business_name,
         b.is_individual,
         u.first_name as individual_first_name,
