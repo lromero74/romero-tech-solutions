@@ -41,6 +41,7 @@
 
 import { WebSocketServer } from 'ws';
 import jwt from 'jsonwebtoken';
+import { randomBytes } from 'crypto';
 import { query } from '../config/database.js';
 import { sessionService } from './sessionService.js';
 
@@ -183,7 +184,6 @@ export function issueDashboardTicket(auditId, userId) {
 
 function randomTicket() {
   // 24 bytes → 48 hex chars. crypto is built-in; no extra deps.
-  const { randomBytes } = require('crypto');
   return randomBytes(24).toString('hex');
 }
 
