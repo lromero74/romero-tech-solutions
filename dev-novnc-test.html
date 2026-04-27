@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>v1.19 noVNC verification</title>
+  <style>
+    body { margin: 0; background: #1a1a1a; color: #eee; font-family: -apple-system, sans-serif; }
+    header { padding: 8px 16px; background: #333; display: flex; align-items: center; gap: 16px; }
+    /* noVNC inserts a <div class="noVNC_screen"> inside our target.
+       Give it explicit size so the canvas it contains has a place
+       to render. With scaleViewport=true the canvas scales to fill
+       this box. */
+    #screen { display: flex; align-items: center; justify-content: center; height: calc(100vh - 50px); }
+    #canvas { width: 80vw; height: 80vh; background: #000; }
+    .status { font-size: 14px; padding: 4px 10px; border-radius: 4px; background: #222; }
+    .ok { color: #7f7; }
+    .err { color: #f77; }
+    .warn { color: #fa0; }
+  </style>
+</head>
+<body>
+<header>
+  <strong>v1.19 noVNC verification</strong>
+  <span class="status" id="status">Loading…</span>
+  <span style="margin-left: auto; font-size: 12px; opacity: 0.7;">
+    Expect: 320×240 checkerboard with sliding green stripe + red corner square
+  </span>
+</header>
+<div id="screen">
+  <div id="canvas"></div>
+</div>
+
+<script type="module" src="/dev-novnc-test.ts"></script>
+</body>
+</html>

@@ -766,6 +766,45 @@ class AgentService {
   }
 
   /**
+   * Wayland Remote Control entry point (v1.19+). For Linux hosts on
+   * Wayland (where MeshCentral's KVM helper can't capture), this
+   * endpoint instructs the agent daemon to spawn screencast-live and
+   * returns the chosen TCP port. The dashboard's noVNC client then
+   * connects to a wss URL backed by a MeshCentral relay tunnel into
+   * the agent's localhost VNC port.
+   *
+   * v1.19 alpha returns relay_url=null until the relay-tunnel
+   * orchestration is wired (see backend remoteControl.js TODO).
+   */
+  async requestStartWaylandRemoteControl(agentId: string): Promise<
+    ApiResponse<{
+      audit_id: string;
+      device_name: string;
+      vnc_port: number;
+      // v1.19+ returns relay_path. Caller prepends location.origin
+      // (with http→ws / https→wss) to build the WS URL noVNC
+      // connects to. relay_url is the older absolute-URL field
+      // kept for backward compat; if both are present, relay_url
+      // wins.
+      relay_path?: string;
+      relay_url: string | null;
+      relay_url_note?: string;
+    }>
+  > {
+    return apiService.post(`/remote-control/agents/${agentId}/wayland/start`, {});
+  }
+
+  /**
+   * Stop a Wayland Remote Control session. Daemon SIGTERMs the
+   * helper; audit row gets ended_at + disconnect_reason. Idempotent.
+   */
+  async requestEndWaylandRemoteControl(auditId: string): Promise<
+    ApiResponse<{ already_ended?: boolean }>
+  > {
+    return apiService.post(`/remote-control/sessions/${auditId}/wayland/end`, {});
+  }
+
+  /**
    * Health check for the MeshCentral integration. Used by the
    * admin diagnostics page to surface "Remote Control unavailable"
    * before a technician clicks the button and gets a confusing

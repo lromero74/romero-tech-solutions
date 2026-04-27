@@ -672,6 +672,12 @@ const startServer = async () => {
     // Make WebSocket service available to routes via req.app
     app.set('websocketService', websocketService);
 
+    // v1.19+ Wayland Remote Control reverse-tunnel pairing.
+    // Attaches WS upgrade handlers at /ws/wayland-tunnel/:audit_id/{agent,dashboard}.
+    // Coexists with socket.io which handles /socket.io/* upgrades.
+    const { default: waylandTunnel } = await import('./services/waylandTunnelService.js');
+    waylandTunnel.attachToHttpServer(httpServer);
+
     // Start workflow scheduler for service request automation
     workflowScheduler.start();
 

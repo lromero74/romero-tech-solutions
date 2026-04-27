@@ -3,6 +3,7 @@ import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, P
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
+import WaylandRemoteControlClient from './WaylandRemoteControlClient';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import { websocketService } from '../../services/websocketService';
 import AgentEditModal from './AgentEditModal';
@@ -201,19 +202,28 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   const [remoteControl, setRemoteControl] = useState<{
     show: boolean;
     starting?: boolean;
+    // iframe path: MeshCentral KVM. Used for X11 / macOS / Windows.
     iframeUrl?: string;
+    // Wayland path: noVNC over a wss tunnel into the agent's
+    // PipeWire-backed VNC server. Set when the active session
+    // is the v1.19 Wayland Remote Control flow. Mutually
+    // exclusive with iframeUrl. relayUrl is the wss URL to
+    // connect to; null in v1.19 alpha until relay-tunnel
+    // orchestration is wired (see backend TODO).
+    waylandRelayUrl?: string | null;
+    waylandRelayNote?: string;
     auditId?: string;
+    // sessionKind tells handleEndRemoteControl which end-endpoint
+    // to call (regular vs wayland). The two flows have different
+    // backend cleanup paths.
+    sessionKind?: 'meshcentral' | 'wayland';
     deviceName?: string;
     error?: string;
-    // Pre-flight compatibility warning. When the target is a Linux
-    // host on Wayland (or an X11 host whose xauth is missing), we
-    // show a warning instead of opening an iframe that would
-    // black-screen. The "Proceed anyway" button on the warning
-    // calls back into handleStartRemoteControl with skipPreflight
-    // so the admin can override after reading the explanation.
+    // Pre-flight compatibility warning for X11 hosts whose xauth
+    // is missing. Wayland hosts no longer use the preflight modal —
+    // they're routed straight to the v1.19 flow.
     preflight?: {
-      kind: 'wayland' | 'xauth-missing';
-      compositor?: string | null;
+      kind: 'xauth-missing';
       pendingAgent?: AgentDevice;
     };
   }>({ show: false });
@@ -557,41 +567,79 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       });
       return;
     }
-    // Pre-flight Wayland / X-auth check on Linux hosts. Surfaces the
-    // limitation to the admin BEFORE opening the iframe — opening
-    // an iframe that black-screens then disconnects is a worse UX
-    // than a clear "this won't work and here's why" modal. Admin
-    // can still proceed via the modal's "Proceed anyway" button
-    // (skipPreflight=true) for cases where they know the agent is
-    // capable but the heartbeat snapshot is stale.
-    if (!skipPreflight && agent.os_type === 'linux') {
-      if (agent.display_server === 'wayland') {
+    // Wayland Linux hosts route to the v1.19 PipeWire/VNC path
+    // instead of MeshCentral KVM (which can't capture Wayland).
+    // Backend orchestrates: enqueue start_wayland_remote_control
+    // command on the agent, daemon spawns screencast-live,
+    // returns the chosen TCP port + (eventually) a wss relay URL.
+    if (agent.os_type === 'linux' && agent.display_server === 'wayland') {
+      setRemoteControl({
+        show: true,
+        starting: true,
+        deviceName: agent.device_name,
+        sessionKind: 'wayland',
+      });
+      try {
+        const resp = await agentService.requestStartWaylandRemoteControl(agent.id);
+        const data: any = (resp as any)?.data || resp;
+        if (!data?.audit_id) {
+          throw new Error((resp as any)?.message || 'Wayland Remote Control did not return an audit_id');
+        }
+        // Build the wss URL noVNC connects to. Backend may return
+        // either relay_url (absolute) or relay_path (relative).
+        // Relative path is preferred because it implicitly uses
+        // the same host the dashboard is loaded from — works
+        // identically in dev (localhost) and prod (api.).
+        let relayUrl: string | null = data.relay_url ?? null;
+        if (!relayUrl && data.relay_path) {
+          const proto = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+          relayUrl = `${proto}//${window.location.host}${data.relay_path}`;
+        }
+        setRemoteControl({
+          show: true,
+          starting: false,
+          waylandRelayUrl: relayUrl,
+          waylandRelayNote: data.relay_url_note,
+          auditId: data.audit_id,
+          deviceName: data.device_name || agent.device_name,
+          sessionKind: 'wayland',
+        });
+      } catch (e: any) {
         setRemoteControl({
           show: true,
           starting: false,
           deviceName: agent.device_name,
-          preflight: {
-            kind: 'wayland',
-            compositor: agent.compositor,
-            pendingAgent: agent,
-          },
+          sessionKind: 'wayland',
+          error: e?.response?.data?.message || e?.message ||
+            'Failed to start Wayland Remote Control session',
         });
-        return;
       }
-      if (agent.display_server === 'x11' && agent.xauth_status === 'missing') {
-        setRemoteControl({
-          show: true,
-          starting: false,
-          deviceName: agent.device_name,
-          preflight: {
-            kind: 'xauth-missing',
-            pendingAgent: agent,
-          },
-        });
-        return;
-      }
+      return;
     }
-    setRemoteControl({ show: true, starting: true, deviceName: agent.device_name });
+
+    // X11 with missing xauth: keep the v1.18.6 preflight that
+    // explains "log out / log in once" with a Proceed-anyway escape.
+    if (!skipPreflight && agent.os_type === 'linux' &&
+        agent.display_server === 'x11' && agent.xauth_status === 'missing') {
+      setRemoteControl({
+        show: true,
+        starting: false,
+        deviceName: agent.device_name,
+        preflight: {
+          kind: 'xauth-missing',
+          pendingAgent: agent,
+        },
+      });
+      return;
+    }
+
+    // Default flow: MeshCentral KVM iframe (X11 / macOS / Windows).
+    setRemoteControl({
+      show: true,
+      starting: true,
+      deviceName: agent.device_name,
+      sessionKind: 'meshcentral',
+    });
     try {
       const resp = await agentService.requestRemoteControl(agent.id);
       const data: any = (resp as any)?.data || resp;
@@ -604,6 +652,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         iframeUrl: data.session_url,
         auditId: data.audit_id,
         deviceName: data.device_name || agent.device_name,
+        sessionKind: 'meshcentral',
       });
     } catch (e: any) {
       setRemoteControl({
@@ -620,10 +669,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   // network failure on /end doesn't block the UI close.
   const handleEndRemoteControl = async () => {
     const auditId = remoteControl.auditId;
+    const kind = remoteControl.sessionKind;
     setRemoteControl({ show: false });
     if (auditId) {
       try {
-        await agentService.requestEndRemoteControl(auditId);
+        if (kind === 'wayland') {
+          await agentService.requestEndWaylandRemoteControl(auditId);
+        } else {
+          await agentService.requestEndRemoteControl(auditId);
+        }
       } catch (e) {
         console.warn('Failed to end remote-control session cleanly:', e);
       }
@@ -2384,7 +2438,8 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   Remote Control: {remoteControl.deviceName || 'Device'}
                 </div>
                 <div className="text-xs text-gray-400">
-                  Live session via MeshCentral · session id {remoteControl.auditId?.slice(0, 8) || '…'}
+                  Live session via {remoteControl.sessionKind === 'wayland' ? 'Wayland portal' : 'MeshCentral'}
+                  {' · session id '}{remoteControl.auditId?.slice(0, 8) || '…'}
                 </div>
               </div>
             </div>
@@ -2398,57 +2453,49 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             </button>
           </div>
 
-          {/* Body: preflight warning / starting spinner / error / iframe */}
+          {/* Body: preflight warning / starting spinner / error / iframe / Wayland noVNC */}
           <div className="flex-1 relative bg-gray-800">
-            {remoteControl.preflight?.kind === 'wayland' && (
+            {/* Wayland session: render noVNC against the relay URL.
+                When relayUrl is null (v1.19 alpha) we surface the
+                note explaining the operator needs an SSH tunnel. */}
+            {remoteControl.sessionKind === 'wayland' &&
+             !remoteControl.starting &&
+             !remoteControl.error &&
+             remoteControl.waylandRelayUrl && (
+              <WaylandRemoteControlClient
+                url={remoteControl.waylandRelayUrl}
+                onDisconnect={() => handleEndRemoteControl()}
+              />
+            )}
+            {remoteControl.sessionKind === 'wayland' &&
+             !remoteControl.starting &&
+             !remoteControl.error &&
+             !remoteControl.waylandRelayUrl && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
                 <AlertTriangle className="w-10 h-10 text-amber-400 mb-3" />
                 <div className="text-base font-semibold mb-2">
-                  Wayland session detected — Remote Control will not display
+                  Wayland Remote Control session started, but no relay URL
                 </div>
                 <div className="text-sm text-gray-300 max-w-2xl text-center space-y-2">
                   <p>
-                    <strong>{remoteControl.deviceName || 'This Linux host'}</strong> is running a
-                    {remoteControl.preflight.compositor ? ` ${remoteControl.preflight.compositor} ` : ' '}
-                    Wayland session. The current Remote Control engine (MeshCentral KVM)
-                    only supports X11 — opening a session here would result in a black screen
-                    or a "configure to use Xorg" error.
+                    The agent reported a working Wayland session — the
+                    consent dialog was approved on the host and
+                    <code className="mx-1">screencast-live</code> is
+                    listening — but the backend hasn't yet wired the
+                    MeshCentral relay-tunnel orchestration that would
+                    expose the agent's localhost VNC port through a
+                    wss URL.
                   </p>
+                  {remoteControl.waylandRelayNote && (
+                    <p className="text-gray-400 text-xs whitespace-pre-line">
+                      {remoteControl.waylandRelayNote}
+                    </p>
+                  )}
                   <p className="text-gray-400 text-xs">
-                    Native Wayland support (xdg-desktop-portal + PipeWire bridge) is planned
-                    for a future release. In the meantime, you have three options:
+                    For dev verification, set up an SSH tunnel to the
+                    agent host, run vnc-ws-bridge there, then visit
+                    /dev-novnc-test.html?url=ws://localhost:6080.
                   </p>
-                  <ul className="text-left text-gray-300 text-sm list-disc list-inside max-w-xl mx-auto space-y-1">
-                    <li>
-                      Have the end-user log out and pick "GNOME on Xorg" (or equivalent) at
-                      the login screen — the agent will report <code>x11</code> on its next
-                      heartbeat and Remote Control will work.
-                    </li>
-                    <li>
-                      SSH into the host and use a CLI-based remote tool instead.
-                    </li>
-                    <li>
-                      Proceed anyway — useful only if you suspect the heartbeat snapshot is
-                      stale and the host has actually switched to X11.
-                    </li>
-                  </ul>
-                </div>
-                <div className="mt-6 flex gap-3">
-                  <button
-                    onClick={() => setRemoteControl({ show: false })}
-                    className="px-4 py-2 text-sm rounded bg-gray-700 text-white hover:bg-gray-600"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={() => {
-                      const a = remoteControl.preflight?.pendingAgent;
-                      if (a) handleStartRemoteControl(a, true);
-                    }}
-                    className="px-4 py-2 text-sm rounded bg-amber-600 text-white hover:bg-amber-700"
-                  >
-                    Proceed anyway
-                  </button>
                 </div>
               </div>
             )}
