@@ -215,6 +215,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // connect to; null in v1.19 alpha until relay-tunnel
     // orchestration is wired (see backend TODO).
     waylandRelayUrl?: string | null;
+    // v1.20+ — wss URL for the H.264 video tunnel. Browser dials
+    // this in parallel with the rfb relay when WebCodecs is
+    // available; absent for older agents and on browsers that
+    // can't decode H.264 in JS.
+    waylandVideoUrl?: string | null;
     waylandRelayNote?: string;
     auditId?: string;
     // sessionKind tells handleEndRemoteControl which end-endpoint
@@ -596,20 +601,32 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         // lives on api. (where the backend is). Falling back to
         // window.location.host would dial the static-frontend host
         // which doesn't speak WS.
-        let relayUrl: string | null = data.relay_url ?? null;
-        if (!relayUrl && data.relay_path) {
+        // Helper to convert a relative `/ws/wayland-tunnel/...`
+        // path into the absolute wss URL the browser dials. The
+        // dashboard is served from www. but the relay lives on
+        // api. — derive the host from VITE_API_BASE_URL.
+        const wssURLFromPath = (path: string): string => {
           const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
-          // Strip a trailing /api so we land on the host root that
-          // the backend listens on (e.g. https://api.example.com).
           const apiOrigin = apiBase.replace(/\/api$/, '');
           const u = new URL(apiOrigin || window.location.origin);
           const proto = u.protocol === 'https:' ? 'wss:' : 'ws:';
-          relayUrl = `${proto}//${u.host}${data.relay_path}`;
+          return `${proto}//${u.host}${path}`;
+        };
+        let relayUrl: string | null = data.relay_url ?? null;
+        if (!relayUrl && data.relay_path) {
+          relayUrl = wssURLFromPath(data.relay_path);
+        }
+        // v1.20+: video tunnel for H.264 (consumed via WebCodecs).
+        // Optional — present only when the agent reported an h264_port.
+        let videoUrl: string | null = null;
+        if (data.video_relay_path) {
+          videoUrl = wssURLFromPath(data.video_relay_path);
         }
         setRemoteControl({
           show: true,
           starting: false,
           waylandRelayUrl: relayUrl,
+          waylandVideoUrl: videoUrl,
           waylandRelayNote: data.relay_url_note,
           auditId: data.audit_id,
           deviceName: data.device_name || agent.device_name,
@@ -2481,6 +2498,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               <WaylandRemoteControlClient
                 ref={waylandClientRef}
                 url={remoteControl.waylandRelayUrl}
+                videoUrl={remoteControl.waylandVideoUrl ?? undefined}
                 onDisconnect={() => handleEndRemoteControl()}
               />
             )}

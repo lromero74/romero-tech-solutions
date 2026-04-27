@@ -78,25 +78,23 @@ const TICKET_TTL_MS = 60_000;
  * needed. Mutating callers hold no lock — JS is single-threaded
  * so the (read, write) is atomic from the event loop's POV.
  */
-function getPair(auditId) {
-  let p = pairs.get(auditId);
+function getPair(auditId, kind) {
+  // Composite key: separate pair tracking per kind so the rfb and
+  // video tunnels for the same audit_id pair independently.
+  const key = `${auditId}:${kind}`;
+  let p = pairs.get(key);
   if (!p) {
     p = {
       agent: null,
       dashboard: null,
       parkedTimer: null,
-      // Pre-pair message buffers. The agent typically connects
-      // first and immediately sends RFB version greeting bytes
-      // ("RFB 003.008\n") before the dashboard's WS even opens.
-      // Without buffering, those early bytes hit a connected ws
-      // with no 'message' listener attached yet and are silently
-      // dropped by Node's `ws` library, which leaves noVNC stuck
-      // at "Connecting…" because the version greeting never
-      // arrived.
+      // Pre-pair message buffers — see notes on the bug this
+      // fixes (early agent bytes silently dropped by Node ws
+      // before the dashboard side connects).
       bufferedFromAgent: [],
       bufferedFromDashboard: [],
     };
-    pairs.set(auditId, p);
+    pairs.set(key, p);
   }
   return p;
 }
@@ -123,10 +121,11 @@ function pipeFrames(from, to, label) {
  * Tear down a pairing: close both sides if they're open, clear
  * timers, remove from the map. Idempotent.
  */
-async function teardown(auditId, reason) {
-  const p = pairs.get(auditId);
+async function teardown(auditId, kind, reason) {
+  const key = `${auditId}:${kind}`;
+  const p = pairs.get(key);
   if (!p) return;
-  pairs.delete(auditId);
+  pairs.delete(key);
   if (p.parkedTimer) {
     clearTimeout(p.parkedTimer);
   }
@@ -141,22 +140,24 @@ async function teardown(auditId, reason) {
     }
   }
   // Best-effort audit-row update so the dashboard's session-history
-  // view shows when the relay actually disconnected. Distinct from
-  // ended_at (which is set when the *audit* row closes via the
-  // /end endpoint).
-  try {
-    await query(
-      `UPDATE remote_control_sessions
-          SET metadata = metadata || $2::jsonb
-        WHERE id = $1`,
-      [auditId, JSON.stringify({
-        relay_closed_at: new Date().toISOString(),
-        relay_close_reason: reason || 'unknown',
-      })]
-    );
-  } catch (e) {
-    // Don't fail teardown if the DB write errors.
-    console.warn('[waylandTunnel] audit-row update failed:', e.message);
+  // view shows when the relay actually disconnected. We only stamp
+  // on rfb-tunnel teardown (the rfb tunnel is the "primary" — its
+  // close marks the session done; the video tunnel may flap
+  // independently if WebCodecs isn't supported on the dashboard).
+  if (kind === 'rfb') {
+    try {
+      await query(
+        `UPDATE remote_control_sessions
+            SET metadata = metadata || $2::jsonb
+          WHERE id = $1`,
+        [auditId, JSON.stringify({
+          relay_closed_at: new Date().toISOString(),
+          relay_close_reason: reason || 'unknown',
+        })]
+      );
+    } catch (e) {
+      console.warn('[waylandTunnel] audit-row update failed:', e.message);
+    }
   }
 }
 
@@ -302,30 +303,37 @@ export function attachToHttpServer(httpServer) {
       // here means it gets through.
       return;
     }
-    // Parse: /ws/wayland-tunnel/:audit_id/agent|dashboard
-    const m = url.match(/^\/ws\/wayland-tunnel\/([^/?]+)\/(agent|dashboard)(\?.*)?$/);
+    // Parse: /ws/wayland-tunnel/:audit_id/(agent|dashboard|video-agent|video-dashboard)
+    //
+    // The "kind" prefix ("video-") selects which independent
+    // pairing the WS belongs to:
+    //   - rfb   (no prefix)   — input + small dirty regions
+    //   - video (video-…)     — H.264 NALU stream, one direction (agent → dashboard)
+    //
+    // Each kind has its own Map of pairs so the two streams pair
+    // independently per audit_id.
+    const m = url.match(/^\/ws\/wayland-tunnel\/([^/?]+)\/(video-)?(agent|dashboard)(\?.*)?$/);
     if (!m) {
       socket.destroy();
       return;
     }
-    const [, auditId, role] = m;
+    const [, auditId, videoPrefix, side] = m;
+    const kind = videoPrefix ? 'video' : 'rfb';
 
-    // Auth + audit lookup BEFORE we accept the upgrade. If we
-    // upgrade first and reject second, the client sees a
-    // confusing close-with-no-reason. Upfront 401 is clearer.
+    // Auth + audit lookup BEFORE we accept the upgrade.
     let identity;
     try {
-      if (role === 'agent') {
+      if (side === 'agent') {
         identity = { kind: 'agent', agentId: authenticateAgent(req) };
       } else {
         identity = { kind: 'dashboard', user: await authenticateDashboard(req, auditId) };
       }
       const audit = await loadAudit(auditId);
-      if (role === 'agent' && audit.agent_device_id !== identity.agentId) {
+      if (side === 'agent' && audit.agent_device_id !== identity.agentId) {
         throw new Error('agent_id mismatch with audit row');
       }
     } catch (e) {
-      console.warn(`[waylandTunnel] reject ${role} ${auditId}: ${e.message}`);
+      console.warn(`[waylandTunnel] reject ${kind}/${side} ${auditId}: ${e.message}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
@@ -333,7 +341,7 @@ export function attachToHttpServer(httpServer) {
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.binaryType = 'nodebuffer';
-      handleConnection(ws, auditId, role);
+      handleConnection(ws, auditId, side, kind);
     });
   });
 }
@@ -342,8 +350,9 @@ export function attachToHttpServer(httpServer) {
  * Per-connection setup: stash in pairs, wire the bridge if both
  * sides present, schedule a 60s parked-timeout if only one side.
  */
-function handleConnection(ws, auditId, role) {
-  const pair = getPair(auditId);
+function handleConnection(ws, auditId, role, kind = 'rfb') {
+  const pair = getPair(auditId, kind);
+  const tag = `${kind}/${role}`;
 
   // Replace stale agent connection (e.g. after a brief network
   // drop the agent reconnects). Dashboard double-connect is a
@@ -361,14 +370,14 @@ function handleConnection(ws, auditId, role) {
     pair.dashboard = ws;
   }
 
-  console.log(`[waylandTunnel] ${role} connected for audit=${auditId}`);
+  console.log(`[waylandTunnel] ${tag} connected for audit=${auditId}`);
 
   ws.on('close', (code, reason) => {
-    console.log(`[waylandTunnel] ${role} closed for audit=${auditId} code=${code}`);
-    teardown(auditId, `${role} disconnected (${code})`);
+    console.log(`[waylandTunnel] ${tag} closed for audit=${auditId} code=${code}`);
+    teardown(auditId, kind, `${tag} disconnected (${code})`);
   });
   ws.on('error', (e) => {
-    console.warn(`[waylandTunnel] ${role} error for audit=${auditId}:`, e.message);
+    console.warn(`[waylandTunnel] ${tag} error for audit=${auditId}:`, e.message);
   });
 
   // Pre-pair buffer: capture any incoming bytes before the
@@ -390,7 +399,7 @@ function handleConnection(ws, auditId, role) {
       clearTimeout(pair.parkedTimer);
       pair.parkedTimer = null;
     }
-    console.log(`[waylandTunnel] PAIRED audit=${auditId}`);
+    console.log(`[waylandTunnel] PAIRED ${kind} audit=${auditId}`);
     // Detach the pre-pair buffering listeners on both sides so
     // pipeFrames takes over cleanly.
     if (pair._agentPreBuf) {
@@ -437,7 +446,7 @@ function handleConnection(ws, auditId, role) {
     // pair branch above clears the timer.
     pair.parkedTimer = setTimeout(() => {
       console.log(`[waylandTunnel] timeout audit=${auditId} ${role}-only never paired`);
-      teardown(auditId, 'counterpart timeout');
+      teardown(auditId, kind, 'counterpart timeout');
     }, 60_000);
   }
 }
