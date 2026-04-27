@@ -402,15 +402,15 @@ router.post(
       // the dev (localhost) and prod (api.) deployments both work.
       // Backend just returns the path; dashboard prepends the wss
       // host on its end.
-      // Mint two one-shot tickets — one for the rfb tunnel
-      // (input + small dirty-rect display), one for the video
-      // tunnel (H.264 NALU stream consumed via WebCodecs). Both
-      // expire in 60s; only the dashboard's first WS dial in
-      // each path consumes them.
+      // Mint three one-shot tickets — rfb (input + display),
+      // video (H.264 / WebCodecs), audio (Opus/WebM via MSE).
+      // All expire in 60s; each is consumed on first valid use.
       const rfbTicket = issueDashboardTicket(audit.id, req.user.id);
       const videoTicket = issueDashboardTicket(audit.id, req.user.id);
+      const audioTicket = issueDashboardTicket(audit.id, req.user.id);
       const relayPath = `/ws/wayland-tunnel/${audit.id}/dashboard?ticket=${rfbTicket}`;
       const videoRelayPath = `/ws/wayland-tunnel/${audit.id}/video-dashboard?ticket=${videoTicket}`;
+      const audioRelayPath = `/ws/wayland-tunnel/${audit.id}/audio-dashboard?ticket=${audioTicket}`;
 
       return res.json({
         success: true,
@@ -418,13 +418,9 @@ router.post(
         device_name: agent.device_name,
         vnc_port: port,
         relay_path: relayPath,
-        // Video tunnel path — present whenever the agent
-        // reported an h264_port. Dashboard opens it iff
-        // WebCodecs is available; falls back to the rfb path
-        // for display otherwise.
         video_relay_path: videoRelayPath,
-        // Kept for backward-compat with v1.19-alpha dashboards.
-        relay_url: null,
+        audio_relay_path: audioRelayPath,
+        relay_url: null, // backward-compat
       });
     } catch (e) {
       return fail(res, 500, 'INTERNAL', 'Failed to initiate Wayland Remote Control session', e);

@@ -65,6 +65,14 @@ export interface WaylandRemoteControlClientProps {
    * gracefully to noVNC-only display (the v1.19 path).
    */
   videoUrl?: string;
+  /**
+   * Optional Opus/WebM audio stream WS URL. When set, opens the
+   * audio tunnel and feeds the byte-stream into a MediaSource
+   * SourceBuffer attached to a hidden HTMLAudioElement so the
+   * operator hears whatever the host is playing. Browser autoplay
+   * policy is satisfied by the user's Remote Control button click.
+   */
+  audioUrl?: string;
   /** Fires after the RFB handshake completes and pixels start flowing. */
   onConnect?: () => void;
   /**
@@ -95,7 +103,7 @@ const WaylandRemoteControlClient = forwardRef<
   WaylandRemoteControlClientHandle,
   WaylandRemoteControlClientProps
 >(function WaylandRemoteControlClient(props, ref) {
-  const { url, videoUrl, onConnect, onDisconnect, onSecurityFailure, className } = props;
+  const { url, videoUrl, audioUrl, onConnect, onDisconnect, onSecurityFailure, className } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<RFB | null>(null);
   const videoCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -410,6 +418,93 @@ const WaylandRemoteControlClient = forwardRef<
       try { decoder.close(); } catch { /* ignore */ }
     };
   }, [videoUrl]);
+
+  // Audio (Opus/WebM via MSE). Opens a parallel WS that streams a
+  // streamable WebM container; we appendBuffer() into a SourceBuffer
+  // attached to a hidden <audio> element so the operator hears
+  // whatever the host's default sink is playing.
+  //
+  // Browser autoplay restrictions: most browsers block audio that
+  // wasn't initiated by a user gesture. Our gesture is the
+  // Remote Control button click that mounted this component, so
+  // .play() is allowed in the same task chain.
+  useEffect(() => {
+    if (!audioUrl) return;
+    if (typeof window === 'undefined' || typeof window.MediaSource === 'undefined') {
+      console.warn('[wayland-audio] MediaSource unavailable — audio disabled');
+      return;
+    }
+    const mimeType = 'audio/webm;codecs=opus';
+    if (!MediaSource.isTypeSupported(mimeType)) {
+      console.warn('[wayland-audio] browser does not support', mimeType);
+      return;
+    }
+    console.log('[wayland-audio] opening audio WS:', audioUrl);
+
+    const audioEl = document.createElement('audio');
+    audioEl.autoplay = true;
+    // Hidden — we don't want a control bar floating in the modal.
+    audioEl.style.display = 'none';
+    document.body.appendChild(audioEl);
+
+    const ms = new MediaSource();
+    audioEl.src = URL.createObjectURL(ms);
+
+    const ws = new WebSocket(audioUrl);
+    ws.binaryType = 'arraybuffer';
+
+    let sourceBuffer: SourceBuffer | null = null;
+    const queue: ArrayBuffer[] = [];
+
+    const flushQueue = () => {
+      if (!sourceBuffer || sourceBuffer.updating) return;
+      const next = queue.shift();
+      if (next) {
+        try {
+          sourceBuffer.appendBuffer(next);
+        } catch (e) {
+          console.error('[wayland-audio] appendBuffer error:', e);
+        }
+      }
+    };
+
+    ms.addEventListener('sourceopen', () => {
+      try {
+        sourceBuffer = ms.addSourceBuffer(mimeType);
+        sourceBuffer.mode = 'sequence'; // ignore stream timestamps; play in arrival order
+        sourceBuffer.addEventListener('updateend', flushQueue);
+        flushQueue();
+      } catch (e) {
+        console.error('[wayland-audio] addSourceBuffer failed:', e);
+      }
+    });
+
+    ws.onopen = () => console.log('[wayland-audio] WS open');
+    ws.onmessage = (ev: MessageEvent) => {
+      queue.push(ev.data as ArrayBuffer);
+      flushQueue();
+    };
+    ws.onerror = (e) => console.error('[wayland-audio] WS error:', e);
+    ws.onclose = (e) => console.log('[wayland-audio] WS close code=' + e.code);
+
+    // play() may reject on browsers that decided this isn't a
+    // valid gesture chain — we just log; the audio element will
+    // attempt to autoplay too.
+    audioEl.play().catch((e) => {
+      console.warn('[wayland-audio] audioEl.play rejected:', e?.message ?? e);
+    });
+
+    return () => {
+      console.log('[wayland-audio] cleanup');
+      try { ws.close(); } catch { /* ignore */ }
+      try {
+        if (ms.readyState === 'open') ms.endOfStream();
+      } catch { /* ignore */ }
+      try { audioEl.pause(); } catch { /* ignore */ }
+      try { URL.revokeObjectURL(audioEl.src); } catch { /* ignore */ }
+      try { audioEl.remove(); } catch { /* ignore */ }
+    };
+  }, [audioUrl]);
 
   // When the H.264 video stream is healthy, hide the noVNC canvas
   // so the operator sees the smooth video feed rather than the

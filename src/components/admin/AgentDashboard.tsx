@@ -220,6 +220,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     // available; absent for older agents and on browsers that
     // can't decode H.264 in JS.
     waylandVideoUrl?: string | null;
+    // v1.21+ — wss URL for the Opus/WebM audio tunnel. Browser
+    // appends to a MediaSource SourceBuffer attached to a hidden
+    // <audio> element. Absent for agents without the audio branch.
+    waylandAudioUrl?: string | null;
     waylandRelayNote?: string;
     auditId?: string;
     // sessionKind tells handleEndRemoteControl which end-endpoint
@@ -622,11 +626,17 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (data.video_relay_path) {
           videoUrl = wssURLFromPath(data.video_relay_path);
         }
+        // v1.21+: audio tunnel for Opus/WebM (played via MSE).
+        let audioUrl: string | null = null;
+        if (data.audio_relay_path) {
+          audioUrl = wssURLFromPath(data.audio_relay_path);
+        }
         setRemoteControl({
           show: true,
           starting: false,
           waylandRelayUrl: relayUrl,
           waylandVideoUrl: videoUrl,
+          waylandAudioUrl: audioUrl,
           waylandRelayNote: data.relay_url_note,
           auditId: data.audit_id,
           deviceName: data.device_name || agent.device_name,
@@ -2499,6 +2509,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                 ref={waylandClientRef}
                 url={remoteControl.waylandRelayUrl}
                 videoUrl={remoteControl.waylandVideoUrl ?? undefined}
+                audioUrl={remoteControl.waylandAudioUrl ?? undefined}
                 onDisconnect={() => handleEndRemoteControl()}
               />
             )}

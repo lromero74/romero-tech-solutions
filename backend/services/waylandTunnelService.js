@@ -303,22 +303,25 @@ export function attachToHttpServer(httpServer) {
       // here means it gets through.
       return;
     }
-    // Parse: /ws/wayland-tunnel/:audit_id/(agent|dashboard|video-agent|video-dashboard)
+    // Parse: /ws/wayland-tunnel/:audit_id/(agent|dashboard|video-agent|video-dashboard|audio-agent|audio-dashboard)
     //
-    // The "kind" prefix ("video-") selects which independent
-    // pairing the WS belongs to:
+    // The "kind" prefix selects which independent pairing the WS
+    // belongs to:
     //   - rfb   (no prefix)   — input + small dirty regions
-    //   - video (video-…)     — H.264 NALU stream, one direction (agent → dashboard)
+    //   - video (video-…)     — H.264 NALU stream (one-way agent → dashboard)
+    //   - audio (audio-…)     — Opus/WebM stream (one-way agent → dashboard)
     //
-    // Each kind has its own Map of pairs so the two streams pair
+    // Each kind has its own Map of pairs so the streams pair
     // independently per audit_id.
-    const m = url.match(/^\/ws\/wayland-tunnel\/([^/?]+)\/(video-)?(agent|dashboard)(\?.*)?$/);
+    const m = url.match(/^\/ws\/wayland-tunnel\/([^/?]+)\/(video-|audio-)?(agent|dashboard)(\?.*)?$/);
     if (!m) {
       socket.destroy();
       return;
     }
-    const [, auditId, videoPrefix, side] = m;
-    const kind = videoPrefix ? 'video' : 'rfb';
+    const [, auditId, kindPrefix, side] = m;
+    let kind = 'rfb';
+    if (kindPrefix === 'video-') kind = 'video';
+    else if (kindPrefix === 'audio-') kind = 'audio';
 
     // Auth + audit lookup BEFORE we accept the upgrade.
     let identity;
