@@ -3,7 +3,7 @@ import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, P
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
-import WaylandRemoteControlClient from './WaylandRemoteControlClient';
+import WaylandRemoteControlClient, { type WaylandRemoteControlClientHandle } from './WaylandRemoteControlClient';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import { websocketService } from '../../services/websocketService';
 import AgentEditModal from './AgentEditModal';
@@ -130,6 +130,10 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
   useEffect(() => {
     latestAgentVersionRef.current = latestAgentVersion;
   }, [latestAgentVersion]);
+
+  // Imperative handle to the noVNC client so the special-keys
+  // toolbar can call sendCtrlAltDel / sendKey on it.
+  const waylandClientRef = useRef<WaylandRemoteControlClientHandle | null>(null);
 
   // Per-agent "update queued" state, keyed by agent.id with value =
   // the agent_version observed at the moment the admin clicked
@@ -2470,6 +2474,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
              !remoteControl.error &&
              remoteControl.waylandRelayUrl && (
               <WaylandRemoteControlClient
+                ref={waylandClientRef}
                 url={remoteControl.waylandRelayUrl}
                 onDisconnect={() => handleEndRemoteControl()}
               />
@@ -2573,6 +2578,69 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               />
             )}
           </div>
+
+          {/* Wayland special-keys toolbar. Lives below the canvas
+              because the noVNC view doesn't carry MeshCentral's
+              built-in chrome that the iframe path provides. */}
+          {remoteControl.sessionKind === 'wayland' &&
+           !remoteControl.starting &&
+           !remoteControl.error &&
+           remoteControl.waylandRelayUrl && (
+            <div className="bg-gray-900 text-white border-t border-indigo-500 px-3 py-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs uppercase tracking-wide text-gray-400 mr-2">Send</span>
+              <button
+                onClick={() => waylandClientRef.current?.sendCtrlAltDel()}
+                className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                title="Ctrl+Alt+Del"
+              >
+                Ctrl+Alt+Del
+              </button>
+              {/* X11 keysym 0xffeb = XK_Super_L (the Windows / GNOME Activities key). */}
+              <button
+                onClick={() => waylandClientRef.current?.sendKey(0xffeb, 'MetaLeft')}
+                className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                title="Super (GNOME Activities / Windows key)"
+              >
+                Super
+              </button>
+              {/* 0xff1b = XK_Escape */}
+              <button
+                onClick={() => waylandClientRef.current?.sendKey(0xff1b, 'Escape')}
+                className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                title="Escape"
+              >
+                Esc
+              </button>
+              {/* Alt+Tab — press alt, press tab, release tab, release alt.
+                  noVNC's sendKey(down) doesn't auto-release, so we sequence
+                  manually for modifier combos. */}
+              <button
+                onClick={() => {
+                  const c = waylandClientRef.current;
+                  if (!c) return;
+                  c.sendKey(0xffe9, 'AltLeft', true); // alt down
+                  c.sendKey(0xff09, 'Tab', true);     // tab down
+                  c.sendKey(0xff09, 'Tab', false);    // tab up
+                  c.sendKey(0xffe9, 'AltLeft', false); // alt up
+                }}
+                className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                title="Alt+Tab (switch windows)"
+              >
+                Alt+Tab
+              </button>
+              {/* 0xff61 = XK_Print on most distros — but X11 keysym 0xff15
+                  (XK_Sys_Req) is what GNOME's screenshot binding actually
+                  listens for. Most desktops accept either; 0xff61 is the
+                  more universal pick. */}
+              <button
+                onClick={() => waylandClientRef.current?.sendKey(0xff61, 'PrintScreen')}
+                className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
+                title="Print Screen"
+              >
+                PrtSc
+              </button>
+            </div>
+          )}
         </div>
       )}
 

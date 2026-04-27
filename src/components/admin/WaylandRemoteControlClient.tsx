@@ -30,6 +30,20 @@ import RFB from '@novnc/novnc/lib/rfb';
 export interface WaylandRemoteControlClientHandle {
   /** Imperatively disconnect. Useful for parent's "End session" button. */
   disconnect(): void;
+  /**
+   * Synthesize an RFB KeyEvent. keysym is an X11 keysym; code is
+   * a DOM KeyboardEvent.code-style string (used by noVNC for some
+   * client-side bookkeeping but not on the wire). down=true sends
+   * a press; pass down=false (or leave undefined and call twice)
+   * for a press+release pair.
+   */
+  sendKey(keysym: number, code: string, down?: boolean): void;
+  /**
+   * Send the platform's "secure attention sequence" — Ctrl+Alt+Del
+   * on Windows, Ctrl+Alt+Backspace on X11, etc. noVNC handles the
+   * key-sequence ordering internally.
+   */
+  sendCtrlAltDel(): void;
 }
 
 export interface WaylandRemoteControlClientProps {
@@ -88,6 +102,28 @@ const WaylandRemoteControlClient = forwardRef<
           }
         }
       },
+      sendKey(keysym: number, code: string, down?: boolean) {
+        if (!rfbRef.current) return;
+        try {
+          if (down === undefined) {
+            // press + release pair (most common for "send a key")
+            rfbRef.current.sendKey(keysym, code, true);
+            rfbRef.current.sendKey(keysym, code, false);
+          } else {
+            rfbRef.current.sendKey(keysym, code, down);
+          }
+        } catch {
+          // Disconnected mid-call; ignore.
+        }
+      },
+      sendCtrlAltDel() {
+        if (!rfbRef.current) return;
+        try {
+          rfbRef.current.sendCtrlAltDel();
+        } catch {
+          // Disconnected mid-call; ignore.
+        }
+      },
     }),
     [],
   );
@@ -140,16 +176,28 @@ const WaylandRemoteControlClient = forwardRef<
 
     const handleConnect = () => {
       setState('connected');
-      // Show the operator's local OS cursor (as a crosshair) over
-      // the canvas so they can see exactly where they're aiming.
-      // noVNC's default is `cursor: none` because the server
-      // typically draws its own cursor via the cursor pseudo-
-      // encoding — but we keep the local cursor visible too, which
-      // makes targeting feel direct on remote sessions where the
-      // server-side cursor lags slightly behind input.
+      // Two CSS tweaks at connect time:
+      //  1. Show the operator's local OS cursor (as a crosshair)
+      //     over the canvas so they can see exactly where they're
+      //     aiming. noVNC's default is `cursor: none` because the
+      //     server typically draws its own cursor via the cursor
+      //     pseudo-encoding — but we keep the local cursor visible
+      //     too, which makes targeting feel direct on remote
+      //     sessions where the server-side cursor lags slightly
+      //     behind input.
+      //  2. Constrain the canvas to the container — even with
+      //     scaleViewport=true noVNC sometimes lets the canvas
+      //     element grow to its native framebuffer size (1920×1080)
+      //     and the bottom of the remote desktop ends up clipped
+      //     below the modal body. max-width/height + object-fit:
+      //     contain pins it inside the body and preserves aspect
+      //     ratio.
       const canvas = containerRef.current?.querySelector('canvas');
       if (canvas) {
         canvas.style.cursor = 'crosshair';
+        canvas.style.maxWidth = '100%';
+        canvas.style.maxHeight = '100%';
+        canvas.style.objectFit = 'contain';
       }
       onConnectRef.current?.();
     };
