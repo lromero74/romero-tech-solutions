@@ -54,6 +54,13 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
   const [rebootRequested, setRebootRequested] = useState(false);
   const [rebootMinutes, setRebootMinutes] = useState(1);
 
+  // Distro-upgrade trigger state. Local-only; the post-trigger
+  // dashboard view is the existing pending_action_commands flow
+  // (the agent_commands row stays in 'executing' until the host
+  // reboots and comes back on the new release).
+  const [upgradeStarting, setUpgradeStarting] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
+
   // "Rebooting since…" badge — computed before the early return so
   // the tick-effect below has a stable dependency. computeRebootInfo
   // tolerates an undefined latestMetrics.
@@ -166,7 +173,7 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                 release on their own.
               </p>
               {distroUpgrade.upgrade_command && (
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <code className="px-2 py-1 text-xs rounded bg-purple-100 dark:bg-purple-900/40 text-purple-900 dark:text-purple-200 break-all">
                     {distroUpgrade.upgrade_command}
                   </code>
@@ -177,11 +184,59 @@ export const OSPatchStatus: React.FC<AgentDetailsComponentProps & { agentId?: st
                     className="px-2 py-1 text-xs font-medium rounded bg-purple-600 text-white hover:bg-purple-700 flex-shrink-0">
                     Copy
                   </button>
+                  {/* Linux-only auto-trigger button. macOS distros land
+                      here too (CheckDistroUpgrade returns the
+                      `softwareupdate --install -a` command for darwin),
+                      but the agent's runDistroUpgrade is Linux-only —
+                      the macOS path remains "open System Settings".
+                      Hide the trigger when distro is darwin to avoid
+                      surfacing a button that will fail. */}
+                  {distroUpgrade.distro && distroUpgrade.distro !== 'macos' && agentId && (
+                    <button
+                      disabled={upgradeStarting}
+                      onClick={async () => {
+                        if (!confirm(
+                          `Start upgrade of ${distroUpgrade.distro || 'this'} from ` +
+                          `${distroUpgrade.current_release} → ${distroUpgrade.available_release}?\n\n` +
+                          `What happens next:\n` +
+                          `• A confirmation dialog pops on the user's desktop\n` +
+                          `• User clicks "Start Upgrade" or "Cancel" (5 min timeout)\n` +
+                          `• If approved: thousands of packages get replaced (~30+ min)\n` +
+                          `• The host reboots mid-process\n` +
+                          `• Dashboard tracks completion when the new release heartbeats back\n\n` +
+                          `If no graphical user is logged in, the command will fail. ` +
+                          `Continue?`
+                        )) return;
+                        setUpgradeStarting(true);
+                        setUpgradeError(null);
+                        try {
+                          await agentService.requestUpgradeDistro(agentId, {
+                            upgrade_command: distroUpgrade.upgrade_command!,
+                            current_release: distroUpgrade.current_release,
+                            available_release: distroUpgrade.available_release,
+                            distro: distroUpgrade.distro,
+                          });
+                        } catch (e: any) {
+                          setUpgradeError(e?.message || 'Failed to send upgrade command');
+                        } finally {
+                          setUpgradeStarting(false);
+                        }
+                      }}
+                      className="px-3 py-1 text-xs font-semibold rounded bg-purple-700 text-white hover:bg-purple-800 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
+                      title="Sends the upgrade command to the agent. The user on the device gets a confirmation dialog before anything runs.">
+                      {upgradeStarting ? 'Sending…' : 'Start Upgrade'}
+                    </button>
+                  )}
                 </div>
               )}
+              {upgradeError && (
+                <p className="text-xs text-red-600 dark:text-red-400 mt-2">
+                  Failed to start upgrade: {upgradeError}
+                </p>
+              )}
               <p className="text-xs text-purple-700 dark:text-purple-400 mt-2 italic">
-                Run this on the agent host as root. Auto-execution is intentionally disabled — release
-                upgrades benefit from human-in-the-loop monitoring.
+                User on the device must approve before the upgrade runs. The host reboots mid-process —
+                expect 30+ minutes of downtime. Click Copy to run the command manually instead.
               </p>
             </div>
           </div>

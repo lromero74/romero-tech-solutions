@@ -672,6 +672,43 @@ class AgentService {
   }
 
   /**
+   * Trigger an OS-level distro upgrade (Ubuntu/Debian/Fedora). The
+   * agent pops a modal confirmation in the active user's session
+   * (zenity/kdialog) explaining the duration + reboot, then runs
+   * the upgrade non-interactively if the user clicks Start. Failure
+   * to find a graphical user → command fails with an actionable
+   * error; admin can override with skip_user_prompt=true to run
+   * blind (e.g. for headless servers, but at your own risk).
+   *
+   * The upgrade itself reboots the host mid-process. The dashboard
+   * tracks completion by watching agent_devices.os_version flip to
+   * the available_release on the post-reboot heartbeat.
+   *
+   * Required payload fields are sourced from the cached
+   * latestMetrics.distro_upgrade — current/available release and
+   * the upgrade_command come from CheckDistroUpgrade on the agent
+   * side. Re-sending them in the payload (rather than re-reading
+   * on the agent) pins the upgrade to the version the admin saw
+   * when they clicked.
+   */
+  async requestUpgradeDistro(
+    agentId: string,
+    payload: {
+      upgrade_command: string;
+      current_release: string;
+      available_release: string;
+      distro?: string;
+      skip_user_prompt?: boolean;
+    }
+  ): Promise<ApiResponse<{ command_id: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/commands`, {
+      command_type: 'upgrade_distro',
+      command_params: payload,
+      requires_approval: false,
+    });
+  }
+
+  /**
    * Get the current "latest" agent version from the download manifest
    * (version.json on the API host's static download directory). Used
    * to compute the "Update available" badge in the AgentDashboard

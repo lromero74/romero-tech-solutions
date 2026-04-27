@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.16.92 Release Notes
+RTS Monitoring Agent - Version 1.16.96 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-27 00:01:28 UTC
-Previous Version: v1.16.91
-Git Commit: a735b31
+Release Date: 2026-04-27 00:39:01 UTC
+Previous Version: v1.16.95
+Git Commit: b0620e7
 
-Changes Since v1.16.91:
+Changes Since v1.16.95:
 ───────────────────────────────────────────────────────────
 
-• v1.16.92: GUI registration auto-elevates to write system config
+• v1.16.96: reboot notification has an inline Cancel Reboot button
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
