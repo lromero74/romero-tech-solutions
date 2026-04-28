@@ -409,9 +409,24 @@ const NativeRemoteControlClient = forwardRef<
       if (nalu.length <= startCodeLen) return;
       const naluType = nalu[startCodeLen] & 0x1f;
       const isKey = naluType === 5; // IDR slice
-      // Don't decode delta slices before we've seen our first IDR;
-      // the decoder will error and require keyframe-resync.
-      if (!isKey && !saw_key) return;
+      // Parameter sets (SPS=7, PPS=8) and SEI (6) / AUD (9) are
+      // always allowed through — the decoder REQUIRES SPS+PPS to
+      // be in the bitstream BEFORE the first IDR can decode.
+      // Dropping them while waiting for the first 'key' chunk
+      // (the bug pre-this-fix) makes the first keyframe undecodable
+      // and WebCodecs raises 'EncodingError: Decoding error'. Both
+      // openh264enc on Linux and VTCompressionSession on macOS
+      // can emit SPS/PPS arbitrarily close to or far from the
+      // matching IDR, so this gate has no business filtering.
+      const isParamOrMarker =
+        naluType === 7 ||  // SPS
+        naluType === 8 ||  // PPS
+        naluType === 6 ||  // SEI
+        naluType === 9;    // AUD (Access Unit Delimiter)
+      // Non-IDR coded slices (P/B frames) before the first key are
+      // genuinely undecodable — those CAN be safely dropped until
+      // saw_key flips. Still gate those.
+      if (!isKey && !isParamOrMarker && !saw_key) return;
       if (isKey) saw_key = true;
 
       // SPS (7), PPS (8), AUD (9), SEI (6) are config/markers,
