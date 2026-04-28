@@ -233,6 +233,12 @@ export async function listDevices(meshId) {
  *
  * `expirySeconds` defaults to 60 — the token is consumed once when
  * the iframe loads.
+ *
+ * NOTE: createLoginToken creates a `~t:...` token-user account that
+ * inherits the *creator's* userid in MC's session machinery — but
+ * it does NOT inherit the creator's mesh-link rights. The iframe
+ * session ends up with rights=0 on every device, which greys out
+ * the Connect/RDP/HW buttons. Prefer getLoginCookie() below.
  */
 export async function mintLoginToken(expirySeconds = 60) {
   const ws = await openControlWebSocket();
@@ -243,6 +249,39 @@ export async function mintLoginToken(expirySeconds = 60) {
       expire: expirySeconds,
     });
     return resp;
+  } finally {
+    ws.close();
+  }
+}
+
+/**
+ * Mint an SSO login cookie for the management-API user. The returned
+ * value is meant to be passed as `?login=<cookie>` in a MeshCentral
+ * iframe URL — MC's handleRootRequestEx decodes the cookie and binds
+ * the iframe's session to the underlying account directly (NOT a
+ * token-user proxy), so the iframe inherits the user's full
+ * mesh-link rights and can actually click Connect.
+ *
+ * Requires `settings.allowlogintoken: true` in MC's config.json.
+ * Without that flag MC silently ignores the request (the Promise
+ * times out waiting for the response). The flag is safe — it only
+ * controls whether already-authenticated WS connections can mint
+ * cookies tied to themselves; it doesn't expose anything to
+ * unauthenticated callers.
+ *
+ * Cookie has a 60-minute timeout (set by MC, not configurable from
+ * the API). One-shot usage is fine — once consumed, MC swaps it
+ * for a normal session cookie and the URL param is no longer
+ * needed.
+ */
+export async function getLoginCookie() {
+  const ws = await openControlWebSocket();
+  try {
+    const resp = await sendActionAndWait(ws, { action: 'logincookie' });
+    if (!resp || typeof resp.cookie !== 'string') {
+      throw new Error('MeshCentral did not return a login cookie — is settings.allowlogintoken=true set in config.json?');
+    }
+    return resp.cookie;
   } finally {
     ws.close();
   }
@@ -323,6 +362,7 @@ export default {
   listDeviceGroups,
   listDevices,
   mintLoginToken,
+  getLoginCookie,
   removeDeviceByName,
   disconnectSession,
 };

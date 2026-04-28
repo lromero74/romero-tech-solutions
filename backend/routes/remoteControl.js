@@ -86,24 +86,30 @@ router.post(
       // 2FA prompts on their dashboard and click through the iframe
       // load, short enough that an intercepted URL can't be replayed
       // hours later.
-      let tokenResp;
+      // Mint an SSO login cookie (NOT a createLoginToken). The
+      // cookie is server-encrypted and binds the iframe's session
+      // to the management user directly, so the iframe inherits
+      // that user's full mesh-link rights and Connect/RDP/HW
+      // buttons enable correctly.
+      //
+      // Earlier we used createLoginToken + ?user=&pass= URL params.
+      // That auto-logged the iframe in but the resulting session
+      // had rights=0 for every device — Connect was greyed out and
+      // the desktop view stayed black. The token-user MC creates
+      // does NOT inherit the creator's mesh-link rights even
+      // though it inherits the userid in session machinery. The
+      // login-cookie path bypasses that hole entirely.
+      let loginCookie;
       try {
-        tokenResp = await meshcentral.mintLoginToken(300);
+        loginCookie = await meshcentral.getLoginCookie();
       } catch (e) {
         return fail(res, 502, 'MESHCENTRAL_UNREACHABLE',
-          'Could not contact MeshCentral to mint session URL', e);
+          'Could not mint MeshCentral session cookie', e);
       }
-      // MeshCentral's createLoginToken response uses `tokenUser`
-      // (NOT `tokenName` or `username` — verified against the live
-      // 1.1.59 server during Phase 5 dogfood). Fall through to the
-      // legacy field names so a future MC version that switches
-      // back doesn't silently break.
-      const tokenName = tokenResp?.tokenUser || tokenResp?.tokenName || tokenResp?.username;
-      const tokenPass = tokenResp?.tokenPass || tokenResp?.password;
-      if (!tokenName || !tokenPass) {
+      if (!loginCookie) {
         return fail(res, 502, 'MESHCENTRAL_TOKEN_MALFORMED',
-          'MeshCentral did not return a usable login token',
-          new Error(JSON.stringify(tokenResp)));
+          'MeshCentral did not return a login cookie',
+          new Error('empty cookie'));
       }
 
       // 3. Build the iframe URL.
@@ -185,9 +191,11 @@ router.post(
       const targetParam = bareNodeId
         ? `gotonode=${encodeURIComponent(bareNodeId)}`
         : `gotodevicename=${encodeURIComponent(agent.device_name)}`;
+      // ?login=<server-encrypted-cookie> is the SSO mechanism
+      // (handleRootRequestEx in MC's webserver.js, ~line 3054).
+      // The cookie was minted above via the management API.
       const sessionUrl = `${meshUrl}/` +
-        `?user=${encodeURIComponent(tokenName)}` +
-        `&pass=${encodeURIComponent(tokenPass)}` +
+        `?login=${encodeURIComponent(loginCookie)}` +
         `&${targetParam}` +
         `&viewmode=11&hide=63`;
 
