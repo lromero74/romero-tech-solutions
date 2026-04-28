@@ -20,7 +20,7 @@
   "background_color": "#ffffff",
   "display": "standalone",
   "orientation": "portrait",
-  "start_url": "/employee",
-  "scope": "/",
+  "start_url": "https://employee.romerotechsolutions.com/",
+  "scope": "https://employee.romerotechsolutions.com/",
   "categories": ["business", "productivity", "utilities"]
 }
