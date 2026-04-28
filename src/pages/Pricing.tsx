@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { DollarSign, Clock, Gift, CheckCircle, Info, Phone, Mail, ArrowRight, Zap, Shield, UserPlus } from 'lucide-react';
+import { DollarSign, Clock, Gift, CheckCircle, Info, Phone, Mail, ArrowRight, Zap, Shield, UserPlus, Users } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
 import StructuredData from '../components/seo/StructuredData';
@@ -357,6 +357,39 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
   const premiumSchedule = pricingData?.schedule ? generateScheduleFromSummary(pricingData.schedule, 'Premium', t) : '';
   // Emergency is just "all other times" - no need to show specific schedule
   const emergencySchedule = t('pricing.tiers.emergency.allOtherTimes');
+  const managedPlans = [
+    {
+      name: t('pricing.managed.essentials.title'),
+      subtitle: t('pricing.managed.essentials.subtitle'),
+      price: '$125',
+      unit: t('pricing.managed.perUser'),
+      minimum: t('pricing.managed.essentials.minimum'),
+      features: t('pricing.managed.essentials.features').split('|'),
+      accent: 'from-cyan-500 to-blue-600',
+      border: 'border-cyan-400/50 hover:border-cyan-400'
+    },
+    {
+      name: t('pricing.managed.managed.title'),
+      subtitle: t('pricing.managed.managed.subtitle'),
+      price: '$175',
+      unit: t('pricing.managed.perUser'),
+      minimum: t('pricing.managed.managed.minimum'),
+      features: t('pricing.managed.managed.features').split('|'),
+      accent: 'from-emerald-500 to-green-600',
+      border: 'border-emerald-400/60 hover:border-emerald-400',
+      featured: true
+    },
+    {
+      name: t('pricing.managed.secure.title'),
+      subtitle: t('pricing.managed.secure.subtitle'),
+      price: '$225',
+      unit: t('pricing.managed.perUser'),
+      minimum: t('pricing.managed.secure.minimum'),
+      features: t('pricing.managed.secure.features').split('|'),
+      accent: 'from-purple-500 to-indigo-600',
+      border: 'border-purple-400/50 hover:border-purple-400'
+    }
+  ];
 
   return (
     <div className="min-h-screen">
@@ -434,6 +467,60 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                   </div>
                 </div>
               )}
+            </div>
+
+            {/* Managed Services Section */}
+            <div className="text-center mb-16">
+              <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+                {t('pricing.managed.title')}
+              </h2>
+              <p className="text-lg text-blue-200 max-w-3xl mx-auto mb-12">
+                {t('pricing.managed.subtitle')}
+              </p>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
+                {managedPlans.map((plan) => (
+                  <div key={plan.name} className="group relative">
+                    {plan.featured && (
+                      <div className="absolute -top-4 left-1/2 -translate-x-1/2 z-10">
+                        <span className="bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg">
+                          {t('pricing.managed.recommended')}
+                        </span>
+                      </div>
+                    )}
+                    <div className={`h-full bg-white/10 backdrop-blur-sm rounded-2xl p-8 shadow-2xl transition-all duration-300 hover:-translate-y-2 border-2 ${plan.border}`}>
+                      <div className={`bg-gradient-to-br ${plan.accent} rounded-xl p-4 w-fit mb-6 mx-auto`}>
+                        <Users className="h-8 w-8 text-white" />
+                      </div>
+                      <h3 className="text-2xl font-bold text-white mb-2">{plan.name}</h3>
+                      <p className="text-sm text-blue-200 mb-6 min-h-[40px]">{plan.subtitle}</p>
+                      <div className="mb-2">
+                        <span className="text-4xl font-bold text-white">{plan.price}</span>
+                        <span className="text-blue-200 ml-2">{plan.unit}</span>
+                      </div>
+                      <p className="text-sm text-cyan-200 font-semibold mb-6">{plan.minimum}</p>
+                      <ul className="space-y-3 text-left">
+                        {plan.features.map((feature) => (
+                          <li key={feature} className="flex items-start text-sm text-blue-100">
+                            <CheckCircle className="w-4 h-4 text-emerald-400 mr-3 flex-shrink-0 mt-0.5" />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 border border-white/20 max-w-4xl mx-auto text-left">
+                <div className="flex items-start">
+                  <Gift className="h-6 w-6 text-green-400 mr-4 flex-shrink-0 mt-1" />
+                  <div>
+                    <h3 className="text-xl font-bold text-white mb-2">{t('pricing.managed.nonprofit.title')}</h3>
+                    <p className="text-blue-200">{t('pricing.managed.nonprofit.description')}</p>
+                  </div>
+                </div>
+              </div>
             </div>
 
             {/* Standard Pricing Section */}

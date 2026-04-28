@@ -212,6 +212,7 @@ router.get('/pricing', async (req, res) => {
         display_order
       FROM hourly_rate_categories
       WHERE is_active = true
+        AND (is_default = true OR category_name = 'Non-Profit')
       ORDER BY display_order, category_name
     `);
 
