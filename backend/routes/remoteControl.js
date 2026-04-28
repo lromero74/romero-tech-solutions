@@ -189,7 +189,7 @@ router.post(
         ? meshNodeId.replace(/^node\/[^/]*\//, '')
         : '';
       const targetParam = bareNodeId
-        ? `gotonode=${encodeURIComponent(bareNodeId)}`
+        ? `node=${encodeURIComponent(bareNodeId)}`
         : `gotodevicename=${encodeURIComponent(agent.device_name)}`;
       // ?login=<server-encrypted-cookie> is the SSO mechanism
       // (handleRootRequestEx in MC's webserver.js, ~line 3054).
