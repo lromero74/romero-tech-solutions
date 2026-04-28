@@ -108,21 +108,23 @@ router.post(
 
       // 3. Build the iframe URL.
       //
-      // MeshCentral supports several URL params after login:
-      //   ?login=<base64(user:pass)>      — auto-login
-      //   &gotodevicename=<name>          — deep-link by device name
-      //                                     (matched against nodes[].name)
-      //   &viewmode=11                    — land on the Desktop tab
-      //                                     directly (1=MyDevices, 10=info,
-      //                                     11=Desktop, 12=Terminal, etc.)
+      // MeshCentral's auto-login URL params (verified against
+      // MeshCentral webserver.js master, route handler at
+      // ~line 2989):
+      //   ?user=<tokenUser>&pass=<tokenPass> — auto-login via
+      //                                         createLoginToken creds
+      //   &gotodevicename=<name>             — deep-link by device name
+      //   &viewmode=11                       — land on the Desktop tab
       //
-      // We use gotodevicename rather than gotonode because the
-      // agent device_name maps cleanly to MeshCentral's node name
-      // (the MeshAgent installer registers under the host's
-      // computer name) — no extra lookup needed.
+      // PRIOR BUG: this code used to send `?login=<base64(user:pass)>`,
+      // borrowed from older MeshCentral docs / blog posts. In modern
+      // MeshCentral the `?login=` param is reserved for SERVER-SIGNED
+      // encrypted cookies (used for password-reset emails); user:pass
+      // sent there is silently ignored and MC falls through to the
+      // login form — which is what the technician was seeing instead
+      // of a transparent SSO.
       const meshUrl = process.env.MESHCENTRAL_URL ||
         'https://mesh.romerotechsolutions.com';
-      const credBlob = Buffer.from(`${tokenName}:${tokenPass}`, 'utf8').toString('base64');
       // hide=63 strips MeshCentral's own UI chrome so the iframe
       // shows just the device's desktop view + the bottom toolbar
       // (Send Ctrl+Alt+Del, Clipboard, etc.). Bitmask:
@@ -135,7 +137,9 @@ router.post(
       // Sum=63 = full chrome strip. Our dashboard modal already
       // shows device name + Disconnect, so the embedded view can
       // be stripped clean.
-      const sessionUrl = `${meshUrl}/?login=${encodeURIComponent(credBlob)}` +
+      const sessionUrl = `${meshUrl}/` +
+        `?user=${encodeURIComponent(tokenName)}` +
+        `&pass=${encodeURIComponent(tokenPass)}` +
         `&gotodevicename=${encodeURIComponent(agent.device_name)}` +
         `&viewmode=11&hide=63`;
 
