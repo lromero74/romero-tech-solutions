@@ -125,6 +125,19 @@ router.post(
       // of a transparent SSO.
       const meshUrl = process.env.MESHCENTRAL_URL ||
         'https://mesh.romerotechsolutions.com';
+
+      // MeshAgent on macOS registers under `scutil --get ComputerName`,
+      // which has no suffix. Our agent reports os.Hostname(), which on
+      // macOS yields `Albondigas.local` (mDNS suffix) and on some Linux
+      // boxes `host.lan` / `host.localdomain`. The mismatch makes MC's
+      // gotodevicename lookup miss → blank desktop. Strip the common
+      // mDNS / private-network suffixes so the name we send matches
+      // what MeshAgent registered with.
+      //
+      // Linux MeshAgent uses `uname -n` (often the bare hostname,
+      // sometimes FQDN) — same stripping is safe there too.
+      const meshNodeName = agent.device_name
+        .replace(/\.(local|lan|localdomain|home|home\.arpa)$/i, '');
       // hide=63 strips MeshCentral's own UI chrome so the iframe
       // shows just the device's desktop view + the bottom toolbar
       // (Send Ctrl+Alt+Del, Clipboard, etc.). Bitmask:
@@ -140,7 +153,7 @@ router.post(
       const sessionUrl = `${meshUrl}/` +
         `?user=${encodeURIComponent(tokenName)}` +
         `&pass=${encodeURIComponent(tokenPass)}` +
-        `&gotodevicename=${encodeURIComponent(agent.device_name)}` +
+        `&gotodevicename=${encodeURIComponent(meshNodeName)}` +
         `&viewmode=11&hide=63`;
 
       // 4. INSERT audit row.
