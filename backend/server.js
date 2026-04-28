@@ -681,11 +681,14 @@ const startServer = async () => {
     // Make WebSocket service available to routes via req.app
     app.set('websocketService', websocketService);
 
-    // v1.19+ Wayland Remote Control reverse-tunnel pairing.
-    // Attaches WS upgrade handlers at /ws/wayland-tunnel/:audit_id/{agent,dashboard}.
-    // Coexists with socket.io which handles /socket.io/* upgrades.
-    const { default: waylandTunnel } = await import('./services/waylandTunnelService.js');
-    waylandTunnel.attachToHttpServer(httpServer);
+    // v1.19+ Native Remote Control reverse-tunnel pairing.
+    // Attaches WS upgrade handlers for both /ws/native-tunnel/:audit_id/{agent,dashboard}
+    // and the legacy /ws/wayland-tunnel/* alias (kept alive through ≥v1.24.x for
+    // un-upgraded agents). Coexists with socket.io which handles /socket.io/* upgrades.
+    // Renamed from waylandTunnelService.js in v1.22 — same architecture now serves
+    // both Linux Wayland and macOS native capture helpers.
+    const { default: nativeTunnel } = await import('./services/nativeTunnelService.js');
+    nativeTunnel.attachToHttpServer(httpServer);
 
     // Start workflow scheduler for service request automation
     workflowScheduler.start();

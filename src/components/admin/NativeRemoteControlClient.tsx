@@ -2,32 +2,36 @@ import { useEffect, useImperativeHandle, useRef, useState, forwardRef } from 're
 import RFB from '@novnc/novnc/lib/rfb';
 
 /**
- * Wraps the noVNC RFB client in a React component. Used by the
- * AgentDashboard's Remote Control modal when the target host is on
- * Wayland Linux — those hosts can't be served by MeshCentral's
- * KVM helper, so we route through the agent's PipeWire+RFB bridge
- * (see internal/screencast/ in rts-monitoring-agent v1.19+).
+ * Native Remote Control client.
  *
- * Status: v1.19 scaffold. Not yet wired into AgentDashboard. The
- * standalone component is testable in isolation against a Go RFB
- * server bridged through websockify (see
- * docs/wayland-remote-control-client.md for setup).
+ * Renamed from WaylandRemoteControlClient in v1.22 — the same
+ * decoder + RFB bridge now serves both:
+ *
+ *   - Linux Wayland (transport='wayland_pipewire') via the
+ *     agent's screencast-live helper (PipeWire portal + openh264enc).
+ *   - macOS (transport='macos_sck') via the agent's
+ *     screencast-mac-live helper (ScreenCaptureKit + VTCompressionSession).
+ *
+ * Both transports emit identical H.264 Annex-B byte-streams, so
+ * the WebCodecs VideoDecoder configured for `mode: "annex-b"`
+ * decodes either without changes. The `transport` prop is purely
+ * informational today; UI may use it for status copy or to branch
+ * future per-transport quirks.
  *
  * Threat model:
- *   - This component only opens a WebSocket to the supplied url.
- *     Caller is responsible for providing an authenticated wss URL
- *     (in production, that's MeshCentral's relay tunnel; in dev,
- *     it's a localhost websockify endpoint).
- *   - Input flows: noVNC sends RFB PointerEvent / KeyEvent over the
- *     wire, the agent's VNC server reads them and dispatches to the
- *     screencast-live helper's portalInputForwarder, which translates
- *     to xdg-desktop-portal RemoteDesktop Notify*Motion / NotifyKeyboardKeysym.
- *     End result: the operator's mouse and keyboard reach the host.
+ *   - This component only opens WebSockets to the supplied URLs.
+ *     Caller is responsible for providing authenticated wss URLs
+ *     minted by the backend's /native/start (or legacy /wayland/start)
+ *     endpoint with one-shot tickets.
+ *   - Input flows: RFB PointerEvent / KeyEvent over the rfb tunnel,
+ *     translated by the agent's helper into either
+ *     xdg-desktop-portal Notify*Motion / NotifyKeyboardKeysym (Linux)
+ *     or CGEventPost (macOS).
  *   - On unmount, RFB.disconnect() is called to terminate the
- *     WebSocket cleanly. If disconnect happens to fail (already
- *     closed, etc.) we swallow the error.
+ *     WebSocket cleanly. Disconnect failures (already closed, etc.)
+ *     are swallowed.
  */
-export interface WaylandRemoteControlClientHandle {
+export interface NativeRemoteControlClientHandle {
   /** Imperatively disconnect. Useful for parent's "End session" button. */
   disconnect(): void;
   /**
@@ -46,7 +50,7 @@ export interface WaylandRemoteControlClientHandle {
   sendCtrlAltDel(): void;
 }
 
-export interface WaylandRemoteControlClientProps {
+export interface NativeRemoteControlClientProps {
   /**
    * WebSocket URL pointing at a websockify-compatible bridge that
    * speaks RFB over TCP behind it. Production form is
@@ -95,14 +99,24 @@ export interface WaylandRemoteControlClientProps {
    * full-bleed inside its parent.
    */
   className?: string;
+  /**
+   * Identifies which agent-side capture stack is feeding this
+   * session. `'wayland_pipewire'` for Linux Wayland (default),
+   * `'macos_sck'` for macOS ScreenCaptureKit. The wire format is
+   * identical; this prop exists so the dashboard can render
+   * transport-specific status copy and so debug logging includes
+   * the source. Unrecognized values are tolerated (treated as
+   * generic "native" with no special handling).
+   */
+  transport?: 'wayland_pipewire' | 'macos_sck' | string;
 }
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'error';
 
-const WaylandRemoteControlClient = forwardRef<
-  WaylandRemoteControlClientHandle,
-  WaylandRemoteControlClientProps
->(function WaylandRemoteControlClient(props, ref) {
+const NativeRemoteControlClient = forwardRef<
+  NativeRemoteControlClientHandle,
+  NativeRemoteControlClientProps
+>(function NativeRemoteControlClient(props, ref) {
   const { url, videoUrl, audioUrl, onConnect, onDisconnect, onSecurityFailure, className } = props;
   const containerRef = useRef<HTMLDivElement>(null);
   const rfbRef = useRef<RFB | null>(null);
@@ -618,4 +632,4 @@ const WaylandRemoteControlClient = forwardRef<
   );
 });
 
-export default WaylandRemoteControlClient;
+export default NativeRemoteControlClient;

@@ -1,27 +1,39 @@
 /**
- * Wayland Remote Control reverse-tunnel pairing service.
+ * Native Remote Control reverse-tunnel pairing service.
  *
- * The agent's daemon, after starting screencast-live, dials a
- * WebSocket here. The dashboard's noVNC client also dials a
- * WebSocket here. We pair them by audit_id and forward binary
+ * Renamed from waylandTunnelService.js in v1.22 — the same tunnel
+ * architecture now serves Linux Wayland (screencast-live) AND
+ * macOS (screencast-mac-live), so the "wayland" name no longer
+ * fit. Both URL prefixes are accepted (see attachToHttpServer):
+ * the older `/ws/wayland-tunnel/*` path keeps working for
+ * un-upgraded agents through at least v1.24.x; new code uses
+ * `/ws/native-tunnel/*`. Both prefixes share the same pair map
+ * (keyed by audit_id + kind), so an agent dialing one prefix
+ * pairs cleanly with a dashboard dialing the other.
+ *
+ * The agent's daemon, after starting its capture helper, dials a
+ * WebSocket here. The dashboard's WebCodecs/RFB client also dials
+ * a WebSocket here. We pair them by audit_id and forward binary
  * frames between them. This is the bridge that lets a browser
- * reach an agent's localhost VNC port without MeshCentral
- * relay or NAT traversal — the agent's outbound dial gets
- * around firewalls, and the dashboard's wss connection rides
- * the same backend trust that everything else does.
+ * reach an agent's localhost VNC/H264 ports without MeshCentral
+ * relay or NAT traversal — the agent's outbound dial gets around
+ * firewalls, and the dashboard's wss connection rides the same
+ * backend trust that everything else does.
  *
- * Wire endpoints (mounted in server.js, see attachToHttpServer):
+ * Wire endpoints (mounted in server.js, see attachToHttpServer).
+ * Each accepts both `/ws/wayland-tunnel/*` and `/ws/native-tunnel/*`:
  *
- *   /ws/wayland-tunnel/:audit_id/agent
+ *   /ws/native-tunnel/:audit_id/agent  (alias: /ws/wayland-tunnel/…)
  *     Auth: X-Agent-Token header (JWT, validated by
  *     authenticateAgentJWT). Caller sends RFB protocol bytes
  *     received from its localhost VNC server, receives bytes
  *     destined for that server.
  *
- *   /ws/wayland-tunnel/:audit_id/dashboard
+ *   /ws/native-tunnel/:audit_id/dashboard  (alias: /ws/wayland-tunnel/…)
  *     Auth: regular session cookie + manage.remote_control.enable
- *     permission. Caller is noVNC running in a browser; binary
- *     frames are RFB protocol bytes.
+ *     permission. Caller is the dashboard's NativeRemoteControlClient
+ *     (renamed from WaylandRemoteControlClient); binary frames are
+ *     RFB protocol bytes.
  *
  * Pairing semantics:
  *   - First side to connect parks until its counterpart shows up.
@@ -112,7 +124,7 @@ function pipeFrames(from, to, label) {
     try {
       to.send(data, { binary: true });
     } catch (e) {
-      console.warn(`[waylandTunnel] ${label} forward error:`, e.message);
+      console.warn(`[nativeTunnel] ${label} forward error:`, e.message);
     }
   });
 }
@@ -156,7 +168,7 @@ async function teardown(auditId, kind, reason) {
         })]
       );
     } catch (e) {
-      console.warn('[waylandTunnel] audit-row update failed:', e.message);
+      console.warn('[nativeTunnel] audit-row update failed:', e.message);
     }
   }
 }
@@ -296,14 +308,20 @@ export function attachToHttpServer(httpServer) {
 
   httpServer.on('upgrade', async (req, socket, head) => {
     const url = req.url || '';
-    if (!url.startsWith('/ws/wayland-tunnel/')) {
+    // Accept both the v1.22+ /ws/native-tunnel/ prefix and the
+    // legacy /ws/wayland-tunnel/ alias. Old agents (v1.21.x and
+    // earlier) only know the wayland prefix; new dashboards use
+    // the native prefix. Both share the same pair map, so any
+    // (old-agent + new-dashboard) or (new-agent + old-dashboard)
+    // pairing still works as long as the audit_id matches.
+    if (!url.startsWith('/ws/wayland-tunnel/') && !url.startsWith('/ws/native-tunnel/')) {
       // Not ours — let socket.io's own upgrade handler (or
       // anyone else's) take it. socket.io's upgrade is
       // attached on a different listener so simply not handling
       // here means it gets through.
       return;
     }
-    // Parse: /ws/wayland-tunnel/:audit_id/(agent|dashboard|video-agent|video-dashboard|audio-agent|audio-dashboard)
+    // Parse: /ws/(wayland-tunnel|native-tunnel)/:audit_id/(agent|dashboard|video-agent|video-dashboard|audio-agent|audio-dashboard)
     //
     // The "kind" prefix selects which independent pairing the WS
     // belongs to:
@@ -313,7 +331,7 @@ export function attachToHttpServer(httpServer) {
     //
     // Each kind has its own Map of pairs so the streams pair
     // independently per audit_id.
-    const m = url.match(/^\/ws\/wayland-tunnel\/([^/?]+)\/(video-|audio-)?(agent|dashboard)(\?.*)?$/);
+    const m = url.match(/^\/ws\/(?:wayland-tunnel|native-tunnel)\/([^/?]+)\/(video-|audio-)?(agent|dashboard)(\?.*)?$/);
     if (!m) {
       socket.destroy();
       return;
@@ -336,7 +354,7 @@ export function attachToHttpServer(httpServer) {
         throw new Error('agent_id mismatch with audit row');
       }
     } catch (e) {
-      console.warn(`[waylandTunnel] reject ${kind}/${side} ${auditId}: ${e.message}`);
+      console.warn(`[nativeTunnel] reject ${kind}/${side} ${auditId}: ${e.message}`);
       socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
       socket.destroy();
       return;
@@ -373,14 +391,14 @@ function handleConnection(ws, auditId, role, kind = 'rfb') {
     pair.dashboard = ws;
   }
 
-  console.log(`[waylandTunnel] ${tag} connected for audit=${auditId}`);
+  console.log(`[nativeTunnel] ${tag} connected for audit=${auditId}`);
 
   ws.on('close', (code, reason) => {
-    console.log(`[waylandTunnel] ${tag} closed for audit=${auditId} code=${code}`);
+    console.log(`[nativeTunnel] ${tag} closed for audit=${auditId} code=${code}`);
     teardown(auditId, kind, `${tag} disconnected (${code})`);
   });
   ws.on('error', (e) => {
-    console.warn(`[waylandTunnel] ${tag} error for audit=${auditId}:`, e.message);
+    console.warn(`[nativeTunnel] ${tag} error for audit=${auditId}:`, e.message);
   });
 
   // Pre-pair buffer: capture any incoming bytes before the
@@ -402,7 +420,7 @@ function handleConnection(ws, auditId, role, kind = 'rfb') {
       clearTimeout(pair.parkedTimer);
       pair.parkedTimer = null;
     }
-    console.log(`[waylandTunnel] PAIRED ${kind} audit=${auditId}`);
+    console.log(`[nativeTunnel] PAIRED ${kind} audit=${auditId}`);
     // Detach the pre-pair buffering listeners on both sides so
     // pipeFrames takes over cleanly.
     if (pair._agentPreBuf) {
@@ -419,14 +437,14 @@ function handleConnection(ws, auditId, role, kind = 'rfb') {
     for (const msg of pair.bufferedFromAgent) {
       if (pair.dashboard.readyState === pair.dashboard.OPEN) {
         try { pair.dashboard.send(msg, { binary: true }); } catch (e) {
-          console.warn('[waylandTunnel] replay agent→dashboard error:', e.message);
+          console.warn('[nativeTunnel] replay agent→dashboard error:', e.message);
         }
       }
     }
     for (const msg of pair.bufferedFromDashboard) {
       if (pair.agent.readyState === pair.agent.OPEN) {
         try { pair.agent.send(msg, { binary: true }); } catch (e) {
-          console.warn('[waylandTunnel] replay dashboard→agent error:', e.message);
+          console.warn('[nativeTunnel] replay dashboard→agent error:', e.message);
         }
       }
     }
@@ -443,12 +461,12 @@ function handleConnection(ws, auditId, role, kind = 'rfb') {
           SET metadata = metadata || $2::jsonb
         WHERE id = $1`,
       [auditId, JSON.stringify({ relay_paired_at: new Date().toISOString() })]
-    ).catch(e => console.warn('[waylandTunnel] paired-update failed:', e.message));
+    ).catch(e => console.warn('[nativeTunnel] paired-update failed:', e.message));
   } else {
     // Schedule a 60s timeout. If counterpart shows up, the
     // pair branch above clears the timer.
     pair.parkedTimer = setTimeout(() => {
-      console.log(`[waylandTunnel] timeout audit=${auditId} ${role}-only never paired`);
+      console.log(`[nativeTunnel] timeout audit=${auditId} ${role}-only never paired`);
       teardown(auditId, kind, 'counterpart timeout');
     }, 60_000);
   }

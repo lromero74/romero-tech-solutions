@@ -1,6 +1,7 @@
 // Minimal TypeScript declaration for the @novnc/novnc package.
 // noVNC 1.6 ships with no .d.ts files; this file declares only
-// the RFB class surface that WaylandRemoteControlClient uses.
+// the RFB class surface that NativeRemoteControlClient uses
+// (renamed from WaylandRemoteControlClient in v1.22).
 //
 // If you need to call additional RFB methods or properties, add
 // them here. The full API is documented at:

@@ -31,7 +31,7 @@ import { query } from '../config/database.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import meshcentral, { listDevices } from '../services/meshcentralService.js';
-import { issueDashboardTicket } from '../services/waylandTunnelService.js';
+import { issueDashboardTicket } from '../services/nativeTunnelService.js';
 
 const router = express.Router();
 
@@ -552,6 +552,256 @@ router.post(
       return res.json({ success: true });
     } catch (e) {
       return fail(res, 500, 'INTERNAL', 'Failed to end Wayland Remote Control session', e);
+    }
+  }
+);
+
+// ──── POST /agents/:agent_id/native/start ─────────────────────────────
+//
+// v1.22+ entry point for Native Remote Control. The dashboard calls
+// this for any agent eligible for the helper-binary path:
+//
+//   - Linux + Wayland → enqueue start_wayland_remote_control
+//   - macOS (darwin)  → enqueue start_macos_remote_control
+//   - Anything else (Linux X11, Windows) → 400; dashboard falls
+//     back to the MeshCentral KVM iframe.
+//
+// The tunnel architecture is identical between the two helpers
+// (3 WS pairs: rfb / video / audio over /ws/native-tunnel/<id>/...),
+// so the backend response shape is the same regardless of OS. The
+// dashboard's NativeRemoteControlClient (renamed from WaylandRemote-
+// ControlClient) is also identical for both — H.264 Annex-B is
+// portable.
+//
+// The legacy /agents/:agent_id/wayland/start endpoint above stays
+// alive: an in-flight v1.21 dashboard hitting it with a Linux
+// Wayland agent still works. New code should call /native/start.
+router.post(
+  '/agents/:agent_id/native/start',
+  authMiddleware,
+  requirePermission('manage.remote_control.enable'),
+  async (req, res) => {
+    if (!featureEnabled()) {
+      return res.status(503).json({
+        success: false,
+        code: 'FEATURE_DISABLED',
+        message: 'Remote control feature is currently disabled',
+      });
+    }
+
+    const { agent_id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) return fail(res, 401, 'UNAUTHENTICATED', 'No user in session');
+
+    try {
+      // 1. Verify the agent exists and is eligible.
+      const agentRow = await query(
+        `SELECT id, device_name, status, os_type, display_server
+           FROM agent_devices
+          WHERE id = $1 AND soft_delete = false`,
+        [agent_id]
+      );
+      if (agentRow.rows.length === 0) {
+        return fail(res, 404, 'AGENT_NOT_FOUND', 'Agent device not found');
+      }
+      const agent = agentRow.rows[0];
+      if (agent.status !== 'online') {
+        return fail(res, 409, 'AGENT_OFFLINE',
+          `Agent ${agent.device_name} is ${agent.status}; cannot initiate Native Remote Control`);
+      }
+
+      // 2. Decide which helper command to enqueue based on os_type.
+      let commandType;
+      let transport;
+      if (agent.os_type === 'linux' && agent.display_server === 'wayland') {
+        commandType = 'start_wayland_remote_control';
+        transport = 'wayland_pipewire';
+      } else if (agent.os_type === 'darwin') {
+        commandType = 'start_macos_remote_control';
+        transport = 'macos_sck';
+      } else {
+        return fail(res, 400, 'NOT_NATIVE',
+          `Agent ${agent.device_name} (os_type=${agent.os_type} display=${agent.display_server || 'n/a'}) does not support Native Remote Control; use the standard /start endpoint for the MeshCentral path`);
+      }
+
+      // 3. INSERT audit row.
+      const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+        req.socket?.remoteAddress || null;
+      const auditRow = await query(
+        `INSERT INTO remote_control_sessions
+           (agent_device_id, initiated_by_user, technician_ip, metadata)
+         VALUES ($1, $2, $3::inet, $4)
+         RETURNING id, started_at`,
+        [agent_id, userId, ip, JSON.stringify({
+          transport,
+          v1_22: true,
+        })]
+      );
+      const audit = auditRow.rows[0];
+
+      // 4. Enqueue the helper-start command.
+      const { v4: uuidv4 } = await import('uuid');
+      const commandId = uuidv4();
+      await query(
+        `INSERT INTO agent_commands (
+           id, agent_device_id, command_type, command_params,
+           requested_by, approval_required, approved_by, status
+         ) VALUES ($1, $2, $3, $4, $5, false, $5, 'pending')`,
+        [commandId, agent_id, commandType, JSON.stringify({ audit_id: audit.id }), userId]
+      );
+
+      // 5. Poll the command row for completion. 240s budget covers
+      // worst-case path: agent picks up commands on its 60s heartbeat
+      // tick + user takes up to 120s to find/click TCC consent dialog
+      // + ~10s for SCStream / PipeWire init.
+      const deadline = Date.now() + 240_000;
+      let port = null;
+      let cmdErr = null;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 1500));
+        const cmdRow = await query(
+          `SELECT status, stdout, error_message
+             FROM agent_commands
+            WHERE id = $1`,
+          [commandId]
+        );
+        if (cmdRow.rows.length === 0) {
+          break;
+        }
+        const cmd = cmdRow.rows[0];
+        if (cmd.status === 'completed') {
+          try {
+            const parsed = JSON.parse(cmd.stdout || '{}');
+            port = parsed.port;
+          } catch {
+            // ignore parse failure; will fall through to error path
+          }
+          break;
+        }
+        if (cmd.status === 'failed') {
+          cmdErr = cmd.error_message || `agent reported ${commandType} failure`;
+          break;
+        }
+      }
+
+      if (cmdErr) {
+        return fail(res, 502, 'AGENT_REJECTED',
+          `Agent could not start Native Remote Control: ${cmdErr}`);
+      }
+      if (!port) {
+        return fail(res, 504, 'AGENT_TIMEOUT',
+          `Timed out waiting for ${agent.device_name} to start Native session`);
+      }
+
+      // 6. Persist port on audit row.
+      await query(
+        `UPDATE remote_control_sessions
+            SET metadata = metadata || $2::jsonb
+          WHERE id = $1`,
+        [audit.id, JSON.stringify({ vnc_port: port })]
+      );
+
+      console.log(
+        `[remoteControl] Native session START audit=${audit.id} ` +
+        `agent=${agent.device_name}/${agent_id} transport=${transport} port=${port}`
+      );
+
+      // 7. Mint three one-shot tickets and return paths under the
+      // /ws/native-tunnel/ prefix. The backend's tunnel service
+      // also accepts the legacy /ws/wayland-tunnel/ prefix so an
+      // un-upgraded agent (still dialing /ws/wayland-tunnel/) can
+      // still pair with a dashboard dialing /ws/native-tunnel/.
+      const rfbTicket = issueDashboardTicket(audit.id, req.user.id);
+      const videoTicket = issueDashboardTicket(audit.id, req.user.id);
+      const audioTicket = issueDashboardTicket(audit.id, req.user.id);
+      const relayPath = `/ws/native-tunnel/${audit.id}/dashboard?ticket=${rfbTicket}`;
+      const videoRelayPath = `/ws/native-tunnel/${audit.id}/video-dashboard?ticket=${videoTicket}`;
+      const audioRelayPath = `/ws/native-tunnel/${audit.id}/audio-dashboard?ticket=${audioTicket}`;
+
+      return res.json({
+        success: true,
+        audit_id: audit.id,
+        device_name: agent.device_name,
+        os_type: agent.os_type,
+        transport,
+        vnc_port: port,
+        relay_path: relayPath,
+        video_relay_path: videoRelayPath,
+        audio_relay_path: audioRelayPath,
+        relay_url: null,
+      });
+    } catch (e) {
+      return fail(res, 500, 'INTERNAL', 'Failed to initiate Native Remote Control session', e);
+    }
+  }
+);
+
+// ──── POST /sessions/:audit_id/native/end ─────────────────────────────
+//
+// Terminates a Native Remote Control session, dispatching the right
+// stop command based on the audit row's transport. Idempotent.
+router.post(
+  '/sessions/:audit_id/native/end',
+  authMiddleware,
+  requirePermission('manage.remote_control.enable'),
+  async (req, res) => {
+    if (!featureEnabled()) {
+      return res.status(503).json({
+        success: false,
+        code: 'FEATURE_DISABLED',
+        message: 'Remote control feature is currently disabled',
+      });
+    }
+
+    const { audit_id } = req.params;
+    const userId = req.user?.id;
+    if (!userId) return fail(res, 401, 'UNAUTHENTICATED', 'No user in session');
+
+    try {
+      const auditRow = await query(
+        `SELECT id, agent_device_id, ended_at, metadata
+           FROM remote_control_sessions
+          WHERE id = $1`,
+        [audit_id]
+      );
+      if (auditRow.rows.length === 0) {
+        return fail(res, 404, 'AUDIT_NOT_FOUND', 'Session audit row not found');
+      }
+      const audit = auditRow.rows[0];
+      if (audit.ended_at) {
+        return res.json({ success: true, already_ended: true });
+      }
+
+      // Dispatch by transport stamp left by /native/start.
+      // Old audit rows from /wayland/start have transport='wayland_pipewire'
+      // → stop_wayland_remote_control still applies. Defaults to
+      // wayland for safety.
+      const transport = audit.metadata?.transport || 'wayland_pipewire';
+      const commandType = transport === 'macos_sck'
+        ? 'stop_macos_remote_control'
+        : 'stop_wayland_remote_control';
+
+      const { v4: uuidv4 } = await import('uuid');
+      await query(
+        `INSERT INTO agent_commands (
+           id, agent_device_id, command_type, command_params,
+           requested_by, approval_required, approved_by, status
+         ) VALUES ($1, $2, $3, $4, $5, false, $5, 'pending')`,
+        [uuidv4(), audit.agent_device_id, commandType, JSON.stringify({ audit_id }), userId]
+      );
+
+      await query(
+        `UPDATE remote_control_sessions
+            SET ended_at = NOW(),
+                disconnect_reason = 'user_requested'
+          WHERE id = $1`,
+        [audit_id]
+      );
+
+      console.log(`[remoteControl] Native session END audit=${audit_id} cmd=${commandType}`);
+      return res.json({ success: true });
+    } catch (e) {
+      return fail(res, 500, 'INTERNAL', 'Failed to end Native Remote Control session', e);
     }
   }
 );

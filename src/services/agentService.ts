@@ -805,6 +805,50 @@ class AgentService {
   }
 
   /**
+   * Native Remote Control entry point (v1.22+). Replaces the
+   * Linux-only /wayland/start with a generalized endpoint that
+   * dispatches by os_type:
+   *   - linux + display_server === 'wayland' → start_wayland_remote_control
+   *   - darwin                                → start_macos_remote_control
+   *   - everything else                       → 400 NOT_NATIVE
+   *
+   * Wire response shape mirrors the old /wayland/start (relay_path,
+   * video_relay_path, audio_relay_path) but additionally returns
+   * `transport` so the dashboard knows which agent-side stack
+   * produced the stream. Relay paths use the new /ws/native-tunnel/
+   * URL prefix; the backend's tunnel service also accepts
+   * /ws/wayland-tunnel/ for back-compat with un-upgraded agents.
+   */
+  async requestStartNativeRemoteControl(agentId: string): Promise<
+    ApiResponse<{
+      audit_id: string;
+      device_name: string;
+      os_type: 'linux' | 'darwin' | string;
+      transport: 'wayland_pipewire' | 'macos_sck' | string;
+      vnc_port: number;
+      relay_path?: string;
+      video_relay_path?: string;
+      audio_relay_path?: string;
+      relay_url: string | null;
+      relay_url_note?: string;
+    }>
+  > {
+    return apiService.post(`/remote-control/agents/${agentId}/native/start`, {});
+  }
+
+  /**
+   * Stop a Native Remote Control session. Backend dispatches the
+   * right stop command (stop_wayland_remote_control or
+   * stop_macos_remote_control) based on the audit row's transport
+   * stamp. Idempotent.
+   */
+  async requestEndNativeRemoteControl(auditId: string): Promise<
+    ApiResponse<{ already_ended?: boolean }>
+  > {
+    return apiService.post(`/remote-control/sessions/${auditId}/native/end`, {});
+  }
+
+  /**
    * Health check for the MeshCentral integration. Used by the
    * admin diagnostics page to surface "Remote Control unavailable"
    * before a technician clicks the button and gets a confusing

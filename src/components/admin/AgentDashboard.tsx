@@ -3,7 +3,7 @@ import { Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity, P
 import { themeClasses } from '../../contexts/ThemeContext';
 import { usePermission } from '../../hooks/usePermission';
 import { agentService, AgentDevice } from '../../services/agentService';
-import WaylandRemoteControlClient, { type WaylandRemoteControlClientHandle } from './WaylandRemoteControlClient';
+import NativeRemoteControlClient, { type NativeRemoteControlClientHandle } from './NativeRemoteControlClient';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import { websocketService } from '../../services/websocketService';
 import AgentEditModal from './AgentEditModal';
@@ -133,7 +133,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
 
   // Imperative handle to the noVNC client so the special-keys
   // toolbar can call sendCtrlAltDel / sendKey on it.
-  const waylandClientRef = useRef<WaylandRemoteControlClientHandle | null>(null);
+  const nativeClientRef = useRef<NativeRemoteControlClientHandle | null>(null);
 
   // Per-agent "update queued" state, keyed by agent.id with value =
   // the agent_version observed at the moment the admin clicked
@@ -208,28 +208,38 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     starting?: boolean;
     // iframe path: MeshCentral KVM. Used for X11 / macOS / Windows.
     iframeUrl?: string;
-    // Wayland path: noVNC over a wss tunnel into the agent's
-    // PipeWire-backed VNC server. Set when the active session
-    // is the v1.19 Wayland Remote Control flow. Mutually
-    // exclusive with iframeUrl. relayUrl is the wss URL to
-    // connect to; null in v1.19 alpha until relay-tunnel
-    // orchestration is wired (see backend TODO).
+    // Native path: noVNC over a wss tunnel into the agent's
+    // helper binary's VNC server. Set when the active session is
+    // the v1.22+ Native Remote Control flow (covers Linux Wayland
+    // via screencast-live AND macOS via screencast-mac-live; the
+    // dashboard treats both the same). Mutually exclusive with
+    // iframeUrl. relayUrl is the wss URL to connect to.
     waylandRelayUrl?: string | null;
-    // v1.20+ — wss URL for the H.264 video tunnel. Browser dials
-    // this in parallel with the rfb relay when WebCodecs is
-    // available; absent for older agents and on browsers that
-    // can't decode H.264 in JS.
+    // wss URL for the H.264 video tunnel. Browser dials this in
+    // parallel with the rfb relay when WebCodecs is available;
+    // absent for older agents and on browsers that can't decode
+    // H.264 in JS.
     waylandVideoUrl?: string | null;
-    // v1.21+ — wss URL for the Opus/WebM audio tunnel. Browser
-    // appends to a MediaSource SourceBuffer attached to a hidden
-    // <audio> element. Absent for agents without the audio branch.
+    // wss URL for the Opus/WebM audio tunnel. Browser appends to
+    // a MediaSource SourceBuffer attached to a hidden <audio>
+    // element. Absent for agents without the audio branch
+    // (today: macOS in v1.22 — audio lands in v1.23).
     waylandAudioUrl?: string | null;
     waylandRelayNote?: string;
+    /** Identifies which agent-side capture stack produced the
+     * stream. Lets the modal show transport-specific status copy
+     * ("Live session via Wayland portal" vs "via macOS Screen Capture").
+     * Set by the start handler from the backend's response.
+     * Field name kept as 'wayland*' for state-shape stability;
+     * value can be either transport. */
+    waylandTransport?: 'wayland_pipewire' | 'macos_sck' | string;
     auditId?: string;
     // sessionKind tells handleEndRemoteControl which end-endpoint
-    // to call (regular vs wayland). The two flows have different
-    // backend cleanup paths.
-    sessionKind?: 'meshcentral' | 'wayland';
+    // to call (regular vs native). The two flows have different
+    // backend cleanup paths. 'native' covers both Linux Wayland
+    // and macOS — the dashboard logic is identical for both since
+    // the wire format is identical.
+    sessionKind?: 'meshcentral' | 'native';
     deviceName?: string;
     error?: string;
     // Pre-flight compatibility warning for X11 hosts whose xauth
@@ -580,35 +590,40 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
       });
       return;
     }
-    // Wayland Linux hosts route to the v1.19 PipeWire/VNC path
-    // instead of MeshCentral KVM (which can't capture Wayland).
-    // Backend orchestrates: enqueue start_wayland_remote_control
-    // command on the agent, daemon spawns screencast-live,
-    // returns the chosen TCP port + (eventually) a wss relay URL.
-    if (agent.os_type === 'linux' && agent.display_server === 'wayland') {
+    // Native Remote Control path: Linux Wayland AND macOS both use
+    // an agent-side helper binary (screencast-live / screencast-mac-live)
+    // to capture, encode, and serve a wss-tunneled H.264+RFB stream.
+    // The backend's /native/start endpoint dispatches by os_type and
+    // returns the same response shape for both transports.
+    //
+    // Eligibility:
+    //   - Linux + Wayland → screencast-live (PipeWire portal)
+    //   - macOS (darwin)  → screencast-mac-live (ScreenCaptureKit)
+    // Anything else falls through to the MeshCentral iframe path
+    // below. Windows MeshAgent KVM still works fine; Linux X11
+    // continues on the iframe path until v1.18.6 preflight clears.
+    const isNativeEligible =
+      agent.os_type === 'darwin' ||
+      (agent.os_type === 'linux' && agent.display_server === 'wayland');
+    if (isNativeEligible) {
       setRemoteControl({
         show: true,
         starting: true,
         deviceName: agent.device_name,
-        sessionKind: 'wayland',
+        sessionKind: 'native',
       });
       try {
-        const resp = await agentService.requestStartWaylandRemoteControl(agent.id);
+        const resp = await agentService.requestStartNativeRemoteControl(agent.id);
         const data: any = (resp as any)?.data || resp;
         if (!data?.audit_id) {
-          throw new Error((resp as any)?.message || 'Wayland Remote Control did not return an audit_id');
+          throw new Error((resp as any)?.message || 'Native Remote Control did not return an audit_id');
         }
-        // Build the wss URL noVNC connects to. Backend may return
-        // either relay_url (absolute) or relay_path (relative).
-        // For relay_path, derive the host from VITE_API_BASE_URL —
-        // the dashboard is served from www., but the WebSocket relay
-        // lives on api. (where the backend is). Falling back to
-        // window.location.host would dial the static-frontend host
-        // which doesn't speak WS.
-        // Helper to convert a relative `/ws/wayland-tunnel/...`
-        // path into the absolute wss URL the browser dials. The
-        // dashboard is served from www. but the relay lives on
-        // api. — derive the host from VITE_API_BASE_URL.
+        // Build the wss URL the dashboard's NativeRemoteControlClient
+        // connects to. Backend returns a relative relay_path under
+        // /ws/native-tunnel/<audit_id>/<role>; we prepend the API
+        // host (derived from VITE_API_BASE_URL — falling back to
+        // window.location.host would hit the static-frontend host
+        // which doesn't speak WS).
         const wssURLFromPath = (path: string): string => {
           const apiBase = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
           const apiOrigin = apiBase.replace(/\/api$/, '');
@@ -620,13 +635,15 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
         if (!relayUrl && data.relay_path) {
           relayUrl = wssURLFromPath(data.relay_path);
         }
-        // v1.20+: video tunnel for H.264 (consumed via WebCodecs).
-        // Optional — present only when the agent reported an h264_port.
+        // H.264 video tunnel (consumed via WebCodecs). Optional —
+        // present only when the agent reported an h264_port.
         let videoUrl: string | null = null;
         if (data.video_relay_path) {
           videoUrl = wssURLFromPath(data.video_relay_path);
         }
-        // v1.21+: audio tunnel for Opus/WebM (played via MSE).
+        // Audio tunnel for Opus/WebM (played via MSE). Linux has
+        // shipped this since v1.21; macOS adds it in v1.23
+        // (Phase E of the Native Remote Control PRP).
         let audioUrl: string | null = null;
         if (data.audio_relay_path) {
           audioUrl = wssURLFromPath(data.audio_relay_path);
@@ -638,18 +655,19 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
           waylandVideoUrl: videoUrl,
           waylandAudioUrl: audioUrl,
           waylandRelayNote: data.relay_url_note,
+          waylandTransport: data.transport,
           auditId: data.audit_id,
           deviceName: data.device_name || agent.device_name,
-          sessionKind: 'wayland',
+          sessionKind: 'native',
         });
       } catch (e: any) {
         setRemoteControl({
           show: true,
           starting: false,
           deviceName: agent.device_name,
-          sessionKind: 'wayland',
+          sessionKind: 'native',
           error: e?.response?.data?.message || e?.message ||
-            'Failed to start Wayland Remote Control session',
+            'Failed to start Native Remote Control session',
         });
       }
       return;
@@ -711,8 +729,11 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
     setRemoteControl({ show: false });
     if (auditId) {
       try {
-        if (kind === 'wayland') {
-          await agentService.requestEndWaylandRemoteControl(auditId);
+        if (kind === 'native') {
+          // Native covers both Linux Wayland and macOS — backend
+          // /native/end dispatches the right stop command based on
+          // the audit row's transport stamp.
+          await agentService.requestEndNativeRemoteControl(auditId);
         } else {
           await agentService.requestEndRemoteControl(auditId);
         }
@@ -2476,7 +2497,13 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   Remote Control: {remoteControl.deviceName || 'Device'}
                 </div>
                 <div className="text-xs text-gray-400">
-                  Live session via {remoteControl.sessionKind === 'wayland' ? 'Wayland portal' : 'MeshCentral'}
+                  Live session via {
+                    remoteControl.sessionKind === 'native'
+                      ? (remoteControl.waylandTransport === 'macos_sck'
+                          ? 'macOS Screen Capture'
+                          : 'Wayland portal')
+                      : 'MeshCentral'
+                  }
                   {' · session id '}{remoteControl.auditId?.slice(0, 8) || '…'}
                 </div>
               </div>
@@ -2498,29 +2525,31 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               content size — driven by the noVNC canvas — wins and
               pushes siblings off-screen). */}
           <div className="flex-1 relative bg-gray-800 min-h-0 overflow-hidden">
-            {/* Wayland session: render noVNC against the relay URL.
-                When relayUrl is null (v1.19 alpha) we surface the
-                note explaining the operator needs an SSH tunnel. */}
-            {remoteControl.sessionKind === 'wayland' &&
+            {/* Native session: render noVNC against the relay URL.
+                Covers both Linux Wayland (transport='wayland_pipewire')
+                and macOS (transport='macos_sck') — wire format is
+                identical between them. */}
+            {remoteControl.sessionKind === 'native' &&
              !remoteControl.starting &&
              !remoteControl.error &&
              remoteControl.waylandRelayUrl && (
-              <WaylandRemoteControlClient
-                ref={waylandClientRef}
+              <NativeRemoteControlClient
+                ref={nativeClientRef}
                 url={remoteControl.waylandRelayUrl}
                 videoUrl={remoteControl.waylandVideoUrl ?? undefined}
                 audioUrl={remoteControl.waylandAudioUrl ?? undefined}
+                transport={remoteControl.waylandTransport}
                 onDisconnect={() => handleEndRemoteControl()}
               />
             )}
-            {remoteControl.sessionKind === 'wayland' &&
+            {remoteControl.sessionKind === 'native' &&
              !remoteControl.starting &&
              !remoteControl.error &&
              !remoteControl.waylandRelayUrl && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white px-6">
                 <AlertTriangle className="w-10 h-10 text-amber-400 mb-3" />
                 <div className="text-base font-semibold mb-2">
-                  Wayland Remote Control session started, but no relay URL
+                  Native Remote Control session started, but no relay URL
                 </div>
                 <div className="text-sm text-gray-300 max-w-2xl text-center space-y-2">
                   <p>
@@ -2613,17 +2642,18 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
             )}
           </div>
 
-          {/* Wayland special-keys toolbar. Lives below the canvas
-              because the noVNC view doesn't carry MeshCentral's
-              built-in chrome that the iframe path provides. */}
-          {remoteControl.sessionKind === 'wayland' &&
+          {/* Native session special-keys toolbar. Lives below the
+              canvas because the noVNC view doesn't carry MeshCentral's
+              built-in chrome that the iframe path provides. Covers
+              both Linux Wayland and macOS — same RFB key dispatch. */}
+          {remoteControl.sessionKind === 'native' &&
            !remoteControl.starting &&
            !remoteControl.error &&
            remoteControl.waylandRelayUrl && (
             <div className="bg-gray-900 text-white border-t border-indigo-500 px-3 py-2 flex flex-wrap items-center gap-2">
               <span className="text-xs uppercase tracking-wide text-gray-400 mr-2">Send</span>
               <button
-                onClick={() => waylandClientRef.current?.sendCtrlAltDel()}
+                onClick={() => nativeClientRef.current?.sendCtrlAltDel()}
                 className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
                 title="Ctrl+Alt+Del"
               >
@@ -2631,7 +2661,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               </button>
               {/* X11 keysym 0xffeb = XK_Super_L (the Windows / GNOME Activities key). */}
               <button
-                onClick={() => waylandClientRef.current?.sendKey(0xffeb, 'MetaLeft')}
+                onClick={() => nativeClientRef.current?.sendKey(0xffeb, 'MetaLeft')}
                 className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
                 title="Super (GNOME Activities / Windows key)"
               >
@@ -2639,7 +2669,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
               </button>
               {/* 0xff1b = XK_Escape */}
               <button
-                onClick={() => waylandClientRef.current?.sendKey(0xff1b, 'Escape')}
+                onClick={() => nativeClientRef.current?.sendKey(0xff1b, 'Escape')}
                 className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
                 title="Escape"
               >
@@ -2650,7 +2680,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   manually for modifier combos. */}
               <button
                 onClick={() => {
-                  const c = waylandClientRef.current;
+                  const c = nativeClientRef.current;
                   if (!c) return;
                   c.sendKey(0xffe9, 'AltLeft', true); // alt down
                   c.sendKey(0xff09, 'Tab', true);     // tab down
@@ -2667,7 +2697,7 @@ const AgentDashboard: React.FC<AgentDashboardProps> = ({
                   listens for. Most desktops accept either; 0xff61 is the
                   more universal pick. */}
               <button
-                onClick={() => waylandClientRef.current?.sendKey(0xff61, 'PrintScreen')}
+                onClick={() => nativeClientRef.current?.sendKey(0xff61, 'PrintScreen')}
                 className="px-3 py-1 text-xs font-semibold rounded bg-gray-700 hover:bg-gray-600 border border-gray-600"
                 title="Print Screen"
               >
