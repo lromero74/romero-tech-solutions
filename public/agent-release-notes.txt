@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.20.0 Release Notes
+RTS Monitoring Agent - Version 1.21.8 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-27 23:19:14 UTC
-Previous Version: v1.20.0
-Git Commit: 298fc07
+Release Date: 2026-04-28 04:15:56 UTC
+Previous Version: v1.21.7
+Git Commit: 29e7282
 
-Changes Since v1.20.0:
+Changes Since v1.21.7:
 ───────────────────────────────────────────────────────────
 
-• fix(release.sh): drop bash 'local' from top-level screencast-live build loop
+• v1.21.8: declare Wayland Remote Control runtime deps in Linux packages
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
