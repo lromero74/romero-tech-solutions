@@ -167,11 +167,23 @@ router.post(
       // Sum=63 = full chrome strip. Our dashboard modal already
       // shows device name + Disconnect, so the embedded view can
       // be stripped clean.
-      // Prefer gotonode=<_id> (exact MC node id, no name ambiguity)
-      // when we resolved the node above. Fall back to
+      // Prefer gotonode=<bareid> (exact MC node id, no name
+      // ambiguity) when we resolved the node above. Fall back to
       // gotodevicename for the legacy path.
-      const targetParam = meshNodeId
-        ? `gotonode=${encodeURIComponent(meshNodeId)}`
+      //
+      // MC's `gotonode` URL param expects just the base64 id
+      // portion, NOT the full "node/<domain>/<id>" form — its
+      // client-side handler builds the full id as
+      //   `node/${domain}/${args.gotonode}`
+      // so passing the full id results in `node//node/<domain>/<id>`
+      // which doesn't match anything → silent no-op, blank MC view.
+      // Strip the leading `node/<domain>/` (domain is empty in our
+      // setup, so it shows up as `node//`).
+      const bareNodeId = meshNodeId
+        ? meshNodeId.replace(/^node\/[^/]*\//, '')
+        : '';
+      const targetParam = bareNodeId
+        ? `gotonode=${encodeURIComponent(bareNodeId)}`
         : `gotodevicename=${encodeURIComponent(agent.device_name)}`;
       const sessionUrl = `${meshUrl}/` +
         `?user=${encodeURIComponent(tokenName)}` +
