@@ -105,9 +105,17 @@ export const securityHeaders = (req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()');
-  res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
-  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
-  res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+  // CORP/COOP relaxed to "same-site" so api.romerotechsolutions.com
+  // can be fetched by sibling subdomains (apex/www dashboard, the
+  // employee.* PWA). With "same-origin", the browser treats each
+  // subdomain as its own origin and blocks the call → users get a
+  // generic "Connection Error" on the employee login page.
+  // Same-site still rejects truly third-party callers.
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  res.setHeader('Cross-Origin-Resource-Policy', 'same-site');
+  // COEP require-corp removed — would force EVERY embedded resource
+  // (Stripe iframes, third-party scripts) to opt-in via CORP, which
+  // they don't, so we'd break Stripe checkout etc.
 
   next();
 };
