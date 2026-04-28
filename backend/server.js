@@ -133,6 +133,15 @@ const httpServer = createServer(app);
 // Enhanced Security middleware with comprehensive CSP
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
+  // Allow other *.romerotechsolutions.com origins (the apex/www
+  // dashboard, the employee.* PWA subdomain, and any future
+  // sibling subdomain) to fetch from api.romerotechsolutions.com.
+  // Defaults of "same-origin" treat each subdomain as a separate
+  // origin and block the cross-subdomain call. "same-site" allows
+  // anything on the same registrable domain through but still
+  // rejects truly third-party callers.
+  crossOriginResourcePolicy: { policy: 'same-site' },
+  crossOriginOpenerPolicy: { policy: 'same-origin-allow-popups' },
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
