@@ -208,8 +208,9 @@ router.post(
          VALUES ($1, $2, $3::inet, $4)
          RETURNING id, started_at`,
         [agent_id, userId, ip, JSON.stringify({
-          meshcentral_token_name: tokenName,
-          token_expiry_seconds: 300,
+          meshcentral_auth: 'logincookie',
+          mesh_node_id: meshNodeId || null,
+          cookie_expiry_minutes: 60,
         })]
       );
       const audit = auditRow.rows[0];
