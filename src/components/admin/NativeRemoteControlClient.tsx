@@ -348,8 +348,22 @@ const NativeRemoteControlClient = forwardRef<
 
     // Annex-B mode: omit "description" from configure(); decoder
     // extracts SPS/PPS from the in-band NALU stream.
+    //
+    // Codec string: 'avc1.42001F' = Baseline profile, no constraint
+    // flags, Level 3.1. This is the LCD that matches both encoders
+    // we care about:
+    //   - Linux gst x264enc profile=baseline:  avc1.42E01E (3.0)
+    //   - macOS VTCompressionSession Baseline: avc1.42001F (3.1)
+    // 3.1 is a superset of 3.0 (more macroblocks/sec budget), and
+    // omitting the constraint flags lets the decoder accept either
+    // VT's no-flag SPS or x264's all-flags-set SPS. Pre-this-fix
+    // the dashboard was set to avc1.42E01E and Chrome's WebCodecs
+    // strict-matched against VT's bitstream → first IDR decoded
+    // (parameter sets in chunk gave it enough), then EncodingError
+    // on the next chunk because the negotiated level mismatch
+    // poisoned the decoder context.
     decoder.configure({
-      codec: 'avc1.42E01E', // baseline 3.0 — matches gst x264enc profile=baseline output
+      codec: 'avc1.42001F',
       optimizeForLatency: true,
     });
 
@@ -402,17 +416,18 @@ const NativeRemoteControlClient = forwardRef<
       return -1;
     }
 
-    // Most-recent parameter set NALUs, kept so we can prepend them
-    // to the next IDR's chunk. WebCodecs in Annex-B mode demands
-    // the FIRST chunk submitted after configure() be marked 'key'
-    // AND contain everything the decoder needs to start (SPS, PPS,
-    // IDR). Submitting SPS standalone first → DataError "A key
-    // frame is required after configure() or flush()". Submitting
-    // an IDR with no preceding SPS/PPS → EncodingError because the
-    // decoder has no parameter set context. Buffering SPS/PPS and
-    // prepending them to the next IDR is the canonical workaround.
+    // Most-recent parameter set / SEI NALUs, kept so we can prepend
+    // them to the next IDR's chunk. WebCodecs in Annex-B mode
+    // demands the FIRST chunk submitted after configure() be
+    // marked 'key' AND contain everything the decoder needs to
+    // start. SPS+PPS are obviously required (decoder errors
+    // otherwise); SEI (picture timing / buffering period info)
+    // matters less in theory but VT-emitted streams seem to need
+    // it bundled with the IDR for Chrome's decoder to maintain
+    // a clean state for subsequent P-frames.
     let pendingSPS: Uint8Array | null = null;
     let pendingPPS: Uint8Array | null = null;
+    let pendingSEI: Uint8Array | null = null;
 
     function submitChunk(data: Uint8Array, type: 'key' | 'delta') {
       try {
@@ -439,15 +454,20 @@ const NativeRemoteControlClient = forwardRef<
       // Cache parameter sets — we prepend them to every IDR's
       // chunk. Both pre-first-key (so the first chunk has the
       // config it needs) and post-first-key (so the decoder picks
-      // up any mid-stream parameter set updates).
+      // up any mid-stream parameter set updates). Also cache SEI
+      // (type 6) — VT's encoder emits picture-timing SEIs that
+      // appear to be load-bearing for Chrome's decoder state.
       if (naluType === 7) { pendingSPS = nalu; return; }
       if (naluType === 8) { pendingPPS = nalu; return; }
+      if (naluType === 6) { pendingSEI = nalu; return; }
 
       if (naluType === 5) {
-        // IDR slice — assemble [SPS?][PPS?][IDR] into one 'key' chunk.
+        // IDR slice — assemble [SPS?][PPS?][SEI?][IDR] into one
+        // 'key' chunk that contains the full keyframe access unit.
         const parts: Uint8Array[] = [];
         if (pendingSPS) parts.push(pendingSPS);
         if (pendingPPS) parts.push(pendingPPS);
+        if (pendingSEI) parts.push(pendingSEI);
         parts.push(nalu);
         let combined: Uint8Array;
         if (parts.length === 1) {
