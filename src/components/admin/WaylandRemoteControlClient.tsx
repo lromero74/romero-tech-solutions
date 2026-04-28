@@ -293,6 +293,14 @@ const WaylandRemoteControlClient = forwardRef<
     const decoder = new VideoDecoderCtor({
       output: (frame: unknown) => {
         const f = frame as VideoFrame & { close: () => void };
+        // Skip 0x0 frames Chrome sometimes emits before SPS/PPS are
+        // fully processed — drawing them at zero dims paints
+        // nothing and pinning the canvas to 0x0 hides the real
+        // frames that follow.
+        if (f.codedWidth === 0 || f.codedHeight === 0) {
+          f.close();
+          return;
+        }
         // Resize canvas to match frame natural dims (typically
         // 1280x720) so drawImage scales correctly when the
         // canvas's CSS dims differ.
