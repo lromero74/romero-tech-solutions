@@ -458,10 +458,22 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
 
   const handleSignIn = async (email: string, password: string): Promise<AuthUser> => {
     try {
-      // Determine login type based on current URL
+      // Determine login type based on current URL.
+      // employee.romerotechsolutions.com (the PWA subdomain) is
+      // dedicated to the employee surface — its bare "/" path
+      // implies the employee form, so we check the hostname before
+      // the pathname. Without this, the subdomain's "/" matched
+      // none of the employee-path patterns and fell through to
+      // 'client' login → backend rejected the @romerotechsolutions
+      // employee email with "Client login using @romerotech... not
+      // permitted."
+      const isEmployeeHost = window.location.hostname.startsWith('employee.');
       const currentPath = window.location.pathname;
       const loginType: 'employee' | 'client' =
-        (currentPath.includes('/employee') || currentPath.includes('/technician') || currentPath.includes('/sales'))
+        (isEmployeeHost ||
+         currentPath.includes('/employee') ||
+         currentPath.includes('/technician') ||
+         currentPath.includes('/sales'))
           ? 'employee'
           : 'client';
 
