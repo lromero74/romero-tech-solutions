@@ -30,7 +30,7 @@ import express from 'express';
 import { query } from '../config/database.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
-import meshcentral from '../services/meshcentralService.js';
+import meshcentral, { listDevices } from '../services/meshcentralService.js';
 import { issueDashboardTicket } from '../services/waylandTunnelService.js';
 
 const router = express.Router();
@@ -126,18 +126,35 @@ router.post(
       const meshUrl = process.env.MESHCENTRAL_URL ||
         'https://mesh.romerotechsolutions.com';
 
-      // MeshAgent on macOS registers under `scutil --get ComputerName`,
-      // which has no suffix. Our agent reports os.Hostname(), which on
-      // macOS yields `Albondigas.local` (mDNS suffix) and on some Linux
-      // boxes `host.lan` / `host.localdomain`. The mismatch makes MC's
-      // gotodevicename lookup miss → blank desktop. Strip the common
-      // mDNS / private-network suffixes so the name we send matches
-      // what MeshAgent registered with.
+      // Resolve our agent's device_name to MeshCentral's actual node
+      // _id. We can't rely on gotodevicename matching directly because
+      // MeshAgent registers under whatever the OS reports (macOS:
+      // sometimes `scutil --get ComputerName`, sometimes
+      // `Albondigas.lan` from BSD-style hostname; Linux: usually
+      // `uname -n`; Windows: NetBIOS name). Our agent reports
+      // `os.Hostname()`, which doesn't always match.
       //
-      // Linux MeshAgent uses `uname -n` (often the bare hostname,
-      // sometimes FQDN) — same stripping is safe there too.
-      const meshNodeName = agent.device_name
-        .replace(/\.(local|lan|localdomain|home|home\.arpa)$/i, '');
+      // Strategy: list every node MC sees, then match by stem (the
+      // part before the first dot, lowercased). "Albondigas.local",
+      // "Albondigas.lan", and "Albondigas" all share stem
+      // "albondigas" — so any of those finds the right node. If the
+      // lookup fails (network issue, MC slow, node not yet
+      // registered), fall back to gotodevicename so the iframe at
+      // least loads MC's device list.
+      const targetStem = agent.device_name.split('.')[0].toLowerCase();
+      let meshNodeId = null;
+      try {
+        const nodeList = await listDevices();
+        for (const meshId of Object.keys(nodeList?.nodes || {})) {
+          for (const n of nodeList.nodes[meshId] || []) {
+            const stem = (n.name || '').split('.')[0].toLowerCase();
+            if (stem === targetStem) { meshNodeId = n._id; break; }
+          }
+          if (meshNodeId) break;
+        }
+      } catch (e) {
+        console.warn(`[remoteControl] MC node lookup failed for ${agent.device_name}:`, e.message);
+      }
       // hide=63 strips MeshCentral's own UI chrome so the iframe
       // shows just the device's desktop view + the bottom toolbar
       // (Send Ctrl+Alt+Del, Clipboard, etc.). Bitmask:
@@ -150,10 +167,16 @@ router.post(
       // Sum=63 = full chrome strip. Our dashboard modal already
       // shows device name + Disconnect, so the embedded view can
       // be stripped clean.
+      // Prefer gotonode=<_id> (exact MC node id, no name ambiguity)
+      // when we resolved the node above. Fall back to
+      // gotodevicename for the legacy path.
+      const targetParam = meshNodeId
+        ? `gotonode=${encodeURIComponent(meshNodeId)}`
+        : `gotodevicename=${encodeURIComponent(agent.device_name)}`;
       const sessionUrl = `${meshUrl}/` +
         `?user=${encodeURIComponent(tokenName)}` +
         `&pass=${encodeURIComponent(tokenPass)}` +
-        `&gotodevicename=${encodeURIComponent(meshNodeName)}` +
+        `&${targetParam}` +
         `&viewmode=11&hide=63`;
 
       // 4. INSERT audit row.
