@@ -463,12 +463,17 @@ function handleConnection(ws, auditId, role, kind = 'rfb') {
       [auditId, JSON.stringify({ relay_paired_at: new Date().toISOString() })]
     ).catch(e => console.warn('[nativeTunnel] paired-update failed:', e.message));
   } else {
-    // Schedule a 60s timeout. If counterpart shows up, the
-    // pair branch above clears the timer.
+    // Schedule a 15s timeout. If counterpart shows up, the pair
+    // branch above clears the timer. v1.24.10 dropped this from
+    // 60s to 15s to match the agent's 10s helper-cleanup grace
+    // period — the agent kills its helper 10s after the rfb
+    // tunnel closes, so a backend parked-pair longer than ~12s
+    // would leave the dashboard sitting hopefully waiting for
+    // an agent half that's already gone, ending in a UX dead-zone.
     pair.parkedTimer = setTimeout(() => {
       console.log(`[nativeTunnel] timeout audit=${auditId} ${role}-only never paired`);
       teardown(auditId, kind, 'counterpart timeout');
-    }, 60_000);
+    }, 15_000);
   }
 }
 
