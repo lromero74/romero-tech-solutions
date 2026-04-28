@@ -197,7 +197,11 @@ router.post(
       const sessionUrl = `${meshUrl}/` +
         `?login=${encodeURIComponent(loginCookie)}` +
         `&${targetParam}` +
-        `&viewmode=11&hide=63`;
+        // Embedded sessions are more reliable on MeshCentral's
+        // server relay path. WebRTC can work in the full MeshCentral
+        // UI but leave the iframe desktop pane black/disconnected in
+        // browser privacy and cross-origin iframe edge cases.
+        `&viewmode=11&hide=63&webrtc=0`;
 
       // 4. INSERT audit row.
       const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
