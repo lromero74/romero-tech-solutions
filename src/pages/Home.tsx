@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Phone, Mail, Monitor, Printer, Wifi, CheckCircle, Star, Users, MapPin, ArrowRight, LogIn } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import ParticleBackground from '../components/common/ParticleBackground';
@@ -7,20 +7,58 @@ import PainPointAnimation from '../components/common/PainPointAnimation';
 
 const Home: React.FC = () => {
   const { t } = useLanguage();
-
-  // Memoize boundaries to prevent infinite re-renders
-  const boundaries = useMemo(() => ({
+  const sectionRef = React.useRef<HTMLElement>(null);
+  const [particleBoundaries, setParticleBoundaries] = React.useState({
     left: 0,
     top: 0,
     right: typeof window !== 'undefined' ? window.innerWidth : 1920,
     bottom: typeof window !== 'undefined' ? window.innerHeight : 2000
-  }), []);
+  });
+
+  React.useEffect(() => {
+    const updateParticleBoundaries = () => {
+      const section = sectionRef.current;
+
+      const nextBoundaries = {
+        left: 0,
+        top: 0,
+        right: section?.clientWidth || window.innerWidth,
+        bottom: section?.scrollHeight || window.innerHeight
+      };
+
+      setParticleBoundaries(prev => (
+        prev.left === nextBoundaries.left &&
+        prev.top === nextBoundaries.top &&
+        prev.right === nextBoundaries.right &&
+        prev.bottom === nextBoundaries.bottom
+          ? prev
+          : nextBoundaries
+      ));
+    };
+
+    updateParticleBoundaries();
+    window.addEventListener('resize', updateParticleBoundaries);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && sectionRef.current
+      ? new ResizeObserver(updateParticleBoundaries)
+      : null;
+
+    if (sectionRef.current && resizeObserver) {
+      resizeObserver.observe(sectionRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateParticleBoundaries);
+      resizeObserver?.disconnect();
+    };
+  }, []);
 
   return (
     <div className="min-h-screen">
       <StructuredData pageType="home" />
 
       <section
+        ref={sectionRef}
         className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white min-h-screen overflow-hidden cursor-crosshair"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -51,7 +89,7 @@ const Home: React.FC = () => {
 
         {/* Particle Background */}
         <div className="absolute inset-0 w-full h-full">
-          <ParticleBackground boundaries={boundaries} />
+          <ParticleBackground boundaries={particleBoundaries} />
         </div>
 
         {/* Main Content Container */}

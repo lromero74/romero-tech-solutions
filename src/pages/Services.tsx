@@ -6,6 +6,51 @@ import StructuredData from '../components/seo/StructuredData';
 
 const Services: React.FC = () => {
   const { t } = useLanguage();
+  const sectionRef = React.useRef<HTMLElement>(null);
+  const [particleBoundaries, setParticleBoundaries] = React.useState({
+    left: 0,
+    top: 0,
+    right: typeof window !== 'undefined' ? window.innerWidth : 1920,
+    bottom: typeof window !== 'undefined' ? window.innerHeight : 2000
+  });
+
+  React.useEffect(() => {
+    const updateParticleBoundaries = () => {
+      const section = sectionRef.current;
+
+      const nextBoundaries = {
+        left: 0,
+        top: 0,
+        right: section?.clientWidth || window.innerWidth,
+        bottom: section?.scrollHeight || window.innerHeight
+      };
+
+      setParticleBoundaries(prev => (
+        prev.left === nextBoundaries.left &&
+        prev.top === nextBoundaries.top &&
+        prev.right === nextBoundaries.right &&
+        prev.bottom === nextBoundaries.bottom
+          ? prev
+          : nextBoundaries
+      ));
+    };
+
+    updateParticleBoundaries();
+    window.addEventListener('resize', updateParticleBoundaries);
+
+    const resizeObserver = typeof ResizeObserver !== 'undefined' && sectionRef.current
+      ? new ResizeObserver(updateParticleBoundaries)
+      : null;
+
+    if (sectionRef.current && resizeObserver) {
+      resizeObserver.observe(sectionRef.current);
+    }
+
+    return () => {
+      window.removeEventListener('resize', updateParticleBoundaries);
+      resizeObserver?.disconnect();
+    };
+  }, []);
 
   const services = [
     {
@@ -69,6 +114,7 @@ const Services: React.FC = () => {
       <StructuredData pageType="services" />
 
       <section
+        ref={sectionRef}
         className="relative bg-gradient-to-br from-slate-900 via-blue-900 to-slate-800 text-white min-h-screen overflow-hidden cursor-crosshair"
         onClick={(e) => {
           const rect = e.currentTarget.getBoundingClientRect();
@@ -99,12 +145,7 @@ const Services: React.FC = () => {
 
         {/* Particle Background */}
         <div className="absolute inset-0 w-full h-full">
-          <ParticleBackground boundaries={{
-            left: 0,
-            top: 0,
-            right: typeof window !== 'undefined' ? window.innerWidth : 1920,
-            bottom: typeof window !== 'undefined' ? Math.max(window.innerHeight, document.documentElement.scrollHeight) : 2000
-          }} />
+          <ParticleBackground boundaries={particleBoundaries} />
         </div>
 
         {/* Main Content Container */}
