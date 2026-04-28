@@ -402,44 +402,24 @@ const NativeRemoteControlClient = forwardRef<
       return -1;
     }
 
-    function emitNALU(nalu: Uint8Array) {
-      // Skip past start code to read NALU header byte (first 5
-      // bits of byte 0 of the NALU body = NAL unit type).
-      const startCodeLen = nalu[2] === 1 ? 3 : 4;
-      if (nalu.length <= startCodeLen) return;
-      const naluType = nalu[startCodeLen] & 0x1f;
-      const isKey = naluType === 5; // IDR slice
-      // Parameter sets (SPS=7, PPS=8) and SEI (6) / AUD (9) are
-      // always allowed through — the decoder REQUIRES SPS+PPS to
-      // be in the bitstream BEFORE the first IDR can decode.
-      // Dropping them while waiting for the first 'key' chunk
-      // (the bug pre-this-fix) makes the first keyframe undecodable
-      // and WebCodecs raises 'EncodingError: Decoding error'. Both
-      // openh264enc on Linux and VTCompressionSession on macOS
-      // can emit SPS/PPS arbitrarily close to or far from the
-      // matching IDR, so this gate has no business filtering.
-      const isParamOrMarker =
-        naluType === 7 ||  // SPS
-        naluType === 8 ||  // PPS
-        naluType === 6 ||  // SEI
-        naluType === 9;    // AUD (Access Unit Delimiter)
-      // Non-IDR coded slices (P/B frames) before the first key are
-      // genuinely undecodable — those CAN be safely dropped until
-      // saw_key flips. Still gate those.
-      if (!isKey && !isParamOrMarker && !saw_key) return;
-      if (isKey) saw_key = true;
+    // Most-recent parameter set NALUs, kept so we can prepend them
+    // to the next IDR's chunk. WebCodecs in Annex-B mode demands
+    // the FIRST chunk submitted after configure() be marked 'key'
+    // AND contain everything the decoder needs to start (SPS, PPS,
+    // IDR). Submitting SPS standalone first → DataError "A key
+    // frame is required after configure() or flush()". Submitting
+    // an IDR with no preceding SPS/PPS → EncodingError because the
+    // decoder has no parameter set context. Buffering SPS/PPS and
+    // prepending them to the next IDR is the canonical workaround.
+    let pendingSPS: Uint8Array | null = null;
+    let pendingPPS: Uint8Array | null = null;
 
-      // SPS (7), PPS (8), AUD (9), SEI (6) are config/markers,
-      // not standalone decodable frames. WebCodecs annex-B mode
-      // wants them passed through as part of the bitstream — we
-      // pass each as a chunk and the decoder's own demux finds
-      // the actual coded slices. Mark non-slice NALUs as 'delta'
-      // so the decoder doesn't expect them to produce a frame.
+    function submitChunk(data: Uint8Array, type: 'key' | 'delta') {
       try {
         const chunk = new EncodedVideoChunkCtor({
-          type: isKey ? 'key' : 'delta',
+          type,
           timestamp: performance.now() * 1000, // microseconds
-          data: nalu,
+          data,
         });
         if (decoder.state === 'configured') {
           decoder.decode(chunk);
@@ -447,6 +427,54 @@ const NativeRemoteControlClient = forwardRef<
       } catch (e) {
         console.error('[wayland-h264] decode error:', e);
       }
+    }
+
+    function emitNALU(nalu: Uint8Array) {
+      // Skip past start code to read NALU header byte (first 5
+      // bits of byte 0 of the NALU body = NAL unit type).
+      const startCodeLen = nalu[2] === 1 ? 3 : 4;
+      if (nalu.length <= startCodeLen) return;
+      const naluType = nalu[startCodeLen] & 0x1f;
+
+      // Cache parameter sets — we prepend them to every IDR's
+      // chunk. Both pre-first-key (so the first chunk has the
+      // config it needs) and post-first-key (so the decoder picks
+      // up any mid-stream parameter set updates).
+      if (naluType === 7) { pendingSPS = nalu; return; }
+      if (naluType === 8) { pendingPPS = nalu; return; }
+
+      if (naluType === 5) {
+        // IDR slice — assemble [SPS?][PPS?][IDR] into one 'key' chunk.
+        const parts: Uint8Array[] = [];
+        if (pendingSPS) parts.push(pendingSPS);
+        if (pendingPPS) parts.push(pendingPPS);
+        parts.push(nalu);
+        let combined: Uint8Array;
+        if (parts.length === 1) {
+          combined = nalu;
+        } else {
+          let total = 0;
+          for (const p of parts) total += p.length;
+          combined = new Uint8Array(total);
+          let off = 0;
+          for (const p of parts) {
+            combined.set(p, off);
+            off += p.length;
+          }
+        }
+        saw_key = true;
+        submitChunk(combined, 'key');
+        return;
+      }
+
+      // SEI (6), AUD (9), and non-IDR coded slices (1) only after
+      // we've sent the first key. SEI/AUD are technically harmless
+      // anytime, but submitting them as 'delta' to a freshly-
+      // configured decoder has the same DataError problem as SPS/
+      // PPS — first chunk must be 'key'. Buffering them is overkill
+      // for non-essential metadata; just drop until first key.
+      if (!saw_key) return;
+      submitChunk(nalu, 'delta');
     }
 
     return () => {
