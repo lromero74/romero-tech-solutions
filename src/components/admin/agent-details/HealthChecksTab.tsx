@@ -57,6 +57,9 @@ const CHECK_TYPE_LABELS: Record<HealthCheckType, string> = {
   battery_health: 'Battery health',
   power_policy: 'Power policy',
   gpu_status: 'GPU status',
+  certificate_expiry: 'Certificate expiry',
+  scheduled_tasks: 'Scheduled tasks',
+  peripherals: 'Peripherals',
 };
 
 function severityIcon(severity: HealthCheckSeverity) {
@@ -246,6 +249,119 @@ function PayloadView({ checkType, payload }: { checkType: HealthCheckType; paylo
           {(battMin !== null || neverBatt !== null) && (
             <div>Sleep on battery: <strong>{fmtMin(battMin)}</strong>{neverBatt === true && <span className="ml-2 text-yellow-500">(never sleeps)</span>}</div>
           )}
+        </div>
+      );
+    }
+    case 'certificate_expiry': {
+      const total = typeof payload.total === 'number' ? payload.total : 0;
+      const soonest = typeof payload.soonest_expiry === 'string' ? payload.soonest_expiry : null;
+      const certs = Array.isArray(payload.certs) ? (payload.certs as Array<{
+        subject: string;
+        issuer?: string;
+        not_after: string;
+        days_until_expiry: number;
+        source?: string;
+      }>) : [];
+      if (total === 0) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No operator-managed certificates discovered</div>;
+      }
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          <div>Total: <strong>{total}</strong>{soonest && <> — soonest expires <strong>{new Date(soonest).toLocaleDateString()}</strong></>}</div>
+          {certs.length > 0 && (
+            <div className="space-y-1 max-h-64 overflow-y-auto">
+              {certs.slice(0, 25).map((c, i) => {
+                const days = c.days_until_expiry;
+                const cls = days < 7 ? 'text-red-500 font-semibold'
+                          : days < 30 ? 'text-yellow-500'
+                          : themeClasses.text.muted;
+                return (
+                  <div key={i} className="border-l-2 pl-2 border-gray-300 dark:border-gray-600">
+                    <div className="font-medium truncate" title={c.subject}>{c.subject}</div>
+                    <div className={`text-xs font-mono ${cls}`}>
+                      expires in {days} days · {c.source}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      );
+    }
+    case 'scheduled_tasks': {
+      const total = typeof payload.total === 'number' ? payload.total : 0;
+      const susp = typeof payload.suspicious_count === 'number' ? payload.suspicious_count : 0;
+      const tasks = Array.isArray(payload.tasks) ? (payload.tasks as Array<{
+        name: string;
+        run_as?: string;
+        command?: string;
+        source?: string;
+        suspicious?: boolean;
+      }>) : [];
+      const suspiciousTasks = tasks.filter(t => t.suspicious);
+      const cleanTasks = tasks.filter(t => !t.suspicious);
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          <div>{total} task{total === 1 ? '' : 's'}, {susp} suspicious</div>
+          {suspiciousTasks.length > 0 && (
+            <div className="space-y-1">
+              <div className="font-medium text-yellow-500">Suspicious:</div>
+              {suspiciousTasks.map((t, i) => (
+                <div key={i} className="font-mono text-xs">
+                  <span className="font-semibold">{t.name}</span>{t.run_as && <span className={themeClasses.text.muted}> as {t.run_as}</span>}
+                  {t.command && <div className={`${themeClasses.text.muted} break-all`}>{t.command}</div>}
+                </div>
+              ))}
+            </div>
+          )}
+          {cleanTasks.length > 0 && (
+            <details>
+              <summary className={`cursor-pointer ${themeClasses.text.muted}`}>{cleanTasks.length} routine task{cleanTasks.length === 1 ? '' : 's'} (click to expand)</summary>
+              <div className="font-mono text-xs mt-1 max-h-48 overflow-y-auto space-y-0.5">
+                {cleanTasks.slice(0, 50).map((t, i) => <div key={i} className="truncate">{t.name}</div>)}
+              </div>
+            </details>
+          )}
+        </div>
+      );
+    }
+    case 'peripherals': {
+      const usb = Array.isArray(payload.usb_devices) ? (payload.usb_devices as Array<{
+        name: string; manufacturer?: string; vendor_id?: string; product_id?: string;
+      }>) : [];
+      const monitors = Array.isArray(payload.monitors) ? (payload.monitors as Array<{
+        name: string; manufacturer?: string; resolution?: string; connection?: string;
+      }>) : [];
+      if (usb.length === 0 && monitors.length === 0) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No peripherals enumerated</div>;
+      }
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} grid grid-cols-1 sm:grid-cols-2 gap-3`}>
+          <div className="min-w-0">
+            <div className="font-medium mb-1">Monitors ({monitors.length})</div>
+            {monitors.length === 0 ? <span className={themeClasses.text.muted}>—</span> : (
+              <div className="text-xs space-y-1">
+                {monitors.map((m, i) => (
+                  <div key={i}>
+                    <span className="font-semibold">{m.name}</span>
+                    {m.connection && <span className={themeClasses.text.muted}> · {m.connection}</span>}
+                    {m.resolution && <span className={themeClasses.text.muted}> · {m.resolution}</span>}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="min-w-0">
+            <div className="font-medium mb-1">USB devices ({usb.length})</div>
+            {usb.length === 0 ? <span className={themeClasses.text.muted}>—</span> : (
+              <div className="text-xs font-mono max-h-48 overflow-y-auto space-y-0.5">
+                {usb.slice(0, 50).map((d, i) => (
+                  <div key={i} className="truncate" title={d.name}>{d.name}</div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       );
     }

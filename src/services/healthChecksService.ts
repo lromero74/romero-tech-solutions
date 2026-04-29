@@ -24,7 +24,11 @@ export type HealthCheckType =
   // Stage 2.4 / 2.5 / 2.6
   | 'battery_health'
   | 'power_policy'
-  | 'gpu_status';
+  | 'gpu_status'
+  // Stage 3.7 / 3.5 / 3.2
+  | 'certificate_expiry'
+  | 'scheduled_tasks'
+  | 'peripherals';
 
 export interface HealthCheckResult {
   check_type: HealthCheckType;

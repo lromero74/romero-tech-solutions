@@ -331,6 +331,121 @@ describe('HealthChecksTab', () => {
     expect(screen.getByText(/PID 59047 · 101\.9%/)).toBeInTheDocument();
   });
 
+  // ----- Stage 3.7 / 3.5 / 3.2 payload renderers -----
+
+  it('certificate_expiry highlights certs expiring < 30 days in yellow, < 7 days in red', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'certificate_expiry',
+        severity: 'critical',
+        passed: false,
+        payload: {
+          total: 3,
+          soonest_expiry: '2026-05-01T00:00:00Z',
+          certs: [
+            { subject: 'CN=expiring-soon.example.com', issuer: 'CN=Le', not_after: '2026-05-01T00:00:00Z', days_until_expiry: 2, source: '/etc/letsencrypt/live/x/cert.pem' },
+            { subject: 'CN=warning.example.com', issuer: 'CN=Le', not_after: '2026-05-20T00:00:00Z', days_until_expiry: 21, source: '/etc/ssl/server.pem' },
+            { subject: 'CN=fine.example.com', issuer: 'CN=Le', not_after: '2027-04-01T00:00:00Z', days_until_expiry: 360, source: '/etc/ssl/other.pem' },
+          ],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Certificate expiry');
+    fireEvent.click(screen.getByRole('button', { name: /Certificate expiry/i }));
+    expect(await screen.findByText(/CN=expiring-soon/)).toBeInTheDocument();
+    // Verify the days-until line for the imminent cert.
+    expect(screen.getByText(/expires in 2 days/)).toBeInTheDocument();
+    expect(screen.getByText(/expires in 21 days/)).toBeInTheDocument();
+  });
+
+  it('scheduled_tasks separates suspicious from routine tasks', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'scheduled_tasks',
+        severity: 'warning',
+        passed: false,
+        payload: {
+          total: 3,
+          suspicious_count: 1,
+          tasks: [
+            { name: 'EvilPersistence', run_as: 'SYSTEM', command: 'C:\\Users\\Public\\evil.exe', source: 'task-scheduler', suspicious: true },
+            { name: 'apt-daily.timer', run_as: 'root', command: 'apt-daily.service', source: 'systemd-timer' },
+            { name: 'GoogleUpdater', run_as: 'SYSTEM', command: 'C:\\Program Files\\Google\\Update.exe', source: 'task-scheduler' },
+          ],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Scheduled tasks');
+    fireEvent.click(screen.getByRole('button', { name: /Scheduled tasks/i }));
+    // Suspicious task name + path appear prominently.
+    expect(await screen.findByText('EvilPersistence')).toBeInTheDocument();
+    expect(screen.getByText(/C:\\Users\\Public\\evil\.exe/)).toBeInTheDocument();
+    // Routine count summary appears.
+    expect(screen.getByText(/2 routine tasks/)).toBeInTheDocument();
+  });
+
+  it('peripherals renders monitors + USB device columns', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'peripherals',
+        severity: 'info',
+        passed: true,
+        payload: {
+          monitors: [
+            { name: 'Built-in Retina Display', connection: 'Built-in', resolution: '3024x1964' },
+            { name: 'DELL U2720Q', connection: 'DisplayPort', resolution: '3840x2160' },
+          ],
+          usb_devices: [
+            { name: 'Magic Keyboard', manufacturer: 'Apple Inc.', vendor_id: '0x05ac' },
+            { name: 'Logitech Mouse', manufacturer: 'Logitech', vendor_id: '0x046d' },
+          ],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Peripherals');
+    fireEvent.click(screen.getByRole('button', { name: /Peripherals/i }));
+    expect(await screen.findByText('Built-in Retina Display')).toBeInTheDocument();
+    expect(screen.getByText('DELL U2720Q')).toBeInTheDocument();
+    expect(screen.getByText('Magic Keyboard')).toBeInTheDocument();
+    // Section headers with counts.
+    expect(screen.getByText(/Monitors \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/USB devices \(2\)/)).toBeInTheDocument();
+  });
+
+  it('peripherals shows empty hint when nothing enumerated', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'peripherals',
+        severity: 'info',
+        passed: true,
+        payload: {},
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Peripherals');
+    fireEvent.click(screen.getByRole('button', { name: /Peripherals/i }));
+    expect(await screen.findByText(/No peripherals enumerated/i)).toBeInTheDocument();
+  });
+
   it('renders power_policy active scheme + sleep timeouts', async () => {
     grantPermission(true);
     mockedList.mockResolvedValue({
