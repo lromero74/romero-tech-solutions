@@ -35,6 +35,11 @@ MARKER="# rts-testbot self-loopback (added by scripts/testbot-host-setup.sh)"
 ENTRIES=(
     "127.0.0.1 api.romerotechsolutions.com"
     "127.0.0.1 romerotechsolutions.com www.romerotechsolutions.com"
+    # MeshCentral server is fronted by the same nginx on testbot.
+    # Required for the backend's getLoginCookie() WebSocket call
+    # which is invoked when a technician starts a remote-control
+    # session via the legacy MeshAgent path.
+    "127.0.0.1 mesh.romerotechsolutions.com"
 )
 
 if [ "$(id -u)" -ne 0 ]; then
@@ -42,24 +47,45 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
-if grep -qF "$MARKER" "$HOSTS_FILE"; then
-    echo "✓ Marker block already present in $HOSTS_FILE; nothing to do."
+# Check which entries are already present (by exact line match) so
+# we can do a partial-add when the marker block is there but is
+# missing newer hostnames added in a later script revision.
+missing=()
+for e in "${ENTRIES[@]}"; do
+    if ! grep -qxF "$e" "$HOSTS_FILE"; then
+        missing+=("$e")
+    fi
+done
+
+if [ ${#missing[@]} -eq 0 ]; then
+    echo "✓ All testbot self-loopback entries already in $HOSTS_FILE; nothing to do."
     exit 0
 fi
 
-# If a previous ad-hoc entry exists without the marker, leave it
-# alone — additional 127.0.0.1 mappings for the same hostname are
-# harmless (first match wins) and removing someone else's manual
-# edit is too aggressive for a setup script.
-
-{
-    echo ""
-    echo "$MARKER"
-    for e in "${ENTRIES[@]}"; do echo "$e"; done
-} >> "$HOSTS_FILE"
-
-echo "✓ Added testbot self-loopback block to $HOSTS_FILE:"
-for e in "${ENTRIES[@]}"; do echo "  $e"; done
+# First run: write the full marker block.
+# Subsequent runs (block exists, missing newer entries): append the
+# missing entries directly after the marker line so the block stays
+# contiguous.
+if ! grep -qF "$MARKER" "$HOSTS_FILE"; then
+    {
+        echo ""
+        echo "$MARKER"
+        for e in "${ENTRIES[@]}"; do echo "$e"; done
+    } >> "$HOSTS_FILE"
+    echo "✓ Wrote testbot self-loopback block to $HOSTS_FILE:"
+    for e in "${ENTRIES[@]}"; do echo "  $e"; done
+else
+    # awk to insert each missing line right after the marker line.
+    tmp=$(mktemp)
+    awk -v marker="$MARKER" -v lines="$(printf '%s\n' "${missing[@]}")" '
+        $0 == marker { print; print lines; next }
+        { print }
+    ' "$HOSTS_FILE" > "$tmp"
+    cat "$tmp" > "$HOSTS_FILE"
+    rm -f "$tmp"
+    echo "✓ Patched testbot self-loopback block in $HOSTS_FILE with new entries:"
+    for e in "${missing[@]}"; do echo "  $e"; done
+fi
 
 echo ""
 echo "Verify with:"
