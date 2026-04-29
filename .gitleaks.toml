@@ -44,6 +44,10 @@ commits = [
     # backend/.env updated on testbot, backend service restarted.
     # All previously-subscribed browsers must re-subscribe on next
     # dashboard visit. File subsequently deleted from tree.
+    #
+    # JWT_SECRET in the same .env was also rotated 2026-04-29 after
+    # decoupling agent auth from it (commit af486b8). The
+    # leaked-in-rts-monitoring-agent JWT secret is now dead.
     '639454ab95a1c7368084cb50fab8a12c52c78afb',
 ]
 # Future-proof: docs and planning files often contain example values
