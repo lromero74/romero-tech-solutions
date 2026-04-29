@@ -1,0 +1,57 @@
+# gitleaks configuration — secret-scanning rules for this repo.
+#
+# Activated by `.githooks/pre-commit` which runs `gitleaks protect`
+# on staged changes before every commit. To enable the hooks for a
+# fresh clone:
+#
+#     git config core.hooksPath .githooks
+#
+# Per-clone setting (lives in .git/config). Each developer opts in
+# once. The hook fails closed: if gitleaks isn't installed the
+# commit is blocked with a "brew install gitleaks" hint.
+#
+# Repo-wide history scan: `gitleaks detect`.
+
+[extend]
+useDefault = true
+
+# Allowlist for known historical leaks. All triaged 2026-04-28; the
+# only real production secret in the list (the VAPID private key in
+# update-production-vapid.sh) was rotated server-side the same day,
+# backend restarted, browsers re-subscribe on next dashboard visit.
+# The other entries are doc/planning examples or expired single-use
+# email-confirmation tokens.
+[allowlist]
+description = "Known historical leaks (rotated, expired, or non-secret examples)"
+commits = [
+    # backend/scripts/debugToken.js + testStoredProc.js — single-use
+    # email-confirmation tokens hardcoded for one-shot debug runs.
+    # Expired hours after issue (Sep 2025). Files deleted from tree
+    # in the repository-cleanup commit.
+    '4e953a3fe4e92e5ab4cfaf56e8b1565bce1ab2d8',
+    # docs/BACKEND_TRIAL_IMPLEMENTATION.md:213 — example token in
+    # API request-body documentation.
+    '4f795d03d48cc65080f3c9b8336a7e926a313777',
+    # MSPAgentPlan.txt:595 + 607 — example tokens inside two code
+    # blocks in a planning document. File deleted from tree.
+    '059f3c796718d7c738ae149dd45ac545a470ac7a',
+    # test-push-subscription.js:37 — auth field of a `mockSubscription`
+    # object. Browser-generated dummy used for testing the push
+    # endpoint, not a real subscriber. File deleted from tree.
+    'e95c833ec1552bb19081ddc7658bc70ccf129c0e',
+    # update-production-vapid.sh:11 — production VAPID private key.
+    # ROTATED 2026-04-28: new keypair generated via web-push,
+    # backend/.env updated on testbot, backend service restarted.
+    # All previously-subscribed browsers must re-subscribe on next
+    # dashboard visit. File subsequently deleted from tree.
+    '639454ab95a1c7368084cb50fab8a12c52c78afb',
+]
+# Future-proof: docs and planning files often contain example values
+# that match secret-shaped patterns. Trust those paths.
+paths = [
+    '^docs/',
+    '^MSPAgentPlan\.txt$',
+    # Ad-hoc test scripts that lived at repo root and were later
+    # cleaned up. Catch any resurrected ones.
+    '^test-.*\.js$',
+]
