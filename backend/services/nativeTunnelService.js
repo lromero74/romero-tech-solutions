@@ -52,7 +52,6 @@
  */
 
 import { WebSocketServer } from 'ws';
-import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { query } from '../config/database.js';
 import { sessionService } from './sessionService.js';
@@ -174,18 +173,28 @@ async function teardown(auditId, kind, reason) {
 }
 
 /**
- * Validate the agent's JWT and return the agent_id, or throw.
- * Agent connects with X-Agent-Token header (set by the agent's
- * dial code).
+ * Validate the agent's token via DB equality and return the agent_id,
+ * or throw. Agent connects with X-Agent-Token header (set by the
+ * agent's dial code). Mirrors the HTTP-side `authenticateAgent`
+ * middleware — token equality against agent_devices.agent_token is
+ * the security check; no JWT signing key is involved. Legacy
+ * JWT-format tokens already in the column work transparently.
  */
-function authenticateAgent(req) {
+async function authenticateAgent(req) {
   const tok = req.headers['x-agent-token'];
   if (!tok) throw new Error('missing X-Agent-Token');
-  const decoded = jwt.verify(tok, process.env.JWT_SECRET);
-  if (decoded?.type !== 'agent') {
-    throw new Error('wrong token type');
+  const result = await query(
+    `SELECT id, is_active, soft_delete
+       FROM agent_devices
+      WHERE agent_token = $1`,
+    [tok],
+  );
+  if (result.rows.length !== 1) throw new Error('invalid agent token');
+  const agent = result.rows[0];
+  if (!agent.is_active || agent.soft_delete) {
+    throw new Error('agent device disabled');
   }
-  return decoded.agent_id;
+  return agent.id;
 }
 
 /**
@@ -345,7 +354,7 @@ export function attachToHttpServer(httpServer) {
     let identity;
     try {
       if (side === 'agent') {
-        identity = { kind: 'agent', agentId: authenticateAgent(req) };
+        identity = { kind: 'agent', agentId: await authenticateAgent(req) };
       } else {
         identity = { kind: 'dashboard', user: await authenticateDashboard(req, auditId) };
       }

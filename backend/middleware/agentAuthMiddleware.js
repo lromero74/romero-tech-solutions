@@ -1,11 +1,35 @@
-import jwt from 'jsonwebtoken';
 import { query } from '../config/database.js';
 
 /**
  * Agent Authentication Middleware
  *
- * Validates JWT tokens for MSP agent devices
- * Agents authenticate using a permanent JWT token issued during registration
+ * Validates agent device tokens against the agent_devices.agent_token
+ * column via literal equality. The token is an opaque random string
+ * (48 random bytes, base64url-encoded; ~64 chars). Tokens are issued
+ * at registration time and stored verbatim in the DB; matching the
+ * Authorization header against that column is sufficient — there is
+ * no signing key, no expiration check, and no JWT decode.
+ *
+ * Why DB equality instead of JWT-with-signature:
+ *
+ *   1. Revocability — clearing or rotating a single agent's token in
+ *      the DB invalidates that one device immediately, with no need
+ *      to rotate a global signing key (which would invalidate every
+ *      agent simultaneously).
+ *   2. Decoupling — global JWT_SECRET rotation no longer breaks
+ *      agents. Their stored token is the source of truth; rotating
+ *      JWT_SECRET only affects user sessions and short-lived magic
+ *      links, both of which tolerate it.
+ *   3. Simplicity — no expiration semantics to reason about. An
+ *      agent's token is valid until the row says otherwise.
+ *
+ * Pre-2026-04-29 the middleware also required a successful jwt.verify
+ * with JWT_SECRET. That check was redundant on top of the DB equality
+ * (forging a token still required the literal stored value, which
+ * the JWT signature didn't help with), and made global rotation a
+ * breaking change. Legacy JWT-format tokens already in the DB
+ * continue to work transparently — the column stores them verbatim
+ * and the equality check is content-agnostic.
  */
 export const authenticateAgent = async (req, res, next) => {
   try {
@@ -22,29 +46,23 @@ export const authenticateAgent = async (req, res, next) => {
 
     const token = authHeader.substring(7); // Remove 'Bearer ' prefix
 
-    // Verify JWT token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
-      console.warn(`⚠️  [agentAuth] Invalid JWT token: ${jwtError.message}`);
+    // Pull agent_id from the URL — every route that uses this
+    // middleware is mounted under /api/agents/:agent_id/... so the
+    // param is always present.
+    const agentId = req.params.agent_id;
+
+    if (!agentId) {
       return res.status(401).json({
         success: false,
-        message: 'Invalid agent token',
-        code: 'INVALID_AGENT_TOKEN'
+        message: 'Missing agent_id in route',
+        code: 'NO_AGENT_ID'
       });
     }
 
-    // Verify this is an agent token (not a user session token)
-    if (decoded.type !== 'agent') {
-      return res.status(401).json({
-        success: false,
-        message: 'Invalid token type - expected agent token',
-        code: 'WRONG_TOKEN_TYPE'
-      });
-    }
-
-    // Verify agent exists and is active
+    // Verify agent exists, is active, and the supplied token matches
+    // the stored row. Token equality is the security check; the id
+    // is defense-in-depth (rules out cross-agent token reuse on the
+    // off-chance two rows ever shared a token).
     const agentResult = await query(
       `SELECT
         id,
@@ -59,7 +77,7 @@ export const authenticateAgent = async (req, res, next) => {
         soft_delete
       FROM agent_devices
       WHERE id = $1 AND agent_token = $2`,
-      [decoded.agent_id, token]
+      [agentId, token]
     );
 
     if (agentResult.rows.length === 0) {
@@ -148,20 +166,11 @@ export const authenticateAgentWebSocket = async (socket, next) => {
       return next(new Error('Agent authentication token required'));
     }
 
-    // Verify JWT token
-    let decoded;
-    try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
-    } catch (jwtError) {
-      return next(new Error('Invalid agent token'));
-    }
-
-    // Verify this is an agent token
-    if (decoded.type !== 'agent') {
-      return next(new Error('Wrong token type - expected agent token'));
-    }
-
-    // Verify agent exists and is active
+    // Look up by token alone. The 384 bits of entropy in an opaque
+    // agent token make collision astronomically unlikely; a query
+    // returning != 1 row is treated as authentication failure
+    // regardless. Legacy JWT-format tokens still work because the
+    // column stores them verbatim.
     const agentResult = await query(
       `SELECT
         id,
@@ -171,8 +180,8 @@ export const authenticateAgentWebSocket = async (socket, next) => {
         is_active,
         soft_delete
       FROM agent_devices
-      WHERE id = $1 AND agent_token = $2`,
-      [decoded.agent_id, token]
+      WHERE agent_token = $1`,
+      [token]
     );
 
     if (agentResult.rows.length === 0) {

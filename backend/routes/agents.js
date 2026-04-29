@@ -232,16 +232,12 @@ router.post('/trial/verify-email', async (req, res) => {
     const agentId = uuidv4();
 
     // Generate proper JWT token for agent authentication
-    const agentToken = jwt.sign(
-      {
-        agent_id: agentId,
-        type: 'agent',
-        business_id: businessId,
-        service_location_id: null  // Free tier doesn't have service locations
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '10y' }  // Permanent token for agent
-    );
+    // Opaque random agent token (48 random bytes, base64url-encoded
+    // → ~64 chars, 384 bits of entropy). Stored verbatim in
+    // agent_devices.agent_token; auth is DB equality. See the
+    // authenticateAgent middleware comment for the rationale and the
+    // JWT-to-opaque migration story.
+    const agentToken = crypto.randomBytes(48).toString('base64url');
 
     await query(`
       INSERT INTO agent_devices (
@@ -921,18 +917,10 @@ router.post('/trial/convert', async (req, res) => {
     await query('BEGIN');
 
     try {
-      // Generate new agent ID and JWT token
+      // Generate new agent ID and opaque random token (see
+      // authenticateAgent middleware for rationale).
       const newAgentId = uuidv4();
-      const permanentToken = jwt.sign(
-        {
-          agent_id: newAgentId,
-          type: 'agent',
-          business_id: tokenData.business_id,
-          service_location_id: tokenData.service_location_id
-        },
-        process.env.JWT_SECRET,
-        { expiresIn: '10y' }
-      );
+      const permanentToken = crypto.randomBytes(48).toString('base64url');
 
       // Create new registered agent
       await query(
@@ -1205,18 +1193,10 @@ router.post('/register', async (req, res) => {
       });
     }
 
-    // Generate permanent JWT token for agent
+    // Generate permanent opaque agent token (see authenticateAgent
+    // middleware for rationale).
     const agentId = uuidv4();
-    const permanentToken = jwt.sign(
-      {
-        agent_id: agentId,
-        type: 'agent',
-        business_id: tokenData.business_id,
-        service_location_id: tokenData.service_location_id
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '10y' } // Long-lived token for agent devices
-    );
+    const permanentToken = crypto.randomBytes(48).toString('base64url');
 
     // Extract system info fields
     const hostname = system_info?.hostname || null;
@@ -4053,17 +4033,10 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
 
     const agent = agentResult.rows[0];
 
-    // Generate new JWT token for agent
-    const newToken = jwt.sign(
-      {
-        agent_id: agent.id,
-        type: 'agent',
-        business_id: agent.business_id,
-        service_location_id: agent.service_location_id
-      },
-      process.env.JWT_SECRET,
-      { expiresIn: '10y' } // Long-lived token for agent devices
-    );
+    // Generate new opaque agent token (see authenticateAgent
+    // middleware for rationale). Used to rotate a single agent's
+    // token without affecting any others.
+    const newToken = crypto.randomBytes(48).toString('base64url');
 
     // Update agent with new token
     await query(
