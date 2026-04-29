@@ -198,21 +198,38 @@ deploy_from_local() {
     ssh "$TESTBOT_SSH_HOST" "sudo systemctl restart $BACKEND_SERVICE" || {
         echo -e "${RED}backend restart failed${NC}"; exit 1
     }
-    sleep 3
 
-    # Smoke test
-    echo -e "${BLUE}Verifying...${NC}"
-    local version_json health_status
-    version_json=$(curl -sf --max-time 10 https://romerotechsolutions.com/version.json 2>/dev/null || echo "ERR")
-    health_status=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" https://api.romerotechsolutions.com/api/health 2>/dev/null || echo "ERR")
+    # Poll /api/health until it returns 200 or we hit max attempts. Node
+    # initialization (DB pool, WebSocket, scheduler service) routinely takes
+    # 5-10s; a fixed sleep is brittle. Retry every 2s for up to 30s.
+    echo -e "${BLUE}Verifying backend is ready...${NC}"
+    local attempts=0 max_attempts=15 health_status="000"
+    while [ $attempts -lt $max_attempts ]; do
+        # Use --fail-with-body OR check exit status separately. Avoid -f
+        # which exits non-zero on 5xx and concatenates with the fallback.
+        health_status=$(curl -s --max-time 5 -o /dev/null -w "%{http_code}" \
+            https://api.romerotechsolutions.com/api/health 2>/dev/null || echo "000")
+        if [ "$health_status" = "200" ]; then
+            break
+        fi
+        attempts=$((attempts + 1))
+        sleep 2
+    done
+
+    local version_json
+    version_json=$(curl -s --max-time 10 https://romerotechsolutions.com/version.json 2>/dev/null || echo "ERR")
 
     echo ""
-    echo -e "${GREEN}Deploy complete.${NC}"
+    if [ "$health_status" = "200" ]; then
+        echo -e "${GREEN}Deploy complete.${NC}"
+    else
+        echo -e "${RED}Deploy completed but backend health check failed.${NC}"
+    fi
     echo -e "  Frontend version.json: $version_json"
-    echo -e "  Backend /api/health:   HTTP $health_status"
+    echo -e "  Backend /api/health:   HTTP $health_status (after $((attempts * 2))s wait)"
 
     if [ "$health_status" != "200" ]; then
-        echo -e "${RED}WARNING: backend health check did not return 200. Investigate:${NC}"
+        echo -e "${RED}Investigate:${NC}"
         echo -e "  ssh $TESTBOT_SSH_HOST 'sudo journalctl -u $BACKEND_SERVICE -n 50'"
         exit 1
     fi
