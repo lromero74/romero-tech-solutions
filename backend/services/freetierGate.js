@@ -11,23 +11,30 @@
 import { query } from '../config/database.js';
 
 // Free-tier check types — available on trial agents.
-export const STAGE1_CHECKS_FREE = Object.freeze([
+// Battery health is free because it's universally useful on laptops
+// (and trial users are most likely to be running on personal hardware).
+export const CHECKS_FREE = Object.freeze([
   'reboot_pending',
   'time_drift',
   'crashdumps',
   'update_history_failures',
   'domain_status',
+  'battery_health',
 ]);
 
 // Paid-only check types — silently dropped on ingest if the agent is on trial.
-export const STAGE1_CHECKS_PAID = Object.freeze([
+// Power-policy + GPU are infra-audit features more relevant to MSP fleet
+// management than personal trial devices.
+export const CHECKS_PAID = Object.freeze([
   'top_processes',
   'listening_ports',
   'mapped_drives',
+  'power_policy',
+  'gpu_status',
 ]);
 
-const FREE_SET = new Set(STAGE1_CHECKS_FREE);
-const PAID_SET = new Set(STAGE1_CHECKS_PAID);
+const FREE_SET = new Set(CHECKS_FREE);
+const PAID_SET = new Set(CHECKS_PAID);
 
 /**
  * Pure decision function — testable without a DB.

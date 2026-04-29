@@ -4105,9 +4105,12 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
 // (separate router, gated by business_id ownership instead of permission key).
 // =============================================================================
 
-const STAGE1_VALID_CHECK_TYPES = new Set([
+const VALID_CHECK_TYPES = new Set([
+  // Stage 1
   'reboot_pending', 'time_drift', 'crashdumps', 'top_processes',
-  'listening_ports', 'update_history_failures', 'domain_status', 'mapped_drives'
+  'listening_ports', 'update_history_failures', 'domain_status', 'mapped_drives',
+  // Stage 2.4 / 2.5 / 2.6
+  'battery_health', 'power_policy', 'gpu_status'
 ]);
 
 router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, async (req, res) => {
@@ -4115,7 +4118,7 @@ router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, asy
     const { agent_id } = req.params;
     const { check_type, severity, passed, payload, collected_at } = req.body;
 
-    if (!check_type || typeof check_type !== 'string' || !STAGE1_VALID_CHECK_TYPES.has(check_type)) {
+    if (!check_type || typeof check_type !== 'string' || !VALID_CHECK_TYPES.has(check_type)) {
       return res.status(400).json({
         success: false,
         message: 'Invalid or missing check_type',
@@ -4247,7 +4250,7 @@ router.get('/:agent_id/health-checks/:check_type/history',
   async (req, res) => {
     try {
       const { agent_id, check_type } = req.params;
-      if (!STAGE1_VALID_CHECK_TYPES.has(check_type)) {
+      if (!VALID_CHECK_TYPES.has(check_type)) {
         return res.status(400).json({ success: false, message: 'Invalid check_type' });
       }
       const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);

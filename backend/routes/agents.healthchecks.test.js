@@ -45,8 +45,8 @@ test('POST /:agent_id/check-result is gated by authenticateAgent + requireAgentM
 
 test('POST /:agent_id/check-result validates check_type against allowlist', () => {
   const block = findRoute('post', '/:agent_id/check-result');
-  assert.ok(block.includes('STAGE1_VALID_CHECK_TYPES'),
-    'check-result must validate against STAGE1_VALID_CHECK_TYPES — accepting arbitrary check_type would let a compromised agent inject rows under any name');
+  assert.ok(block.includes('VALID_CHECK_TYPES'),
+    'check-result must validate against VALID_CHECK_TYPES — accepting arbitrary check_type would let a compromised agent inject rows under any name');
 });
 
 test('POST /:agent_id/check-result enforces free-tier gate', () => {
@@ -85,7 +85,7 @@ test('GET history endpoint requires same permission and validates check_type', (
   assert.ok(block, 'history GET must exist');
   assert.ok(/requirePermission\(\s*['"]view\.agent_health_checks\.enable['"]\s*\)/.test(block),
     'history GET must enforce view.agent_health_checks.enable');
-  assert.ok(/STAGE1_VALID_CHECK_TYPES/.test(block),
+  assert.ok(/VALID_CHECK_TYPES/.test(block),
     'history GET must validate check_type — open-ended params let a caller probe arbitrary string columns');
 });
 

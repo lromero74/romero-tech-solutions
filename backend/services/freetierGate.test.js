@@ -2,13 +2,14 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   decideAllowed,
-  STAGE1_CHECKS_FREE,
-  STAGE1_CHECKS_PAID,
+  CHECKS_FREE,
+  CHECKS_PAID,
 } from './freetierGate.js';
 
 // The free/paid sets are part of the agent ↔ backend contract; pin them.
-test('STAGE1_CHECKS_FREE has the expected set', () => {
-  assert.deepEqual([...STAGE1_CHECKS_FREE].sort(), [
+test('CHECKS_FREE has the expected set', () => {
+  assert.deepEqual([...CHECKS_FREE].sort(), [
+    'battery_health',
     'crashdumps',
     'domain_status',
     'reboot_pending',
@@ -17,17 +18,19 @@ test('STAGE1_CHECKS_FREE has the expected set', () => {
   ]);
 });
 
-test('STAGE1_CHECKS_PAID has the expected set', () => {
-  assert.deepEqual([...STAGE1_CHECKS_PAID].sort(), [
+test('CHECKS_PAID has the expected set', () => {
+  assert.deepEqual([...CHECKS_PAID].sort(), [
+    'gpu_status',
     'listening_ports',
     'mapped_drives',
+    'power_policy',
     'top_processes',
   ]);
 });
 
 test('free/paid sets do not overlap', () => {
-  const free = new Set(STAGE1_CHECKS_FREE);
-  for (const k of STAGE1_CHECKS_PAID) {
+  const free = new Set(CHECKS_FREE);
+  for (const k of CHECKS_PAID) {
     assert.ok(!free.has(k), `paid check "${k}" must not be in free set`);
   }
 });

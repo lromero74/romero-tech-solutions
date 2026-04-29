@@ -54,6 +54,9 @@ const CHECK_TYPE_LABELS: Record<HealthCheckType, string> = {
   update_history_failures: 'Update install history',
   domain_status: 'Domain join status',
   mapped_drives: 'Mapped drives',
+  battery_health: 'Battery health',
+  power_policy: 'Power policy',
+  gpu_status: 'GPU status',
 };
 
 function severityIcon(severity: HealthCheckSeverity) {
@@ -196,6 +199,84 @@ function PayloadView({ checkType, payload }: { checkType: HealthCheckType; paylo
           {mappings.length === 0
             ? <span>No mapped drives</span>
             : mappings.map((m, i) => <div key={i}>{m.local} → {m.remote} [{m.status}]</div>)}
+        </div>
+      );
+    }
+    case 'battery_health': {
+      const applicable = payload.applicable !== false;
+      if (!applicable) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No battery (desktop / server)</div>;
+      }
+      const cycle = typeof payload.cycle_count === 'number' ? payload.cycle_count : null;
+      const ratio = typeof payload.capacity_ratio === 'number' ? payload.capacity_ratio : null;
+      const design = typeof payload.design_capacity_mah === 'number' ? payload.design_capacity_mah : null;
+      const currMax = typeof payload.current_max_capacity_mah === 'number' ? payload.current_max_capacity_mah : null;
+      const charging = typeof payload.is_charging === 'boolean' ? payload.is_charging : null;
+      const pct = typeof payload.percent_remaining === 'number' ? payload.percent_remaining : null;
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
+          {ratio !== null && (
+            <div>Capacity vs design: <strong>{(ratio * 100).toFixed(1)}%</strong>
+              {currMax !== null && design !== null && <> ({currMax} / {design} mAh)</>}
+            </div>
+          )}
+          {cycle !== null && <div>Cycle count: <strong>{cycle}</strong></div>}
+          {pct !== null && <div>Charge remaining: {pct}%{charging !== null && (charging ? ' (charging)' : ' (not charging)')}</div>}
+        </div>
+      );
+    }
+    case 'power_policy': {
+      const applicable = payload.applicable !== false;
+      if (!applicable) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>Power policy not available</div>;
+      }
+      const scheme = typeof payload.active_scheme_name === 'string' ? payload.active_scheme_name : null;
+      const acMin = typeof payload.sleep_timeout_ac_min === 'number' ? payload.sleep_timeout_ac_min : null;
+      const battMin = typeof payload.sleep_timeout_battery_min === 'number' ? payload.sleep_timeout_battery_min : null;
+      const neverAC = typeof payload.never_sleep_ac === 'boolean' ? payload.never_sleep_ac : null;
+      const neverBatt = typeof payload.never_sleep_battery === 'boolean' ? payload.never_sleep_battery : null;
+      const fmtMin = (m: number | null) => m === null ? '?' : (m === 0 ? 'never' : `${m} min`);
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-1`}>
+          {scheme && <div>Active scheme: <strong>{scheme}</strong></div>}
+          <div>Sleep on AC: <strong>{fmtMin(acMin)}</strong>{neverAC === true && <span className="ml-2 text-yellow-500">(never sleeps)</span>}</div>
+          {(battMin !== null || neverBatt !== null) && (
+            <div>Sleep on battery: <strong>{fmtMin(battMin)}</strong>{neverBatt === true && <span className="ml-2 text-yellow-500">(never sleeps)</span>}</div>
+          )}
+        </div>
+      );
+    }
+    case 'gpu_status': {
+      const applicable = payload.applicable !== false;
+      if (!applicable) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No GPU detected</div>;
+      }
+      const gpus = Array.isArray(payload.gpus) ? (payload.gpus as Array<{
+        name: string;
+        vendor?: string;
+        utilization_pct?: number;
+        temperature_c?: number;
+        memory_used_mb?: number;
+        memory_total_mb?: number;
+      }>) : [];
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          {gpus.length === 0 ? <span>(no GPUs reported)</span> : gpus.map((g, i) => (
+            <div key={i} className="border-l-2 pl-2 border-gray-300 dark:border-gray-600">
+              <div className="font-medium">{g.name}{g.vendor && <span className={`ml-2 ${themeClasses.text.muted}`}>{g.vendor}</span>}</div>
+              <div className="font-mono text-xs">
+                {g.utilization_pct !== undefined && <span className="mr-3">util: {g.utilization_pct}%</span>}
+                {g.temperature_c !== undefined && (
+                  <span className={`mr-3 ${g.temperature_c > 90 ? 'text-yellow-500 font-semibold' : ''}`}>
+                    temp: {g.temperature_c}°C
+                  </span>
+                )}
+                {g.memory_total_mb !== undefined && (
+                  <span>VRAM: {g.memory_used_mb ?? '?'} / {g.memory_total_mb} MB</span>
+                )}
+              </div>
+            </div>
+          ))}
         </div>
       );
     }

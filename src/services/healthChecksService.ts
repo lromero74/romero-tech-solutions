@@ -12,6 +12,7 @@ import apiService from './apiService';
 export type HealthCheckSeverity = 'info' | 'warning' | 'critical';
 
 export type HealthCheckType =
+  // Stage 1
   | 'reboot_pending'
   | 'time_drift'
   | 'crashdumps'
@@ -19,7 +20,11 @@ export type HealthCheckType =
   | 'listening_ports'
   | 'update_history_failures'
   | 'domain_status'
-  | 'mapped_drives';
+  | 'mapped_drives'
+  // Stage 2.4 / 2.5 / 2.6
+  | 'battery_health'
+  | 'power_policy'
+  | 'gpu_status';
 
 export interface HealthCheckResult {
   check_type: HealthCheckType;

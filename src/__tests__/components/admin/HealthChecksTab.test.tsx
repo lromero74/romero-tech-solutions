@@ -209,4 +209,103 @@ describe('HealthChecksTab', () => {
     render(<HealthChecksTab agentId="agent-1" />);
     expect(await screen.findByText(/No health-check data reported yet/i)).toBeInTheDocument();
   });
+
+  // ----- Stage 2.4 / 2.5 / 2.6 payload renderers -----
+
+  it('renders battery_health stats when applicable', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'battery_health',
+        severity: 'info',
+        passed: true,
+        payload: {
+          applicable: true,
+          cycle_count: 234,
+          capacity_ratio: 0.913,
+          design_capacity_mah: 5800,
+          current_max_capacity_mah: 5300,
+          is_charging: false,
+          percent_remaining: 78,
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Battery health');
+    fireEvent.click(screen.getByRole('button', { name: /Battery health/i }));
+    expect(await screen.findByText(/91\.3%/)).toBeInTheDocument();
+    expect(screen.getByText(/234/)).toBeInTheDocument();
+  });
+
+  it('renders battery non-applicable hint on desktops', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'battery_health',
+        severity: 'info',
+        passed: true,
+        payload: { applicable: false },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Battery health');
+    fireEvent.click(screen.getByRole('button', { name: /Battery health/i }));
+    expect(await screen.findByText(/desktop \/ server/i)).toBeInTheDocument();
+  });
+
+  it('flags GPU temperature > 90°C with a visual cue', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'gpu_status',
+        severity: 'warning',
+        passed: false,
+        payload: {
+          applicable: true,
+          gpus: [{ name: 'NVIDIA RTX 4090', vendor: 'NVIDIA', temperature_c: 95, utilization_pct: 100 }],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('GPU status');
+    fireEvent.click(screen.getByRole('button', { name: /GPU status/i }));
+    expect(await screen.findByText(/temp: 95°C/)).toBeInTheDocument();
+  });
+
+  it('renders power_policy active scheme + sleep timeouts', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'power_policy',
+        severity: 'warning',
+        passed: false,
+        payload: {
+          applicable: true,
+          active_scheme_name: 'High performance',
+          sleep_timeout_ac_min: 0,
+          sleep_timeout_battery_min: 0,
+          never_sleep_ac: true,
+          never_sleep_battery: true,
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Power policy');
+    fireEvent.click(screen.getByRole('button', { name: /Power policy/i }));
+    expect(await screen.findByText(/High performance/)).toBeInTheDocument();
+    // Both AC and battery rows exist with "never" + visual cue.
+    expect(screen.getAllByText(/never/i).length).toBeGreaterThanOrEqual(2);
+  });
 });
