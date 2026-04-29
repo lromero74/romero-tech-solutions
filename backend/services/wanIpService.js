@@ -40,9 +40,17 @@ export function shouldRecordIpChange(newIp, previousIp) {
 
 export function normalizeIp(ip) {
   if (!ip) return '';
-  const s = String(ip).trim();
+  let s = String(ip).trim();
   // IPv6-mapped IPv4 prefix.
-  if (s.toLowerCase().startsWith('::ffff:')) return s.substring(7);
+  if (s.toLowerCase().startsWith('::ffff:')) s = s.substring(7);
+  // Strip CIDR mask. Postgres inet::text returns IPv4 hosts with an
+  // implicit "/32" suffix and IPv6 hosts with "/128"; these are NOT
+  // present on req.ip from Express, so a naive string comparison
+  // would treat every observation as a change. (Bug found 2026-04-29
+  // when the canary mac accumulated 18 spurious "change" rows for a
+  // stationary IP.)
+  const slashIdx = s.indexOf('/');
+  if (slashIdx > 0) s = s.substring(0, slashIdx);
   return s;
 }
 
@@ -57,8 +65,11 @@ export async function recordObservation(agentDeviceId, businessId, ip) {
   if (!ip) return { changed: false, previousIp: null, currentIp: null };
   const normalized = normalizeIp(ip);
 
+  // host() returns the address WITHOUT the implicit /32 (or /128) mask,
+  // so it round-trips cleanly against req.ip. Naive ::text would emit
+  // "172.56.244.248/32" and trigger a phantom "change" on every check.
   const { rows } = await query(`
-    SELECT public_ip::text AS public_ip
+    SELECT host(public_ip) AS public_ip
       FROM agent_wan_ip_history
      WHERE agent_device_id = $1
      ORDER BY observed_at DESC
@@ -85,7 +96,10 @@ export async function recordObservation(agentDeviceId, businessId, ip) {
 export async function getHistory(agentDeviceId, limit = 50) {
   const safeLimit = Math.min(Math.max(parseInt(limit, 10) || 50, 1), 500);
   const { rows } = await query(`
-    SELECT id, public_ip::text AS public_ip, previous_ip::text AS previous_ip, observed_at
+    SELECT id,
+           host(public_ip) AS public_ip,
+           CASE WHEN previous_ip IS NULL THEN NULL ELSE host(previous_ip) END AS previous_ip,
+           observed_at
       FROM agent_wan_ip_history
      WHERE agent_device_id = $1
      ORDER BY observed_at DESC

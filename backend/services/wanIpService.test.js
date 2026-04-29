@@ -22,6 +22,30 @@ test('normalizeIp: empty/null → empty string', () => {
   assert.equal(normalizeIp(undefined), '');
 });
 
+// 2026-04-29 production bug: Postgres inet::text emits IPv4 hosts as
+// "X.Y.Z.W/32" and req.ip arrives as "X.Y.Z.W". Naive comparison
+// treated every observation as a change — 18 spurious rows accumulated.
+// Both sides must normalize identically.
+test('normalizeIp: strips IPv4 CIDR mask /32', () => {
+  assert.equal(normalizeIp('172.56.244.248/32'), '172.56.244.248');
+  assert.equal(normalizeIp('1.2.3.4/24'), '1.2.3.4');  // uncommon, also stripped
+});
+
+test('normalizeIp: strips IPv6 CIDR mask /128', () => {
+  assert.equal(normalizeIp('::1/128'), '::1');
+  assert.equal(normalizeIp('2001:db8::1/64'), '2001:db8::1');
+});
+
+test('normalizeIp: combined IPv6-mapped IPv4 + CIDR', () => {
+  assert.equal(normalizeIp('::ffff:1.2.3.4/128'), '1.2.3.4');
+});
+
+test('shouldRecordIpChange: same IP with vs without /32 → false (regression guard)', () => {
+  // The canary's 18 spurious rows came from this exact case.
+  assert.equal(shouldRecordIpChange('172.56.244.248', '172.56.244.248/32'), false);
+  assert.equal(shouldRecordIpChange('172.56.244.248/32', '172.56.244.248'), false);
+});
+
 test('shouldRecordIpChange: first sighting → true', () => {
   assert.equal(shouldRecordIpChange('1.2.3.4', null), true);
   assert.equal(shouldRecordIpChange('1.2.3.4', undefined), true);
