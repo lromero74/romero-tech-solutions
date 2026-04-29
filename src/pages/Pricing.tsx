@@ -42,7 +42,8 @@ interface PricingData {
   };
 }
 
-// Helper to generate schedule from database slots
+// Service-hour tiers are stored as Pacific wall-clock values. Do not convert
+// these through Date/browser timezone APIs or the pricing page will drift.
 const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string, t: (key: string) => string): string => {
   const tierSlots = schedule.filter(slot => slot.tierName === tierName);
   if (tierSlots.length === 0) return '';
@@ -57,171 +58,70 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string,
     t('common.days.sat')
   ];
 
-  // Convert each day's UTC range to local time
-  interface LocalBlock {
-    startTimestamp: number;
-    endTimestamp: number;
-    startDay: number;
-    endDay: number;
+  interface ScheduleBlock {
+    day: number;
     startTime: string;
     endTime: string;
   }
 
-  const formatTime = (date: Date) => {
-    const hours = date.getHours();
-    const minutes = date.getMinutes();
+  const timeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const formatTime = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
     const period = hours >= 12 ? 'pm' : 'am';
     const displayHours = hours % 12 || 12;
-    const displayMinutes = minutes === 0 ? '' : `:${minutes.toString().padStart(2, '0')}`;
+    const displayMinutes = minutes === 0 ? '' : `:${String(minutes).padStart(2, '0')}`;
     return `${displayHours}${displayMinutes}${period}`;
   };
 
-  const localBlocks: LocalBlock[] = tierSlots.map(slot => {
-    // Create Date objects for start time (using a reference week starting July 3, 2022 = Sunday)
-    // Using a summer date to account for Daylight Saving Time
-    const startDate = new Date(Date.UTC(2022, 6, 3 + slot.dayOfWeek));
-    const [startHours, startMin] = slot.timeStart.split(':').map(Number);
-    startDate.setUTCHours(startHours, startMin, 0, 0);
-
-    // Create Date objects for end time
-    const endDate = new Date(Date.UTC(2022, 6, 3 + slot.dayOfWeek));
-    const [endHours, endMin] = slot.timeEnd.split(':').map(Number);
-    endDate.setUTCHours(endHours, endMin, 0, 0);
-
-    const localStartDay = startDate.getDay();
-    const localEndDay = endDate.getDay();
-    const startTimeStr = formatTime(startDate);
-    const endTimeStr = formatTime(endDate);
-
-    // Recalculate timestamps using a consistent reference week based on LOCAL day
-    // This ensures blocks from the same local day use the same reference date
-    // IMPORTANT: Use local hours/minutes directly, not the converted date's hours
-    const normalizedStart = new Date(2022, 6, 3 + localStartDay);
-    const startLocalHours = startDate.getHours();
-    const startLocalMinutes = startDate.getMinutes();
-    normalizedStart.setHours(startLocalHours, startLocalMinutes, 0, 0);
-
-    const normalizedEnd = new Date(2022, 6, 3 + localEndDay);
-    const endLocalHours = endDate.getHours();
-    const endLocalMinutes = endDate.getMinutes();
-    normalizedEnd.setHours(endLocalHours, endLocalMinutes, 0, 0);
-
-    return {
-      startTimestamp: normalizedStart.getTime(),
-      endTimestamp: normalizedEnd.getTime(),
-      startDay: localStartDay,
-      endDay: localEndDay,
-      startTime: startTimeStr,
-      endTime: endTimeStr
-    };
+  const blocks = tierSlots.map(slot => ({
+    day: slot.dayOfWeek,
+    startTime: slot.timeStart,
+    endTime: slot.timeEnd
   });
 
-  // Sort by start timestamp
-  localBlocks.sort((a, b) => a.startTimestamp - b.startTimestamp);
-
-  // Merge adjacent/overlapping blocks by timestamp
-  const merged: LocalBlock[] = [];
-  let current = localBlocks[0];
-
-  for (let i = 1; i < localBlocks.length; i++) {
-    const next = localBlocks[i];
-    const gap = next.startTimestamp - current.endTimestamp;
-    const oneHour = 60 * 60 * 1000;
-
-    // If blocks are adjacent or overlap (gap <= 1 hour), merge them
-    if (gap <= oneHour) {
-      current = {
-        startTimestamp: current.startTimestamp,
-        endTimestamp: next.endTimestamp,
-        startDay: current.startDay,
-        endDay: next.endDay,
-        startTime: current.startTime,
-        endTime: next.endTime
-      };
-    } else {
-      merged.push(current);
-      current = next;
-    }
-  }
-  merged.push(current);
-
-  // Group blocks by day and merge time ranges within the same day
-  const dayGroups: { [key: number]: LocalBlock[] } = {};
-
-  merged.forEach(block => {
-    // For blocks that span the same day
-    if (block.startDay === block.endDay) {
-      if (!dayGroups[block.startDay]) {
-        dayGroups[block.startDay] = [];
-      }
-      dayGroups[block.startDay].push(block);
-    } else {
-      // For cross-day blocks, just add them as-is
-      if (!dayGroups[-1]) dayGroups[-1] = [];
-      dayGroups[-1].push(block);
-    }
+  const byDay: Record<number, ScheduleBlock[]> = {};
+  blocks.forEach(block => {
+    if (!byDay[block.day]) byDay[block.day] = [];
+    byDay[block.day].push(block);
   });
 
-  // Merge blocks within the same day if they have gaps ≤1 hour
-  Object.keys(dayGroups).forEach(dayStr => {
-    const day = Number(dayStr);
-    if (day === -1) return; // Skip cross-day blocks
+  const mergedByDay: Record<number, ScheduleBlock[]> = {};
+  Object.entries(byDay).forEach(([day, dayBlocks]) => {
+    const sorted = [...dayBlocks].sort((a, b) => timeToMinutes(a.startTime) - timeToMinutes(b.startTime));
+    const merged: ScheduleBlock[] = [];
 
-    const blocks = dayGroups[day];
-    if (blocks.length <= 1) return; // No merging needed
-
-    // Sort blocks by start timestamp
-    blocks.sort((a, b) => a.startTimestamp - b.startTimestamp);
-
-    const mergedDayBlocks: LocalBlock[] = [];
-    let currentBlock = blocks[0];
-
-    for (let i = 1; i < blocks.length; i++) {
-      const nextBlock = blocks[i];
-      const gap = nextBlock.startTimestamp - currentBlock.endTimestamp;
-      const oneHour = 60 * 60 * 1000;
-
-      // If blocks are adjacent or have a gap ≤1 hour, merge them
-      if (gap <= oneHour) {
-        currentBlock = {
-          startTimestamp: currentBlock.startTimestamp,
-          endTimestamp: nextBlock.endTimestamp,
-          startDay: currentBlock.startDay,
-          endDay: currentBlock.endDay,
-          startTime: currentBlock.startTime,
-          endTime: nextBlock.endTime
-        };
+    sorted.forEach(block => {
+      const previous = merged[merged.length - 1];
+      if (previous && timeToMinutes(block.startTime) <= timeToMinutes(previous.endTime)) {
+        previous.endTime = block.endTime;
       } else {
-        mergedDayBlocks.push(currentBlock);
-        currentBlock = nextBlock;
+        merged.push({ ...block });
       }
-    }
-    mergedDayBlocks.push(currentBlock);
+    });
 
-    dayGroups[day] = mergedDayBlocks;
+    mergedByDay[Number(day)] = merged;
   });
 
-  // Now group by matching time ranges across days
   const timeRangeGroups: { [key: string]: number[] } = {};
   const formatted: string[] = [];
 
-  // Process same-day blocks
-  Object.entries(dayGroups).forEach(([dayStr, blocks]) => {
-    const day = Number(dayStr);
-    if (day === -1) return; // Skip cross-day blocks for now
-
-    blocks.forEach(block => {
-      const key = `${block.startTime}-${block.endTime}`;
+  Object.entries(mergedByDay).forEach(([dayStr, dayBlocks]) => {
+    dayBlocks.forEach(block => {
+      const key = `${formatTime(block.startTime)}-${formatTime(block.endTime)}`;
       if (!timeRangeGroups[key]) {
         timeRangeGroups[key] = [];
       }
+      const day = Number(dayStr);
       if (!timeRangeGroups[key].includes(day)) {
         timeRangeGroups[key].push(day);
       }
     });
   });
 
-  // Format time range groups with consecutive days
   Object.entries(timeRangeGroups).forEach(([timeRange, days]) => {
     days.sort((a, b) => a - b);
 
@@ -246,70 +146,7 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string,
     });
   });
 
-  // Format cross-day blocks with intelligent grouping
-  if (dayGroups[-1]) {
-    // Group cross-day blocks by their time range pattern
-    const crossDayGroups: { [key: string]: LocalBlock[] } = {};
-
-    dayGroups[-1].forEach(block => {
-      const key = `${block.startTime}-${block.endTime}`;
-      if (!crossDayGroups[key]) {
-        crossDayGroups[key] = [];
-      }
-      crossDayGroups[key].push(block);
-    });
-
-    // For each time range pattern, group consecutive start days
-    Object.entries(crossDayGroups).forEach(([timeRange, blocks]) => {
-      // Sort blocks by their start day
-      blocks.sort((a, b) => a.startDay - b.startDay);
-
-      // Group consecutive start days
-      const dayRanges: Array<{ startDay: number; endDay: number }> = [];
-      let currentRange = { startDay: blocks[0].startDay, endDay: blocks[0].startDay };
-
-      for (let i = 1; i < blocks.length; i++) {
-        // Check if this block's start day is consecutive to the current range
-        if (blocks[i].startDay === currentRange.endDay + 1) {
-          currentRange.endDay = blocks[i].startDay;
-        } else {
-          dayRanges.push({ ...currentRange });
-          currentRange = { startDay: blocks[i].startDay, endDay: blocks[i].startDay };
-        }
-      }
-      dayRanges.push(currentRange);
-
-      // Format each range
-      dayRanges.forEach(range => {
-        const dayStr = range.startDay === range.endDay
-          ? dayNames[range.startDay]
-          : `${dayNames[range.startDay]}-${dayNames[range.endDay]}`;
-
-        // Check if this time range crosses into the next day
-        // Get a sample block from this range to check end day
-        const sampleBlock = blocks.find(b => b.startDay >= range.startDay && b.startDay <= range.endDay);
-        let displayTimeRange = timeRange;
-
-        if (sampleBlock && sampleBlock.startDay !== sampleBlock.endDay) {
-          // Time crosses to next day, annotate with "next day" indicator in superscript
-          const [startTime, endTime] = timeRange.split('-');
-
-          // For single day ranges, show the specific next day name
-          // For multi-day ranges, just indicate it crosses to the next day
-          if (range.startDay === range.endDay) {
-            const nextDayName = dayNames[(sampleBlock.endDay) % 7];
-            displayTimeRange = `${startTime}-${endTime}<sup>(${nextDayName})</sup>`;
-          } else {
-            displayTimeRange = `${startTime}-${endTime}<sup>(${t('common.days.nextDay')})</sup>`;
-          }
-        }
-
-        formatted.push(`${dayStr}: ${displayTimeRange}`);
-      });
-    });
-  }
-
-  return formatted.join(' | ');
+  return `${formatted.join(' | ')} ${t('pricing.tiers.pacificTime')}`;
 };
 
 interface PricingProps {

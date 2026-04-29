@@ -131,13 +131,14 @@ export const enTranslations = {
 
   'pricing.tiers.title': 'Hourly Support Rates',
   'pricing.tiers.subtitle': 'For non-managed clients, project work, and occasional break/fix support',
+  'pricing.tiers.pacificTime': 'Pacific Time',
 
   'pricing.standard.title': 'Hourly Support for Non-Managed Clients',
   'pricing.nonprofit.title': 'Non-Profit Pricing',
   'pricing.nonprofit.subtitle': 'Sustainable discounted hourly rates for qualified non-profit organizations',
 
   'pricing.tiers.standard.title': 'Standard Hours',
-  'pricing.tiers.standard.time': 'Mon-Fri: 8am-7pm',
+  'pricing.tiers.standard.time': 'Mon-Fri: 8am-7pm Pacific Time',
   'pricing.tiers.standard.description': 'Our regular hourly rate for scheduled service during standard support hours',
   'pricing.tiers.standard.feature1': 'Scheduled appointments',
   'pricing.tiers.standard.feature2': 'Same-day service available',

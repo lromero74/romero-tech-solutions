@@ -131,13 +131,14 @@ export const esTranslations = {
 
   'pricing.tiers.title': 'Tarifas de Soporte por Hora',
   'pricing.tiers.subtitle': 'Para clientes no administrados, proyectos y soporte ocasional',
+  'pricing.tiers.pacificTime': 'hora del Pacifico',
 
   'pricing.standard.title': 'Soporte por Hora para Clientes No Administrados',
   'pricing.nonprofit.title': 'Precios para Organizaciones Sin Fines de Lucro',
   'pricing.nonprofit.subtitle': 'Tarifas por hora sostenibles con descuento para organizaciones calificadas sin fines de lucro',
 
   'pricing.tiers.standard.title': 'Horario Estándar',
-  'pricing.tiers.standard.time': 'Lun-Vie: 8am-7pm',
+  'pricing.tiers.standard.time': 'Lun-Vie: 8am-7pm hora del Pacifico',
   'pricing.tiers.standard.description': 'Nuestra tarifa regular por hora para servicio programado durante horario estándar',
   'pricing.tiers.standard.feature1': 'Citas programadas',
   'pricing.tiers.standard.feature2': 'Servicio el mismo día disponible',
