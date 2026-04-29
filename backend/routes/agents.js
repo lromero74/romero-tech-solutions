@@ -20,6 +20,10 @@ import { candleAggregationService } from '../services/candleAggregationService.j
 import { isCheckAllowedForAgent } from '../services/freetierGate.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { alertEscalationService } from '../services/alertEscalationService.js';
+import { evaluateMetricsForAnomalies } from '../services/anomalyDetectionService.js';
+import { getLatestForecast, getDiskHistory, forecastSeverity } from '../services/diskForecastService.js';
+import { getBaselines } from '../services/anomalyDetectionService.js';
+import { getHistory as getWanIpHistory } from '../services/wanIpService.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
@@ -2012,6 +2016,28 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
     // Detect confluence alerts using the latest metric
     const latestMetric = metricsArray[metricsArray.length - 1];
     const triggeredAlerts = await confluenceDetectionService.detectAndCreateAlerts(agent_id, latestMetric);
+
+    // Stage 2.2 — sustained 2σ anomaly detection. Fire-and-forget; failures
+    // here must not block the metrics write path. Anomalies that cross the
+    // 15-min sustained threshold get reported via the existing alert pipeline.
+    // Snapshot req.agent locals here so the .then closure doesn't depend on
+    // variables declared later in this handler.
+    const _agentBusinessId = req.agent && req.agent.business_id;
+    const _agentDeviceName = req.agent && req.agent.device_name;
+    evaluateMetricsForAnomalies(agent_id, latestMetric)
+      .then(fired => {
+        for (const f of fired) {
+          alertEscalationService.processHealthCheckResult({
+            agent_device_id: agent_id,
+            business_id: _agentBusinessId,
+            check_type: `metric_anomaly_${f.metric_type}`,
+            severity: 'warning',
+            payload: f,
+            device_name: _agentDeviceName,
+          }).catch(err => console.error(`❌ anomaly alert dispatch failed:`, err));
+        }
+      })
+      .catch(err => console.error(`❌ anomaly evaluation failed for agent ${agent_id}:`, err));
 
     // Broadcast metrics update to all connected admin clients via WebSocket
     // Get agent device info for the broadcast
@@ -4237,6 +4263,62 @@ router.get('/:agent_id/health-checks/:check_type/history',
     } catch (error) {
       console.error('Health check history fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch history' });
+    }
+  }
+);
+
+// =============================================================================
+// Stage 2 — Trends / Forecast / Baseline read endpoints
+// See docs/PRPs/STAGE2_TRENDS.md.
+// =============================================================================
+
+router.get('/:agent_id/disk-forecast',
+  authMiddleware,
+  requirePermission('view.agent_disk_forecast.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id } = req.params;
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
+      const [forecast, history] = await Promise.all([
+        getLatestForecast(agent_id),
+        getDiskHistory(agent_id, days),
+      ]);
+      const severity = forecast ? forecastSeverity(forecast.days_until_full) : null;
+      res.json({ success: true, data: { forecast, history, severity } });
+    } catch (error) {
+      console.error('Disk forecast fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch disk forecast' });
+    }
+  }
+);
+
+router.get('/:agent_id/baselines',
+  authMiddleware,
+  requirePermission('view.agent_trends.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id } = req.params;
+      const baselines = await getBaselines(agent_id);
+      res.json({ success: true, data: baselines });
+    } catch (error) {
+      console.error('Baselines fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch baselines' });
+    }
+  }
+);
+
+router.get('/:agent_id/wan-ip-history',
+  authMiddleware,
+  requirePermission('view.agent_trends.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id } = req.params;
+      const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 50, 1), 500);
+      const rows = await getWanIpHistory(agent_id, limit);
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('WAN IP history fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch WAN IP history' });
     }
   }
 );

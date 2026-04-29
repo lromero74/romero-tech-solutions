@@ -1,4 +1,5 @@
 import { query } from '../config/database.js';
+import { recordObservation as recordWanIpObservation } from '../services/wanIpService.js';
 
 /**
  * Agent Authentication Middleware
@@ -112,6 +113,13 @@ export const authenticateAgent = async (req, res, next) => {
     };
 
     console.log(`🤖 Agent authenticated: ${agent.device_name} (${agent.id})`);
+
+    // Stage 2.7 WAN IP change tracking — fire-and-forget so a slow DB
+    // write here can't slow down the auth path (or fail it).
+    // req.ip is the express-resolved remote IP (honors trust proxy).
+    recordWanIpObservation(agent.id, agent.business_id, req.ip).catch(err => {
+      console.error(`⚠️ wan-ip record failed for agent ${agent.id}:`, err);
+    });
 
     // Continue to the protected route
     next();

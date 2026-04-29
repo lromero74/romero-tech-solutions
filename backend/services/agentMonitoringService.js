@@ -155,10 +155,96 @@ export function getMonitoringStatus() {
   };
 }
 
+// =============================================================================
+// Stage 2 — Nightly trend / forecast / baseline computation
+// =============================================================================
+
+import { recomputeAllForecasts } from './diskForecastService.js';
+import { recomputeAllBaselines } from './anomalyDetectionService.js';
+
+let nightlyTrendsTimeout = null;
+
+/**
+ * Compute trends + baselines for ALL agents. Called once at boot
+ * (delayed) and then nightly at 03:00 UTC.
+ *
+ * Idempotent — safe to call manually as well, e.g. by an admin
+ * "Recompute now" button. Returns counts for logging.
+ */
+export async function computeNightlyTrends() {
+  console.log('📈 Stage 2 nightly trends: starting...');
+  let forecastResult = { computed: 0, upserted: 0 };
+  let baselineResult = { upserted: 0 };
+  try {
+    forecastResult = await recomputeAllForecasts();
+    console.log(`📈   disk forecasts: ${forecastResult.upserted} upserted (${forecastResult.computed} candidates)`);
+  } catch (err) {
+    console.error('❌ disk forecast computation failed:', err);
+  }
+  try {
+    baselineResult = await recomputeAllBaselines();
+    console.log(`📈   metric baselines: ${baselineResult.upserted} upserted across ${TRACKED_METRIC_COUNT} metric types`);
+  } catch (err) {
+    console.error('❌ baseline computation failed:', err);
+  }
+  return { forecast: forecastResult, baseline: baselineResult };
+}
+
+const TRACKED_METRIC_COUNT = 6; // matches anomalyDetectionService.TRACKED_METRICS.length
+
+/**
+ * Schedule the next nightly run at 03:00 UTC. Re-arms itself on each
+ * fire (vs. a single setInterval) so we don't drift when the
+ * computation overruns the interval.
+ */
+function scheduleNextNightlyRun() {
+  const now = new Date();
+  const next = new Date(now);
+  next.setUTCHours(3, 0, 0, 0);
+  if (next <= now) {
+    next.setUTCDate(next.getUTCDate() + 1);
+  }
+  const delayMs = next.getTime() - now.getTime();
+  console.log(`📈 Stage 2 nightly trends scheduled for ${next.toISOString()} (in ${Math.round(delayMs / 60000)} min)`);
+  nightlyTrendsTimeout = setTimeout(async () => {
+    await computeNightlyTrends().catch(err => console.error('❌ nightly trends failed:', err));
+    scheduleNextNightlyRun();
+  }, delayMs);
+}
+
+/**
+ * Start the Stage 2 nightly job. Calls computeNightlyTrends once
+ * after a 5-minute boot delay (so the backend isn't competing with
+ * the boot work the rest of the system does at startup), then schedules
+ * the next run at 03:00 UTC.
+ */
+export function startNightlyTrends() {
+  if (nightlyTrendsTimeout) {
+    console.log('⚠️  Stage 2 nightly trends already scheduled');
+    return;
+  }
+  // Initial run after 5 min — gives boot a quiet window AND ensures
+  // trends are populated soon after deploy without waiting until 3 AM UTC.
+  setTimeout(() => {
+    computeNightlyTrends().catch(err => console.error('❌ initial trends run failed:', err));
+  }, 5 * 60 * 1000);
+  scheduleNextNightlyRun();
+}
+
+export function stopNightlyTrends() {
+  if (nightlyTrendsTimeout) {
+    clearTimeout(nightlyTrendsTimeout);
+    nightlyTrendsTimeout = null;
+  }
+}
+
 // Export for use in other modules
 export default {
   startAgentMonitoring,
   stopAgentMonitoring,
   getMonitoringStatus,
-  checkAgentHeartbeats
+  checkAgentHeartbeats,
+  startNightlyTrends,
+  stopNightlyTrends,
+  computeNightlyTrends
 };

@@ -20,5 +20,6 @@ export { OSEndOfLifeStatus } from './OSEndOfLifeStatus';
 export { CommandDetailsDialog } from './CommandDetailsDialog';
 export { default as AlertHistory } from './AlertHistory';
 export { default as HealthChecksTab } from './HealthChecksTab';
+export { default as TrendsTab } from './TrendsTab';
 export * from './types';
 export * from './utils';

@@ -74,7 +74,7 @@ import { websocketService } from './services/websocketService.js';
 import { workflowScheduler } from './services/workflowScheduler.js';
 
 // Import agent monitoring service
-import { startAgentMonitoring, stopAgentMonitoring } from './services/agentMonitoringService.js';
+import { startAgentMonitoring, stopAgentMonitoring, startNightlyTrends, stopNightlyTrends } from './services/agentMonitoringService.js';
 
 // Import alert configuration service
 import { alertConfigService } from './services/alertConfigService.js';
@@ -698,6 +698,10 @@ const startServer = async () => {
     // Start agent heartbeat monitoring
     startAgentMonitoring();
 
+    // Start Stage 2 nightly trend / forecast / baseline computation.
+    // Schedules a 5-minute boot-delayed initial run + nightly at 03:00 UTC.
+    startNightlyTrends();
+
     // Start metrics cleanup service
     metricsCleanupService.start();
 
@@ -760,6 +764,7 @@ process.on('SIGTERM', () => {
   console.log('SIGTERM received, shutting down gracefully');
   stopSessionCleanup();
   stopAgentMonitoring();
+  stopNightlyTrends();
   metricsCleanupService.stop();
   auditLogCleanupService.stop();
   alertCleanupService.stop();
@@ -772,6 +777,7 @@ process.on('SIGINT', () => {
   console.log('SIGINT received, shutting down gracefully');
   stopSessionCleanup();
   stopAgentMonitoring();
+  stopNightlyTrends();
   metricsCleanupService.stop();
   auditLogCleanupService.stop();
   alertCleanupService.stop();
