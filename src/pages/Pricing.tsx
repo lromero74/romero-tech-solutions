@@ -81,7 +81,7 @@ const generateScheduleFromSummary = (schedule: ScheduleSlot[], tierName: string,
     day: slot.dayOfWeek,
     startTime: slot.timeStart,
     endTime: slot.timeEnd
-  });
+  }));
 
   const byDay: Record<number, ScheduleBlock[]> = {};
   blocks.forEach(block => {
