@@ -161,6 +161,7 @@ export function getMonitoringStatus() {
 
 import { recomputeAllForecasts } from './diskForecastService.js';
 import { recomputeAllBaselines } from './anomalyDetectionService.js';
+import { recomputeAllSmartTrends } from './smartTrendService.js';
 
 let nightlyTrendsTimeout = null;
 
@@ -187,7 +188,14 @@ export async function computeNightlyTrends() {
   } catch (err) {
     console.error('❌ baseline computation failed:', err);
   }
-  return { forecast: forecastResult, baseline: baselineResult };
+  let smartResult = { upserted: 0 };
+  try {
+    smartResult = await recomputeAllSmartTrends();
+    console.log(`📈   SMART trends: ${smartResult.upserted} upserted`);
+  } catch (err) {
+    console.error('❌ SMART trend computation failed:', err);
+  }
+  return { forecast: forecastResult, baseline: baselineResult, smart: smartResult };
 }
 
 const TRACKED_METRIC_COUNT = 6; // matches anomalyDetectionService.TRACKED_METRICS.length

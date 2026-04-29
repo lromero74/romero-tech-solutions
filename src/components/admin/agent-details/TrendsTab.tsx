@@ -16,7 +16,7 @@ import {
   ResponsiveContainer, ComposedChart, Area, Line, XAxis, YAxis,
   CartesianGrid, Tooltip, Legend, ReferenceLine,
 } from 'recharts';
-import { TrendingUp, AlertTriangle, AlertCircle, Globe } from 'lucide-react';
+import { TrendingUp, AlertTriangle, AlertCircle, Globe, HardDrive } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
 import { usePermission } from '../../../hooks/usePermission';
@@ -26,6 +26,7 @@ import {
   DiskHistoryPoint,
   MetricBaseline,
   WanIpHistoryRow,
+  SmartTrend,
 } from '../../../services/trendsService';
 
 interface Props {
@@ -69,6 +70,7 @@ const TrendsTab: React.FC<Props> = ({ agentId }) => {
   const [forecastSev, setForecastSev] = useState<'critical' | 'warning' | null>(null);
   const [baselines, setBaselines] = useState<MetricBaseline[]>([]);
   const [wanIps, setWanIps] = useState<WanIpHistoryRow[]>([]);
+  const [smart, setSmart] = useState<SmartTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,8 +83,9 @@ const TrendsTab: React.FC<Props> = ({ agentId }) => {
       canViewForecast ? trendsService.diskForecast(agentId, 30) : Promise.resolve(null),
       trendsService.baselines(agentId),
       trendsService.wanIpHistory(agentId, 20),
+      trendsService.smartTrend(agentId),
     ])
-      .then(([df, bl, ip]) => {
+      .then(([df, bl, ip, sm]) => {
         if (cancelled) return;
         if (df) {
           setForecast(df.data.forecast);
@@ -91,6 +94,7 @@ const TrendsTab: React.FC<Props> = ({ agentId }) => {
         }
         setBaselines(bl.data || []);
         setWanIps(ip.data || []);
+        setSmart(sm.data || null);
         setLoading(false);
       })
       .catch(err => {
@@ -175,6 +179,37 @@ const TrendsTab: React.FC<Props> = ({ agentId }) => {
           )}
         </section>
       )}
+
+      <section
+        data-testid="trends-smart"
+        className={`${themeClasses.bg.card} ${themeClasses.shadow.md} rounded-lg p-6`}
+      >
+        <h3 className={`text-lg font-semibold ${themeClasses.text.primary} mb-3 flex items-center gap-2`}>
+          {smart ? severityIcon(smart.severity === 'info' ? null : smart.severity) : <HardDrive className="w-5 h-5" />}
+          {t('agentDetails.trends.smartTitle', undefined, 'SMART pre-fail trend')}
+        </h3>
+        {!smart ? (
+          <div className={`text-sm ${themeClasses.text.muted}`}>
+            {t('agentDetails.trends.noSmart', undefined,
+              'No SMART trend yet — the nightly job will compute one once the agent has at least 24 hours of metrics history.')}
+          </div>
+        ) : (
+          <div className={`text-sm ${themeClasses.text.secondary} grid grid-cols-2 md:grid-cols-4 gap-4`}>
+            <Stat label="Reallocated sectors"
+                  value={smart.reallocated_sectors_current === null ? '?' : String(smart.reallocated_sectors_current)} />
+            <Stat label="Failures predicted"
+                  value={smart.failures_predicted_current === null ? '?' : String(smart.failures_predicted_current)} />
+            <Stat label="Max temp (30d)"
+                  value={smart.max_temperature_c === null ? '?' : `${smart.max_temperature_c}°C`} />
+            <Stat label="Reallocated growth"
+                  value={
+                    smart.reallocated_growth_per_day === null
+                      ? '?'
+                      : `${Number(smart.reallocated_growth_per_day).toFixed(2)}/day`
+                  } />
+          </div>
+        )}
+      </section>
 
       <section
         data-testid="trends-baselines"

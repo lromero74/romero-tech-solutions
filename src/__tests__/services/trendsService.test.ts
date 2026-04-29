@@ -56,4 +56,11 @@ describe('trendsService', () => {
       expect(mockedApi.get).toHaveBeenCalledWith('/agents/a-1/wan-ip-history?limit=500');
     });
   });
+
+  describe('smartTrend', () => {
+    it('GETs /agents/:id/smart-trend', async () => {
+      await trendsService.smartTrend('a-1');
+      expect(mockedApi.get).toHaveBeenCalledWith('/agents/a-1/smart-trend');
+    });
+  });
 });

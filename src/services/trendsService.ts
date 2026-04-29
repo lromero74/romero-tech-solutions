@@ -70,6 +70,21 @@ interface WanIpHistoryResponse {
   data: WanIpHistoryRow[];
 }
 
+export interface SmartTrend {
+  reallocated_sectors_current: number | null;
+  failures_predicted_current: number | null;
+  max_temperature_c: number | null;
+  reallocated_growth_per_day: string | number | null;
+  severity: 'info' | 'warning' | 'critical';
+  sample_count: number;
+  computed_at: string;
+}
+
+interface SmartTrendResponse {
+  success: boolean;
+  data: SmartTrend | null;
+}
+
 export const trendsService = {
   diskForecast(agentId: string, days = 30): Promise<DiskForecastResponse> {
     const safeDays = Math.min(Math.max(days, 1), 90);
@@ -85,6 +100,9 @@ export const trendsService = {
     return apiService.get<WanIpHistoryResponse>(
       `/agents/${agentId}/wan-ip-history?limit=${safeLimit}`
     );
+  },
+  smartTrend(agentId: string): Promise<SmartTrendResponse> {
+    return apiService.get<SmartTrendResponse>(`/agents/${agentId}/smart-trend`);
   },
 };
 

@@ -7,6 +7,7 @@ jest.mock('../../../services/trendsService', () => ({
     diskForecast: jest.fn(),
     baselines: jest.fn(),
     wanIpHistory: jest.fn(),
+    smartTrend: jest.fn(),
   },
 }));
 
@@ -61,6 +62,7 @@ describe('TrendsTab', () => {
     });
     mocked.baselines.mockResolvedValue({ success: true, data: [] });
     mocked.wanIpHistory.mockResolvedValue({ success: true, data: [] });
+    mocked.smartTrend.mockResolvedValue({ success: true, data: null });
   });
 
   it('shows no-permission message when view.agent_trends is denied', async () => {
@@ -144,5 +146,25 @@ describe('TrendsTab', () => {
     expect(await screen.findByText(/No forecast yet/i)).toBeInTheDocument();
     expect(screen.getByText(/No baselines yet/i)).toBeInTheDocument();
     expect(screen.getByText(/No WAN IP changes recorded yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/No SMART trend yet/i)).toBeInTheDocument();
+  });
+
+  it('renders SMART trend stats when populated', async () => {
+    grant(ALL_PERMS);
+    mocked.smartTrend.mockResolvedValue({
+      success: true,
+      data: {
+        reallocated_sectors_current: 0,
+        failures_predicted_current: 0,
+        max_temperature_c: 42,
+        reallocated_growth_per_day: 0,
+        severity: 'info',
+        sample_count: 1500,
+        computed_at: '2026-04-29T03:00:00Z',
+      },
+    });
+    render(<TrendsTab agentId="a-1" />);
+    await screen.findByTestId('trends-smart');
+    expect(screen.getByText('42°C')).toBeInTheDocument();
   });
 });

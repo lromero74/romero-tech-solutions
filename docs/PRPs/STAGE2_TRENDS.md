@@ -1,9 +1,28 @@
 # PRP: Stage 2 — Trend / Forecast / Anomaly
 
 **Created:** 2026-04-29
-**Status:** In progress (overnight execution)
+**Status:** ✅ Code-complete for 4/7 sub-features; **awaiting deploy** (Louis to flip `service.sh restart --prod`)
 **Parent:** `docs/PRPs/RMM_GAP_CLOSURE_MASTER.md`
-**Estimated effort (revised):** 1–2 days actual, given Stage 1 patterns proven and the agent already captures the raw metrics
+**Actual effort:** 1 overnight session for the backend-only quartet (2.1 + 2.2 + 2.3 + 2.7); 2.4–2.6 split into a follow-up PRP because they need new cross-OS agent collectors
+
+### Shipped 2026-04-29 overnight
+- ✅ 2.1 Disk-space forecasting (whole-disk linear regression)
+- ✅ 2.2 Performance baselines + 2σ sustained anomaly alerts
+- ✅ 2.3 SMART pre-fail trend (reallocated_sectors growth + temperature + vendor-predicted failures)
+- ✅ 2.7 WAN IP change tracking (server-side via agentAuthMiddleware)
+- ✅ Frontend Trends tab on AgentDetails with all four sections
+- ✅ 5 new RBAC permissions + role grants (view.agent_trends, view.agent_disk_forecast, manage.agent_baselines)
+- ✅ Nightly job (`computeNightlyTrends`) scheduled at 03:00 UTC + 5-min boot-delayed initial run
+- ✅ 113 backend tests + 239 frontend tests, all green (1 pre-existing jsdom flake)
+- ✅ DB migrations applied to testbot (5 new tables); backup at `~/rts-pre-stage2-20260429-064820.sql`
+
+### Deferred to a follow-up session
+- 2.4 Battery health trend (needs new agent collector)
+- 2.5 GPU monitoring (needs new agent collector × 3 vendors)
+- 2.6 Power-policy audit (needs new agent collector)
+- Per-partition disk forecast (currently whole-disk only)
+- Manual "Recompute now" admin button
+- POST `/baselines/recompute` route for executive/admin override
 
 ---
 

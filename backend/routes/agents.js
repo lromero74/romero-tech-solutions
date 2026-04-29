@@ -24,6 +24,7 @@ import { evaluateMetricsForAnomalies } from '../services/anomalyDetectionService
 import { getLatestForecast, getDiskHistory, forecastSeverity } from '../services/diskForecastService.js';
 import { getBaselines } from '../services/anomalyDetectionService.js';
 import { getHistory as getWanIpHistory } from '../services/wanIpService.js';
+import { getSmartTrend } from '../services/smartTrendService.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
@@ -4319,6 +4320,21 @@ router.get('/:agent_id/wan-ip-history',
     } catch (error) {
       console.error('WAN IP history fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch WAN IP history' });
+    }
+  }
+);
+
+router.get('/:agent_id/smart-trend',
+  authMiddleware,
+  requirePermission('view.agent_trends.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id } = req.params;
+      const trend = await getSmartTrend(agent_id);
+      res.json({ success: true, data: trend });
+    } catch (error) {
+      console.error('SMART trend fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch SMART trend' });
     }
   }
 );

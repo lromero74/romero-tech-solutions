@@ -40,7 +40,7 @@ Close the feature gap between the RTS monitoring agent and commercial RMMs (Datt
 | Stage | Theme | Effort | Risk | Independent? | Status |
 |---|---|---|---|---|---|
 | 1 | Tiny collectors (8 health checks) | 1–2 wk per check, ~6 wk total | Low | Yes | ✅ **Shipped 2026-04-29** (RTS v1.102.0 + agent v1.26.2) |
-| 2 | Trend/forecast/anomaly | 3–4 wk | Medium (data volume) | Yes | ⏳ Next |
+| 2 | Trend/forecast/anomaly | 3–4 wk | Medium (data volume) | Yes | 🟡 **Code-complete for 2.1+2.2+2.3+2.7** in v1.103.0; awaiting deploy. 2.4–2.6 deferred (need new agent collectors) |
 | 3 | Asset & inventory deepening | 2–3 wk | Low–Medium | Yes |
 | 4 | Action layer (patch/deploy/scripts) | 4–6 wk | High (write actions, reboot policies) | Stage 4.1 needs Stage 1.1 |
 | 5 | Security & compliance | 3–4 wk | High (recovery-key escrow = legal/insurance liability) | Yes |
