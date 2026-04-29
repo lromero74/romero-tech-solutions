@@ -31,7 +31,7 @@ jest.mock('../../../contexts/ClientLanguageContext', () => ({
   }),
 }));
 
-import HealthChecksTab from '../../../components/admin/agent-details/HealthChecksTab';
+import HealthChecksTab, { basename } from '../../../components/admin/agent-details/HealthChecksTab';
 import { healthChecksService } from '../../../services/healthChecksService';
 import { usePermission } from '../../../hooks/usePermission';
 import * as ws from '../../../services/websocketService';
@@ -279,6 +279,56 @@ describe('HealthChecksTab', () => {
     await screen.findByText('GPU status');
     fireEvent.click(screen.getByRole('button', { name: /GPU status/i }));
     expect(await screen.findByText(/temp: 95°C/)).toBeInTheDocument();
+  });
+
+  // Regression: full executable paths were overflowing the Top processes
+  // grid columns (screenshot bug 2026-04-29). basename() must extract the
+  // last path segment cleanly across platform separators.
+  describe('basename helper', () => {
+    it('handles macOS/Linux paths', () => {
+      expect(basename('/System/Library/Frameworks/Foo.framework/Foo')).toBe('Foo');
+      expect(basename('/sbin/launchd')).toBe('launchd');
+      expect(basename('/usr/bin/python3')).toBe('python3');
+    });
+    it('handles Windows paths with backslashes', () => {
+      expect(basename('C:\\Windows\\System32\\svchost.exe')).toBe('svchost.exe');
+      expect(basename('C:/mixed\\separators/foo.exe')).toBe('foo.exe');
+    });
+    it('handles bare names + edge cases', () => {
+      expect(basename('foo')).toBe('foo');
+      expect(basename('')).toBe('');
+      // Trailing separators must not produce empty results.
+      expect(basename('/usr/bin/')).toBe('bin');
+    });
+  });
+
+  it('Top processes renders basename prominently with full path on a second line', async () => {
+    grantPermission(true);
+    const longPath = '/System/Library/ExtensionKit/Extensions/SecurityPrivacyExtension.appex/Contents/MacOS/SecurityPrivacyExtension';
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'top_processes',
+        severity: 'info',
+        passed: true,
+        payload: {
+          top_by_cpu: [{ name: longPath, pid: 59047, cpu_pct: 101.9 }],
+          top_by_mem: [{ name: '/sbin/launchd', pid: 1, mem_pct: 0.4 }],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Top processes');
+    fireEvent.click(screen.getByRole('button', { name: /Top processes/i }));
+    // Basename appears as its own short text node.
+    expect(await screen.findByText('SecurityPrivacyExtension')).toBeInTheDocument();
+    expect(screen.getByText('launchd')).toBeInTheDocument();
+    // Full path also appears (somewhere) for the operator who needs it.
+    expect(screen.getByText(longPath)).toBeInTheDocument();
+    // PID + percent appear as a single combined dim line per row.
+    expect(screen.getByText(/PID 59047 · 101\.9%/)).toBeInTheDocument();
   });
 
   it('renders power_policy active scheme + sleep timeouts', async () => {

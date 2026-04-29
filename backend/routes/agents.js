@@ -17,7 +17,6 @@ import {
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
 import { candleAggregationService } from '../services/candleAggregationService.js';
-import { isCheckAllowedForAgent } from '../services/freetierGate.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { alertEscalationService } from '../services/alertEscalationService.js';
 import { evaluateMetricsForAnomalies } from '../services/anomalyDetectionService.js';
@@ -4134,11 +4133,9 @@ router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, asy
     }
     const sev = ['info', 'warning', 'critical'].includes(severity) ? severity : 'info';
 
-    // Free-tier gate: silently accept-and-drop if check isn't allowed for this tier.
-    const allowed = await isCheckAllowedForAgent(agent_id, check_type);
-    if (!allowed) {
-      return res.json({ success: true, gated: true });
-    }
+    // No per-check gating here — the subscription model is per-device-count,
+    // not per-feature. Quota enforcement lives at registration time. Every
+    // device that successfully authed gets every check_type.
 
     // Look up business_id (denormalized into the row for tenant isolation).
     const { rows: agentRows } = await query(

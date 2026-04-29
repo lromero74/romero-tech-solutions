@@ -136,21 +136,24 @@ function PayloadView({ checkType, payload }: { checkType: HealthCheckType; paylo
     case 'top_processes': {
       const byCpu = Array.isArray(payload.top_by_cpu) ? (payload.top_by_cpu as Array<{ name: string; pid: number; cpu_pct?: number }>) : [];
       const byMem = Array.isArray(payload.top_by_mem) ? (payload.top_by_mem as Array<{ name: string; pid: number; mem_pct?: number }>) : [];
+      // min-w-0 on each column keeps long unwrappable paths from blowing
+      // out the grid; basename + dim full-path-on-second-line is the
+      // readable layout (the screenshot bug Louis flagged).
       return (
         <div className={`text-sm ${themeClasses.text.secondary} grid grid-cols-1 sm:grid-cols-2 gap-3`}>
-          <div>
+          <div className="min-w-0">
             <div className="font-medium mb-1">Top by CPU</div>
-            <div className="font-mono text-xs">
+            <div className="text-xs space-y-1">
               {byCpu.slice(0, 10).map((p, i) => (
-                <div key={i}>{p.name} (PID {p.pid}): {p.cpu_pct?.toFixed(1) ?? '?'}%</div>
+                <ProcessRow key={i} name={p.name} pid={p.pid} value={p.cpu_pct} unit="%" />
               ))}
             </div>
           </div>
-          <div>
+          <div className="min-w-0">
             <div className="font-medium mb-1">Top by RAM</div>
-            <div className="font-mono text-xs">
+            <div className="text-xs space-y-1">
               {byMem.slice(0, 10).map((p, i) => (
-                <div key={i}>{p.name} (PID {p.pid}): {p.mem_pct?.toFixed(1) ?? '?'}%</div>
+                <ProcessRow key={i} name={p.name} pid={p.pid} value={p.mem_pct} unit="%" />
               ))}
             </div>
           </div>
@@ -427,3 +430,46 @@ const HealthChecksTab: React.FC<Props> = ({ agentId }) => {
 
 export default HealthChecksTab;
 export { HealthChecksTab };
+
+// ----- Helpers (top_processes display) -----
+
+/**
+ * Returns the trailing component of a / or \ separated path. Used to
+ * render the EXECUTABLE NAME prominently while keeping the full path
+ * visible (but de-emphasized) for operators who need it. Without
+ * this, full macOS framework paths like
+ *   /System/Library/ExtensionKit/Extensions/.../SecurityPrivacyExtension
+ * blew out the right column of the Top processes grid.
+ */
+export function basename(path: string): string {
+  if (!path) return '';
+  const parts = path.split(/[/\\]/);
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    if (p) return p;
+  }
+  return path;
+}
+
+const ProcessRow: React.FC<{
+  name: string;
+  pid: number;
+  value: number | undefined;
+  unit: string;
+}> = ({ name, pid, value, unit }) => {
+  const short = basename(name);
+  const showFullPath = name && name !== short;
+  return (
+    <div className="leading-tight">
+      <div className="flex items-baseline gap-2 font-mono">
+        <span className="font-semibold truncate" title={name}>{short}</span>
+        <span className={`${themeClasses.text.muted} flex-shrink-0`}>
+          PID {pid} · {value !== undefined ? value.toFixed(1) : '?'}{unit}
+        </span>
+      </div>
+      {showFullPath && (
+        <div className={`${themeClasses.text.muted} text-[10px] font-mono break-all`}>{name}</div>
+      )}
+    </div>
+  );
+};

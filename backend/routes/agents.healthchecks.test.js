@@ -49,10 +49,14 @@ test('POST /:agent_id/check-result validates check_type against allowlist', () =
     'check-result must validate against VALID_CHECK_TYPES — accepting arbitrary check_type would let a compromised agent inject rows under any name');
 });
 
-test('POST /:agent_id/check-result enforces free-tier gate', () => {
+// Per-check freetier gate was removed 2026-04-29. Pricing is per-device-count,
+// not per-feature — every authed agent gets every check_type. Quota enforcement
+// lives at registration time. Pin the absence so a future "let's add a feature
+// gate" patch trips this test.
+test('POST /:agent_id/check-result does NOT call any per-check feature gate', () => {
   const block = findRoute('post', '/:agent_id/check-result');
-  assert.ok(block.includes('isCheckAllowedForAgent'),
-    'check-result must call isCheckAllowedForAgent — defense-in-depth against a compromised free-tier agent reporting paid-only checks');
+  assert.ok(!/isCheckAllowedForAgent|freetierGate|CHECKS_FREE|CHECKS_PAID/.test(block),
+    'check-result must not gate on a per-feature freetier check (pricing is per-device-count)');
 });
 
 test('POST /:agent_id/check-result writes both latest snapshot and history', () => {
@@ -95,9 +99,9 @@ test('GET history endpoint clamps days parameter to a sane range', () => {
     'days param must be bounded — unbounded would let a caller force a slow query');
 });
 
-test('imports include freetier gate and requirePermission', () => {
-  assert.ok(/from\s+['"]\.\.\/services\/freetierGate\.js['"]/.test(SRC),
-    'agents.js must import from services/freetierGate.js');
+test('imports include requirePermission (no freetier gate)', () => {
+  assert.ok(!/freetierGate/.test(SRC),
+    'agents.js must NOT import freetierGate (deleted 2026-04-29)');
   assert.ok(/requirePermission/.test(SRC) && /permissionMiddleware\.js/.test(SRC),
     'agents.js must import requirePermission from permissionMiddleware.js');
 });
