@@ -508,6 +508,57 @@ describe('HealthChecksTab', () => {
     expect(screen.getByText(/Firefox \(1\)/)).toBeInTheDocument();
   });
 
+  it('license_keys renders Windows OEM + Office + Adobe sections', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'license_keys',
+        severity: 'info',
+        passed: true,
+        payload: {
+          applicable: true,
+          windows_oem_key: 'XXXXX-XXXXX-XXXXX-XXXXX-XXXXX',
+          office_licenses: [
+            { product: 'Office16ProPlusVL_KMS_Client edition', license_status: 'LICENSED', partial_key: 'ABCDE', vendor: 'Microsoft' },
+          ],
+          adobe_products: [
+            { product: 'Acrobat', vendor: 'Adobe' },
+            { product: 'Photoshop CC', vendor: 'Adobe' },
+          ],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('License keys');
+    fireEvent.click(screen.getByRole('button', { name: /License keys/i }));
+    expect(await screen.findByText(/XXXXX-XXXXX/)).toBeInTheDocument();
+    expect(screen.getByText(/Microsoft Office \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Adobe \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText('Office16ProPlusVL_KMS_Client edition')).toBeInTheDocument();
+  });
+
+  it('license_keys non-applicable on Linux', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'license_keys',
+        severity: 'info',
+        passed: true,
+        payload: { applicable: false },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('License keys');
+    fireEvent.click(screen.getByRole('button', { name: /License keys/i }));
+    expect(await screen.findByText(/not applicable on this OS/i)).toBeInTheDocument();
+  });
+
   it('renders power_policy active scheme + sleep timeouts', async () => {
     grantPermission(true);
     mockedList.mockResolvedValue({

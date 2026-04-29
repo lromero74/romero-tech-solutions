@@ -62,6 +62,7 @@ const CHECK_TYPE_LABELS: Record<HealthCheckType, string> = {
   peripherals: 'Peripherals',
   logon_history: 'Logon history',
   browser_extensions: 'Browser extensions',
+  license_keys: 'License keys',
 };
 
 function severityIcon(severity: HealthCheckSeverity) {
@@ -428,6 +429,54 @@ function PayloadView({ checkType, payload }: { checkType: HealthCheckType; paylo
               </div>
             </details>
           ))}
+        </div>
+      );
+    }
+    case 'license_keys': {
+      const applicable = payload.applicable !== false;
+      if (!applicable) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>License-key inventory not applicable on this OS</div>;
+      }
+      const oem = typeof payload.windows_oem_key === 'string' ? payload.windows_oem_key : null;
+      const office = Array.isArray(payload.office_licenses) ? (payload.office_licenses as Array<{
+        product: string; license_status?: string; partial_key?: string; vendor?: string;
+      }>) : [];
+      const adobe = Array.isArray(payload.adobe_products) ? (payload.adobe_products as Array<{
+        product: string; vendor?: string;
+      }>) : [];
+      if (!oem && office.length === 0 && adobe.length === 0) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No license-managed software detected</div>;
+      }
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          {oem && (
+            <div>
+              <span className="font-medium">Windows OEM key:</span>{' '}
+              <span className="font-mono text-xs">{oem}</span>
+            </div>
+          )}
+          {office.length > 0 && (
+            <div>
+              <div className="font-medium">Microsoft Office ({office.length})</div>
+              <div className="font-mono text-xs space-y-0.5 mt-1">
+                {office.map((l, i) => (
+                  <div key={i}>
+                    {l.product}
+                    {l.license_status && <span className={themeClasses.text.muted}> · {l.license_status}</span>}
+                    {l.partial_key && <span className={themeClasses.text.muted}> · …{l.partial_key}</span>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {adobe.length > 0 && (
+            <div>
+              <div className="font-medium">Adobe ({adobe.length})</div>
+              <div className="font-mono text-xs space-y-0.5 mt-1">
+                {adobe.map((l, i) => <div key={i}>{l.product}</div>)}
+              </div>
+            </div>
+          )}
         </div>
       );
     }
