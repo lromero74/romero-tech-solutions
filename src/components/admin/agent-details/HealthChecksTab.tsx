@@ -60,6 +60,8 @@ const CHECK_TYPE_LABELS: Record<HealthCheckType, string> = {
   certificate_expiry: 'Certificate expiry',
   scheduled_tasks: 'Scheduled tasks',
   peripherals: 'Peripherals',
+  logon_history: 'Logon history',
+  browser_extensions: 'Browser extensions',
 };
 
 function severityIcon(severity: HealthCheckSeverity) {
@@ -362,6 +364,70 @@ function PayloadView({ checkType, payload }: { checkType: HealthCheckType; paylo
               </div>
             )}
           </div>
+        </div>
+      );
+    }
+    case 'logon_history': {
+      const success = typeof payload.success_count_24h === 'number' ? payload.success_count_24h : 0;
+      const failures = typeof payload.failure_count_24h === 'number' ? payload.failure_count_24h : 0;
+      const last = payload.last_logon as { user?: string; when?: string } | undefined;
+      const recent = Array.isArray(payload.recent) ? (payload.recent as Array<{
+        user?: string; when: string; source_ip?: string; success: boolean;
+      }>) : [];
+      const failureCls = failures >= 50 ? 'text-red-500 font-semibold'
+                       : failures >= 10 ? 'text-yellow-500 font-semibold'
+                       : themeClasses.text.secondary;
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          <div>Last 24h: <strong>{success}</strong> successful, <span className={failureCls}>{failures} failed</span></div>
+          {last && last.user && last.when && (
+            <div>Last successful logon: <strong>{last.user}</strong> at {new Date(last.when).toLocaleString()}</div>
+          )}
+          {recent.length > 0 && (
+            <details>
+              <summary className={`cursor-pointer ${themeClasses.text.muted}`}>{recent.length} recent event{recent.length === 1 ? '' : 's'}</summary>
+              <div className="font-mono text-xs mt-1 max-h-64 overflow-y-auto space-y-0.5">
+                {recent.map((e, i) => (
+                  <div key={i} className={e.success ? '' : 'text-yellow-500'}>
+                    {e.success ? '✓' : '✗'} {e.user || '?'}{e.source_ip && <> from {e.source_ip}</>} — {new Date(e.when).toLocaleString()}
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      );
+    }
+    case 'browser_extensions': {
+      const total = typeof payload.total === 'number' ? payload.total : 0;
+      const exts = Array.isArray(payload.extensions) ? (payload.extensions as Array<{
+        browser: string; user?: string; id?: string; name?: string; version?: string; enabled?: boolean;
+      }>) : [];
+      if (total === 0) {
+        return <div className={`text-sm ${themeClasses.text.muted}`}>No browser extensions enumerated</div>;
+      }
+      // Group by browser for compact display.
+      const byBrowser: Record<string, typeof exts> = {};
+      for (const e of exts) {
+        const k = e.browser || 'Other';
+        (byBrowser[k] ||= []).push(e);
+      }
+      return (
+        <div className={`text-sm ${themeClasses.text.secondary} space-y-2`}>
+          <div>{total} extension{total === 1 ? '' : 's'} across {Object.keys(byBrowser).length} browser{Object.keys(byBrowser).length === 1 ? '' : 's'}</div>
+          {Object.entries(byBrowser).map(([browser, list]) => (
+            <details key={browser}>
+              <summary className={`cursor-pointer ${themeClasses.text.primary}`}>{browser} ({list.length})</summary>
+              <div className="font-mono text-xs mt-1 max-h-64 overflow-y-auto space-y-0.5">
+                {list.slice(0, 50).map((e, i) => (
+                  <div key={i} className={e.enabled ? '' : themeClasses.text.muted}>
+                    {e.enabled ? '✓' : '✗'} {e.name || e.id || '(unnamed)'}{e.version && <span className={themeClasses.text.muted}> v{e.version}</span>}
+                    {e.user && <span className={themeClasses.text.muted}> · {e.user}</span>}
+                  </div>
+                ))}
+              </div>
+            </details>
+          ))}
         </div>
       );
     }

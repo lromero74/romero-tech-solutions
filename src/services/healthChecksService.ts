@@ -28,7 +28,10 @@ export type HealthCheckType =
   // Stage 3.7 / 3.5 / 3.2
   | 'certificate_expiry'
   | 'scheduled_tasks'
-  | 'peripherals';
+  | 'peripherals'
+  // Stage 3.6 / 3.3
+  | 'logon_history'
+  | 'browser_extensions';
 
 export interface HealthCheckResult {
   check_type: HealthCheckType;

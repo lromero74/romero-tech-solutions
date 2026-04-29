@@ -4111,7 +4111,9 @@ const VALID_CHECK_TYPES = new Set([
   // Stage 2.4 / 2.5 / 2.6
   'battery_health', 'power_policy', 'gpu_status',
   // Stage 3.7 / 3.5 / 3.2
-  'certificate_expiry', 'scheduled_tasks', 'peripherals'
+  'certificate_expiry', 'scheduled_tasks', 'peripherals',
+  // Stage 3.6 / 3.3
+  'logon_history', 'browser_extensions'
 ]);
 
 router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, async (req, res) => {

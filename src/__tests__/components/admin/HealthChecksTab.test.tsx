@@ -446,6 +446,68 @@ describe('HealthChecksTab', () => {
     expect(await screen.findByText(/No peripherals enumerated/i)).toBeInTheDocument();
   });
 
+  // ----- Stage 3.6 / 3.3 -----
+
+  it('logon_history highlights elevated failure counts', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'logon_history',
+        severity: 'warning',
+        passed: false,
+        payload: {
+          success_count_24h: 3,
+          failure_count_24h: 25,
+          last_logon: { user: 'louis', when: '2026-04-29T09:00:00Z' },
+          recent: [
+            { user: 'louis', when: '2026-04-29T09:00:00Z', success: true },
+            { user: 'admin', when: '2026-04-29T08:00:00Z', source_ip: '1.2.3.4', success: false },
+          ],
+        },
+        collected_at: '2026-04-29T09:00:00Z',
+        reported_at: '2026-04-29T09:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Logon history');
+    fireEvent.click(screen.getByRole('button', { name: /Logon history/i }));
+    // The "25 failed" span has a coloring class — find it by exact text content.
+    expect(await screen.findByText('25 failed')).toBeInTheDocument();
+    // 'Last successful logon: louis' appears in the body when last_logon is set.
+    expect(screen.getByText(/Last successful logon/)).toBeInTheDocument();
+    // The username 'louis' appears in the strong tag.
+    expect(screen.getByText('louis')).toBeInTheDocument();
+  });
+
+  it('browser_extensions groups by browser with counts', async () => {
+    grantPermission(true);
+    mockedList.mockResolvedValue({
+      success: true,
+      data: [{
+        check_type: 'browser_extensions',
+        severity: 'info',
+        passed: true,
+        payload: {
+          total: 3,
+          extensions: [
+            { browser: 'Chrome', user: 'louis', id: 'cjpalhdlnbpafiamejdnhcphjbkeiagm', name: 'uBlock Origin', version: '1.55.0', enabled: true },
+            { browser: 'Chrome', user: 'louis', id: 'somelegit', name: '1Password', version: '8.10', enabled: true },
+            { browser: 'Firefox', user: 'louis', id: 'uBlock0@raymondhill.net', name: 'uBlock Origin', version: '1.55.0', enabled: true },
+          ],
+        },
+        collected_at: '2026-04-29T00:00:00Z',
+        reported_at: '2026-04-29T00:00:00Z',
+      }],
+    });
+    render(<HealthChecksTab agentId="agent-1" />);
+    await screen.findByText('Browser extensions');
+    fireEvent.click(screen.getByRole('button', { name: /Browser extensions/i }));
+    // Per-browser count badges in the <summary> labels.
+    expect(await screen.findByText(/Chrome \(2\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Firefox \(1\)/)).toBeInTheDocument();
+  });
+
   it('renders power_policy active scheme + sleep timeouts', async () => {
     grantPermission(true);
     mockedList.mockResolvedValue({
