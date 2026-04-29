@@ -1,10 +1,21 @@
 # PRP: Stage 1 — Tiny Health-Check Collectors
 
 **Created:** 2026-04-28
-**Status:** Execution-ready
+**Status:** ✅ Shipped 2026-04-29 — RTS backend `v1.102.0` + agent `v1.26.2`
 **Parent:** `docs/PRPs/RMM_GAP_CLOSURE_MASTER.md`
-**Estimated effort:** ~6 weeks total (8 collectors @ 1–2 wk each, can parallelize 2 at a time)
+**Actual effort:** 1 day (vs. ~6 wk estimate) — collectors fanned out in one batch after end-to-end smoke test of `reboot_pending` confirmed the pipe was healthy
 **Quality score:** 9/10
+
+### Shipped 2026-04-29
+- All 8 collectors live in production: `reboot_pending`, `time_drift`, `crashdumps`, `top_processes`, `listening_ports`, `update_history_failures`, `domain_status`, `mapped_drives`
+- Backend: 51 tests / agent: 65+ tests / frontend: 14 new Jest tests / all green
+- Self-monitoring agent on Louis's mac is the canary — first 8 rows landed in `agent_check_results` with sane payload sizes (≤ 3.3 KB max, total ≤ 7 KB)
+- Real `update_history_failures` warning surfaced on the canary (a softwareupdate run that found no software to install — benign but correctly captured)
+
+### Known polish items deferred to follow-up
+1. `update_history_failures` package extractor takes the first word after "Install " — when message starts with "The Installer..." it returns package="the". Skip stop-words.
+2. "no software found to install" matches the failure regex but is semantically a no-op. Add an explicit allow-list.
+3. Real cross-OS signed installers (Linux .deb, Windows .zip, macOS .pkg) ship via `scripts/release.sh` in the agent repo — initial release for v1.26.2 happened on this date; subsequent collector additions in later stages will use the same flow.
 
 ---
 
