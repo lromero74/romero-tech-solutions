@@ -50,6 +50,9 @@ import agentDownloadRoutes from './routes/agentDownloads.js';
 import remoteControlRoutes from './routes/remoteControl.js';
 import automationRoutes from './routes/automation.js';
 import deploymentRoutes from './routes/deployment.js';
+import { operatorRouter as patchApprovalsOperatorRouter, agentRouter as patchApprovalsAgentRouter } from './routes/patchApprovals.js';
+import { stage4FeatureGate } from './middleware/stage4FeatureGate.js';
+import { authenticateAgent, requireAgentMatch } from './middleware/agentAuthMiddleware.js';
 import subscriptionRoutes from './routes/subscription.js';
 
 // Import session service for cleanup
@@ -540,6 +543,24 @@ app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary down
 app.use('/api/remote-control', generalLimiter, doubleCsrfProtection, remoteControlRoutes); // MeshCentral remote-control sessions
 app.use('/api/automation', generalLimiter, methodBasedCsrfProtection, automationRoutes); // Policy automation and script library
 app.use('/api/deployment', generalLimiter, methodBasedCsrfProtection, deploymentRoutes); // Software deployment and package management
+
+// Stage 4 — patch approvals. Both routers gated by stage4FeatureGate (env var
+// STAGE_4_ENABLED). Until enabled, every Stage 4 endpoint short-circuits 503.
+app.use(
+  '/api/agents/:agent_id/patch-approvals/ingest',
+  generalLimiter,
+  stage4FeatureGate,
+  authenticateAgent,
+  requireAgentMatch,
+  patchApprovalsAgentRouter
+);
+app.use(
+  '/api/patch-approvals',
+  generalLimiter,
+  methodBasedCsrfProtection,
+  stage4FeatureGate,
+  patchApprovalsOperatorRouter
+);
 app.use('/api/subscription', generalLimiter, subscriptionRoutes); // Subscription management (mixed auth: pricing public, status/upgrade authenticated)
 
 // Pre-authentication trusted device check (no auth required)
