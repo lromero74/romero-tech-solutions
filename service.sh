@@ -12,7 +12,15 @@
 # flag is accepted for sister-script parity and points the user at npm run dev.
 #
 # Usage: ./service.sh [start|stop|restart|build|status|logs]
-#        ./service.sh restart --prod [--force]
+#        ./service.sh restart --prod [--force]                  (run ON testbot)
+#        ./service.sh restart --prod --from-local [--no-backend-deps]  (run on laptop)
+#
+# --from-local mode (laptop → testbot):
+#   The build runs on your laptop (~30s on M1, no memory pressure on prod).
+#   Then dist/ is rsynced to testbot and the backend is restarted via SSH.
+#   This avoids the OOM risk seen on 2026-04-29 when in-place vite builds
+#   on the 3.7Gi t3.medium instance overlapped with running services.
+#   Requires: laptop = Darwin; ssh testbot configured; clean git state.
 
 set -e
 
@@ -35,6 +43,10 @@ BACKEND_PORT=3001
 
 # Nginx config
 NGINX_CONF="/etc/nginx/conf.d/romerotechsolutions.conf"
+
+# --from-local mode targets
+TESTBOT_SSH_HOST="testbot"
+TESTBOT_REMOTE_DIR="/home/ec2-user/romero-tech-solutions"
 
 # ── Sister-project port awareness ──────────────────────────────────
 # Used by start/restart to refuse if our port is held by something we don't own.
@@ -108,6 +120,101 @@ reload_nginx() {
     else
         echo -e "${RED}Nginx config test failed!${NC}"
         return 1
+    fi
+}
+
+# ── --from-local deploy (laptop → testbot) ─────────────────────────
+
+is_darwin() {
+    [ "$(uname -s)" = "Darwin" ]
+}
+
+deploy_from_local() {
+    local skip_backend_deps="$1"
+
+    if ! is_darwin; then
+        echo -e "${RED}--from-local must be run from your laptop (Darwin), not testbot.${NC}"
+        echo -e "${YELLOW}Drop --from-local to use the in-place restart on this host.${NC}"
+        exit 1
+    fi
+
+    # Verify clean git + in-sync with origin so testbot's `git pull` matches
+    # what we built. A drift here would let prod run code that doesn't match
+    # the dist we shipped.
+    if ! git -C "$SCRIPT_DIR" diff --quiet || ! git -C "$SCRIPT_DIR" diff --quiet --staged; then
+        echo -e "${RED}Working tree has uncommitted changes.${NC}"
+        echo -e "${YELLOW}Commit + push before --from-local — testbot pulls from origin.${NC}"
+        git -C "$SCRIPT_DIR" status --short
+        exit 1
+    fi
+    git -C "$SCRIPT_DIR" fetch --quiet origin main
+    local local_sha remote_sha
+    local_sha=$(git -C "$SCRIPT_DIR" rev-parse HEAD)
+    remote_sha=$(git -C "$SCRIPT_DIR" rev-parse origin/main)
+    if [ "$local_sha" != "$remote_sha" ]; then
+        echo -e "${RED}HEAD ($local_sha) is not at origin/main ($remote_sha).${NC}"
+        echo -e "${YELLOW}Push your branch first so testbot's git pull lands the same commit.${NC}"
+        exit 1
+    fi
+
+    # Verify SSH connectivity before doing the expensive build.
+    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$TESTBOT_SSH_HOST" 'echo ok' >/dev/null 2>&1; then
+        echo -e "${RED}Cannot reach $TESTBOT_SSH_HOST via ssh.${NC}"
+        echo -e "${YELLOW}Check your ~/.ssh/config and network.${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Step 1/5: building dist/ locally...${NC}"
+    (cd "$SCRIPT_DIR" && npm ci --no-audit --no-fund) || {
+        echo -e "${RED}npm ci failed${NC}"; exit 1
+    }
+    (cd "$SCRIPT_DIR" && npm run build) || {
+        echo -e "${RED}npm run build failed${NC}"; exit 1
+    }
+
+    echo -e "${BLUE}Step 2/5: pulling latest on testbot...${NC}"
+    ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR && git pull --ff-only origin main" || {
+        echo -e "${RED}git pull on testbot failed${NC}"; exit 1
+    }
+
+    echo -e "${BLUE}Step 3/5: rsync dist/ to testbot...${NC}"
+    rsync -az --delete \
+        --exclude='.DS_Store' \
+        "$SCRIPT_DIR/dist/" \
+        "$TESTBOT_SSH_HOST:$TESTBOT_REMOTE_DIR/dist/" || {
+        echo -e "${RED}rsync failed${NC}"; exit 1
+    }
+
+    if [ "$skip_backend_deps" != "true" ]; then
+        echo -e "${BLUE}Step 4/5: backend npm ci on testbot (idempotent if no changes)...${NC}"
+        ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR/backend && npm ci --no-audit --no-fund" || {
+            echo -e "${RED}backend npm ci failed${NC}"; exit 1
+        }
+    else
+        echo -e "${YELLOW}Step 4/5: skipping backend npm ci (--no-backend-deps).${NC}"
+    fi
+
+    echo -e "${BLUE}Step 5/5: restart backend on testbot...${NC}"
+    ssh "$TESTBOT_SSH_HOST" "sudo systemctl restart $BACKEND_SERVICE" || {
+        echo -e "${RED}backend restart failed${NC}"; exit 1
+    }
+    sleep 3
+
+    # Smoke test
+    echo -e "${BLUE}Verifying...${NC}"
+    local version_json health_status
+    version_json=$(curl -sf --max-time 10 https://romerotechsolutions.com/version.json 2>/dev/null || echo "ERR")
+    health_status=$(curl -sf --max-time 10 -o /dev/null -w "%{http_code}" https://api.romerotechsolutions.com/api/health 2>/dev/null || echo "ERR")
+
+    echo ""
+    echo -e "${GREEN}Deploy complete.${NC}"
+    echo -e "  Frontend version.json: $version_json"
+    echo -e "  Backend /api/health:   HTTP $health_status"
+
+    if [ "$health_status" != "200" ]; then
+        echo -e "${RED}WARNING: backend health check did not return 200. Investigate:${NC}"
+        echo -e "  ssh $TESTBOT_SSH_HOST 'sudo journalctl -u $BACKEND_SERVICE -n 50'"
+        exit 1
     fi
 }
 
@@ -253,15 +360,18 @@ case "${1:-}" in
         shift
         TARGET_MODE=""
         FORCE=false
+        FROM_LOCAL=false
+        SKIP_BACKEND_DEPS=false
         for arg in "$@"; do
             case "$arg" in
                 --dev)
-                    echo -e "${YELLOW}--dev is not applicable on this host — testbot only runs prod.${NC}"
-                    echo -e "${YELLOW}Run \`npm run dev\` on your laptop for HMR development.${NC}"
+                    echo -e "${YELLOW}--dev is not applicable here — run \`npm run dev\` on your laptop for HMR.${NC}"
                     exit 0
                     ;;
-                --prod)      TARGET_MODE="prod" ;;
-                --force)     FORCE=true ;;
+                --prod)              TARGET_MODE="prod" ;;
+                --force)             FORCE=true ;;
+                --from-local)        FROM_LOCAL=true ;;
+                --no-backend-deps)   SKIP_BACKEND_DEPS=true ;;
                 *)
                     echo -e "${RED}Unknown flag: $arg${NC}"
                     exit 1
@@ -271,7 +381,24 @@ case "${1:-}" in
 
         if [ -z "$TARGET_MODE" ]; then
             echo -e "${RED}restart requires --prod${NC}"
-            echo "Usage: $0 restart --prod [--force]"
+            echo "Usage: $0 restart --prod [--force]                          (run on testbot)"
+            echo "       $0 restart --prod --from-local [--no-backend-deps]   (run on laptop)"
+            exit 1
+        fi
+
+        # Laptop → testbot path: build local, rsync, restart remotely.
+        if [ "$FROM_LOCAL" = true ]; then
+            echo -e "${YELLOW}========================================${NC}"
+            echo -e "${YELLOW}  Deploy from laptop → testbot${NC}"
+            echo -e "${YELLOW}========================================${NC}"
+            deploy_from_local "$SKIP_BACKEND_DEPS"
+            exit $?
+        fi
+
+        # In-place path requires Linux + sudo + systemd. Refuse on the laptop.
+        if is_darwin; then
+            echo -e "${RED}restart --prod (in-place) only runs on testbot.${NC}"
+            echo -e "${YELLOW}Use \`$0 restart --prod --from-local\` to deploy from your laptop.${NC}"
             exit 1
         fi
 
@@ -371,14 +498,17 @@ case "${1:-}" in
         echo "Usage: $0 [command]"
         echo ""
         echo "Commands:"
-        echo "  start                   Start backend"
-        echo "  stop                    Stop backend"
-        echo "  restart --prod          Restart backend"
-        echo "  restart --prod --force  Restart even if a foreign process holds the port"
-        echo "  build                   npm install + npm run build (frontend dist/)"
-        echo "  status                  Show service status + port-collision check"
-        echo "  logs                    Show recent backend logs"
-        echo "  setup-nginx             (no-op; nginx config is hand-managed)"
+        echo "  start                                 Start backend (testbot only)"
+        echo "  stop                                  Stop backend (testbot only)"
+        echo "  restart --prod                        Restart backend in-place (testbot only)"
+        echo "  restart --prod --force                Restart even if a foreign process holds the port"
+        echo "  restart --prod --from-local           Build dist on laptop, rsync, restart on testbot"
+        echo "  restart --prod --from-local --no-backend-deps"
+        echo "                                        Same, but skip 'cd backend && npm ci' on testbot"
+        echo "  build                                 npm install + npm run build (frontend dist/)"
+        echo "  status                                Show service status + port-collision check"
+        echo "  logs                                  Show recent backend logs"
+        echo "  setup-nginx                           (no-op; nginx config is hand-managed)"
         echo ""
         echo "Notes:"
         echo "  - Backend port: ${BACKEND_PORT}"
