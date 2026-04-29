@@ -164,7 +164,26 @@ deploy_from_local() {
         exit 1
     fi
 
-    echo -e "${BLUE}Step 1/5: building dist/ locally...${NC}"
+    # CRITICAL: pull testbot's .env.production into the project root so
+    # `npm run build` bakes the right VITE_* values into the bundle. Without
+    # this, the laptop's `.env` (which points VITE_API_BASE_URL at localhost
+    # for dev) would get embedded — yielding a dist that "loads" but every
+    # API call hits the user's own machine. Production users see "Connection
+    # Error: Unable to connect to the backend server."
+    #
+    # We re-pull each deploy so the local copy stays in sync with testbot
+    # if secrets / Cognito IDs are rotated. The file is gitignored.
+    echo -e "${BLUE}Step 1/6: pull .env.production from testbot...${NC}"
+    scp -q "$TESTBOT_SSH_HOST:$TESTBOT_REMOTE_DIR/.env.production" "$SCRIPT_DIR/.env.production" || {
+        echo -e "${RED}scp .env.production failed${NC}"; exit 1
+    }
+    if ! grep -q "VITE_API_BASE_URL=https://api\.romerotechsolutions\.com" "$SCRIPT_DIR/.env.production"; then
+        echo -e "${RED}testbot's .env.production does NOT have a prod API URL.${NC}"
+        echo -e "${YELLOW}Investigate before continuing — building from this would ship a broken bundle.${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Step 2/6: building dist/ locally...${NC}"
     (cd "$SCRIPT_DIR" && npm ci --no-audit --no-fund) || {
         echo -e "${RED}npm ci failed${NC}"; exit 1
     }
@@ -172,12 +191,22 @@ deploy_from_local() {
         echo -e "${RED}npm run build failed${NC}"; exit 1
     }
 
-    echo -e "${BLUE}Step 2/5: pulling latest on testbot...${NC}"
+    # Belt + suspenders: verify the built bundle actually embeds the prod
+    # API URL. If env loading misbehaves for any reason, this catches it
+    # at the artifact level before we rsync a broken bundle to prod.
+    if ! grep -q "https://api\.romerotechsolutions\.com/api" "$SCRIPT_DIR"/dist/js/index-*.js 2>/dev/null; then
+        echo -e "${RED}Built bundle does NOT contain the prod API URL.${NC}"
+        echo -e "${YELLOW}Refusing to deploy — would brick the dashboard for all users.${NC}"
+        echo -e "${YELLOW}Check: grep VITE_API_BASE_URL .env.production${NC}"
+        exit 1
+    fi
+
+    echo -e "${BLUE}Step 3/6: pulling latest on testbot...${NC}"
     ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR && git pull --ff-only origin main" || {
         echo -e "${RED}git pull on testbot failed${NC}"; exit 1
     }
 
-    echo -e "${BLUE}Step 3/5: rsync dist/ to testbot...${NC}"
+    echo -e "${BLUE}Step 4/6: rsync dist/ to testbot...${NC}"
     rsync -az --delete \
         --exclude='.DS_Store' \
         "$SCRIPT_DIR/dist/" \
@@ -186,15 +215,15 @@ deploy_from_local() {
     }
 
     if [ "$skip_backend_deps" != "true" ]; then
-        echo -e "${BLUE}Step 4/5: backend npm ci on testbot (idempotent if no changes)...${NC}"
+        echo -e "${BLUE}Step 5/6: backend npm ci on testbot (idempotent if no changes)...${NC}"
         ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR/backend && npm ci --no-audit --no-fund" || {
             echo -e "${RED}backend npm ci failed${NC}"; exit 1
         }
     else
-        echo -e "${YELLOW}Step 4/5: skipping backend npm ci (--no-backend-deps).${NC}"
+        echo -e "${YELLOW}Step 5/6: skipping backend npm ci (--no-backend-deps).${NC}"
     fi
 
-    echo -e "${BLUE}Step 5/5: restart backend on testbot...${NC}"
+    echo -e "${BLUE}Step 6/6: restart backend on testbot...${NC}"
     ssh "$TESTBOT_SSH_HOST" "sudo systemctl restart $BACKEND_SERVICE" || {
         echo -e "${RED}backend restart failed${NC}"; exit 1
     }
