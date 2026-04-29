@@ -1,14 +1,15 @@
-RTS Monitoring Agent - Version 1.21.8 Release Notes
+RTS Monitoring Agent - Version 1.30.1 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-28 04:15:56 UTC
-Previous Version: v1.21.7
-Git Commit: 29e7282
+Release Date: 2026-04-29 16:56:08 UTC
+Previous Version: v1.30.0
+Git Commit: fe12f35
 
-Changes Since v1.21.7:
+Changes Since v1.30.0:
 ───────────────────────────────────────────────────────────
 
-• v1.21.8: declare Wayland Remote Control runtime deps in Linux packages
+• v1.30.1 (real): tray polish + port-conflict fix in log/settings servers
+• v1.30.1: tray polish — drop duplicate checkmark on Remote Control
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

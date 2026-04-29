@@ -1,12 +1,42 @@
 # PRP: Stage 4 — Action Layer (Patch Deploy + Scripts + Software + WoL + Config Viewer)
 
 **Created:** 2026-04-29
-**Status:** Design-only (no code) — review before execution
+**Status:** M1 in progress — see Revision Note below
 **Parent:** `docs/PRPs/RMM_GAP_CLOSURE_MASTER.md`
 **Estimated effort:** 4–6 weeks. By far the biggest stage. Phase the rollout.
 **Quality score (design):** 7/10 — covers the surface area; specific OS-by-OS rollback semantics will need validation in flight.
 
 > ⚠️ **Risk callout.** Stage 4 is the single highest-blast-radius effort in the gap-closure plan. Mistakes brick customer machines. Every milestone in this PRP includes guard-rails (beta flag, audit trail, typed confirmation, second-employee approval at scale). Don't relax them under deadline pressure.
+
+---
+
+## REVISION NOTE — 2026-04-29 (post-discovery)
+
+A discovery pass during M1 found that migrations 043 (`policy_based_automation`) and 044 (`software_deployment`), shipped 2025-10-17 with mature route + service code, **already cover ~80% of the schema this PRP designed**. Concretely:
+
+| This PRP's design | What's already in prod |
+|---|---|
+| `software_catalog` | `software_packages` (mig 044) — richer (checksums, signatures, install/uninstall cmds, prerequisites) |
+| `package_deployments` (was: `patch_deployments`) | `package_deployments` (mig 044) — scope, schedule, approval, rollback, retries |
+| `maintenance_windows` | `deployment_schedules` (mig 044) — recurring/one_time, cron, exclude_dates |
+| `agent_software_installs` | `deployment_history` (mig 044) — per-agent install results |
+| `agent_scripts` | `automation_scripts` (mig 043) — script library with type, OS support, exec stats |
+| (no equivalent) | `automation_policies` + `policy_assignments` + `policy_execution_history` (mig 043) |
+| (no equivalent) | `policySchedulerService.js` — cron-based, dynamic business expansion, OS filtering |
+| RBAC perms (e.g. `view.deployments.enable`) | mig 053 already added them |
+
+**Net-new in this PRP that survives discovery:**
+1. `patch_approvals` — per-device-per-patch approval queue (existing flow has policy-level auto-approve only)
+2. `agent_action_audit` — hash-chained tamper-evident trail (existing `policy_execution_history` is per-execution, not chained)
+3. PGP-signed scripts — added as columns to `automation_scripts` (`signature_pgp`, `signed_by`, `signed_at`, `body_sha256`, `parent_script_id`)
+4. Two-employee approval for large deployments — added as columns to `package_deployments` (`requires_two_approvers`, `second_approved_by`, `second_approved_at`)
+5. Patch policy reboot/threshold defaults — added as columns to `patch_policies`
+6. `STAGE_4_ENABLED` env-var feature gate — middleware
+7. 4 new RBAC perms: `view.patch_approvals.enable`, `manage.patch_approvals.enable`, `sign.scripts.enable`, `view.action_audit.enable`
+
+**M1 deliverables (revised):** schema rollback + extend migrations, `actionAuditService.js` with hash chain, `stage4FeatureGate.js` middleware, RBAC seed. **All landed.** M2+ remains as designed below, but reads/writes go through the existing `software_packages` / `package_deployments` / `automation_scripts` tables instead of the duplicates I'd originally drawn.
+
+The detailed milestone descriptions below pre-date discovery and may reference the duplicate table names. Treat them as the design intent; the actual table names in M2+ implementation are the existing ones in mig 043/044.
 
 ---
 
