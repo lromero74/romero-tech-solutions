@@ -27,6 +27,7 @@ import clientSchedulerRoutes from './routes/client/scheduler.js';
 import clientPaymentRoutes, { webhookRouter } from './routes/client/payments.js';
 import clientInvoiceRoutes from './routes/client/invoices.js';
 import clientAlertSubscriptionRoutes from './routes/client/alertSubscriptions.js';
+import clientHealthCheckRoutes from './routes/client/healthChecks.js';
 import translationsRoutes from './routes/translations.js';
 import trustedDevicesRoutes from './routes/trustedDevices.js';
 import serviceAreasRoutes from './routes/serviceAreas.js';
@@ -517,6 +518,7 @@ app.use('/api/client/mfa', generalLimiter, methodBasedCsrfProtection, clientMfaR
 app.use('/api/client/payments', generalLimiter, doubleCsrfProtection, clientPaymentRoutes); // Client payments (Stripe) + CSRF
 app.use('/api/client/invoices', generalLimiter, methodBasedCsrfProtection, clientInvoiceRoutes); // Client invoices (CSRF skipped for GET)
 app.use('/api/client/alert-subscriptions', generalLimiter, methodBasedCsrfProtection, clientAlertSubscriptionRoutes); // Client alert subscriptions (CSRF skipped for GET)
+app.use('/api/client/agents', generalLimiter, methodBasedCsrfProtection, clientHealthCheckRoutes); // Client health-check + transparency report (Stage 1)
 app.use('/api/translations', generalLimiter, translationsRoutes); // Translation system - mostly GET
 app.use('/api/service-areas', generalLimiter, serviceAreasRoutes); // Service area validation - GET only
 app.use('/api/service-types', generalLimiter, serviceTypesRoutes); // Service types management - GET public, admin CRUD

@@ -17,6 +17,9 @@ import {
 import { confluenceDetectionService } from '../services/confluenceDetectionService.js';
 import { policySchedulerService } from '../services/policySchedulerService.js';
 import { candleAggregationService } from '../services/candleAggregationService.js';
+import { isCheckAllowedForAgent } from '../services/freetierGate.js';
+import { requirePermission } from '../middleware/permissionMiddleware.js';
+import { alertEscalationService } from '../services/alertEscalationService.js';
 import {
   generateTrialVerificationCode,
   checkEmailNotRegistered,
@@ -4065,6 +4068,178 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
     });
   }
 });
+
+// =============================================================================
+// Stage 1 Health Checks — see docs/PRPs/STAGE1_HEALTH_CHECKS.md
+//   POST /:agent_id/check-result            (agent → backend, agent JWT)
+//   GET  /:agent_id/health-checks           (employee, requires permission)
+//   GET  /:agent_id/health-checks/:check_type/history  (employee, requires permission)
+// Client transparency endpoint lives at /api/client/agents/:agent_id/transparency-report
+// (separate router, gated by business_id ownership instead of permission key).
+// =============================================================================
+
+const STAGE1_VALID_CHECK_TYPES = new Set([
+  'reboot_pending', 'time_drift', 'crashdumps', 'top_processes',
+  'listening_ports', 'update_history_failures', 'domain_status', 'mapped_drives'
+]);
+
+router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, async (req, res) => {
+  try {
+    const { agent_id } = req.params;
+    const { check_type, severity, passed, payload, collected_at } = req.body;
+
+    if (!check_type || typeof check_type !== 'string' || !STAGE1_VALID_CHECK_TYPES.has(check_type)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid or missing check_type',
+        code: 'INVALID_CHECK_TYPE'
+      });
+    }
+    if (payload === undefined || payload === null) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing payload',
+        code: 'MISSING_PAYLOAD'
+      });
+    }
+    const sev = ['info', 'warning', 'critical'].includes(severity) ? severity : 'info';
+
+    // Free-tier gate: silently accept-and-drop if check isn't allowed for this tier.
+    const allowed = await isCheckAllowedForAgent(agent_id, check_type);
+    if (!allowed) {
+      return res.json({ success: true, gated: true });
+    }
+
+    // Look up business_id (denormalized into the row for tenant isolation).
+    const { rows: agentRows } = await query(
+      'SELECT business_id, device_name, status FROM agent_devices WHERE id = $1',
+      [agent_id]
+    );
+    if (agentRows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Agent not found' });
+    }
+    const business_id = agentRows[0].business_id;
+
+    // Compare to previous to drive change-only history inserts.
+    const { rows: prevRows } = await query(
+      `SELECT payload FROM agent_check_results
+        WHERE agent_device_id = $1 AND check_type = $2`,
+      [agent_id, check_type]
+    );
+    const previous = prevRows[0]?.payload ?? null;
+
+    // Upsert latest snapshot.
+    const collectedTimestamp = collected_at ? new Date(collected_at) : new Date();
+    await query(`
+      INSERT INTO agent_check_results
+        (agent_device_id, business_id, check_type, severity, passed, payload, collected_at, reported_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, now())
+      ON CONFLICT (agent_device_id, check_type) DO UPDATE
+        SET severity = EXCLUDED.severity,
+            passed = EXCLUDED.passed,
+            payload = EXCLUDED.payload,
+            collected_at = EXCLUDED.collected_at,
+            reported_at = now()
+    `, [agent_id, business_id, check_type, sev, !!passed, JSON.stringify(payload), collectedTimestamp]);
+
+    // Append to history only on payload change (bounds growth by churn rate).
+    const payloadChanged = !previous || JSON.stringify(previous) !== JSON.stringify(payload);
+    if (payloadChanged) {
+      await query(`
+        INSERT INTO agent_check_history
+          (agent_device_id, business_id, check_type, severity, passed, payload, collected_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `, [agent_id, business_id, check_type, sev, !!passed, JSON.stringify(payload), collectedTimestamp]);
+    }
+
+    // Live broadcast for the admin Health Checks tab.
+    if (websocketService && websocketService.io) {
+      websocketService.io.emit('agent-check-result', {
+        agentId: agent_id,
+        businessId: business_id,
+        deviceName: agentRows[0].device_name,
+        checkType: check_type,
+        severity: sev,
+        passed: !!passed,
+        payload,
+        collectedAt: collectedTimestamp.toISOString(),
+        changed: payloadChanged
+      });
+    }
+
+    // Fire alert pipeline for warning/critical (deduped 4h, opt-in subscribers
+    // via alert_subscribers / client_alert_subscriptions). Async — failures here
+    // never block the check_result write path.
+    if (sev === 'warning' || sev === 'critical') {
+      alertEscalationService.processHealthCheckResult({
+        agent_device_id: agent_id,
+        business_id,
+        check_type,
+        severity: sev,
+        payload,
+        device_name: agentRows[0].device_name,
+      }).catch(err => {
+        console.error(`❌ processHealthCheckResult failed for agent ${agent_id} check ${check_type}:`, err);
+      });
+    }
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Agent check-result upload error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to ingest check result',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+router.get('/:agent_id/health-checks',
+  authMiddleware,
+  requirePermission('view.agent_health_checks.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id } = req.params;
+      const { rows } = await query(`
+        SELECT check_type, severity, passed, payload, collected_at, reported_at
+          FROM agent_check_results
+         WHERE agent_device_id = $1
+         ORDER BY check_type
+      `, [agent_id]);
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Health checks fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch health checks' });
+    }
+  }
+);
+
+router.get('/:agent_id/health-checks/:check_type/history',
+  authMiddleware,
+  requirePermission('view.agent_health_checks.enable'),
+  async (req, res) => {
+    try {
+      const { agent_id, check_type } = req.params;
+      if (!STAGE1_VALID_CHECK_TYPES.has(check_type)) {
+        return res.status(400).json({ success: false, message: 'Invalid check_type' });
+      }
+      const days = Math.min(Math.max(parseInt(req.query.days, 10) || 30, 1), 90);
+      const { rows } = await query(`
+        SELECT severity, passed, payload, collected_at
+          FROM agent_check_history
+         WHERE agent_device_id = $1
+           AND check_type = $2
+           AND collected_at >= now() - ($3::int || ' days')::interval
+         ORDER BY collected_at DESC
+         LIMIT 200
+      `, [agent_id, check_type, days]);
+      res.json({ success: true, data: rows });
+    } catch (error) {
+      console.error('Health check history fetch error:', error);
+      res.status(500).json({ success: false, message: 'Failed to fetch history' });
+    }
+  }
+);
 
 /**
  * Trial Agent Software Inventory Upload Endpoint

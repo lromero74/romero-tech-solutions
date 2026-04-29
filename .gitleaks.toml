@@ -58,4 +58,10 @@ paths = [
     # Ad-hoc test scripts that lived at repo root and were later
     # cleaned up. Catch any resurrected ones.
     '^test-.*\.js$',
+    # Migration files: SQL DDL + seed-data scripts. By convention these
+    # contain only schema + role names + permission keys. Real secrets
+    # live in backend/.env (gitignored). Ratified 2026-04-29 after
+    # gitleaks flagged the constant name STAGE1_PERMISSIONS in
+    # 20260428_stage1_health_check_permissions.js as high-entropy.
+    '^backend/migrations/',
 ]

@@ -73,3 +73,7 @@ backend/uploads/
 
 # Frontend production env (vite — values bake into dist/ at build time, not a runtime secret)
 .env.production
+
+# Local-only working dirs (scratch outputs, outbound campaign drafts)
+outputs/
+outreach/

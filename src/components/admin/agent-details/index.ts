@@ -19,5 +19,6 @@ export { ServiceMonitoring } from './ServiceMonitoring';
 export { OSEndOfLifeStatus } from './OSEndOfLifeStatus';
 export { CommandDetailsDialog } from './CommandDetailsDialog';
 export { default as AlertHistory } from './AlertHistory';
+export { default as HealthChecksTab } from './HealthChecksTab';
 export * from './types';
 export * from './utils';

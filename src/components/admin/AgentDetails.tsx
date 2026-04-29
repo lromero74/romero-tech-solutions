@@ -3,7 +3,7 @@ import {
   Monitor, Server, Laptop, Smartphone, Circle, AlertTriangle, Activity,
   RefreshCw, ArrowLeft, Terminal, Bell, Clock, CheckCircle, XCircle,
   Cpu, HardDrive, Wifi, TrendingUp, Calendar, Shield, Download, Disc, Thermometer, AlertOctagon, FileWarning, Info, MapPin,
-  Link, Unlink, RotateCcw, Save, Plus, Trash2, Play
+  Link, Unlink, RotateCcw, Save, Plus, Trash2, Play, Heart
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { themeClasses } from '../../contexts/ThemeContext';
@@ -14,7 +14,7 @@ import { agentService, AgentDevice, AgentMetric, AgentAlert, AgentCommand, Agent
 import { automationService, AutomationPolicy, AutomationScript, PolicyExecutionHistory } from '../../services/automationService';
 import { PermissionDeniedModal } from './shared/PermissionDeniedModal';
 import MetricsChartECharts from './MetricsChartECharts';
-import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus, CommandDetailsDialog } from './agent-details';
+import { CurrentMetrics, SystemEventLogs, DiskHealthStatus, OSPatchStatus, PackageManagerStatus, HardwareTemperature, NetworkConnectivity, SecurityStatus, FailedLoginAttempts, ServiceMonitoring, OSEndOfLifeStatus, CommandDetailsDialog, HealthChecksTab } from './agent-details';
 import AssetInventory from './agent-details/AssetInventory';
 import AlertHistory from './agent-details/AlertHistory';
 import { mergeAgentMetrics, coerceMetricNumerics } from './agent-details/agentMetricMerge';
@@ -53,7 +53,7 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
   const [policies, setPolicies] = useState<AgentPolicy[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands' | 'inventory' | 'policies'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'alerts' | 'commands' | 'inventory' | 'policies' | 'health'>('overview');
   const [activeResourceTab, setActiveResourceTab] = useState<'cpu' | 'memory' | 'disk'>('cpu');
   const [loadedCharts, setLoadedCharts] = useState<Set<'cpu' | 'memory' | 'disk'>>(new Set(['cpu'])); // Track which charts have been loaded
   const METRICS_FETCH_WINDOW = 168; // Always fetch 7 days of history
@@ -1185,6 +1185,17 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
             <Shield className="w-4 h-4 inline mr-2" />
             {t('agentDetails.tabs.policies', undefined, 'Policies')} ({policies.length})
           </button>
+          <button
+            onClick={() => setActiveTab('health')}
+            className={`flex-1 px-6 py-3 text-sm font-medium ${
+              activeTab === 'health'
+                ? `${themeClasses.text.primary} border-b-2 border-purple-600`
+                : `${themeClasses.text.secondary} hover:${themeClasses.text.primary}`
+            }`}
+          >
+            <Heart className="w-4 h-4 inline mr-2" />
+            {t('agentDetails.tabs.health', undefined, 'Health')}
+          </button>
         </div>
 
         <div className="p-6">
@@ -1667,6 +1678,11 @@ const AgentDetails: React.FC<AgentDetailsProps> = ({
                 </div>
               )}
             </div>
+          )}
+
+          {/* Health Tab */}
+          {activeTab === 'health' && (
+            <HealthChecksTab agentId={agentId} />
           )}
         </div>
       </div>

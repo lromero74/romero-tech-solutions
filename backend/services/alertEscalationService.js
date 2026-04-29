@@ -7,7 +7,30 @@ import { query } from '../config/database.js';
 import { emailService } from './emailService.js';
 import { twilioService } from './twilioService.js';
 import { websocketService } from './websocketService.js';
+import { alertNotificationService } from './alertNotificationService.js';
 import { buildEmployeeAlertHTML, buildEmployeeAlertText } from '../templates/alertEmailTemplates.js';
+
+// Severity → channel default for health-check alerts. The actual delivery is
+// driven by per-subscriber preferences (alert_subscribers / client_alert_subscriptions);
+// this map only decides whether to FIRE at all from a check_result.
+const HEALTH_CHECK_FIRE_SEVERITIES = new Set(['warning', 'critical']);
+
+// Dedupe window — don't fire the same (agent, check_type, severity) twice
+// inside this period unless the prior alert was resolved.
+const HEALTH_CHECK_DEDUPE_HOURS = 4;
+
+// Friendly labels for the alert message body. New check_types added in later
+// stages must extend this map (or fall back to a humanized snake_case).
+const HEALTH_CHECK_LABELS = Object.freeze({
+  reboot_pending: 'Reboot pending',
+  time_drift: 'System clock drift',
+  crashdumps: 'Crash dumps detected',
+  top_processes: 'Top resource consumers',
+  listening_ports: 'Listening ports changed',
+  update_history_failures: 'OS update failure',
+  domain_status: 'Domain join status',
+  mapped_drives: 'Mapped drive issue',
+});
 
 class AlertEscalationService {
   /**
@@ -608,6 +631,133 @@ class AlertEscalationService {
     }
   }
 }
+
+// =============================================================================
+// Stage 1 Health-Check alert hookup
+// =============================================================================
+
+/**
+ * Pure decision: should a check_result fire an alert at all?
+ * Exported for unit testing.
+ */
+export function shouldFireHealthCheckAlert(severity) {
+  return HEALTH_CHECK_FIRE_SEVERITIES.has(severity);
+}
+
+/**
+ * Pure mapping: check_type → human-readable label.
+ * Exported for unit testing.
+ */
+export function healthCheckLabel(checkType) {
+  if (HEALTH_CHECK_LABELS[checkType]) return HEALTH_CHECK_LABELS[checkType];
+  // Fallback: humanize snake_case for unknown future check types.
+  return String(checkType || 'Health check')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Cached config_id for the seeded 'health_check' alert_configurations row.
+// Lazy-loaded once per process; refreshed if a query returns null (in case
+// migrations get re-run in a long-lived dev process).
+let _healthCheckConfigId = null;
+async function _getHealthCheckConfigId() {
+  if (_healthCheckConfigId !== null) return _healthCheckConfigId;
+  const { rows } = await query(
+    `SELECT id FROM alert_configurations
+      WHERE alert_type = 'health_check' AND alert_name = 'Stage 1 Health Check'
+      LIMIT 1`
+  );
+  if (rows.length === 0) {
+    console.warn('⚠️ Stage 1 Health Check alert_configurations row missing — health-check alerts will not reach client subscribers until migration 20260428_health_check_alert_config.sql is applied');
+    return null;
+  }
+  _healthCheckConfigId = rows[0].id;
+  return _healthCheckConfigId;
+}
+
+/**
+ * Process a single agent_check_result and fire an alert if it crosses severity
+ * threshold and isn't deduped.
+ *
+ * Hooks the existing alert_history → alertNotificationService.routeAlert() pipeline:
+ *   - Skips silently for severity='info'.
+ *   - Dedupes by (agent_id, check_type, severity) within HEALTH_CHECK_DEDUPE_HOURS.
+ *     If a prior unresolved alert exists, no new row is inserted.
+ *   - Inserts an alert_history row referencing the seeded 'health_check' config.
+ *   - Calls alertNotificationService.routeAlert(insertedId) for delivery.
+ *
+ * @param {object} input
+ * @param {string} input.agent_device_id
+ * @param {string|null} input.business_id
+ * @param {string} input.check_type
+ * @param {string} input.severity         'info' | 'warning' | 'critical'
+ * @param {object} input.payload          Original check_result payload
+ * @param {string} [input.device_name]    For human-readable alert_title
+ * @returns {{ fired: boolean, alertHistoryId: number|null, reason?: string }}
+ */
+async function processHealthCheckResult(input) {
+  const { agent_device_id, business_id, check_type, severity, payload, device_name } = input;
+
+  if (!shouldFireHealthCheckAlert(severity)) {
+    return { fired: false, alertHistoryId: null, reason: 'severity below threshold' };
+  }
+
+  // Dedupe: any unresolved health_check alert for the same (agent, check_type, severity)
+  // inside the dedupe window?
+  const dedupe = await query(
+    `SELECT id
+       FROM alert_history
+      WHERE agent_id = $1
+        AND alert_type = 'health_check'
+        AND severity = $2
+        AND (indicators_triggered ->> 'check_type') = $3
+        AND triggered_at >= now() - ($4 || ' hours')::interval
+        AND resolved_at IS NULL
+      LIMIT 1`,
+    [agent_device_id, severity, check_type, String(HEALTH_CHECK_DEDUPE_HOURS)]
+  );
+  if (dedupe.rows.length > 0) {
+    return { fired: false, alertHistoryId: dedupe.rows[0].id, reason: 'deduped within window' };
+  }
+
+  const configId = await _getHealthCheckConfigId();
+  const label = healthCheckLabel(check_type);
+  const deviceLabel = device_name || agent_device_id;
+  const alertTitle = `${label} — ${severity}`;
+  const alertDescription = `Stage 1 health check "${check_type}" reported severity=${severity} on device ${deviceLabel}.`;
+
+  const insert = await query(
+    `INSERT INTO alert_history (
+        alert_config_id, agent_id, metric_type, alert_type, severity,
+        indicator_count, indicators_triggered, alert_title, alert_description,
+        triggered_at
+      ) VALUES ($1, $2, 'health_check', 'health_check', $3,
+                1, $4::jsonb, $5, $6, now())
+      RETURNING id`,
+    [
+      configId,
+      agent_device_id,
+      severity,
+      JSON.stringify({ check_type, payload, business_id }),
+      alertTitle,
+      alertDescription,
+    ]
+  );
+  const alertHistoryId = insert.rows[0].id;
+
+  // Fire-and-forget routing — failures inside notification dispatch shouldn't
+  // block the original check_result write path. Errors are logged inside the
+  // notification service.
+  alertNotificationService.routeAlert(alertHistoryId).catch(err => {
+    console.error(`❌ routeAlert failed for health_check alert ${alertHistoryId}:`, err);
+  });
+
+  return { fired: true, alertHistoryId };
+}
+
+// Attach to the singleton AFTER the class is instantiated below, so the method
+// is reachable as alertEscalationService.processHealthCheckResult(...).
+AlertEscalationService.prototype.processHealthCheckResult = processHealthCheckResult;
 
 // Export singleton instance
 export const alertEscalationService = new AlertEscalationService();

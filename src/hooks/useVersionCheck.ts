@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-const CURRENT_VERSION = '1.101.114';
+const CURRENT_VERSION = '1.102.0';
 const CHECK_INTERVAL = 5 * 60 * 1000; // 5 minutes
 
 interface VersionInfo {
