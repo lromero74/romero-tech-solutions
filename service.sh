@@ -208,8 +208,11 @@ deploy_from_local() {
         exit 1
     fi
 
+    # ssh -A forwards the laptop's SSH agent so fedora can authenticate to
+    # GitHub using the laptop's key — fedora itself doesn't need a deploy
+    # key. Forwarding lasts only for the duration of this single command.
     echo -e "${BLUE}Step 3/6: pulling latest on $PROD_SSH_HOST...${NC}"
-    ssh "$PROD_SSH_HOST" "cd $PROD_REMOTE_DIR && git pull --ff-only origin main" || {
+    ssh -A "$PROD_SSH_HOST" "cd $PROD_REMOTE_DIR && git pull --ff-only origin main" || {
         echo -e "${RED}git pull on $PROD_SSH_HOST failed${NC}"; exit 1
     }
 
