@@ -12,15 +12,18 @@
 # flag is accepted for sister-script parity and points the user at npm run dev.
 #
 # Usage: ./service.sh [start|stop|restart|build|status|logs]
-#        ./service.sh restart --prod [--force]                  (run ON testbot)
-#        ./service.sh restart --prod --from-local [--no-backend-deps]  (run on laptop)
+#        ./service.sh restart --prod [--force]                  (legacy testbot in-place — rollback only)
+#        ./service.sh restart --prod --from-local [--no-backend-deps]  (laptop → fedora.local; the prod path)
 #
-# --from-local mode (laptop → testbot):
-#   The build runs on your laptop (~30s on M1, no memory pressure on prod).
-#   Then dist/ is rsynced to testbot and the backend is restarted via SSH.
-#   This avoids the OOM risk seen on 2026-04-29 when in-place vite builds
-#   on the 3.7Gi t3.medium instance overlapped with running services.
-#   Requires: laptop = Darwin; ssh testbot configured; clean git state.
+# --from-local mode (laptop → fedora.local):
+#   The build runs on your laptop (~10s on M1). Then dist/ is rsynced to
+#   fedora.local (which serves prod via Cloudflare Tunnel since 2026-04-29)
+#   and the backend is restarted via the user-level systemd unit.
+#
+#   The pre-2026-04-29 testbot path remains as a rollback only — see
+#   ~/.claude/CLAUDE.md "FEDORA.LOCAL" section for the fallback DNS flip.
+#
+#   Requires: laptop = Darwin; ssh fedora.local configured; clean git state.
 
 set -e
 
@@ -45,8 +48,12 @@ BACKEND_PORT=3001
 NGINX_CONF="/etc/nginx/conf.d/romerotechsolutions.conf"
 
 # --from-local mode targets
-TESTBOT_SSH_HOST="testbot"
-TESTBOT_REMOTE_DIR="/home/ec2-user/romero-tech-solutions"
+PROD_SSH_HOST="fedora.local"
+PROD_REMOTE_DIR="/home/louis/romero-tech-solutions"
+PROD_BACKEND_BOX="rts-box"   # distrobox name on fedora that runs the backend
+# Systemd user-level unit names on fedora.local (no sudo).
+PROD_SERVICE_BACKEND="rts"
+PROD_SERVICE_FRONTEND="rts-frontend"
 
 # ── Sister-project port awareness ──────────────────────────────────
 # Used by start/restart to refuse if our port is held by something we don't own.
@@ -123,7 +130,7 @@ reload_nginx() {
     fi
 }
 
-# ── --from-local deploy (laptop → testbot) ─────────────────────────
+# ── --from-local deploy (laptop → fedora.local) ────────────────────
 
 is_darwin() {
     [ "$(uname -s)" = "Darwin" ]
@@ -133,17 +140,17 @@ deploy_from_local() {
     local skip_backend_deps="$1"
 
     if ! is_darwin; then
-        echo -e "${RED}--from-local must be run from your laptop (Darwin), not testbot.${NC}"
+        echo -e "${RED}--from-local must be run from your laptop (Darwin), not on the prod host.${NC}"
         echo -e "${YELLOW}Drop --from-local to use the in-place restart on this host.${NC}"
         exit 1
     fi
 
-    # Verify clean git + in-sync with origin so testbot's `git pull` matches
-    # what we built. A drift here would let prod run code that doesn't match
-    # the dist we shipped.
+    # Verify clean git + in-sync with origin so the prod host's `git pull`
+    # matches what we built. A drift here would let prod run code that
+    # doesn't match the dist we shipped.
     if ! git -C "$SCRIPT_DIR" diff --quiet || ! git -C "$SCRIPT_DIR" diff --quiet --staged; then
         echo -e "${RED}Working tree has uncommitted changes.${NC}"
-        echo -e "${YELLOW}Commit + push before --from-local — testbot pulls from origin.${NC}"
+        echo -e "${YELLOW}Commit + push before --from-local — $PROD_SSH_HOST pulls from origin.${NC}"
         git -C "$SCRIPT_DIR" status --short
         exit 1
     fi
@@ -153,32 +160,32 @@ deploy_from_local() {
     remote_sha=$(git -C "$SCRIPT_DIR" rev-parse origin/main)
     if [ "$local_sha" != "$remote_sha" ]; then
         echo -e "${RED}HEAD ($local_sha) is not at origin/main ($remote_sha).${NC}"
-        echo -e "${YELLOW}Push your branch first so testbot's git pull lands the same commit.${NC}"
+        echo -e "${YELLOW}Push your branch first so $PROD_SSH_HOST's git pull lands the same commit.${NC}"
         exit 1
     fi
 
     # Verify SSH connectivity before doing the expensive build.
-    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$TESTBOT_SSH_HOST" 'echo ok' >/dev/null 2>&1; then
-        echo -e "${RED}Cannot reach $TESTBOT_SSH_HOST via ssh.${NC}"
+    if ! ssh -o ConnectTimeout=5 -o BatchMode=yes "$PROD_SSH_HOST" 'echo ok' >/dev/null 2>&1; then
+        echo -e "${RED}Cannot reach $PROD_SSH_HOST via ssh.${NC}"
         echo -e "${YELLOW}Check your ~/.ssh/config and network.${NC}"
         exit 1
     fi
 
-    # CRITICAL: pull testbot's .env.production into the project root so
+    # CRITICAL: pull prod's .env.production into the project root so
     # `npm run build` bakes the right VITE_* values into the bundle. Without
     # this, the laptop's `.env` (which points VITE_API_BASE_URL at localhost
     # for dev) would get embedded — yielding a dist that "loads" but every
     # API call hits the user's own machine. Production users see "Connection
     # Error: Unable to connect to the backend server."
     #
-    # We re-pull each deploy so the local copy stays in sync with testbot
+    # We re-pull each deploy so the local copy stays in sync with prod
     # if secrets / Cognito IDs are rotated. The file is gitignored.
-    echo -e "${BLUE}Step 1/6: pull .env.production from testbot...${NC}"
-    scp -q "$TESTBOT_SSH_HOST:$TESTBOT_REMOTE_DIR/.env.production" "$SCRIPT_DIR/.env.production" || {
+    echo -e "${BLUE}Step 1/6: pull .env.production from $PROD_SSH_HOST...${NC}"
+    scp -q "$PROD_SSH_HOST:$PROD_REMOTE_DIR/.env.production" "$SCRIPT_DIR/.env.production" || {
         echo -e "${RED}scp .env.production failed${NC}"; exit 1
     }
     if ! grep -q "VITE_API_BASE_URL=https://api\.romerotechsolutions\.com" "$SCRIPT_DIR/.env.production"; then
-        echo -e "${RED}testbot's .env.production does NOT have a prod API URL.${NC}"
+        echo -e "${RED}prod's .env.production does NOT have a prod API URL.${NC}"
         echo -e "${YELLOW}Investigate before continuing — building from this would ship a broken bundle.${NC}"
         exit 1
     fi
@@ -201,31 +208,36 @@ deploy_from_local() {
         exit 1
     fi
 
-    echo -e "${BLUE}Step 3/6: pulling latest on testbot...${NC}"
-    ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR && git pull --ff-only origin main" || {
-        echo -e "${RED}git pull on testbot failed${NC}"; exit 1
+    echo -e "${BLUE}Step 3/6: pulling latest on $PROD_SSH_HOST...${NC}"
+    ssh "$PROD_SSH_HOST" "cd $PROD_REMOTE_DIR && git pull --ff-only origin main" || {
+        echo -e "${RED}git pull on $PROD_SSH_HOST failed${NC}"; exit 1
     }
 
-    echo -e "${BLUE}Step 4/6: rsync dist/ to testbot...${NC}"
+    echo -e "${BLUE}Step 4/6: rsync dist/ to $PROD_SSH_HOST...${NC}"
     rsync -az --delete \
         --exclude='.DS_Store' \
         "$SCRIPT_DIR/dist/" \
-        "$TESTBOT_SSH_HOST:$TESTBOT_REMOTE_DIR/dist/" || {
+        "$PROD_SSH_HOST:$PROD_REMOTE_DIR/dist/" || {
         echo -e "${RED}rsync failed${NC}"; exit 1
     }
 
+    # Backend npm ci runs INSIDE the rts-box distrobox where node_modules
+    # are bound. Running on the host would scatter native bindings across
+    # incompatible filesystems.
     if [ "$skip_backend_deps" != "true" ]; then
-        echo -e "${BLUE}Step 5/6: backend npm ci on testbot (idempotent if no changes)...${NC}"
-        ssh "$TESTBOT_SSH_HOST" "cd $TESTBOT_REMOTE_DIR/backend && npm ci --no-audit --no-fund" || {
+        echo -e "${BLUE}Step 5/6: backend npm ci inside $PROD_BACKEND_BOX (idempotent if no changes)...${NC}"
+        ssh "$PROD_SSH_HOST" "distrobox enter $PROD_BACKEND_BOX -- bash -c 'cd $PROD_REMOTE_DIR/backend && npm ci --no-audit --no-fund'" || {
             echo -e "${RED}backend npm ci failed${NC}"; exit 1
         }
     else
         echo -e "${YELLOW}Step 5/6: skipping backend npm ci (--no-backend-deps).${NC}"
     fi
 
-    echo -e "${BLUE}Step 6/6: restart backend on testbot...${NC}"
-    ssh "$TESTBOT_SSH_HOST" "sudo systemctl restart $BACKEND_SERVICE" || {
-        echo -e "${RED}backend restart failed${NC}"; exit 1
+    # User-level systemd on fedora — no sudo. Restart both backend and the
+    # static-frontend server so a new dist/ is reloaded immediately.
+    echo -e "${BLUE}Step 6/6: restart $PROD_SERVICE_BACKEND + $PROD_SERVICE_FRONTEND on $PROD_SSH_HOST...${NC}"
+    ssh "$PROD_SSH_HOST" "systemctl --user restart $PROD_SERVICE_BACKEND $PROD_SERVICE_FRONTEND" || {
+        echo -e "${RED}service restart failed${NC}"; exit 1
     }
 
     # Poll /api/health until it returns 200 or we hit max attempts. Node
@@ -259,7 +271,7 @@ deploy_from_local() {
 
     if [ "$health_status" != "200" ]; then
         echo -e "${RED}Investigate:${NC}"
-        echo -e "  ssh $TESTBOT_SSH_HOST 'sudo journalctl -u $BACKEND_SERVICE -n 50'"
+        echo -e "  ssh $PROD_SSH_HOST 'journalctl --user -u $PROD_SERVICE_BACKEND -n 50 --no-pager'"
         exit 1
     fi
 }
@@ -427,24 +439,28 @@ case "${1:-}" in
 
         if [ -z "$TARGET_MODE" ]; then
             echo -e "${RED}restart requires --prod${NC}"
-            echo "Usage: $0 restart --prod [--force]                          (run on testbot)"
-            echo "       $0 restart --prod --from-local [--no-backend-deps]   (run on laptop)"
+            echo "Usage: $0 restart --prod [--force]                          (legacy testbot in-place — rollback only)"
+            echo "       $0 restart --prod --from-local [--no-backend-deps]   (laptop → fedora.local; the prod path)"
             exit 1
         fi
 
-        # Laptop → testbot path: build local, rsync, restart remotely.
+        # Laptop → fedora.local path: build local, rsync, restart remotely.
         if [ "$FROM_LOCAL" = true ]; then
             echo -e "${YELLOW}========================================${NC}"
-            echo -e "${YELLOW}  Deploy from laptop → testbot${NC}"
+            echo -e "${YELLOW}  Deploy from laptop → $PROD_SSH_HOST${NC}"
             echo -e "${YELLOW}========================================${NC}"
             deploy_from_local "$SKIP_BACKEND_DEPS"
             exit $?
         fi
 
-        # In-place path requires Linux + sudo + systemd. Refuse on the laptop.
+        # In-place path is the legacy testbot flow (sudo + systemctl). It's
+        # kept around as a rollback target while testbot remains as warm
+        # standby (per ~/.claude/CLAUDE.md FEDORA.LOCAL section). Refuse to
+        # run from the laptop.
         if is_darwin; then
-            echo -e "${RED}restart --prod (in-place) only runs on testbot.${NC}"
-            echo -e "${YELLOW}Use \`$0 restart --prod --from-local\` to deploy from your laptop.${NC}"
+            echo -e "${RED}restart --prod (in-place) is the legacy testbot flow.${NC}"
+            echo -e "${YELLOW}For prod deploys use:  $0 restart --prod --from-local${NC}"
+            echo -e "${YELLOW}For testbot rollback:  ssh testbot 'cd ~/romero-tech-solutions && ./service.sh restart --prod'${NC}"
             exit 1
         fi
 
@@ -544,13 +560,13 @@ case "${1:-}" in
         echo "Usage: $0 [command]"
         echo ""
         echo "Commands:"
-        echo "  start                                 Start backend (testbot only)"
-        echo "  stop                                  Stop backend (testbot only)"
-        echo "  restart --prod                        Restart backend in-place (testbot only)"
+        echo "  start                                 Start backend (legacy testbot in-place)"
+        echo "  stop                                  Stop backend (legacy testbot in-place)"
+        echo "  restart --prod                        Restart in-place (legacy testbot rollback only)"
         echo "  restart --prod --force                Restart even if a foreign process holds the port"
-        echo "  restart --prod --from-local           Build dist on laptop, rsync, restart on testbot"
+        echo "  restart --prod --from-local           Build dist on laptop, rsync to fedora.local, restart"
         echo "  restart --prod --from-local --no-backend-deps"
-        echo "                                        Same, but skip 'cd backend && npm ci' on testbot"
+        echo "                                        Same, but skip 'npm ci' inside the rts-box distrobox"
         echo "  build                                 npm install + npm run build (frontend dist/)"
         echo "  status                                Show service status + port-collision check"
         echo "  logs                                  Show recent backend logs"
