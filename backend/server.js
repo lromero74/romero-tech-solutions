@@ -540,6 +540,15 @@ app.use('/api/employees', adminLimiter, adminIPWhitelist, doubleCsrfProtection, 
 app.use('/api/client/settings', generalLimiter, doubleCsrfProtection, clientSettingsRoutes); // Client settings (timezone, preferences)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
+// Static-file alternate path for agent downloads. Pre-migration this was served
+// by testbot's nginx ('/downloads/agent/...' paths in version.json). Now
+// served by the Node app so the same URLs work post-migration.
+{
+  const _agentBinariesDir = process.env.AGENT_BINARIES_DIR
+    || (process.env.NODE_ENV === 'production' ? '/var/www/agent-downloads' : '/tmp/agent-binaries');
+  app.use('/downloads/agent', generalLimiter,
+    express.static(_agentBinariesDir, { maxAge: '1h', fallthrough: false }));
+}
 app.use('/api/remote-control', generalLimiter, doubleCsrfProtection, remoteControlRoutes); // MeshCentral remote-control sessions
 app.use('/api/automation', generalLimiter, methodBasedCsrfProtection, automationRoutes); // Policy automation and script library
 app.use('/api/deployment', generalLimiter, methodBasedCsrfProtection, deploymentRoutes); // Software deployment and package management

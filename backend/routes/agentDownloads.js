@@ -9,10 +9,17 @@ const __dirname = dirname(__filename);
 
 const router = express.Router();
 
-// Agent binary storage directory
-// In production: /var/www/agent-downloads/
-// In development: /tmp/agent-binaries/ (for testing)
+// Agent binary storage directory.
+// Override via AGENT_BINARIES_DIR env var (required when the host puts
+// downloads under a non-default path — e.g. fedora.local hosts them under
+// /home/louis/agent-downloads because /var/www isn't visible inside the
+// rts-box distrobox).
+// Falls back to /var/www/agent-downloads in production (testbot legacy path)
+// or /tmp/agent-binaries in development.
 const getAgentBinariesDir = () => {
+  if (process.env.AGENT_BINARIES_DIR) {
+    return process.env.AGENT_BINARIES_DIR;
+  }
   return process.env.NODE_ENV === 'production'
     ? '/var/www/agent-downloads'
     : '/tmp/agent-binaries';
