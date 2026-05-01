@@ -51,6 +51,7 @@ import remoteControlRoutes from './routes/remoteControl.js';
 import automationRoutes from './routes/automation.js';
 import deploymentRoutes from './routes/deployment.js';
 import { operatorRouter as patchApprovalsOperatorRouter, agentRouter as patchApprovalsAgentRouter } from './routes/patchApprovals.js';
+import securityActionsRoutes from './routes/securityActions.js';
 import { stage4FeatureGate } from './middleware/stage4FeatureGate.js';
 import { authenticateAgent, requireAgentMatch } from './middleware/agentAuthMiddleware.js';
 import subscriptionRoutes from './routes/subscription.js';
@@ -569,6 +570,16 @@ app.use(
   methodBasedCsrfProtection,
   stage4FeatureGate,
   patchApprovalsOperatorRouter
+);
+
+// Stage 4 M4 — security actions (install/uninstall ClamAV, enable/disable
+// native AV + firewall). Same gate; uses /api/agents/:id/security-action.
+app.use(
+  '/api/agents',
+  generalLimiter,
+  methodBasedCsrfProtection,
+  stage4FeatureGate,
+  securityActionsRoutes
 );
 app.use('/api/subscription', generalLimiter, subscriptionRoutes); // Subscription management (mixed auth: pricing public, status/upgrade authenticated)
 

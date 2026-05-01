@@ -568,6 +568,28 @@ class AgentService {
    * existing /commands poll picks it up and runs it via internal/updatepkgs.
    * Final result arrives via the agent.command.completed websocket event.
    */
+  /**
+   * Stage 4 M4 — issue a security-related agent action (install/uninstall
+   * ClamAV, enable/disable native AV, enable/disable OS firewall).
+   *
+   * Backend: POST /api/agents/:id/security-action
+   *   body: { capability, action }
+   * Backend writes an agent_commands row (command_type=security_action),
+   * audit-trails it via actionAuditService, and returns the command_id.
+   * The agent picks up the row from its existing /commands poll and runs
+   * the right OS-level binary (socketfilterfw / netsh / ufw / brew / dnf
+   * / etc.). Result arrives via the websocket agent.command.completed.
+   */
+  async requestSecurityAction(
+    agentId: string,
+    payload: {
+      capability: 'clamav' | 'native_av' | 'firewall';
+      action: 'install' | 'uninstall' | 'enable' | 'disable';
+    }
+  ): Promise<ApiResponse<{ command_id: string; agent_id: string; capability: string; action: string; status: string }>> {
+    return apiService.post(`/agents/${agentId}/security-action`, payload);
+  }
+
   async requestUpdatePackages(
     agentId: string,
     payload: {

@@ -1,11 +1,75 @@
-import React from 'react';
-import { Shield, Circle, AlertTriangle } from 'lucide-react';
+import React, { useState } from 'react';
+import { Shield, Circle, AlertTriangle, Loader2 } from 'lucide-react';
 import { themeClasses } from '../../../contexts/ThemeContext';
 import { AgentDetailsComponentProps } from './types';
 import { useOptionalClientLanguage } from '../../../contexts/ClientLanguageContext';
+import { agentService } from '../../../services/agentService';
+import { usePermission } from '../../../hooks/usePermission';
 
-export const SecurityStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics }) => {
+type SecurityCapability = 'clamav' | 'native_av' | 'firewall';
+type SecurityActionVerb = 'install' | 'uninstall' | 'enable' | 'disable';
+
+// Detect ClamAV in the agent's reported security_data array. Matches both
+// "ClamAV" (the daemon) and "ClamXav" (the macOS GUI wrapper).
+function hasClamAV(securityData: unknown): boolean {
+  if (!Array.isArray(securityData)) return false;
+  return securityData.some((p) => {
+    if (!p || typeof p !== 'object') return false;
+    const name = String((p as { name?: unknown }).name ?? '').toLowerCase();
+    const vendor = String((p as { vendor?: unknown }).vendor ?? '').toLowerCase();
+    return name.includes('clamav') || name.includes('clamxav') ||
+           vendor.includes('clamav') || vendor.includes('clamxav');
+  });
+}
+
+// macOS / Linux native AV is "not really controllable from CLI"; we hide the
+// button there. Windows Defender is the only natively-controllable native AV.
+function nativeAVControllable(osType: string | undefined): boolean {
+  return (osType ?? '').toLowerCase() === 'windows';
+}
+
+export const SecurityStatus: React.FC<AgentDetailsComponentProps> = ({ latestMetrics, agent }) => {
   const { t } = useOptionalClientLanguage();
+  const { checkPermission } = usePermission();
+  const canManage = checkPermission('manage.security_actions.enable');
+
+  // Track in-flight requests by capability — prevents double-clicks and
+  // shows a per-button spinner without a global loading state.
+  const [inflight, setInflight] = useState<Set<SecurityCapability>>(new Set());
+  const [lastResult, setLastResult] = useState<{
+    capability: SecurityCapability;
+    action: SecurityActionVerb;
+    ok: boolean;
+    message: string;
+  } | null>(null);
+
+  const runAction = async (capability: SecurityCapability, action: SecurityActionVerb) => {
+    if (!agent?.id) return;
+    setInflight(prev => new Set(prev).add(capability));
+    setLastResult(null);
+    try {
+      const resp = await agentService.requestSecurityAction(agent.id, { capability, action });
+      setLastResult({
+        capability,
+        action,
+        ok: resp.success === true,
+        message: resp.success === true
+          ? `${capability} ${action} queued (command id ${resp.data?.command_id?.slice(0, 8) ?? '?'}). Result will appear within a minute.`
+          : (resp.message ?? 'Failed to queue action.')
+      });
+    } catch (e) {
+      setLastResult({
+        capability, action, ok: false,
+        message: e instanceof Error ? e.message : 'Network error issuing security action.'
+      });
+    } finally {
+      setInflight(prev => {
+        const next = new Set(prev);
+        next.delete(capability);
+        return next;
+      });
+    }
+  };
 
   // Helper function to translate security error messages
   const translateErrorMessage = (errorMessage: string): string => {
@@ -208,6 +272,103 @@ export const SecurityStatus: React.FC<AgentDetailsComponentProps> = ({ latestMet
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Stage 4 M4 — security action panel (operator-initiated remediation).
+          Renders below the existing display for operators who hold
+          manage.security_actions.enable. Buttons are conditional on the
+          agent's reported state so we never show "install" when already
+          installed. */}
+      {canManage && agent?.id && (
+        <div className={`mt-4 pt-4 border-t ${themeClasses.border.primary}`}>
+          <h4 className={`text-sm font-semibold ${themeClasses.text.primary} mb-3`}>
+            {t('agentDetails.securityStatus.actions.title', undefined, 'Security Actions')}
+          </h4>
+          <div className="flex flex-wrap gap-2">
+            {/* ClamAV install / uninstall */}
+            {hasClamAV(latestMetrics.security_data) ? (
+              <button
+                type="button"
+                onClick={() => runAction('clamav', 'uninstall')}
+                disabled={inflight.has('clamav')}
+                className="px-3 py-1.5 text-sm rounded border border-red-300 text-red-700 hover:bg-red-50 dark:border-red-700 dark:text-red-300 dark:hover:bg-red-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {inflight.has('clamav') && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('agentDetails.securityStatus.actions.uninstallClamAV', undefined, 'Uninstall ClamAV')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => runAction('clamav', 'install')}
+                disabled={inflight.has('clamav')}
+                className="px-3 py-1.5 text-sm rounded border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {inflight.has('clamav') && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('agentDetails.securityStatus.actions.installClamAV', undefined, 'Install ClamAV')}
+              </button>
+            )}
+
+            {/* Native AV (Windows Defender) — only shown on Windows where it's controllable */}
+            {nativeAVControllable(agent.os_type) && (
+              latestMetrics.antivirus_enabled ? (
+                <button
+                  type="button"
+                  onClick={() => runAction('native_av', 'disable')}
+                  disabled={inflight.has('native_av')}
+                  className="px-3 py-1.5 text-sm rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-700 dark:text-yellow-300 dark:hover:bg-yellow-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {inflight.has('native_av') && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {t('agentDetails.securityStatus.actions.disableDefender', undefined, 'Disable Windows Defender')}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => runAction('native_av', 'enable')}
+                  disabled={inflight.has('native_av')}
+                  className="px-3 py-1.5 text-sm rounded border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                >
+                  {inflight.has('native_av') && <Loader2 className="w-3 h-3 animate-spin" />}
+                  {t('agentDetails.securityStatus.actions.enableDefender', undefined, 'Enable Windows Defender')}
+                </button>
+              )
+            )}
+
+            {/* Firewall enable / disable */}
+            {latestMetrics.firewall_enabled ? (
+              <button
+                type="button"
+                onClick={() => runAction('firewall', 'disable')}
+                disabled={inflight.has('firewall')}
+                className="px-3 py-1.5 text-sm rounded border border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-700 dark:text-yellow-300 dark:hover:bg-yellow-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {inflight.has('firewall') && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('agentDetails.securityStatus.actions.disableFirewall', undefined, 'Disable Firewall')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => runAction('firewall', 'enable')}
+                disabled={inflight.has('firewall')}
+                className="px-3 py-1.5 text-sm rounded border border-green-300 text-green-700 hover:bg-green-50 dark:border-green-700 dark:text-green-300 dark:hover:bg-green-900/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+              >
+                {inflight.has('firewall') && <Loader2 className="w-3 h-3 animate-spin" />}
+                {t('agentDetails.securityStatus.actions.enableFirewall', undefined, 'Enable Firewall')}
+              </button>
+            )}
+          </div>
+
+          {lastResult && (
+            <div
+              className={`mt-3 p-2 text-xs rounded ${
+                lastResult.ok
+                  ? 'bg-green-50 text-green-800 dark:bg-green-900/20 dark:text-green-200'
+                  : 'bg-red-50 text-red-800 dark:bg-red-900/20 dark:text-red-200'
+              }`}
+            >
+              {lastResult.message}
+            </div>
+          )}
         </div>
       )}
 
