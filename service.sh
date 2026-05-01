@@ -541,15 +541,30 @@ case "${1:-}" in
             exit 1
         }
 
-        echo -e "${BLUE}Restarting backend...${NC}"
-        sudo systemctl restart "$BACKEND_SERVICE"
-        sleep 2
-        if is_service_running "$BACKEND_SERVICE"; then
-            echo -e "${GREEN}Backend restarted${NC}"
+        echo -e "${BLUE}Restarting services...${NC}"
+        if [ "$(hostname)" = "fedora" ]; then
+            systemctl --user restart "$PROD_SERVICE_BACKEND" "$PROD_SERVICE_FRONTEND"
         else
-            echo -e "${RED}Backend failed to restart${NC}"
-            echo -e "${YELLOW}Check: sudo journalctl -u ${BACKEND_SERVICE} -n 50${NC}"
-            exit 1
+            ensure_service_exists "$BACKEND_SERVICE"
+            sudo systemctl restart "$BACKEND_SERVICE"
+        fi
+        
+        sleep 2
+        if [ "$(hostname)" = "fedora" ]; then
+            if is_service_running "$PROD_SERVICE_BACKEND"; then
+                echo -e "${GREEN}Backend ($PROD_SERVICE_BACKEND) restarted${NC}"
+            else
+                echo -e "${RED}Backend ($PROD_SERVICE_BACKEND) failed to restart${NC}"
+                exit 1
+            fi
+        else
+            if is_service_running "$BACKEND_SERVICE"; then
+                echo -e "${GREEN}Backend restarted${NC}"
+            else
+                echo -e "${RED}Backend failed to restart${NC}"
+                echo -e "${YELLOW}Check: sudo journalctl -u ${BACKEND_SERVICE} -n 50${NC}"
+                exit 1
+            fi
         fi
 
         echo ""
