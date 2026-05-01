@@ -511,8 +511,6 @@ case "${1:-}" in
         echo -e "${YELLOW}========================================${NC}"
         echo ""
 
-        ensure_service_exists "$BACKEND_SERVICE"
-
         # Refuse if a foreign process holds our port (don't trample sister projects).
         local_holds=$(foreign_holds_backend_port || true)
         if [ -n "$local_holds" ] && [ "$FORCE" != true ]; then
