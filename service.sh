@@ -521,6 +521,13 @@ case "${1:-}" in
         echo -e "${YELLOW}========================================${NC}"
         echo ""
 
+        # Force cleanup of stale frontend processes
+        if [ "$(hostname)" = "fedora" ]; then
+             echo -e "${BLUE}Cleaning up stale frontend processes in rts-box...${NC}"
+             distrobox enter rts-box -- pkill -f serve || true
+             sleep 1
+        fi
+
         # Refuse if a foreign process holds our port (don't trample sister projects).
         local_holds=$(foreign_holds_backend_port || true)
         if [ -n "$local_holds" ] && [ "$FORCE" != true ]; then
