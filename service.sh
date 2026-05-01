@@ -91,8 +91,14 @@ is_service_running() {
 # True if our backend port is held by a process that's NOT our systemd unit.
 foreign_holds_backend_port() {
     local our_pid
-    our_pid=$(systemctl show "$BACKEND_SERVICE" --no-page -p MainPID --value 2>/dev/null || echo "0")
+    if [ "$(hostname)" = "fedora" ]; then
+        our_pid=$(systemctl --user show "$PROD_SERVICE_BACKEND" --no-page -p MainPID --value 2>/dev/null || echo "0")
+    else
+        our_pid=$(systemctl show "$BACKEND_SERVICE" --no-page -p MainPID --value 2>/dev/null || echo "0")
+    fi
+    
     local holders
+    # Use ss to find PIDs holding the port. Note: ss -p often requires sudo for some processes.
     holders=$(sudo ss -tlnp 2>/dev/null | awk -v p=":${BACKEND_PORT}" '$4 ~ p' | grep -oE 'pid=[0-9]+' | grep -oE '[0-9]+' | sort -u)
     if [ -z "$holders" ]; then
         return 1   # nothing on the port
