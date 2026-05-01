@@ -64,6 +64,12 @@ export const getPageFromPath = (path: string): AppPage => {
   if (path === '/onboarding' || path.startsWith('/onboarding')) {
     return 'onboarding';
   }
+  if (path === '/rapid-service' || path.startsWith('/rapid-service')) {
+    return 'rapid-service';
+  }
+  if (path === '/rapid-service-resume' || path.startsWith('/rapid-service-resume')) {
+    return 'rapid-service-resume';
+  }
   return 'home';
 };
 
@@ -92,12 +98,18 @@ export const getPathFromPage = (page: AppPage): string => {
   if (page === 'agent-login') {
     return '/agent/login';
   }
+  if (page === 'rapid-service') {
+    return '/rapid-service';
+  }
+  if (page === 'rapid-service-resume') {
+    return '/rapid-service-resume';
+  }
   return `/${page}`;
 };
 
 export const updateUrlForPage = (page: AppPage): void => {
   // Don't update URL for pages with dynamic parameters
-  if (page === 'rate' || page === 'trial-login' || page === 'agent-login' || page === 'onboarding') {
+  if (page === 'rate' || page === 'trial-login' || page === 'agent-login' || page === 'onboarding' || page === 'rapid-service' || page === 'rapid-service-resume') {
     return;
   }
 

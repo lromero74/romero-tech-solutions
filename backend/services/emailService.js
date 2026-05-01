@@ -1708,26 +1708,39 @@ Email: info@romerotechsolutions.com
    * Generic email sending method for custom emails
    * @param {Object} params - Email parameters
    * @param {string} params.to - Recipient email address
-   * @param {string} params.subject - Email subject
-   * @param {string} params.html - HTML email body
-   * @param {string} [params.text] - Plain text email body (optional)
+   * @param {string} [params.template] - Optional template name
+   * @param {Object} [params.data] - Data for the template
+   * @param {string} [params.subject] - Email subject (if no template)
+   * @param {string} [params.html] - HTML email body (if no template)
+   * @param {string} [params.text] - Plain text email body (if no template)
    * @returns {Promise<Object>} Email sending result
    */
-  async sendEmail({ to, subject, html, text = null }) {
+  async sendEmail({ to, subject, html, text = null, template = null, data = {} }) {
     try {
+      let finalSubject = subject;
+      let finalHtml = html;
+      let finalText = text;
+
+      if (template === 'agent-magic-link') {
+        const content = this.generateAgentMagicLinkEmailContent(data);
+        finalSubject = content.subject;
+        finalHtml = content.html;
+        finalText = content.text;
+      }
+
       console.log('🔍 Starting generic email send process...');
       console.log('📧 Email config:', {
         from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
         to: to,
-        subject: subject
+        subject: finalSubject
       });
 
       const mailOptions = {
         from: `"${process.env.SES_FROM_NAME}" <${process.env.SES_FROM_EMAIL}>`,
         to: to,
-        subject: subject,
-        text: text || html.replace(/<[^>]*>/g, ''), // Strip HTML tags for text version if not provided
-        html: html
+        subject: finalSubject,
+        text: finalText || finalHtml.replace(/<[^>]*>/g, ''), // Strip HTML tags for text version if not provided
+        html: finalHtml
       };
 
       const result = await transporter.sendMail(mailOptions);
@@ -1743,6 +1756,91 @@ Email: info@romerotechsolutions.com
       console.error('❌ Error sending email:', error);
       throw new Error(`Failed to send email: ${error.message}`);
     }
+  }
+
+  /**
+   * Generate agent magic link email content
+   */
+  generateAgentMagicLinkEmailContent({ firstName, magicLinkUrl, deviceName }) {
+    const subject = `Continue Your Service Request - Romero Tech Solutions`;
+
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>${subject}</title>
+          <style>
+            body { font-family: Arial, sans-serif; color: #333; line-height: 1.6; margin: 0; padding: 0; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { text-align: center; margin-bottom: 30px; background: linear-gradient(135deg, #1e293b, #3b82f6); color: white; padding: 30px 20px; border-radius: 8px; }
+            .logo { font-size: 24px; font-weight: bold; margin-bottom: 5px; }
+            .tagline { font-size: 14px; opacity: 0.9; }
+            .content { background: #f8fafc; border-radius: 8px; padding: 25px; margin-bottom: 20px; }
+            .cta-button { display: inline-block; background: #3b82f6; color: white; padding: 15px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; margin: 20px 0; text-align: center; }
+            .footer { text-align: center; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 12px; }
+            .link-fallback { color: #3b82f6; word-break: break-all; font-size: 12px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <div style="text-align: center; margin-bottom: 10px;">
+                <img src="https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png" alt="Romero Tech Solutions Logo" style="max-width: 150px; height: auto; margin-bottom: 10px;" />
+              </div>
+              <div class="logo">Romero Tech Solutions</div>
+              <div class="tagline">One-Click Login</div>
+            </div>
+
+            <div class="content">
+              <h2 style="color: #1e293b; margin-bottom: 15px;">Hello ${firstName},</h2>
+
+              <p style="margin-bottom: 15px;">
+                We received a service request from your computer <strong>${deviceName}</strong>.
+                Since you already have an account with us, please click the button below to log in and 
+                complete your request.
+              </p>
+
+              <div style="text-align: center; margin: 30px 0;">
+                <a href="${magicLinkUrl}" class="cta-button" style="color: white;">
+                  Log In & Continue Request
+                </a>
+              </div>
+
+              <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
+                This link will expire in 15 minutes for your security.
+                If the button doesn't work, you can copy and paste this link into your browser:
+                <br><span class="link-fallback">${magicLinkUrl}</span>
+              </p>
+            </div>
+
+            <div class="footer">
+              <p>© 2025 Romero Tech Solutions | (619) 940-5550</p>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    const text = `
+Continue Your Service Request - Romero Tech Solutions
+
+Hello ${firstName},
+
+We received a service request from your computer ${deviceName}.
+Since you already have an account with us, please use the link below to log in and complete your request:
+
+${magicLinkUrl}
+
+This link will expire in 15 minutes.
+
+Questions? Contact us: (619) 940-5550
+
+© 2025 Romero Tech Solutions.
+    `;
+
+    return { subject, html, text };
   }
 
   /**

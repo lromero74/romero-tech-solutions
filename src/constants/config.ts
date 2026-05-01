@@ -8,7 +8,7 @@ export const APP_CONFIG = {
   },
 
   navigation: {
-    pages: ['home', 'services', 'pricing', 'about', 'contact', 'download', 'login', 'clogin', 'coming-soon', 'dashboard', 'employee', 'confirm-email', 'rate', 'trial-login', 'agent-login', 'onboarding'] as const
+    pages: ['home', 'services', 'pricing', 'about', 'contact', 'download', 'login', 'clogin', 'coming-soon', 'dashboard', 'employee', 'confirm-email', 'rate', 'trial-login', 'agent-login', 'onboarding', 'rapid-service', 'rapid-service-resume'] as const
   },
 
   particles: {

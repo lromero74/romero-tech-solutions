@@ -2607,7 +2607,7 @@ router.post('/agent-magic-login', async (req, res) => {
       });
     }
 
-    const { agent_id, user_id, business_id, redirect } = decoded;
+    const { agent_id, user_id, business_id, pending_guest_id, redirect } = decoded;
 
     // For device_management tokens, we need to look up business_id from the user
     let effectiveBusinessId = business_id;
@@ -2619,6 +2619,31 @@ router.post('/agent-magic-login', async (req, res) => {
       if (userResult.rows.length > 0) {
         effectiveBusinessId = userResult.rows[0].business_id;
       }
+    }
+
+    // Handle Guest Promotion if pending_guest_id is present
+    if (pending_guest_id) {
+      console.log(`🎁 Promoting guest agent ${pending_guest_id} for user ${user_id}`);
+      
+      // Look up service location for this business (default to first active one)
+      const locationResult = await query(
+        'SELECT id FROM service_locations WHERE business_id = $1 AND is_active = true ORDER BY is_headquarters DESC, created_at ASC LIMIT 1',
+        [effectiveBusinessId]
+      );
+      const locationId = locationResult.rows[0]?.id;
+      
+      const permanentToken = crypto.randomBytes(48).toString('base64url');
+      
+      await query(`
+        UPDATE agent_devices
+        SET is_guest = false,
+            monitoring_enabled = true,
+            business_id = $2,
+            service_location_id = $3,
+            agent_token = $4,
+            updated_at = NOW()
+        WHERE id = $1 AND is_guest = true
+      `, [pending_guest_id, effectiveBusinessId, locationId, permanentToken]);
     }
 
     // Validate agent exists and belongs to the specified business (if agent_id provided)

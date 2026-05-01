@@ -26,6 +26,8 @@ import TrialLogin from './pages/TrialLogin';
 // import TrialDashboard from './pages/TrialDashboard'; // DEPRECATED: All clients now use ClientDashboard
 import AgentLogin from './pages/AgentLogin';
 import TrialUserOnboarding from './components/TrialUserOnboarding';
+import RapidServiceFunnel from './pages/RapidServiceFunnel';
+import RapidServiceResume from './pages/RapidServiceResume';
 import { AppPage } from './constants/config';
 import { getPageFromPath, updateUrlForPage } from './utils/routing';
 import { useVersionCheck } from './hooks/useVersionCheck';
@@ -142,6 +144,16 @@ function AppContent() {
         return null;
       }
       return <TrialUserOnboarding />;
+    }
+
+    // Handle rapid service funnel page
+    if (currentPage === 'rapid-service') {
+      return <RapidServiceFunnel />;
+    }
+
+    // Handle rapid service resume page (requires authentication)
+    if (currentPage === 'rapid-service-resume') {
+      return <RapidServiceResume />;
     }
 
     // Handle service rating page (public - no auth required)
@@ -278,7 +290,7 @@ function AppContent() {
   };
 
   // Don't show header/footer for role-specific dashboard pages, confirmation page, rating page, trial login, onboarding, and client dashboard when authenticated or loading
-  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' || currentPage === 'trial-login' || currentPage === 'onboarding' || currentPage === 'agent-login' ||
+  if (currentPage === 'employee' || currentPage === 'technician' || currentPage === 'confirm-email' || currentPage === 'rate' || currentPage === 'trial-login' || currentPage === 'onboarding' || currentPage === 'agent-login' || currentPage === 'rapid-service' || currentPage === 'rapid-service-resume' ||
       (currentPage === 'clogin' && (isLoading || (isAuthenticated && isClient))) ||
       (currentPage === 'dashboard' && (isLoading || (isAuthenticated && (isAdmin || isTechnician || isExecutive || isSales || isClient))))) {
     return renderPage();

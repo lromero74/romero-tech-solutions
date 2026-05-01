@@ -46,6 +46,7 @@ import alertSubscriptionRoutes from './routes/alertSubscriptions.js';
 import employeeSettingsRoutes from './routes/employeeSettings.js';
 import clientSettingsRoutes from './routes/clientSettings.js';
 import agentRoutes from './routes/agents.js';
+import guestAgentRoutes from './routes/guestAgents.js';
 import agentDownloadRoutes from './routes/agentDownloads.js';
 import remoteControlRoutes from './routes/remoteControl.js';
 import automationRoutes from './routes/automation.js';
@@ -540,6 +541,7 @@ app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtectio
 app.use('/api/employees', adminLimiter, adminIPWhitelist, doubleCsrfProtection, employeeSettingsRoutes); // Employee settings (timezone, preferences)
 app.use('/api/client/settings', generalLimiter, doubleCsrfProtection, clientSettingsRoutes); // Client settings (timezone, preferences)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
+app.use('/api/agents/guest', generalLimiter, guestAgentRoutes); // Guest agent and Rapid Service flow
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
 // Static-file alternate path for agent downloads. Pre-migration this was served
 // by testbot's nginx ('/downloads/agent/...' paths in version.json). Now
