@@ -16,12 +16,30 @@
 #        ./service.sh restart --prod --from-local [--no-backend-deps]  (laptop → fedora.local; the prod path)
 #
 # --from-local mode (laptop → fedora.local):
-#   The build runs on your laptop (~10s on M1). Then dist/ is rsynced to
-#   fedora.local (which serves prod via Cloudflare Tunnel since 2026-04-29)
-#   and the backend is restarted via the user-level systemd unit.
+#   The Mac is the build host of record. fedora.local is artifact-only — it
+#   runs the rts-box distrobox where Node executes server.js. There is NO
+#   git on fedora's path here; the source tree is rsync'd directly so the
+#   running code is whatever the laptop just built.
 #
-#   The pre-2026-04-29 testbot path remains as a rollback only — see
-#   ~/.claude/CLAUDE.md "FEDORA.LOCAL" section for the fallback DNS flip.
+#   Why no git on fedora:
+#     * fedora doesn't have GitHub credentials (would need a deploy key).
+#     * The migration left a stale, partially-corrupted .git/ on fedora;
+#       depending on it became a maintenance burden. The Mac's repo is the
+#       single source of truth.
+#     * fedora's *-build distroboxes (ubuntu-builder, fedora-builder) are
+#       reserved for the rts-monitoring-agent cross-compiles that the M1 Mac
+#       can't produce natively. They're a separate build path.
+#
+#   Steps:
+#     1. SCP fedora's .env.production so the Vite build embeds prod URLs.
+#     2. Build dist/ locally (npm ci + npm run build).
+#     3. rsync source tree (excluding .git, node_modules, dist, .env*, uploads)
+#        directly into /home/louis/romero-tech-solutions on fedora.
+#     4. rsync the freshly-built dist/ separately.
+#     5. npm ci INSIDE the rts-box distrobox so backend native bindings build
+#        against the right libc/arch.
+#     6. systemctl --user restart rts + rts-frontend.
+#     7. Poll /api/health until 200.
 #
 #   Requires: laptop = Darwin; ssh fedora.local configured; clean git state.
 
@@ -211,9 +229,30 @@ deploy_from_local() {
     # ssh -A forwards the laptop's SSH agent so fedora can authenticate to
     # GitHub using the laptop's key — fedora itself doesn't need a deploy
     # key. Forwarding lasts only for the duration of this single command.
-    echo -e "${BLUE}Step 3/6: pulling latest on $PROD_SSH_HOST...${NC}"
-    ssh -A "$PROD_SSH_HOST" "cd $PROD_REMOTE_DIR && git pull --ff-only origin main" || {
-        echo -e "${RED}git pull on $PROD_SSH_HOST failed${NC}"; exit 1
+    echo -e "${BLUE}Step 3/6: rsync source tree to $PROD_SSH_HOST...${NC}"
+    # Excludes: .git/ (fedora has no git), node_modules/ (built fresh inside the
+    # distrobox in step 5), dist/ (rsync'd separately as the deployable artifact),
+    # .env* (fedora has its own — never overwrite secrets), uploads/ (user data
+    # that lives only on prod), .DS_Store, and the laptop-only .claude/ tooling
+    # state. --delete keeps fedora's tree byte-identical to the laptop's source.
+    rsync -az --delete \
+        --exclude='.git/' \
+        --exclude='.gitignore' \
+        --exclude='node_modules/' \
+        --exclude='dist/' \
+        --exclude='.env' \
+        --exclude='.env.*' \
+        --exclude='backend/uploads/' \
+        --exclude='backend/.env' \
+        --exclude='backend/.env.*' \
+        --exclude='.DS_Store' \
+        --exclude='.claude/' \
+        --exclude='outputs/' \
+        --exclude='outreach/' \
+        --exclude='tools/' \
+        "$SCRIPT_DIR/" \
+        "$PROD_SSH_HOST:$PROD_REMOTE_DIR/" || {
+        echo -e "${RED}source rsync failed${NC}"; exit 1
     }
 
     echo -e "${BLUE}Step 4/6: rsync dist/ to $PROD_SSH_HOST...${NC}"
@@ -221,7 +260,7 @@ deploy_from_local() {
         --exclude='.DS_Store' \
         "$SCRIPT_DIR/dist/" \
         "$PROD_SSH_HOST:$PROD_REMOTE_DIR/dist/" || {
-        echo -e "${RED}rsync failed${NC}"; exit 1
+        echo -e "${RED}dist rsync failed${NC}"; exit 1
     }
 
     # Backend npm ci runs INSIDE the rts-box distrobox where node_modules
