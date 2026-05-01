@@ -461,6 +461,7 @@ router.post('/trial/heartbeat', async (req, res) => {
              trial_email = $4,
              trial_user_id = $5,
              business_id = $6,
+             is_guest = false,
              updated_at = NOW()
          WHERE id = $1`,
         [trialUUID, status || 'online', agent_version, trial_email, userId, businessId]

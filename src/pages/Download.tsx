@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Download as DownloadIcon, Server, Apple, Check, AlertCircle, Shield, Activity, Clock, BarChart, Laptop, Monitor } from 'lucide-react';
+import { Download as DownloadIcon, Server, Apple, Check, AlertCircle, Shield, Activity, Clock, BarChart, Laptop, Monitor, Wrench } from 'lucide-react';
 
 interface DetectedPlatform {
   platform: string | null;
@@ -203,24 +203,24 @@ const Download: React.FC = () => {
 
   const features = [
     {
-      icon: Activity,
-      title: 'Real-Time Monitoring',
-      description: '24/7 system health monitoring with instant alerts'
+      icon: Wrench,
+      title: 'Instant Support',
+      description: 'Request technical help immediately after installation'
     },
     {
       icon: Shield,
-      title: 'Security Tracking',
-      description: 'Track patches, updates, and security vulnerabilities'
+      title: 'Secure Remote Access',
+      description: 'We only enable remote tools when you request service'
     },
     {
-      icon: BarChart,
-      title: 'Performance Metrics',
-      description: 'CPU, memory, disk, and network performance tracking'
+      icon: Activity,
+      title: 'Auto-Diagnostics',
+      description: 'The agent automatically gathers hardware specs to speed up repairs'
     },
     {
-      icon: Clock,
-      title: 'Uptime Monitoring',
-      description: 'Track system uptime and service availability'
+      icon: Check,
+      title: 'Optional Monitoring',
+      description: 'Enable 24/7 monitoring later for proactive protection'
     }
   ];
 
@@ -307,29 +307,23 @@ const Download: React.FC = () => {
             <DownloadIcon className="w-10 h-10 text-blue-600 dark:text-blue-400" />
           </div>
           <h1 className="text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            Download RTS Monitoring Agent
+            Get Instant Technical Support
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto">
-            Install our lightweight monitoring agent to enable 24/7 system health tracking,
-            security monitoring, and proactive maintenance for your devices.
+            Install the RTS Agent to request immediate technical support. No registration required to get started. 
+            Once installed, simply click <strong>"Request Support"</strong> in your system tray to connect with a technician.
           </p>
 
-          {/* Free Tier Notice */}
-          <div className="bg-green-50 dark:bg-green-900/20 border-2 border-green-200 dark:border-green-800 rounded-lg p-6 max-w-2xl mx-auto mb-12">
+          {/* Value Proposition Notice */}
+          <div className="bg-blue-50 dark:bg-blue-900/20 border-2 border-blue-200 dark:border-blue-800 rounded-lg p-6 max-w-2xl mx-auto mb-12">
             <div className="flex items-start gap-3">
-              <Check className="w-6 h-6 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+              <Wrench className="w-6 h-6 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
               <div className="text-left">
-                <h3 className="font-semibold text-green-900 dark:text-green-100 mb-1">Start Free - No Credit Card Required</h3>
-                <p className="text-sm text-green-800 dark:text-green-200">
-                  Monitor <span className="font-medium">2 devices at no cost</span> with no expiration.
-                  Includes all core monitoring features, automatic updates, and dashboard access.
+                <h3 className="font-semibold text-blue-900 dark:text-blue-100 mb-1">Zero-Friction Help</h3>
+                <p className="text-sm text-blue-800 dark:text-blue-200">
+                  Download the agent now and open your first service request in seconds. 
+                  We only collect your billing and contact details when you're ready to submit a request.
                 </p>
-                <a
-                  href="/pricing"
-                  className="inline-flex items-center text-sm font-medium text-green-900 dark:text-green-300 hover:text-green-700 dark:hover:text-green-100 mt-2"
-                >
-                  View Pricing Details →
-                </a>
               </div>
             </div>
           </div>
@@ -708,14 +702,13 @@ const Download: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Register Your Device
+                    Request Support
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300 mb-2">
-                    Follow the setup wizard to register your device. Free tier users get 2 devices at no cost.
+                    Right-click the RTS icon in your system tray and select <strong>"Request Technical Support"</strong>.
                   </p>
                   <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded p-3 text-sm text-blue-900 dark:text-blue-100">
-                    <strong>New to RTS?</strong> The agent will guide you through creating a free account
-                    and registering your first device.
+                    <strong>No Registration Needed:</strong> You only enter your details when you actually need help.
                   </div>
                 </div>
               </div>
@@ -728,11 +721,10 @@ const Download: React.FC = () => {
                 </div>
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                    Start Monitoring
+                    Get Back to Work
                   </h3>
                   <p className="text-gray-600 dark:text-gray-300">
-                    The agent runs as a background service, automatically collecting system metrics
-                    and sending them to your dashboard.
+                    A technician will contact you and securely connect to resolve your issue.
                   </p>
                 </div>
               </div>
