@@ -84,7 +84,11 @@ SISTER_PORTS_DOC="\
 # ── Helpers ────────────────────────────────────────────────────────
 
 is_service_running() {
-    systemctl is-active --quiet "$1" 2>/dev/null
+    if [ "$(hostname)" = "fedora" ]; then
+        systemctl --user is-active --quiet "$1" 2>/dev/null
+    else
+        systemctl is-active --quiet "$1" 2>/dev/null
+    fi
     return $?
 }
 
