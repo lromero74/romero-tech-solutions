@@ -1,14 +1,14 @@
-RTS Monitoring Agent - Version 1.31.2 Release Notes
+RTS Monitoring Agent - Version 1.32.0 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-04-30 05:41:55 UTC
-Previous Version: v1.31.0
-Git Commit: d3ac1a5
+Release Date: 2026-05-01 00:36:23 UTC
+Previous Version: v1.31.2
+Git Commit: 48419a0
 
-Changes Since v1.31.0:
+Changes Since v1.31.2:
 ───────────────────────────────────────────────────────────
 
-• v1.31.1: more robust ClamAV detection
+• v1.32.0: security_action command handler (Stage 4 M4 agent side)
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download

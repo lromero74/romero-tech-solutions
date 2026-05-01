@@ -1,6 +1,6 @@
-const CACHE_NAME = 'romero-tech-v1.101.95';
-const STATIC_CACHE_NAME = 'romero-tech-static-v1.101.95';
-const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.101.95';
+const CACHE_NAME = 'romero-tech-v1.109.0';
+const STATIC_CACHE_NAME = 'romero-tech-static-v1.109.0';
+const DYNAMIC_CACHE_NAME = 'romero-tech-dynamic-v1.109.0';
 
 // Resources to cache immediately
 const STATIC_ASSETS = [
@@ -20,7 +20,7 @@ const API_CACHE_PATTERNS = [
 
 // Install event - cache static assets
 self.addEventListener('install', (event) => {
-  console.log('SW: Installing service worker...');
+  console.log('SW: Installing service worker v1.109.0...');
 
   event.waitUntil(
     Promise.all([
@@ -37,7 +37,7 @@ self.addEventListener('install', (event) => {
 
 // Activate event - clean up old caches
 self.addEventListener('activate', (event) => {
-  console.log('SW: Activating service worker...');
+  console.log('SW: Activating service worker v1.109.0...');
 
   event.waitUntil(
     Promise.all([
@@ -95,6 +95,14 @@ async function handleRequest(request) {
       return await fetch(request);
     }
 
+    // HTML pages - ALWAYS Network First to ensure fresh JS/CSS hashes
+    // This takes precedence over static assets to avoid serving stale index.html
+    if (request.headers.get('accept')?.includes('text/html') || 
+        url.pathname === '/' || 
+        url.pathname === '/index.html') {
+      return await networkFirst(request, DYNAMIC_CACHE_NAME);
+    }
+
     // JavaScript and CSS - Network First to prevent serving stale code
     if (isAppCodeAsset(url.pathname)) {
       return await networkFirst(request, DYNAMIC_CACHE_NAME);
@@ -110,11 +118,6 @@ async function handleRequest(request) {
       return await networkFirst(request, DYNAMIC_CACHE_NAME);
     }
 
-    // HTML pages - Network First with cache fallback
-    if (request.headers.get('accept')?.includes('text/html')) {
-      return await networkFirst(request, DYNAMIC_CACHE_NAME);
-    }
-
     // Everything else - Network only
     return await fetch(request);
 
@@ -122,7 +125,9 @@ async function handleRequest(request) {
     console.error('SW: Request failed:', error);
 
     // Return offline fallback for HTML pages
-    if (request.headers.get('accept')?.includes('text/html')) {
+    if (request.headers.get('accept')?.includes('text/html') || 
+        url.pathname === '/' || 
+        url.pathname === '/index.html') {
       const cache = await caches.open(STATIC_CACHE_NAME);
       return await cache.match('/index.html') || new Response('Offline', { status: 503 });
     }
@@ -161,6 +166,11 @@ async function networkFirst(request, cacheName) {
 
     if (response.ok && shouldCache(request)) {
       console.log('SW: Caching response:', request.url);
+      cache.put(request, response.clone());
+    } else if (response.ok && (request.headers.get('accept')?.includes('text/html') || 
+                               request.url.endsWith('/') || 
+                               request.url.endsWith('/index.html'))) {
+      // Also cache the HTML index so we have a fallback
       cache.put(request, response.clone());
     }
 
@@ -202,6 +212,11 @@ function isAppCodeAsset(pathname) {
 
 function isStaticAsset(pathname) {
   // Images, fonts, and other static assets - use Cache First
+  // Exclude index.html/root as they are handled by HTML-specific logic
+  if (pathname === '/' || pathname === '/index.html') {
+    return false;
+  }
+  
   return STATIC_ASSETS.includes(pathname) ||
          pathname.match(/\.(png|jpg|jpeg|gif|svg|ico|woff|woff2)$/);
 }
@@ -216,6 +231,152 @@ function shouldCache(request) {
 
   // Cache successful responses only
   return false;
+}
+
+// Listen for messages from the main thread
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    console.log('SW: Received SKIP_WAITING message');
+    self.skipWaiting();
+  }
+});
+
+// Push notification event handlers
+self.addEventListener('push', (event) => {
+  console.log('SW: Push notification received');
+
+  let notificationData = {
+    title: 'Romero Tech Solutions',
+    body: 'You have a new notification',
+    icon: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+    badge: '/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png',
+    vibrate: [200, 100, 200],
+    data: {
+      dateOfArrival: Date.now(),
+      primaryKey: 1
+    },
+    actions: [
+      { action: 'view', title: 'View Details' },
+      { action: 'dismiss', title: 'Dismiss' }
+    ]
+  };
+
+  // Try to get notification data from the push event
+  if (event.data) {
+    try {
+      const payload = event.data.json();
+      notificationData = {
+        ...notificationData,
+        ...payload
+      };
+    } catch (e) {
+      // If JSON parsing fails, use text as body
+      notificationData.body = event.data.text();
+    }
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(notificationData.title, notificationData)
+  );
+});
+
+// Handle notification clicks
+self.addEventListener('notificationclick', (event) => {
+  console.log('SW: Notification clicked:', event.action);
+
+  event.notification.close();
+
+  if (event.action === 'dismiss') {
+    return;
+  }
+
+  // Handle MFA code notifications specially
+  if (event.notification.data?.type === 'mfa_code' && event.action === 'copy') {
+    event.waitUntil(
+      (async () => {
+        const mfaCode = event.notification.data.code;
+
+        // Try to copy to clipboard
+        const windowClients = await clients.matchAll({
+          type: 'window',
+          includeUncontrolled: true
+        });
+
+        if (windowClients.length > 0) {
+          const client = windowClients[0];
+          client.focus();
+
+          // Send message to client to copy the code
+          client.postMessage({
+            type: 'COPY_MFA_CODE',
+            code: mfaCode
+          });
+
+          console.log('SW: MFA code sent to client for copying:', mfaCode);
+        } else {
+          // If no window is open, open one and pass the code
+          if (clients.openWindow) {
+            const urlToOpen = `/?mfa_code=${mfaCode}`;
+            return clients.openWindow(urlToOpen);
+          }
+        }
+      })()
+    );
+    return;
+  }
+
+  // Default behavior: Open the app or focus existing window
+  event.waitUntil(
+    clients.matchAll({
+      type: 'window',
+      includeUncontrolled: true
+    }).then((windowClients) => {
+      // Check if there's already a window/tab open
+      for (let client of windowClients) {
+        if ('focus' in client) {
+          return client.focus();
+        }
+      }
+      // If no window is open, open a new one
+      if (clients.openWindow) {
+        const urlToOpen = event.notification.data?.url || '/';
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});
+
+// Background sync for offline push subscription
+self.addEventListener('sync', (event) => {
+  if (event.tag === 'sync-push-subscription') {
+    console.log('SW: Syncing push subscription');
+    event.waitUntil(syncPushSubscription());
+  }
+});
+
+async function syncPushSubscription() {
+  try {
+    const subscription = await self.registration.pushManager.getSubscription();
+    if (subscription) {
+      // Send subscription to server
+      const response = await fetch('/api/push/subscribe', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(subscription)
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to sync subscription');
+      }
+
+      console.log('SW: Push subscription synced successfully');
+    }
+  } catch (error) {
+    console.error('SW: Failed to sync push subscription:', error);
+    throw error; // Retry later
+  }
 }
 
 // Listen for messages from the main thread

@@ -1,295 +1,202 @@
 #!/usr/bin/env node
 
+/**
+ * Romero Tech Solutions - System-Wide Backup
+ * 
+ * This script performs a comprehensive backup of all projects running on fedora.local.
+ * It captures:
+ * 1. PostgreSQL databases (via podman exec postgres-box pg_dump)
+ * 2. SQLite databases (direct file copy)
+ * 3. User-uploaded files (PDFs, icons, etc.)
+ * 4. Project source code (excluding node_modules)
+ * 
+ * The script runs on the local Mac and coordinates the backup via SSH.
+ */
+
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
-import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';
-import secretsManager from '../backend/utils/secrets.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-// Load environment variables from backend directory (where actual DB config is)
-dotenv.config({ path: path.join(__dirname, '..', 'backend', '.env') });
-
 const execAsync = promisify(exec);
 
-// Parse command line arguments
-function parseArgs(args) {
-  const options = {
-    message: null
-  };
+// --- Configuration ---
+const REMOTE_HOST = 'fedora.local';
+const REMOTE_USER = 'louis';
+const BACKUP_ROOT_LOCAL = path.join(os.homedir(), 'WebSite', 'Backups');
 
+// Database Container Config
+const PG_CONTAINER = 'postgres-box';
+
+const PROJECTS = [
+  {
+    name: 'romero-tech-solutions',
+    remotePath: '/home/louis/romero-tech-solutions',
+    dbType: 'postgres',
+    dbName: 'romerotechsolutions',
+    dbUser: 'romero_app',
+    dbPass: 'xVRCCJYI66LC0u8UMuhHqjbzNFq8mWIG',
+    uploadPaths: ['backend/uploads']
+  },
+  {
+    name: 'worship-setlist',
+    remotePath: '/home/louis/worship-setlist',
+    dbType: 'sqlite',
+    dbFile: 'data/database.sqlite',
+    uploadPaths: ['data/pdfs']
+  },
+  {
+    name: 'funder-finder',
+    remotePath: '/home/louis/funder-finder',
+    dbType: 'sqlite',
+    dbFile: 'backend/data/database.sqlite',
+    uploadPaths: ['backend/uploads']
+  },
+  {
+    name: 'tampa-re-investor',
+    remotePath: '/home/louis/tampa-re-investor',
+    dbType: 'sqlite',
+    dbFile: 'backend/data/database.sqlite',
+    uploadPaths: ['backend/uploads']
+  },
+  {
+    name: 'ZenithGrid',
+    remotePath: '/home/louis/ZenithGrid',
+    dbType: 'postgres',
+    dbName: 'zenithgrid',
+    dbUser: 'zenithgrid_app',
+    dbPass: 'cwPPJBsETiMkWntXP-EqEFBPZU28qU0MxJVzjH3TaUk',
+    uploadPaths: ['backend/uploads']
+  }
+];
+
+// --- Helpers ---
+
+async function runRemote(command) {
+  const sshCmd = `ssh ${REMOTE_HOST} "${command.replace(/"/g, '\\"')}"`;
+  return execAsync(sshCmd);
+}
+
+function parseArgs(args) {
+  const options = { message: null };
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i];
-    if (arg === '--message' && args[i + 1]) {
+    if (args[i] === '--message' || args[i] === '-m') {
       options.message = args[i + 1];
-      i++; // Skip the message value
+      i++;
     }
   }
-
   return options;
 }
 
-async function createBackup(options = {}) {
+// --- Main Process ---
+
+async function systemWideBackup() {
+  const options = parseArgs(process.argv.slice(2));
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupFolder = `system_backup_${timestamp}`;
+  const localDest = path.join(BACKUP_ROOT_LOCAL, backupFolder);
+  const remoteTemp = `/home/${REMOTE_USER}/tmp/${backupFolder}`; // Use home tmp to avoid root perms
+
+  console.log('🚀 Starting System-Wide Backup for fedora.local');
+  console.log('================================================');
+  if (options.message) console.log(`💬 Note: ${options.message}\n`);
+
   try {
-    console.log('🚀 Starting comprehensive backup process...');
-    console.log('============================================');
+    // 1. Prepare directories
+    console.log(`📁 Creating local backup directory: ${localDest}`);
+    fs.mkdirSync(localDest, { recursive: true });
 
-    // Show message if provided
-    if (options.message) {
-      console.log(`💬 Backup description: "${options.message}"`);
-      console.log('');
-    }
+    console.log(`📁 Creating remote temporary directory: ${remoteTemp}`);
+    await runRemote(`mkdir -p ${remoteTemp}`);
 
-    // Generate timestamp for backup folder
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const backupFolderName = `backup_${timestamp}`;
-
-    // Create ~/WebSite/Backups directory structure
-    const homeDir = os.homedir();
-    const websiteBackupsDir = path.join(homeDir, 'WebSite', 'Backups');
-    const timestampedBackupDir = path.join(websiteBackupsDir, backupFolderName);
-
-    console.log(`📂 Creating backup directory structure...`);
-    if (!fs.existsSync(websiteBackupsDir)) {
-      fs.mkdirSync(websiteBackupsDir, { recursive: true });
-      console.log(`   ✅ Created: ${websiteBackupsDir}`);
-    } else {
-      console.log(`   ℹ️  Directory exists: ${websiteBackupsDir}`);
-    }
-
-    fs.mkdirSync(timestampedBackupDir, { recursive: true });
-    console.log(`   ✅ Created timestamped backup folder: ${timestampedBackupDir}`);
-
-    // Step 1: Database Backup
-    console.log('\n🗄️  Step 1: Backing up database...');
-    console.log('====================================');
-
-    const dbBackupFileName = `database_${timestamp}.sql`;
-    const dbBackupPath = path.join(timestampedBackupDir, dbBackupFileName);
-
-    try {
-      // Get database credentials using AWS Secrets Manager (same as application)
-      let dbCredentials;
-      const useSecretsManager = process.env.USE_SECRETS_MANAGER === 'true';
-
-      if (useSecretsManager && process.env.DB_SECRET_NAME) {
-        console.log('🔐 Using AWS Secrets Manager for database credentials');
-        dbCredentials = await secretsManager.getDatabaseCredentials(process.env.DB_SECRET_NAME);
-      } else {
-        console.log('📝 Using environment variables for database credentials');
-        dbCredentials = {
-          host: process.env.DB_HOST,
-          port: process.env.DB_PORT,
-          database: process.env.DB_NAME,
-          user: process.env.DB_USER,
-          password: process.env.DB_PASSWORD
-        };
-      }
-
-      // Build pg_dump command with connection parameters
-      const pgDumpCmd = [
-        '/opt/homebrew/opt/postgresql@16/bin/pg_dump',
-        `--host=${dbCredentials.host}`,
-        `--port=${dbCredentials.port}`,
-        `--username=${dbCredentials.user}`,
-        `--dbname=${dbCredentials.database}`,
-        '--verbose',
-        '--clean',
-        '--if-exists',
-        '--create',
-        '--format=plain',
-        '--no-password',
-        `--file=${dbBackupPath}`
-      ].join(' ');
-
-      console.log('🏃 Running database backup...');
-      console.log(`Command: ${pgDumpCmd.replace(dbCredentials.password, '***')}`);
-
-      // Set PGPASSWORD environment variable for authentication
-      const env = { ...process.env, PGPASSWORD: dbCredentials.password };
-
-      const { stdout, stderr } = await execAsync(pgDumpCmd, { env });
-
-      if (stderr && !stderr.includes('NOTICE:')) {
-        console.log('⚠️  pg_dump stderr output:', stderr);
-      }
-
-      // Check if database backup was created successfully
-      if (fs.existsSync(dbBackupPath)) {
-        const dbStats = fs.statSync(dbBackupPath);
-        if (dbStats.size > 0) {
-          console.log('✅ Database backup completed successfully!');
-          console.log(`📊 Database backup size: ${(dbStats.size / 1024 / 1024).toFixed(2)} MB`);
-        } else {
-          throw new Error('Database backup file is empty');
-        }
-      } else {
-        throw new Error('Database backup file was not created');
-      }
-    } catch (dbError) {
-      console.error('❌ Database backup failed:', dbError.message);
-      console.log('⚠️  Continuing with project files backup...');
-    }
-
-    // Step 2: Project Files Backup
-    console.log('\n📦 Step 2: Creating project files backup...');
-    console.log('===========================================');
-
-    const projectRoot = path.join(__dirname, '..');
-    const projectName = path.basename(projectRoot);
-    const projectBackupFileName = `project_${projectName}_${timestamp}.tar.gz`;
-    const projectBackupPath = path.join(timestampedBackupDir, projectBackupFileName);
-
-    // Create tarball excluding node_modules and other unnecessary files
-    const tarCmd = [
-      'tar',
-      '-czf',
-      `"${projectBackupPath}"`,
-      '--exclude=node_modules',
-      '--exclude=.git',
-      '--exclude=dist',
-      '--exclude=build',
-      '--exclude=coverage',
-      '--exclude=.vscode',
-      '--exclude=.idea',
-      '--exclude=*.log',
-      '--exclude=.DS_Store',
-      '--exclude=.env.local',
-      '--exclude=.env.*.local',
-      '--exclude=database_backups',
-      '-C',
-      path.dirname(projectRoot),
-      path.basename(projectRoot)
-    ].join(' ');
-
-    console.log('🏃 Creating project tarball...');
-    console.log(`Command: ${tarCmd}`);
-
-    try {
-      const { stdout, stderr } = await execAsync(tarCmd);
-
-      if (stderr) {
-        console.log('⚠️  tar stderr output:', stderr);
-      }
-
-      // Check if project backup was created successfully
-      if (fs.existsSync(projectBackupPath)) {
-        const projectStats = fs.statSync(projectBackupPath);
-        if (projectStats.size > 0) {
-          console.log('✅ Project files backup completed successfully!');
-          console.log(`📊 Project backup size: ${(projectStats.size / 1024 / 1024).toFixed(2)} MB`);
-        } else {
-          throw new Error('Project backup file is empty');
-        }
-      } else {
-        throw new Error('Project backup file was not created');
-      }
-    } catch (projectError) {
-      console.error('❌ Project backup failed:', projectError.message);
-      throw projectError;
-    }
-
-    // Step 3: Create backup manifest
-    console.log('\n📋 Step 3: Creating backup manifest...');
-    console.log('=====================================');
-
-    const manifestPath = path.join(timestampedBackupDir, 'backup_manifest.json');
     const manifest = {
       timestamp: new Date().toISOString(),
-      backupFolder: backupFolderName,
-      projectName: projectName,
-      projectPath: projectRoot,
-      message: options.message || null,
-      files: {},
-      system: {
-        hostname: os.hostname(),
-        platform: os.platform(),
-        arch: os.arch(),
-        nodeVersion: process.version
-      },
-      database: {
-        host: process.env.DB_HOST || 'from-secrets-manager',
-        port: process.env.DB_PORT || '5432',
-        name: process.env.DB_NAME || 'from-secrets-manager',
-        user: process.env.DB_USER || 'from-secrets-manager',
-        secretsManager: process.env.USE_SECRETS_MANAGER === 'true'
-      }
+      host: REMOTE_HOST,
+      message: options.message,
+      projects: []
     };
 
-    // Add file information to manifest
-    try {
-      const files = fs.readdirSync(timestampedBackupDir);
-      for (const file of files) {
-        if (file !== 'backup_manifest.json') {
-          const filePath = path.join(timestampedBackupDir, file);
-          const stats = fs.statSync(filePath);
-          manifest.files[file] = {
-            size: stats.size,
-            sizeFormatted: `${(stats.size / 1024 / 1024).toFixed(2)} MB`,
-            created: stats.birthtime.toISOString(),
-            type: path.extname(file) === '.sql' ? 'database' : 'project'
-          };
-        }
+    // 2. Process each project
+    for (const project of PROJECTS) {
+      console.log(`\n📦 Processing project: ${project.name}`);
+      console.log('------------------------------------------------');
+
+      const projectBackupDir = `${remoteTemp}/${project.name}`;
+      await runRemote(`mkdir -p ${projectBackupDir}`);
+
+      // A. Database Backup
+      if (project.dbType === 'postgres') {
+        console.log(`   🗄️  Dumping Postgres DB: ${project.dbName}`);
+        // We dump to /tmp inside the container then move it to the remote backup dir
+        const containerTmp = `/tmp/${project.name}_db.sql`;
+        await runRemote(`podman exec -e PGPASSWORD=${project.dbPass} ${PG_CONTAINER} pg_dump -h localhost -U ${project.dbUser} -d ${project.dbName} -f ${containerTmp}`);
+        // Move from container to the project backup directory on the host
+        // Note: podman cp is the way if it's a plain container
+        await runRemote(`podman cp ${PG_CONTAINER}:${containerTmp} ${projectBackupDir}/database.sql`);
+        // Clean up container tmp
+        await runRemote(`podman exec ${PG_CONTAINER} rm ${containerTmp}`);
+      } else if (project.dbType === 'sqlite') {
+        console.log(`   🗄️  Copying SQLite DB: ${project.dbFile}`);
+        await runRemote(`if [ -f "${project.remotePath}/${project.dbFile}" ]; then cp ${project.remotePath}/${project.dbFile} ${projectBackupDir}/database.sqlite; fi`);
       }
-    } catch (manifestError) {
-      console.log('⚠️  Could not create complete manifest:', manifestError.message);
+
+      // B. Uploads / Critical Files
+      for (const uploadPath of project.uploadPaths) {
+        console.log(`   📂 Capturing uploads: ${uploadPath}`);
+        const destName = uploadPath.replace(/\//g, '_');
+        await runRemote(`if [ -d "${project.remotePath}/${uploadPath}" ]; then cp -r ${project.remotePath}/${uploadPath} ${projectBackupDir}/${destName}; fi`);
+      }
+
+      // C. Source Code (Minimal)
+      console.log(`   📜 Packaging source (excluding node_modules)...`);
+      const tarName = `source.tar.gz`;
+      await runRemote(`tar -czf ${projectBackupDir}/${tarName} -C ${path.dirname(project.remotePath)} --exclude=node_modules --exclude=.git --exclude=dist --exclude=build ${path.basename(project.remotePath)}`);
+
+      manifest.projects.push({
+        name: project.name,
+        dbType: project.dbType,
+        dbName: project.dbName || project.dbFile,
+        uploads: project.uploadPaths
+      });
     }
 
+    // 3. Finalize Manifest
+    console.log('\n📋 Creating backup manifest...');
+    const manifestPath = path.join(localDest, 'backup_manifest.json');
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
-    console.log('✅ Backup manifest created');
 
-    // Final Summary
-    console.log('\n🎉 Backup Process Complete!');
-    console.log('============================');
-    console.log(`📁 Backup location: ${timestampedBackupDir}`);
-    console.log('\n📋 Backup contents:');
+    // 4. Pull everything to local Mac
+    console.log(`\n🚚 Transferring backup bundle to local Mac...`);
+    // Zip it up on the remote first to save transfer time
+    const remoteBundle = `${remoteTemp}.tar.gz`;
+    await runRemote(`tar -czf ${remoteBundle} -C ${path.dirname(remoteTemp)} ${path.basename(remoteTemp)}`);
+    
+    // Scp the zip
+    await execAsync(`scp ${REMOTE_HOST}:${remoteBundle} ${localDest}/bundle.tar.gz`);
+    
+    // Extract local
+    console.log(`   📦 Extracting bundle on Mac...`);
+    await execAsync(`tar -xzf ${localDest}/bundle.tar.gz -C ${localDest} --strip-components=1`);
+    await execAsync(`rm ${localDest}/bundle.tar.gz`);
 
-    const finalFiles = fs.readdirSync(timestampedBackupDir);
-    finalFiles.forEach(file => {
-      const filePath = path.join(timestampedBackupDir, file);
-      const stats = fs.statSync(filePath);
-      const sizeFormatted = file.includes('.tar.gz')
-        ? `${(stats.size / 1024 / 1024).toFixed(2)} MB`
-        : `${(stats.size / 1024).toFixed(2)} KB`;
-      console.log(`   📄 ${file} (${sizeFormatted})`);
-    });
+    // 5. Cleanup Remote
+    console.log(`🧹 Cleaning up remote temporary files...`);
+    await runRemote(`rm -rf ${remoteTemp} ${remoteBundle}`);
 
-    console.log('\n🔧 To restore:');
-    console.log(`   Database: cd backend && node scripts/restore_database.js ${dbBackupFileName}`);
-    console.log(`   Project:  tar -xzf "${projectBackupPath}" -C /desired/location/`);
-
-    // List recent backups
-    console.log('\n📚 Recent backups:');
-    const allBackups = fs.readdirSync(websiteBackupsDir)
-      .filter(dir => dir.startsWith('backup_'))
-      .sort()
-      .reverse()
-      .slice(0, 5);
-
-    allBackups.forEach((backup, index) => {
-      const backupPath = path.join(websiteBackupsDir, backup);
-      const backupStats = fs.statSync(backupPath);
-      console.log(`   ${index + 1}. ${backup} - ${backupStats.mtime.toLocaleString()}`);
-    });
+    console.log('\n================================================');
+    console.log('✅ SYSTEM-WIDE BACKUP COMPLETE');
+    console.log(`📍 Location: ${localDest}`);
+    console.log('================================================');
 
   } catch (error) {
-    console.error('\n❌ Backup process failed:', error.message);
-    console.error('\nTroubleshooting:');
-    console.error('1. Ensure PostgreSQL client tools are installed (pg_dump)');
-    console.error('2. Verify database connection parameters in .env file');
-    console.error('3. Check that tar is available (should be on macOS/Linux)');
-    console.error('4. Ensure sufficient disk space for backups');
-
+    console.error('\n❌ Backup failed!');
+    console.error(error);
     process.exit(1);
   }
 }
 
-// Parse command line arguments and run the backup
-const args = process.argv.slice(2);
-const options = parseArgs(args);
-createBackup(options);
+systemWideBackup();
