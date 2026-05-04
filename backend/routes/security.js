@@ -1,5 +1,6 @@
 import express from 'express';
 import { execFile } from 'child_process';
+import { existsSync } from 'fs';
 import { promisify } from 'util';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
@@ -29,10 +30,20 @@ const RTS_RELEVANT_JAILS = [
 const JAIL_NAME_RE = /^[a-z][a-zA-Z0-9-]{0,63}$/;
 const IPV4_RE = /^(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)){3}$/;
 
+// Distrobox bridge: when running inside an rts-box distrobox on fedora.local,
+// fail2ban-client lives on the host (the binary isn't installed in the
+// container, and the unix socket isn't bind-mounted). distrobox-host-exec
+// routes the call back to the host. On testbot / non-distrobox the prefix is
+// empty and execFile invokes sudo + fail2ban-client directly.
+const F2B_CMD_PREFIX = (
+  process.env.CONTAINER_ID && existsSync('/usr/bin/distrobox-host-exec')
+) ? ['/usr/bin/distrobox-host-exec'] : [];
+
 const runFail2banClient = async (args) => {
   // sudo -n: never prompt; rely on the NOPASSWD entry in
   // /etc/sudoers.d/romero-fail2ban being present.
-  const { stdout, stderr } = await execFileAsync('sudo', ['-n', '/usr/bin/fail2ban-client', ...args], {
+  const cmd = [...F2B_CMD_PREFIX, 'sudo', '-n', '/usr/bin/fail2ban-client', ...args];
+  const { stdout, stderr } = await execFileAsync(cmd[0], cmd.slice(1), {
     timeout: 5000,
     maxBuffer: 1024 * 1024,
   });
