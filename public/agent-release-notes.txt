@@ -1,14 +1,15 @@
-RTS Monitoring Agent - Version 1.32.0 Release Notes
+RTS Monitoring Agent - Version 1.34.2 Release Notes
 ═══════════════════════════════════════════════════════════
 
-Release Date: 2026-05-01 00:36:23 UTC
-Previous Version: v1.31.2
-Git Commit: 48419a0
+Release Date: 2026-05-04 01:06:32 UTC
+Previous Version: v1.33.0
+Git Commit: 08f4c5e
 
-Changes Since v1.31.2:
+Changes Since v1.33.0:
 ───────────────────────────────────────────────────────────
 
-• v1.32.0: security_action command handler (Stage 4 M4 agent side)
+• release.sh: clean step uses find -type f to spare vendored subdirs
+• release.sh: deploy targets fedora.local instead of dead testbot
 
 ───────────────────────────────────────────────────────────
 For full details, visit: https://romerotechsolutions.com/download
