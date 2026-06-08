@@ -31,7 +31,7 @@ const ComingSoon: React.FC = () => {
 
             <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-12">
               <a
-                href="tel:+16199405550"
+                href="tel:+17342557060"
                 className="group inline-flex items-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-xl hover:from-blue-700 hover:to-cyan-700 transition-all duration-300 transform hover:scale-105 shadow-lg hover:shadow-xl"
               >
                 <Phone className="h-5 w-5 mr-2" />
@@ -102,7 +102,7 @@ const ComingSoon: React.FC = () => {
                   {t('comingSoon.contact.call.description')}
                 </p>
                 <a
-                  href="tel:+16199405550"
+                  href="tel:+17342557060"
                   className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white font-semibold rounded-lg hover:from-blue-700 hover:to-cyan-700 transition-all duration-300"
                 >
                   <Phone className="h-4 w-4 mr-2" />

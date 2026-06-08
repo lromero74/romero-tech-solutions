@@ -219,7 +219,7 @@ router.post('/acknowledge/:token', async (req, res) => {
               <p><strong>Business:</strong> ${acknowledgment.business_name}</p>
               <p><strong>Acknowledged At:</strong> ${new Date(acknowledgedAt).toLocaleString()}</p>
               <p>Our technician will contact you shortly to schedule the service or provide additional information about next steps.</p>
-              <p>If you have any questions, please don't hesitate to contact us at (619) 940-5550.</p>
+              <p>If you have any questions, please don't hesitate to contact us at (734) 255-7060.</p>
             </div>
             <div class="footer">
               <p>© 2025 Romero Tech Solutions. All rights reserved.</p>
@@ -524,7 +524,7 @@ router.post('/start/:token', async (req, res) => {
               <p><strong>Business:</strong> ${assignment.business_name}</p>
               <p><strong>Started At:</strong> ${new Date(actualStartTime).toLocaleString()}</p>
               <p>Our technician is now actively working on your request. You will receive another notification when the work is completed.</p>
-              <p>If you have any questions, please don't hesitate to contact us at (619) 940-5550.</p>
+              <p>If you have any questions, please don't hesitate to contact us at (734) 255-7060.</p>
             </div>
             <div class="footer">
               <p>© 2025 Romero Tech Solutions. All rights reserved.</p>
@@ -848,7 +848,7 @@ router.post('/stop/:token', async (req, res) => {
               <p><strong>Business:</strong> ${assignment.business_name}</p>
 
               <p>This work session has been completed. Our technician may start additional work sessions if needed, and you will receive notifications for each session.</p>
-              <p>If you have any questions, please don't hesitate to contact us at (619) 940-5550.</p>
+              <p>If you have any questions, please don't hesitate to contact us at (734) 255-7060.</p>
             </div>
             <div class="footer">
               <p>© 2025 Romero Tech Solutions. All rights reserved.</p>

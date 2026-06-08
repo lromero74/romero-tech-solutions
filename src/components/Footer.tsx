@@ -30,7 +30,7 @@ const Footer: React.FC = () => {
             <h4 className="text-lg font-semibold text-white">{t('footer.contactUs')}</h4>
             <div className="space-y-3">
               <a
-                href="tel:+16199405550"
+                href="tel:+17342557060"
                 className="flex items-center space-x-3 text-gray-300 hover:text-blue-400 transition-colors duration-200 group"
               >
                 <Phone className="h-5 w-5 group-hover:scale-110 transition-transform duration-200" />

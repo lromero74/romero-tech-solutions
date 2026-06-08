@@ -1,7 +1,7 @@
 export const APP_CONFIG = {
   company: {
     name: 'Romero Tech Solutions',
-    phone: '(619) 940-5550',
+    phone: '(734) 255-7060',
     email: 'info@romerotechsolutions.com',
     location: 'San Diego County, CA',
     yearsExperience: 30

@@ -14,7 +14,7 @@ export const esTranslations = {
   'home.hero.title': 'Soluciones',
   'home.hero.titleHighlight': 'Tecnológicas Profesionales',
   'home.hero.subtitle': 'Monitoreo remoto y asistencia remota disponibles a nivel nacional • Soporte en sitio, reparación de computadoras y configuración de redes en el Norte del Condado de San Diego, CA',
-  'home.hero.callButton': 'Llamar (619) 940-5550',
+  'home.hero.callButton': 'Llamar (734) 255-7060',
   'home.hero.quoteButton': 'Envíenos un Correo',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Años de Experiencia',
@@ -95,7 +95,7 @@ export const esTranslations = {
 
   'home.finalCta.title': '¿Listo para Resolver Sus Problemas Tecnológicos?',
   'home.finalCta.subtitle': 'No deje que la tecnología lo frustre. Obtenga ayuda profesional de expertos en los que puede confiar.',
-  'home.finalCta.callButton': 'Llamar Ahora: (619) 940-5550',
+  'home.finalCta.callButton': 'Llamar Ahora: (734) 255-7060',
   'home.finalCta.quoteButton': 'Envíenos un Correo',
   'home.finalCta.sameDay': 'Servicio el Mismo Día Disponible',
   'home.finalCta.trusted': '30+ Años de Experiencia Confiable',
@@ -222,7 +222,7 @@ export const esTranslations = {
 
   'about.finalCta.title': '¿Listo para Unirse a Nuestra Familia?',
   'about.finalCta.subtitle': '¡No deje que los problemas tecnológicos sean su kriptonita! Únase a nuestra creciente familia de clientes satisfechos que duermen mejor sabiendo que su tecnología está protegida por verdaderos héroes.',
-  'about.finalCta.callButton': 'Llame a Sus Héroes: (619) 940-5550',
+  'about.finalCta.callButton': 'Llame a Sus Héroes: (734) 255-7060',
   'about.finalCta.consultButton': 'Envíenos un Correo',
   'about.finalCta.location': 'Sirviendo con Orgullo el Condado de San Diego y Más Allá',
 
@@ -269,7 +269,7 @@ export const esTranslations = {
   'contact.hero.title': '¿Necesita',
   'contact.hero.titleHighlight': 'Héroes Tecnológicos?',
   'contact.hero.subtitle': '¡Estamos esperando! Ya sea una reparación de emergencia o mantenimiento de rutina, sus héroes tecnológicos del vecindario están a solo una llamada de distancia.',
-  'contact.hero.emergencyButton': 'Línea de Emergencia: (619) 940-5550',
+  'contact.hero.emergencyButton': 'Línea de Emergencia: (734) 255-7060',
 
   'contact.methods.title': 'Elija Su Método de Rescate',
   'contact.methods.subtitle': '¡Múltiples formas de contactar a sus héroes tecnológicos: estamos aquí cuando más nos necesita!',
@@ -297,7 +297,7 @@ export const esTranslations = {
 
   'contact.emergencyCta.title': '¿Crisis Tecnológica? ¡Somos Su 911!',
   'contact.emergencyCta.subtitle': '¡No entre en pánico cuando la tecnología falle! Sus héroes del vecindario están esperando para rescatarlo de cualquier desastre digital. ¡Lo tendremos en línea más rápido de lo que puede decir "ayuda"!',
-  'contact.emergencyCta.hotlineButton': 'Línea de Rescate: (619) 940-5550',
+  'contact.emergencyCta.hotlineButton': 'Línea de Rescate: (734) 255-7060',
   'contact.emergencyCta.sosButton': 'Enviar Correo SOS',
   'contact.emergencyCta.sameDay': 'Respuesta el Mismo Día',
   'contact.emergencyCta.trusted': '30+ Años Confiables',
@@ -382,7 +382,7 @@ export const esTranslations = {
   'comingSoon.title': 'Portal Cliente',
   'comingSoon.titleHighlight': '¡Próximamente!',
   'comingSoon.subtitle': 'Estamos construyendo una increíble plataforma de experiencia del cliente que revolucionará cómo interactúa con nuestros servicios.',
-  'comingSoon.callButton': 'Llamar (619) 940-5550',
+  'comingSoon.callButton': 'Llamar (734) 255-7060',
   'comingSoon.emailButton': 'Envíenos un Correo',
 
   // Coming Soon Features
@@ -398,7 +398,7 @@ export const esTranslations = {
   'comingSoon.contact.subtitle': 'Mientras construimos su nuevo portal cliente, nuestro equipo siempre está listo para ayudarle con cualquier necesidad de TI.',
   'comingSoon.contact.call.title': 'Llámenos',
   'comingSoon.contact.call.description': 'Hable directamente con nuestros expertos técnicos',
-  'comingSoon.contact.call.button': '(619) 940-5550',
+  'comingSoon.contact.call.button': '(734) 255-7060',
   'comingSoon.contact.email.title': 'Envíenos un Correo',
   'comingSoon.contact.email.description': 'Envíenos sus preguntas y le responderemos rápidamente',
   'comingSoon.contact.email.button': 'Enviar Correo',
@@ -420,7 +420,7 @@ export const esTranslations = {
   'dashboard.stats.availableSpace': 'Espacio Disponible',
 
   // Common
-  'common.phone': '(619) 940-5550',
+  'common.phone': '(734) 255-7060',
   'common.email': 'info@romerotechsolutions.com',
   'common.loading': 'Cargando...',
   'common.days.sun': 'Dom',
@@ -530,7 +530,7 @@ export const esTranslations = {
 
   // SEO Metadata
   'seo.home.title': 'Soporte de TI y Reparación de Computadoras Profesional | Escondido, CA | Romero Tech Solutions',
-  'seo.home.description': 'Reparación experta de computadoras, configuración de redes y soporte de TI en Escondido, CA. Más de 30 años de experiencia sirviendo hogares y empresas. Llame al (619) 940-5550 para soluciones tecnológicas rápidas y confiables.',
+  'seo.home.description': 'Reparación experta de computadoras, configuración de redes y soporte de TI en Escondido, CA. Más de 30 años de experiencia sirviendo hogares y empresas. Llame al (734) 255-7060 para soluciones tecnológicas rápidas y confiables.',
   'seo.home.keywords': 'reparación de computadoras, soporte de TI, configuración de redes, Escondido CA, Condado de San Diego, TI empresarial, reparación de computadoras domésticas, soporte técnico',
 
   'seo.services.title': 'Servicios de TI y Reparación de Computadoras | Configuración de Redes | Romero Tech Solutions',
@@ -546,7 +546,7 @@ export const esTranslations = {
   'seo.about.keywords': 'experto en TI, técnico en computadoras, seguridad cibernética, experiencia militar, profesional de TI de San Diego',
 
   'seo.contact.title': 'Contáctenos | Obtenga Soporte de TI Ahora | Romero Tech Solutions',
-  'seo.contact.description': 'Contacte a Romero Tech Solutions para soporte de TI rápido y confiable en el Condado de San Diego. Llame al (619) 940-5550 o envíe un correo a info@romerotechsolutions.com',
+  'seo.contact.description': 'Contacte a Romero Tech Solutions para soporte de TI rápido y confiable en el Condado de San Diego. Llame al (734) 255-7060 o envíe un correo a info@romerotechsolutions.com',
   'seo.contact.keywords': 'contactar soporte de TI, reparación de computadoras cerca de mí, soporte técnico Escondido, ayuda de TI de emergencia',
 
   'seo.og.siteName': 'Romero Tech Solutions',
@@ -556,7 +556,7 @@ export const esTranslations = {
   'faq.a1': 'Servimos todo el Norte del Condado de San Diego, incluyendo Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon y Poway. Ofrecemos tanto visitas en sitio como soporte remoto según sus necesidades.',
 
   'faq.q2': '¿Qué tan rápido pueden responder a problemas de TI de emergencia?',
-  'faq.a2': 'Para situaciones de emergencia, nos esforzamos por responder dentro de 2-4 horas durante el horario comercial. Ofrecemos horas de servicio premium y de emergencia, incluyendo noches y fines de semana. Llame al (619) 940-5550 para asistencia inmediata.',
+  'faq.a2': 'Para situaciones de emergencia, nos esforzamos por responder dentro de 2-4 horas durante el horario comercial. Ofrecemos horas de servicio premium y de emergencia, incluyendo noches y fines de semana. Llame al (734) 255-7060 para asistencia inmediata.',
 
   'faq.q3': '¿Ofrecen soporte remoto o solo visitas en sitio?',
   'faq.a3': 'Ofrecemos tanto solución de problemas remota como visitas de servicio en sitio. Muchos problemas se pueden resolver de forma remota, lo que le ahorra tiempo y dinero. Para problemas de hardware o problemas complejos de red, proporcionamos soporte en sitio.',

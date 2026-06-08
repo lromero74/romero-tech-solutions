@@ -555,7 +555,7 @@ const Pricing: React.FC<PricingProps> = ({ setCurrentPage }) => {
                   {t('pricing.cta.signupButton')}
                 </button>
                 <a
-                  href="tel:+16199405550"
+                  href="tel:+17342557060"
                   className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
                 >
                   <Phone className="h-5 w-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />

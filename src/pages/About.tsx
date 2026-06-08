@@ -119,7 +119,7 @@ const About: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-16">
                 <a
-                  href="tel:+16199405550"
+                  href="tel:+17342557060"
                   className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
                 >
                   <Phone className="h-5 w-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
@@ -299,7 +299,7 @@ const About: React.FC = () => {
 
               <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
                 <a
-                  href="tel:+16199405550"
+                  href="tel:+17342557060"
                   className="inline-flex items-center justify-center px-10 py-5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-bold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg text-lg"
                 >
                   <Phone className="h-6 w-6 mr-3" />
