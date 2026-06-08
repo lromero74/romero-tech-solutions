@@ -140,7 +140,7 @@ class EmailService {
                 Questions? Contact us at:
               </p>
               <p style="color: #2563eb; font-weight: bold;">
-                📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com
+                📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com
               </p>
               <p style="color: #64748b; font-size: 12px; margin-top: 20px;">
                 © 2025 Romero Tech Solutions. All rights reserved.<br>
@@ -171,7 +171,7 @@ What's Next:
 - Access your service history
 
 Questions? Contact us at:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.

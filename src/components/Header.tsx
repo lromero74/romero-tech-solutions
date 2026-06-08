@@ -239,7 +239,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
             </div>
             
             <a
-              href="tel:+16199405550"
+              href="tel:+17342557060"
               className="flex items-center text-blue-600 hover:text-blue-800 transition-colors duration-200"
               title={t('common.phone')}
             >
@@ -317,7 +317,7 @@ const Header: React.FC<HeaderProps> = ({ currentPage, setCurrentPage }) => {
                 </div>
                 
                 <a
-                  href="tel:+16199405550"
+                  href="tel:+17342557060"
                   className="flex items-center space-x-2 px-4 py-2 text-blue-600 hover:text-blue-800 transition-colors duration-200"
                 >
                   <Phone className="h-4 w-4" />

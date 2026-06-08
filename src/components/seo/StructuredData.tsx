@@ -15,7 +15,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
     "alternateName": "RTS",
     "description": "Professional IT support, computer repair, and network solutions serving San Diego County, CA with over 30 years of experience.",
     "url": "https://romerotechsolutions.com",
-    "telephone": "+1-619-940-5550",
+    "telephone": "+1-734-255-7060",
     "email": "info@romerotechsolutions.com",
     "priceRange": "$$",
     "hasOfferCatalog": {
@@ -130,7 +130,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
     "contactPoint": [
       {
         "@type": "ContactPoint",
-        "telephone": "+1-619-940-5550",
+        "telephone": "+1-734-255-7060",
         "contactType": "customer service",
         "availableLanguage": ["English", "Spanish"],
         "areaServed": "US-CA"
@@ -262,7 +262,7 @@ const StructuredData: React.FC<StructuredDataProps> = ({ pageType = 'home' }) =>
     "logo": "https://romerotechsolutions.com/D629A5B3-F368-455F-9D3E-4EBDC4222F46.png",
     "contactPoint": {
       "@type": "ContactPoint",
-      "telephone": "+1-619-940-5550",
+      "telephone": "+1-734-255-7060",
       "contactType": "customer support",
       "availableLanguage": ["English", "Spanish"]
     },

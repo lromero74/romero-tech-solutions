@@ -227,7 +227,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
         </p>
         <div className="space-y-1">
           <p className="text-sm">
-            📞 Call us: <a href="tel:+16199405550" className="text-white hover:text-blue-200">(619) 940-5550</a>
+            📞 Call us: <a href="tel:+17342557060" className="text-white hover:text-blue-200">(734) 255-7060</a>
           </p>
           <p className="text-sm">
             ✉️ Email: <a href="mailto:info@romerotechsolutions.com" className="text-white hover:text-blue-200">info@romerotechsolutions.com</a>

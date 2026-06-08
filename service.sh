@@ -396,7 +396,7 @@ show_status() {
 
     local mode
     mode=$(get_current_mode)
-    echo -e "Mode:     ${GREEN}${mode^^}${NC} (frontend dist/ + backend both served from this host)"
+    echo -e "Mode:     ${GREEN}$(printf '%s' "$mode" | tr '[:lower:]' '[:upper:]')${NC} (frontend dist/ + backend both served from this host)"
     echo -e "URLs:     https://romerotechsolutions.com (nginx → dist/)"
     echo -e "          https://api.romerotechsolutions.com (nginx → port ${BACKEND_PORT})"
     echo ""

@@ -302,7 +302,7 @@ class EmailService {
             <div class="footer">
               <div class="contact-info">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -335,7 +335,7 @@ What's Next:
 ✓ Communicate directly with technicians
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -439,13 +439,13 @@ ${confirmationUrl}
 
                 <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
                   If you're having trouble or ${isAccountLocked ? 'did not make these login attempts' : 'did not request this password reset'}, please contact us immediately at
-                  <strong>(619) 940-5550</strong> or <strong>info@romerotechsolutions.com</strong>
+                  <strong>(734) 255-7060</strong> or <strong>info@romerotechsolutions.com</strong>
                 </p>
               </div>
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -473,7 +473,7 @@ SECURITY NOTICE:
 - If you didn't request this, please ignore this email
 
 If you're having trouble or did not request this password reset, please contact us immediately:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -572,13 +572,13 @@ Serving Escondido, CA and surrounding areas.
 
                 <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
                   If you're having trouble or did not request this login, please contact us immediately at
-                  <strong>(619) 940-5550</strong> or <strong>info@romerotechsolutions.com</strong>
+                  <strong>(734) 255-7060</strong> or <strong>info@romerotechsolutions.com</strong>
                 </p>
               </div>
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -607,7 +607,7 @@ SECURITY NOTICE:
 - Never share this code with anyone
 
 If you're having trouble or did not request this login, please contact us immediately:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -671,7 +671,7 @@ Serving Escondido, CA and surrounding areas.
       const variables = {
         action: text.action,
         purpose: text.purpose,
-        phone: '(619) 940-5550',
+        phone: '(734) 255-7060',
         email: 'info@romerotechsolutions.com'
       };
 
@@ -742,7 +742,7 @@ Serving Escondido, CA and surrounding areas.
 
               <div class="footer">
                 <p><strong>${translations['email.mfa.footer.questionsLabel']}</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   ${translations['email.mfa.footer.copyright']}<br>
                   ${translations['email.mfa.footer.serviceArea']}
@@ -771,7 +771,7 @@ ${translations['email.mfa.body.securityTitle']}
 ${interpolateTranslation(translations['email.mfa.body.troubleMessage'], variables)}
 
 ${translations['email.mfa.footer.questionsLabel']}
-📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com
+📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com
 
 ${translations['email.mfa.footer.copyright']}
 ${translations['email.mfa.footer.serviceArea']}
@@ -823,7 +823,7 @@ ${translations['email.mfa.footer.serviceArea']}
               <div style="white-space: pre-line;">${message}</div>
             </div>
             <div style="text-align: center; margin-top: 20px; color: #64748b; font-size: 12px;">
-              <p>© 2025 Romero Tech Solutions | (619) 940-5550 | info@romerotechsolutions.com</p>
+              <p>© 2025 Romero Tech Solutions | (734) 255-7060 | info@romerotechsolutions.com</p>
             </div>
           </div>
         `
@@ -1065,7 +1065,7 @@ ${translations['email.mfa.footer.serviceArea']}
 
                 <div class="footer">
                   <p><strong>Questions? Contact us:</strong></p>
-                  <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                  <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                   <p style="margin-top: 15px;">
                     © 2025 Romero Tech Solutions. All rights reserved.<br>
                     Serving Escondido, CA and surrounding areas.
@@ -1118,7 +1118,7 @@ NEXT STEPS:
 To view and manage this service request, please log in to the technician portal.
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -1270,13 +1270,13 @@ Serving Escondido, CA and surrounding areas.
 
                 <p style="color: #64748b; font-size: 14px; margin-top: 20px;">
                   If you have any questions or need to update your request, please contact us at
-                  <strong>(619) 940-5550</strong> or <strong>info@romerotechsolutions.com</strong>
+                  <strong>(734) 255-7060</strong> or <strong>info@romerotechsolutions.com</strong>
                 </p>
               </div>
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -1317,7 +1317,7 @@ A qualified technician will contact you within 1 HOUR to discuss your service re
 You can track the status of your service request by logging into your client portal or by referencing your request number ${requestNumber} when contacting us.
 
 If you have any questions or need to update your request, please contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -1449,7 +1449,7 @@ Serving Escondido, CA and surrounding areas.
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -1476,7 +1476,7 @@ Email: ${clientData.email}
 ${clientData.phone ? `Phone: ${clientData.phone}` : ''}
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -1625,7 +1625,7 @@ Email: info@romerotechsolutions.com
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -1657,7 +1657,7 @@ ${serviceRequest.locationAddress ? `Address: ${[serviceRequest.locationAddress.s
 Status: ${serviceRequest.status}
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -1816,7 +1816,7 @@ Email: info@romerotechsolutions.com
             </div>
 
             <div class="footer">
-              <p>© 2025 Romero Tech Solutions | (619) 940-5550</p>
+              <p>© 2025 Romero Tech Solutions | (734) 255-7060</p>
             </div>
           </div>
         </body>
@@ -1835,7 +1835,7 @@ ${magicLinkUrl}
 
 This link will expire in 15 minutes.
 
-Questions? Contact us: (619) 940-5550
+Questions? Contact us: (734) 255-7060
 
 © 2025 Romero Tech Solutions.
     `;
@@ -1927,7 +1927,7 @@ Questions? Contact us: (619) 940-5550
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -1963,7 +1963,7 @@ ${serviceRequest.locationAddress ? `Address: ${[serviceRequest.locationAddress.s
 Status: ${serviceRequest.status}
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.
@@ -2120,7 +2120,7 @@ Email: info@romerotechsolutions.com
 
               <div class="footer">
                 <p><strong>Questions? Contact us:</strong></p>
-                <p>📞 (619) 940-5550 | ✉️ info@romerotechsolutions.com</p>
+                <p>📞 (734) 255-7060 | ✉️ info@romerotechsolutions.com</p>
                 <p style="margin-top: 15px;">
                   © 2025 Romero Tech Solutions. All rights reserved.<br>
                   Serving Escondido, CA and surrounding areas.
@@ -2162,7 +2162,7 @@ ${cancellationReason}
 This notification was sent to all executives and administrators for review and follow-up action.
 
 Questions? Contact us:
-Phone: (619) 940-5550
+Phone: (734) 255-7060
 Email: info@romerotechsolutions.com
 
 © 2025 Romero Tech Solutions. All rights reserved.

@@ -14,7 +14,7 @@ export const enTranslations = {
   'home.hero.title': 'Professional',
   'home.hero.titleHighlight': 'Tech Solutions',
   'home.hero.subtitle': 'Remote monitoring and remote assistance available nationwide • On-site support, computer repair, and network setup in North County San Diego, CA',
-  'home.hero.callButton': 'Call (619) 940-5550',
+  'home.hero.callButton': 'Call (734) 255-7060',
   'home.hero.quoteButton': 'E-mail Us',
   'home.hero.stat1': '30+',
   'home.hero.stat1Label': 'Years Experience',
@@ -95,7 +95,7 @@ export const enTranslations = {
 
   'home.finalCta.title': 'Ready to Solve Your Tech Problems?',
   'home.finalCta.subtitle': "Don't let technology frustrate you. Get professional help from experts you can trust.",
-  'home.finalCta.callButton': 'Call Now: (619) 940-5550',
+  'home.finalCta.callButton': 'Call Now: (734) 255-7060',
   'home.finalCta.quoteButton': 'E-mail Us',
   'home.finalCta.sameDay': 'Same-Day Service Available',
   'home.finalCta.trusted': '30+ Years Trusted Experience',
@@ -222,7 +222,7 @@ export const enTranslations = {
 
   'about.finalCta.title': 'Ready to Join Our Family?',
   'about.finalCta.subtitle': "Don't let tech problems be your kryptonite! Join our growing family of satisfied customers who sleep better knowing their technology is protected by real heroes.",
-  'about.finalCta.callButton': 'Call Your Heroes: (619) 940-5550',
+  'about.finalCta.callButton': 'Call Your Heroes: (734) 255-7060',
   'about.finalCta.consultButton': 'E-mail Us',
   'about.finalCta.location': 'Proudly Serving North County San Diego & Beyond',
 
@@ -269,7 +269,7 @@ export const enTranslations = {
   'contact.hero.title': 'Need Tech',
   'contact.hero.titleHighlight': 'Heroes?',
   'contact.hero.subtitle': "We're standing by! Whether it's an emergency repair or routine maintenance, your neighborhood tech heroes are just one call away.",
-  'contact.hero.emergencyButton': 'Emergency Line: (619) 940-5550',
+  'contact.hero.emergencyButton': 'Emergency Line: (734) 255-7060',
 
   'contact.methods.title': 'Choose Your Rescue Method',
   'contact.methods.subtitle': "Multiple ways to reach your tech heroes - we're here when you need us most!",
@@ -297,7 +297,7 @@ export const enTranslations = {
 
   'contact.emergencyCta.title': 'Tech Crisis? We\'re Your 911!',
   'contact.emergencyCta.subtitle': "Don't panic when technology fails! Your neighborhood heroes are standing by to rescue you from any digital disaster. We'll have you back online faster than you can say \"help\"!",
-  'contact.emergencyCta.hotlineButton': 'Rescue Hotline: (619) 940-5550',
+  'contact.emergencyCta.hotlineButton': 'Rescue Hotline: (734) 255-7060',
   'contact.emergencyCta.sosButton': 'Send SOS Email',
   'contact.emergencyCta.sameDay': 'Same-Day Response',
   'contact.emergencyCta.trusted': '30+ Years Trusted',
@@ -382,7 +382,7 @@ export const enTranslations = {
   'comingSoon.title': 'Client Portal',
   'comingSoon.titleHighlight': 'Coming Soon!',
   'comingSoon.subtitle': "We're building an amazing client experience platform that will revolutionize how you interact with our services.",
-  'comingSoon.callButton': 'Call (619) 940-5550',
+  'comingSoon.callButton': 'Call (734) 255-7060',
   'comingSoon.emailButton': 'Email Us',
 
   // Coming Soon Features
@@ -398,7 +398,7 @@ export const enTranslations = {
   'comingSoon.contact.subtitle': "While we're building your new client portal, our team is always ready to help you with any IT needs.",
   'comingSoon.contact.call.title': 'Call Us',
   'comingSoon.contact.call.description': 'Speak directly with our technical experts',
-  'comingSoon.contact.call.button': '(619) 940-5550',
+  'comingSoon.contact.call.button': '(734) 255-7060',
   'comingSoon.contact.email.title': 'Email Us',
   'comingSoon.contact.email.description': "Send us your questions and we'll respond quickly",
   'comingSoon.contact.email.button': 'Send Email',
@@ -420,7 +420,7 @@ export const enTranslations = {
   'dashboard.stats.availableSpace': 'Available Space',
 
   // Common
-  'common.phone': '(619) 940-5550',
+  'common.phone': '(734) 255-7060',
   'common.email': 'info@romerotechsolutions.com',
   'common.loading': 'Loading...',
   'common.days.sun': 'Sun',
@@ -539,7 +539,7 @@ export const enTranslations = {
 
   // SEO Metadata
   'seo.home.title': 'Professional IT Support & Computer Repair | Escondido, CA | Romero Tech Solutions',
-  'seo.home.description': 'Expert computer repair, network setup & IT support in Escondido, CA. 30+ years experience serving homes & businesses. Call (619) 940-5550 for fast, reliable tech solutions.',
+  'seo.home.description': 'Expert computer repair, network setup & IT support in Escondido, CA. 30+ years experience serving homes & businesses. Call (734) 255-7060 for fast, reliable tech solutions.',
   'seo.home.keywords': 'computer repair, IT support, network setup, Escondido CA, San Diego County, business IT, home computer repair, tech support',
 
   'seo.services.title': 'IT Services & Computer Repair | Network Setup | Romero Tech Solutions',
@@ -555,7 +555,7 @@ export const enTranslations = {
   'seo.about.keywords': 'IT expert, computer technician, cyber security, military experience, San Diego IT professional',
 
   'seo.contact.title': 'Contact Us | Get IT Support Now | Romero Tech Solutions',
-  'seo.contact.description': 'Contact Romero Tech Solutions for fast, reliable IT support in San Diego County. Call (619) 940-5550 or email info@romerotechsolutions.com',
+  'seo.contact.description': 'Contact Romero Tech Solutions for fast, reliable IT support in San Diego County. Call (734) 255-7060 or email info@romerotechsolutions.com',
   'seo.contact.keywords': 'contact IT support, computer repair near me, tech support Escondido, emergency IT help',
 
   'seo.og.siteName': 'Romero Tech Solutions',
@@ -565,7 +565,7 @@ export const enTranslations = {
   'faq.a1': 'We serve all of North San Diego County including Escondido, Carlsbad, Oceanside, Vista, San Marcos, Encinitas, El Cajon, and Poway. We offer both on-site visits and remote support depending on your needs.',
 
   'faq.q2': 'How quickly can you respond to emergency IT issues?',
-  'faq.a2': 'For emergency situations, we strive to respond within 2-4 hours during business hours. We offer premium and emergency service hours including evenings and weekends. Call (619) 940-5550 for immediate assistance.',
+  'faq.a2': 'For emergency situations, we strive to respond within 2-4 hours during business hours. We offer premium and emergency service hours including evenings and weekends. Call (734) 255-7060 for immediate assistance.',
 
   'faq.q3': 'Do you offer remote support or only on-site visits?',
   'faq.a3': 'We offer both remote troubleshooting and on-site service visits. Many issues can be resolved remotely, which saves you time and money. For hardware issues or complex network problems, we provide on-site support.',

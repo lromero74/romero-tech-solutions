@@ -141,7 +141,7 @@ const Home: React.FC = () => {
 
                 <div className="flex flex-col sm:flex-row gap-4 justify-center w-full">
                   <a
-                    href="tel:+16199405550"
+                    href="tel:+17342557060"
                     className="group inline-flex items-center justify-center px-8 py-4 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white font-semibold rounded-xl transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl"
                   >
                     <Phone className="h-5 w-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
@@ -328,10 +328,10 @@ const Home: React.FC = () => {
                     <h3 className="text-xl font-bold text-white mb-4 group-hover:text-cyan-300 transition-colors duration-200">{t('home.contact.phone.title')}</h3>
                     <p className="text-blue-200 mb-4 leading-relaxed">{t('home.contact.phone.description')}</p>
                     <a
-                      href="tel:+16199405550"
+                      href="tel:+17342557060"
                       className="text-cyan-300 font-semibold hover:text-white transition-colors"
                     >
-                      (619) 940-5550
+                      (734) 255-7060
                     </a>
                   </div>
                 </div>
