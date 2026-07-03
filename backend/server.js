@@ -42,6 +42,8 @@ import adminTestimonialsRoutes from './routes/admin/testimonials.js';
 import adminRatingQuestionsRoutes from './routes/admin/ratingQuestions.js';
 import adminAlertsRoutes from './routes/admin/alerts.js';
 import adminSubscriptionRoutes from './routes/admin/subscription.js';
+import adminZenithgridLicensesRoutes from './routes/admin/zenithgridLicenses.js';
+import zenithgridLicensingRoutes from './routes/zenithgridLicensing.js';
 import alertSubscriptionRoutes from './routes/alertSubscriptions.js';
 import employeeSettingsRoutes from './routes/employeeSettings.js';
 import clientSettingsRoutes from './routes/clientSettings.js';
@@ -537,10 +539,12 @@ app.use('/api/admin/testimonials', adminLimiter, adminIPWhitelist, doubleCsrfPro
 app.use('/api/admin/rating-questions', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminRatingQuestionsRoutes); // Admin rating questions management
 app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminAlertsRoutes); // Admin alert management (confluence alerts)
 app.use('/api/admin/subscription', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminSubscriptionRoutes); // Admin subscription pricing & analytics
+app.use('/api/admin/zenithgrid-licenses', adminLimiter, adminIPWhitelist, doubleCsrfProtection, adminZenithgridLicensesRoutes); // Admin ZenithGrid license issuance/revocation
 app.use('/api/admin/alerts', adminLimiter, adminIPWhitelist, doubleCsrfProtection, alertSubscriptionRoutes); // Alert subscription management (employee notifications)
 app.use('/api/employees', adminLimiter, adminIPWhitelist, doubleCsrfProtection, employeeSettingsRoutes); // Employee settings (timezone, preferences)
 app.use('/api/client/settings', generalLimiter, doubleCsrfProtection, clientSettingsRoutes); // Client settings (timezone, preferences)
 app.use('/api/agents', generalLimiter, agentRoutes); // MSP Agent monitoring system (mixed auth: agent JWT + employee session)
+app.use('/api/public/zenithgrid', generalLimiter, zenithgridLicensingRoutes); // ZenithGrid license activation/heartbeat (unauthenticated, machine client)
 app.use('/api/agents/guest', generalLimiter, guestAgentRoutes); // Guest agent and Rapid Service flow
 app.use('/api/agent', generalLimiter, agentDownloadRoutes); // Agent binary downloads (public - no auth required)
 // Static-file alternate path for agent downloads. Pre-migration this was served
