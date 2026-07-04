@@ -1,13 +1,12 @@
 # PRP: Migrate RTS Production off fedora.local → AWS Lightsail
 
-**Status:** RTS CORE MIGRATED & LIVE (2026-07-04). MeshCentral pending.
+**Status:** ✅ RTS CORE + MeshCentral MIGRATED & LIVE on Lightsail (2026-07-04).
+Only fedora-decommission (after a standby window) remains.
 **Date:** 2026-07-04
 **Author:** drafted with Claude
 **Scope note:** covers **RTS backend + Postgres AND MeshCentral** (remote
-desktop). Decided to split the wave: RTS core cut over first; MeshCentral
-follows next session (safe because RTS↔Mesh is loosely coupled via
-`MESHCENTRAL_URL` — Lightsail RTS drives fedora's MeshCentral over the
-internet meanwhile, so remote desktop never goes down).
+desktop). Executed as two cutovers same day: RTS core first, then
+MeshCentral (via a dedicated cloudflared tunnel on the box). Both live.
 
 ---
 
