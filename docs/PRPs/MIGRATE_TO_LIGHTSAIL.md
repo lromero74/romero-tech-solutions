@@ -336,6 +336,44 @@ public internet
 
 ## MeshCentral (remote desktop) — migrates in the same wave
 
+### ⚠️ Attempt 1 (2026-07-04): rolled back — agent path didn't work
+
+First cutover attempt. What was done and what happened:
+- Installed MeshCentral **1.1.59** (pinned to match fedora) on the Lightsail
+  micro; systemd unit `meshcentral.service` (now stopped + disabled, setup
+  preserved for retry).
+- Copied `meshcentral-data/` **verbatim** from fedora — **cert hashes are
+  byte-identical** (verified `8C:25:99:7B:…`), so agent cert-trust is NOT
+  the problem.
+- MeshCentral came up clean (loaded the mesh cert, listening 4434 web/agent,
+  4433 AMT, 1024 redir). nginx vhost `mesh.` → `http://127.0.0.1:4434`
+  (TLS-offloaded; `TlsOffload:127.0.0.1` in config). **Web UI worked** via
+  public CF (`https://mesh.…/` → 200, login page rendered).
+- **BUT agents never connected.** After the DNS flip (CNAME→tunnel ⇒
+  proxied A→micro) + fedora mesh stop, there were **0 agent connections**
+  over several minutes; `/agent.ashx` returned 404 even directly against
+  `127.0.0.1:4434` (bypassing nginx). Remote-desktop was down, so I
+  **rolled back cleanly**: restarted fedora mesh, flipped mesh DNS back to
+  the tunnel CNAME, confirmed agents reconnected to fedora (service
+  restored).
+
+**Leading hypothesis for the retry:** fedora serves mesh through a
+**cloudflared *tunnel*** (outbound-registered), not a CF-proxied A →
+direct-nginx origin. The MeshCentral agent WebSocket likely behaves
+differently through a direct-origin proxy than through the tunnel (or
+`/agent.ashx` needs a routing nuance the reverse-proxy setup didn't
+satisfy). **Retry options to try:** (a) run **cloudflared on the Lightsail
+box** with a tunnel ingress `mesh → https://127.0.0.1:4433`, replicating
+fedora's model exactly (most faithful); (b) dig into MeshCentral's expected
+reverse-proxy config for the agent endpoint (WSS path/headers, `AliasPort`,
+whether agents need `:4433` not `:4434`); (c) crucially — **next time, do
+NOT stop fedora mesh until ONE agent is confirmed connected to the Lightsail
+instance** (test agent path in isolation before the full DNS cutover).
+Mesh stays on fedora meanwhile; RTS-on-Lightsail calls it cross-host, so
+there's no urgency.
+
+---
+
 RTS uses MeshCentral for technician remote-control sessions. The coupling is
 **loose**: RTS calls it over HTTPS at a configurable `MESHCENTRAL_URL`
 (currently `https://mesh.romerotechsolutions.com`) with token auth
