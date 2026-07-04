@@ -1,11 +1,51 @@
 # PRP: Migrate RTS Production off fedora.local → AWS Lightsail
 
-**Status:** Draft / planning — nothing executed. Pressure-test before committing.
+**Status:** RTS CORE MIGRATED & LIVE (2026-07-04). MeshCentral pending.
 **Date:** 2026-07-04
 **Author:** drafted with Claude
 **Scope note:** covers **RTS backend + Postgres AND MeshCentral** (remote
-desktop). RTS depends on MeshCentral for technician remote-control sessions;
-they migrate together as one wave — see the MeshCentral section below.
+desktop). Decided to split the wave: RTS core cut over first; MeshCentral
+follows next session (safe because RTS↔Mesh is loosely coupled via
+`MESHCENTRAL_URL` — Lightsail RTS drives fedora's MeshCentral over the
+internet meanwhile, so remote desktop never goes down).
+
+---
+
+## Execution Status (2026-07-04)
+
+**✅ RTS core is live on Lightsail.**
+- Instance: `rts` (`micro_3_0`, us-east-1, static IP **54.208.154.115**,
+  SSH alias `rts-ls`, key `~/.ssh/lightsail/rts_us-east-1.pem`).
+- Applied: 2 GB swap; Postgres 16 tuned (96 MB buffers, 30 conns,
+  loopback); Node 22; nginx serving `dist/` static + proxying `api.` →
+  :3001; self-signed origin cert (CF Full).
+- **Frontend build lesson (now proven):** the micro CANNOT build the Vite
+  frontend in place (thrashed swap, timed out). Build on the dev machine /
+  fedora and ship `dist/` — matches ZenithGrid's ship pattern. The eventual
+  RTS ship script must build the artifact off-box.
+- DB: single-DB `pg_dump` of `romerotechsolutions` → restored (owned by
+  `romero_app`). NOT `pg_dumpall` (authentik/zenithgrid stayed on fedora).
+- DNS cut over 4 records → proxied A at the IP: `api`, `www`, apex,
+  `employee`. MX/TXT (email) untouched. `auth.` (Authentik) left on fedora.
+- Verified live: public API log-confirmed on Lightsail; SPA on all 4 hosts;
+  Cognito login reachable; **live RTS agents heartbeating/posting metrics
+  (200)**; ZenithGrid licensing endpoints working; RAM ~490 MB used /
+  ~420 MB available, swap idle.
+- fedora `rts.service` + `rts-frontend.service` **stopped + disabled**
+  (warm standby — data preserved, won't auto-resurrect a 2nd scheduler).
+
+**⏳ Remaining (next session):**
+1. MeshCentral migration (see the MeshCentral section) — still on fedora,
+   RTS calls it cross-host meanwhile.
+2. Verify a real Stripe webhook lands on Lightsail.
+3. Optional: add `origin.romerotechsolutions.com` DNS-only A for SSH.
+4. Write-delta: ~30 min of agent metrics landed on fedora between dump and
+   cutover (small metrics-history gap, non-critical).
+5. After a standby window: drop `romerotechsolutions` DB from fedora
+   postgres-box (leave `authentik`), fully decommission fedora RTS.
+
+**Rollback:** flip the 4 CF records back to the tunnel CNAME
+(`de498114-…cfargotunnel.com`) + re-enable fedora `rts.service`.
 
 ---
 
