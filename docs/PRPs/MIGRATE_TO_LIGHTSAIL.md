@@ -34,7 +34,19 @@ and has run cleanly there since.
 **Intended outcome:** RTS running natively on its own Lightsail instance
 (no distrobox), Postgres local to that box, public ingress via
 Cloudflare-proxied A-records → the static IP (mirroring ZenithGrid), fedora
-kept as a stopped warm-standby for ~30 days, then decommissioned.
+RTS kept as a stopped warm-standby for ~30 days, then decommissioned.
+
+**⚠️ fedora + postgres-box are NOT fully decommissioned by this migration.**
+`postgres-box` on fedora hosts three databases: `romerotechsolutions` (RTS,
+the thing we're moving), `zenithgrid` (ZenithGrid warm-standby, dormant),
+and **`authentik`** — the SSO/identity provider for the **stream-box**
+streaming app (`~/authentik` docker-compose + `~/STREAM-SETUP`, currently
+stopped but intentional, not junk). So after RTS moves, postgres-box and
+fedora stay alive for Authentik/stream-box. The RTS migration only removes
+RTS's dependency on fedora — it does NOT let us retire the box or its
+Postgres. Decommission scope here is *RTS's* fedora footprint only
+(rts-box backend + frontend, mesh-box, and RTS's DB), not postgres-box
+itself.
 
 ---
 
@@ -46,6 +58,8 @@ kept as a stopped warm-standby for ~30 days, then decommissioned.
 | Corrupt table | `agent_metrics_corrupted` (475 MB, 63k rows) — unreadable blocks |
 | Agent devices | **23 total, only 3 active in last 24h** |
 | Backend | `node server.js` on :3001, distrobox `rts-box`, systemd `--user` unit that `source`s `.env` then execs node |
+| Frontend | **separate service** `rts-frontend.service` — static `dist/` via `npx serve` in `rts-box`. Migration must stand up both backend + frontend (or have the Lightsail nginx serve `dist/` directly, like ZenithGrid). |
+| Corrupt table | **RESOLVED 2026-07-04** — view repointed to live `agent_metrics`, `agent_metrics_corrupted` dropped, full `pg_dump` now clean. Migration `20260704_fix_package_manager_view_drop_corrupt.sql`. |
 | Postgres | in distrobox `postgres-box`, `USE_SECRETS_MANAGER=false`, local creds in `.env` |
 | Public ingress | Cloudflare-proxied hostnames (`api.` / `www.` / apex `romerotechsolutions.com`, `mesh.`) → cloudflared tunnel → rts-box:3001 |
 | AWS-managed glue (does NOT move) | Cognito pool `us-east-1_YCT3O4xRZ`, SES, Stripe (+ webhooks), any S3 uploads |
