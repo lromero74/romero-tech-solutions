@@ -93,6 +93,31 @@ is the backbone of the cutover and it currently can't complete. Options:
 
 This also closes out the two loose ends already on the board (view repoint +
 corrupt-table drop) — fold them in here as migration prerequisites.
+**DONE 2026-07-04** — view repointed, corrupt table dropped, full `pg_dump`
+verified clean. Migration `20260704_fix_package_manager_view_drop_corrupt.sql`.
+
+---
+
+## What moves vs. what stays (per-DATABASE, not per-box)
+
+`postgres-box` hosts three databases. **We migrate the RTS database ONLY.**
+Do NOT `pg_dumpall` the cluster — that would drag stream-box's Authentik and
+the ZenithGrid standby along. Dump/restore the single `romerotechsolutions`
+database (`pg_dump ... romerotechsolutions`, which is already how the
+prereq dumps were taken — single-DB, not `pg_dumpall`).
+
+| Data on fedora | Action | Where it lands |
+|---|---|---|
+| `romerotechsolutions` DB | **MOVE** | Lightsail local Postgres |
+| MeshCentral `meshcentral-data/` (NeDB files) | **MOVE** | Lightsail (co-located) |
+| RTS `.env` (incl. ZenithGrid license signing key) | **MOVE** | Lightsail `~/.../backend/.env` |
+| `authentik` DB (stream-box SSO) | **STAYS** | fedora postgres-box — untouched |
+| `zenithgrid` DB (warm-standby) | **STAYS** | fedora postgres-box — dormant |
+| `~/authentik` compose + `~/STREAM-SETUP` + stream-box | **STAYS** | fedora |
+
+So post-migration fedora still runs postgres-box (for Authentik + the
+ZenithGrid standby); only RTS's tables leave it. Nothing stream-box needs is
+touched.
 
 ---
 
