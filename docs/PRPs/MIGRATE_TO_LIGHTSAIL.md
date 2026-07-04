@@ -121,22 +121,54 @@ touched.
 
 ---
 
-## Target architecture (mirror ZenithGrid)
+## Target architecture (cost-optimized: everything on one `micro`)
 
 ```
 public internet
    → Cloudflare DNS (proxied A → Lightsail static IP, SSL mode Full)
    → Cloudflare edge (universal cert)
-   → nginx on Lightsail :443 (self-signed origin cert)
-   → node server.js :3001 (native systemd system unit, no distrobox)
-   → local PostgreSQL (127.0.0.1:5432)
+   → nginx on Lightsail :443  (self-signed origin cert; ALSO serves the
+        frontend dist/ statically — no separate `npx serve` process)
+   → node server.js :3001     (RTS backend, native systemd unit)
+   → MeshCentral :4434         (native, co-located; `mesh.` grey-cloud + LE)
+   → local PostgreSQL 16 (127.0.0.1:5432, tuned small)
 ```
 
-- **Instance:** Lightsail, size to the DB + agent load. ZenithGrid runs fine
-  on 4 GB/2 vCPU/80 GB; RTS's 3 GB DB + agent ingestion likely wants the
-  **8 GB/2 vCPU/160 GB** tier for headroom (agent metrics grow). Confirm
-  against current fedora RAM/CPU usage before picking.
+- **Instance: `micro_3_0` — 1 GB RAM / 2 vCPU / 40 GB / $7/mo, us-west-2 or
+  us-east-1.** Deliberate cost choice (matches the saltavidas box). RTS's
+  expected user count is low — lower than saltavidas. **This is TIGHT: RAM
+  (1 GB) is the binding constraint**, so the micro-specific tuning below is
+  mandatory, not optional. Rough light-load budget: Postgres ~150–250 MB +
+  RTS Node ~150–250 MB + MeshCentral ~150–250 MB + nginx ~40 MB + Ubuntu
+  ~130 MB ≈ 600–900 MB — fits at rest, near-zero slack for spikes.
+  **Escape hatch:** if it can't hold, `snapshot → create a larger instance
+  from it → repoint DNS`. Resizing UP is easy; only jump to `small_3_0`
+  ($12/2 GB) if the micro genuinely can't cope. Starting on micro is a
+  low-risk, low-cost experiment.
 - **OS:** Ubuntu 24.04 (matches ZenithGrid, native Node + Postgres).
+
+### Micro-specific tuning (MANDATORY on a 1 GB box)
+
+1. **2 GB swapfile** — non-negotiable. Turns an OOM-kill into a brief
+   slowdown. `fallocate -l 2G /swapfile; chmod 600; mkswap; swapon;` +
+   `/etc/fstab` entry. Set `vm.swappiness=10` so it's a cushion, not a
+   crutch.
+2. **No separate frontend process.** fedora runs the RTS frontend as
+   `rts-frontend.service` (`npx serve dist/` — a whole Node process). On
+   Lightsail, **nginx serves `dist/` statically** — reclaims ~50–80 MB and
+   one process. There is NO `rts-frontend` systemd unit on Lightsail.
+3. **Tune Postgres down** (`postgresql.conf`): `shared_buffers = 96MB`,
+   `effective_cache_size = 256MB`, `work_mem = 4MB`, `maintenance_work_mem
+   = 64MB`, `max_connections = 30` (RTS uses a small pool). Prevents
+   Postgres from assuming it owns the box.
+4. **Agent-metrics retention is now load-bearing, not a follow-up.** On a
+   40 GB disk with `agent_metrics` growing forever, add a prune/rollup job
+   early (e.g. keep raw metrics 30–90 days, roll older into daily
+   aggregates). Track disk with an alert.
+5. **Basic memory/disk monitoring + alerting** from day one so pressure is
+   visible before it becomes an OOM. MeshCentral during an active
+   remote-desktop session is the main RAM/CPU wildcard — watch it after
+   cutover.
 - **DNS:** the RTS hostnames become Cloudflare-proxied A-records → the new
   static IP (SSL mode Full), replacing the tunnel CNAMEs. Add a DNS-only
   `origin.romerotechsolutions.com` A → the IP for SSH/origin pinning (the
@@ -151,43 +183,76 @@ public internet
 
 ## Migration steps (ordered)
 
-1. **Prereq:** repoint the `agent_package_manager_summary` view → `agent_metrics`;
-   verify; drop `agent_metrics_corrupted`; confirm a full `pg_dump -Fc`
-   succeeds.
-2. **Provision** the Lightsail instance (static IP, Ubuntu 24.04). Install
-   Node, PostgreSQL, nginx. Harden (ufw, fail2ban, no password SSH).
-3. **Install RTS natively:** clone the repo, `npm ci`, build frontend, create
-   a systemd *system* unit `rts.service` (uvicorn-equivalent: `node server.js`),
-   nginx vhost with a self-signed origin cert (`/etc/ssl/rts/`), CF SSL mode
-   Full.
-4. **DB restore:** `pg_dump -Fc` on fedora → `pg_restore` on Lightsail's local
-   Postgres. Create role/db matching `.env`. Verify row counts vs fedora
-   (esp. `agent_metrics`, `agent_devices`, `users`, `zenithgrid_licenses`).
-5. **Copy secrets:** `.env` via `scp -3`. Verify Cognito/SES/Stripe env vars
-   present; verify the ZenithGrid license signing key line survived intact
-   (it's a `\n`-escaped single line — the exact thing that broke twice when
-   added by hand; copy the whole file, don't re-hand-edit it).
-6. **Smoke test with DNS still on fedora:** hit the Lightsail box directly by
-   IP/origin hostname (bypassing CF) — `/api/health`, a login via Cognito, an
-   agent check-in POST, a Stripe webhook replay, a ZenithGrid `/activate`
-   round-trip. Nothing public flips yet.
-7. **Cutover:** lower CF DNS TTLs beforehand. Repoint each hostname's CF
-   record from the tunnel CNAME → proxied A to the Lightsail IP. Watch the 3
-   active agents reconnect; watch backend logs.
-8. **Verify post-cutover:** agent check-ins landing, frontend loads, login,
-   Stripe webhook delivery (update the webhook URL in Stripe if it targets a
-   raw origin rather than the CF hostname), SES sends, ZenithGrid licensing
-   endpoints.
-9. **Warm standby:** stop (don't delete) the fedora rts-box + postgres-box.
-   Keep ~30 days as rollback. Document the cutover timestamp for the
-   write-delta window.
-10. **Decommission fedora RTS** after the standby window: stop/disable units,
-    reclaim space, update CLAUDE.md infra notes.
+1. **Prereq — DONE 2026-07-04:** repointed the `agent_package_manager_summary`
+   view → `agent_metrics`; dropped `agent_metrics_corrupted`; full `pg_dump -Fc`
+   confirmed clean. (`20260704_fix_package_manager_view_drop_corrupt.sql`.)
+2. **Provision** the `micro_3_0` instance (static IP, Ubuntu 24.04). Install
+   Node, PostgreSQL 16, nginx, MeshCentral. Harden (ufw, fail2ban, key-only
+   SSH). **Immediately add the 2 GB swapfile + `vm.swappiness=10`** (micro
+   tuning #1 — do this before anything else consumes RAM).
+3. **Install RTS natively:** clone the repo, `npm ci`, `npm run build` the
+   frontend, create a systemd *system* unit `rts.service` (`node server.js`
+   :3001). **nginx serves `dist/` statically** (micro tuning #2 — NO
+   `rts-frontend` process) and reverse-proxies `/api` → :3001, with a
+   self-signed origin cert (`/etc/ssl/rts/`), CF SSL mode Full.
+4. **Tune Postgres** (micro tuning #3) before restore: `shared_buffers=96MB`,
+   `effective_cache_size=256MB`, `work_mem=4MB`, `max_connections=30`.
+5. **DB restore:** `pg_dump -Fc` on fedora (single DB — `romerotechsolutions`
+   ONLY, never `pg_dumpall`) → `pg_restore` on Lightsail's local Postgres.
+   Create the `romero_app` role + DB matching `.env`. Verify row counts vs
+   fedora (esp. `agent_metrics`, `agent_devices`, `users`,
+   `zenithgrid_licenses`, `zenithgrid_license_activations`).
+6. **MeshCentral:** install natively, copy `~/meshcentral/meshcentral-data/`
+   (NeDB, ~32 MB) from fedora. Wire `mesh.romerotechsolutions.com` as
+   **CF grey-cloud / DNS-only + real Let's Encrypt** on the box (NOT CF
+   Full/self-signed — keeps MeshAgent cert validation clean; see Risks).
+   **Test carrying over the existing mesh cert material first** — agents that
+   pin the cert hash may reconnect without re-install.
+7. **Copy secrets:** RTS `.env` via `scp -3`. Verify Cognito/SES/Stripe env
+   vars present; verify the ZenithGrid license signing key line survived
+   intact (`\n`-escaped single line — the exact thing that broke twice when
+   hand-edited; copy the whole file, don't re-type it). Set
+   `MESHCENTRAL_URL` to the new mesh endpoint.
+8. **Smoke test with DNS still on fedora:** hit the Lightsail box directly by
+   IP/origin hostname (bypassing CF) — `/api/health`, frontend loads, login
+   via Cognito, an agent check-in POST, a Stripe webhook replay, a
+   remote-control session start, a ZenithGrid `/activate` round-trip.
+   **Watch RAM/swap under this load** — first real signal of whether the
+   micro holds. Nothing public flips yet.
+9. **Cutover:** lower CF DNS TTLs beforehand. Repoint each hostname's CF
+   record from the tunnel CNAME → proxied A to the Lightsail IP (`mesh.` →
+   grey-cloud DNS-only per step 6). Watch the 3 active agents + mesh agents
+   reconnect; watch backend logs + memory.
+10. **Verify post-cutover:** agent check-ins landing, frontend, login, Stripe
+    webhook delivery (update the webhook URL in Stripe if it targets a raw
+    origin rather than the CF hostname), SES sends, MeshCentral remote
+    sessions, ZenithGrid licensing endpoints. **Monitor RAM/swap/disk for the
+    first days** — this is where you learn if micro was the right call or if
+    you resize up.
+11. **Warm standby:** stop (don't delete) the fedora rts-box + mesh-box; leave
+    postgres-box running (Authentik still needs it — do NOT stop postgres-box).
+    Keep ~30 days as rollback. Document the cutover timestamp for the
+    write-delta window.
+12. **Decommission fedora RTS** after the standby window: stop/disable the RTS
+    + mesh units, drop the `romerotechsolutions` DB from postgres-box (leave
+    `authentik`), reclaim space, update CLAUDE.md infra notes.
 
 ---
 
 ## Risks & mitigations
 
+- **⚠️ TOP RISK — RAM exhaustion on the micro (1 GB).** Postgres + RTS Node +
+  MeshCentral + nginx share 1 GB. At rest it fits (~600–900 MB), but an active
+  MeshCentral remote-desktop session (screen relay) + agent-ingestion + a
+  Postgres query burst could spike past it. Mitigations: the mandatory 2 GB
+  swap (cushions spikes), tuned Postgres (caps its appetite), nginx-static
+  frontend (removes a whole Node process), memory alerting. **Acceptance
+  test:** during step-8 smoke testing, drive a remote-control session +
+  concurrent agent check-ins and watch `free -m` / swap usage. If it's
+  swapping hard under light load, resize up to `small_3_0` ($12/2 GB) via
+  snapshot before cutover rather than limping. This risk is the whole reason
+  the micro is framed as an *experiment with an escape hatch*, not a
+  commitment.
 - **Agent TLS pinning.** If agents pin the *origin* cert (not just the CF
   edge cert), the CF Full-mode self-signed origin cert will fail validation —
   the exact "agent reconnect pain" the ZenithGrid/MeshCentral migration
@@ -205,11 +270,15 @@ public internet
 - **License signing key.** Single point that, if lost/mangled in transit,
   breaks ZenithGrid activation. Copy `.env` wholesale; verify the key line
   post-copy; do NOT hand-retype it.
-- **DB size growth.** `agent_metrics` grows continuously. Size the instance
-  disk with headroom and consider a retention/rollup policy for old metrics
-  as a follow-up (out of scope here, but flag it).
-- **Cognito/SES region.** Both are `us-east-1`; put the Lightsail instance in
-  `us-east-1` too (matches ZenithGrid) to keep latency/data-residency simple.
+- **DB size growth on a 40 GB disk.** `agent_metrics` grows continuously; on
+  the micro's 40 GB (vs 80/160 on bigger tiers) this bites sooner. The
+  retention/rollup policy is **in scope for this migration** (micro tuning
+  #4), not a someday-follow-up — plus a disk-usage alert.
+- **Cognito/SES region vs micro region.** Cognito + SES are `us-east-1`.
+  saltavidas's micro is in `us-west-2`. Cross-region adds a little latency to
+  Cognito/SES calls but nothing data-residency-breaking. Prefer **us-east-1**
+  for the RTS micro to keep auth/email local; only pick us-west-2 if you want
+  it beside saltavidas for management convenience.
 
 ## MeshCentral (remote desktop) — migrates in the same wave
 
@@ -250,10 +319,11 @@ and reconnect/re-trust the mesh agents as needed.
 
 ## Explicitly out of scope
 
-Agent-metrics retention/rollup policy, moving Cognito/SES/Stripe (they stay),
-any RTS app refactor, CI/CD for RTS deploys (ZenithGrid has a ship script;
-RTS could get one but that's a follow-up). MeshCentral version upgrade (move
-as-is; upgrade separately).
+Moving Cognito/SES/Stripe (they stay), any RTS app refactor, CI/CD for RTS
+deploys (ZenithGrid has a ship script; RTS could get one but that's a
+follow-up). MeshCentral version upgrade (move as-is; upgrade separately).
+(Agent-metrics retention is NO LONGER out of scope — the micro's 40 GB disk
+makes it a migration deliverable; see micro tuning #4.)
 
 ## Verification (definition of done)
 
