@@ -49,10 +49,8 @@ internet meanwhile, so remote desktop never goes down).
   (`20260704_alert_history_allow_health_check.sql`). Verified 0 errors post-fix.
 
 **⏳ Remaining:**
-1. **MeshCentral migration** (see the MeshCentral section) — the one
-   substantial piece left. Still on fedora; Lightsail RTS calls it
-   cross-host meanwhile (remote desktop works). Warrants a focused session
-   (MeshAgent cert re-trust risk).
+1. ✅ **MeshCentral migrated & live** (2026-07-04) — see the MeshCentral
+   section. Agents on Lightsail via a dedicated cloudflared tunnel.
 2. Write-delta: ~30 min of agent metrics landed on fedora between dump and
    cutover (small metrics-history gap, non-critical).
 3. After a standby window: drop `romerotechsolutions` DB from fedora
@@ -334,9 +332,36 @@ public internet
   for the RTS micro to keep auth/email local; only pick us-west-2 if you want
   it beside saltavidas for management convenience.
 
-## MeshCentral (remote desktop) — migrates in the same wave
+## MeshCentral (remote desktop) — ✅ MIGRATED & LIVE (2026-07-04, attempt 2)
 
-### ⚠️ Attempt 1 (2026-07-04): rolled back — agent path didn't work
+**Working on Lightsail.** Agents connected + verified, RTS→mesh integration
+200, fedora mesh stopped + disabled. Setup:
+- MeshCentral **1.1.59** (native, systemd `meshcentral.service`), data dir
+  copied verbatim (certs byte-identical → seamless agent trust).
+- **cloudflared tunnel** on the box (`cloudflared-mesh.service`, dedicated
+  tunnel `b6485c6e-…`), ingress `mesh → http://localhost:4434` — replicates
+  fedora's exact model. `mesh.romerotechsolutions.com` = CF-proxied CNAME →
+  that tunnel. (nginx is NOT in the mesh path; the tunnel is.)
+- RAM with mesh + RTS + Postgres co-resident: ~220 MB avail / ~160 MB swap —
+  tight but stable (the micro holds all three, as planned).
+
+### 🔑 ROOT CAUSE of the attempt-1 failure — zombie fedora processes
+
+Attempt 1 wasn't a Lightsail problem at all. **fedora's MeshCentral leaves
+orphaned `node` processes** (the distrobox+systemd silent-failure mode — the
+"incrementing ports" 4434→4435→4436 were successive orphans). `systemctl
+--user stop meshcentral` reports `inactive` but the orphans keep running and
+**keep the agents connected to fedora** — so agents never lost their
+connection, never retried, never reached Lightsail (looked like "0 agents on
+Lightsail = broken"). The fix: `pkill -9 -f node_modules/meshcentral` inside
+mesh-box to kill ALL of them; agents then immediately reconnected to
+Lightsail and verified. **Lesson for any future fedora→cloud cutover: after
+`systemctl stop`, `pkill -9` the orphans and confirm 0 real procs
+(`ps | grep node_modules/meshcentral | grep -v grep`) — don't trust
+`systemctl is-active`, and don't trust `pgrep -f` counts (they match the
+distrobox wrapper's own command line).**
+
+### Attempt 1 (2026-07-04): rolled back — (was actually the zombie issue above)
 
 First cutover attempt. What was done and what happened:
 - Installed MeshCentral **1.1.59** (pinned to match fedora) on the Lightsail
