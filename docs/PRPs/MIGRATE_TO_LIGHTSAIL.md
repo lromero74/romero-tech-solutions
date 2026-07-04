@@ -34,14 +34,28 @@ internet meanwhile, so remote desktop never goes down).
 - fedora `rts.service` + `rts-frontend.service` **stopped + disabled**
   (warm standby — data preserved, won't auto-resurrect a 2nd scheduler).
 
-**⏳ Remaining (next session):**
-1. MeshCentral migration (see the MeshCentral section) — still on fedora,
-   RTS calls it cross-host meanwhile.
-2. Verify a real Stripe webhook lands on Lightsail.
-3. Optional: add `origin.romerotechsolutions.com` DNS-only A for SSH.
-4. Write-delta: ~30 min of agent metrics landed on fedora between dump and
+**✅ Also done post-cutover:**
+- `origin.romerotechsolutions.com` DNS-only A → the IP (SSH/origin pinning).
+- Resource watchdog (`rts-watchdog.timer`, 5-min) — logs status, warns on
+  low-mem/high-swap/disk-full/service-down (greppable `RTS-WATCHDOG WARN`).
+- **Stripe webhooks verified:** live-mode endpoint
+  `https://api.romerotechsolutions.com/api/client/payments/webhook` is
+  enabled and — being the CF hostname, not a raw origin — followed the DNS
+  cutover automatically. Endpoint live on the box (400 requires signature),
+  `STRIPE_WEBHOOK_SECRET` present. No dashboard change needed.
+- **Two latent app bugs fixed** (found in migration log review, pre-existing
+  on fedora, ~55×/hr each): confluence-detection `getAllConfigs` typo +
+  missing `health_check` value in the `alert_history` constraint
+  (`20260704_alert_history_allow_health_check.sql`). Verified 0 errors post-fix.
+
+**⏳ Remaining:**
+1. **MeshCentral migration** (see the MeshCentral section) — the one
+   substantial piece left. Still on fedora; Lightsail RTS calls it
+   cross-host meanwhile (remote desktop works). Warrants a focused session
+   (MeshAgent cert re-trust risk).
+2. Write-delta: ~30 min of agent metrics landed on fedora between dump and
    cutover (small metrics-history gap, non-critical).
-5. After a standby window: drop `romerotechsolutions` DB from fedora
+3. After a standby window: drop `romerotechsolutions` DB from fedora
    postgres-box (leave `authentik`), fully decommission fedora RTS.
 
 **Rollback:** flip the 4 CF records back to the tunnel CNAME
