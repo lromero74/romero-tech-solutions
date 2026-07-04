@@ -7,7 +7,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { shouldFireHealthCheckAlert, healthCheckLabel } from './alertEscalationService.js';
@@ -103,4 +103,27 @@ test('routeAlert is called fire-and-forget (errors logged, not thrown)', () => {
 test('skips silently for severity below threshold', () => {
   assert.ok(/shouldFireHealthCheckAlert\(severity\)/.test(SRC),
     'processHealthCheckResult must early-return via shouldFireHealthCheckAlert');
+});
+
+// REGRESSION (2026-07-04): the insert uses alert_type='health_check', but the
+// alert_history_alert_type_check constraint only permitted the technical-
+// indicator types — every health-check alert insert failed with a check-
+// constraint violation. 20260428 added 'health_check' to the
+// alert_CONFIGURATIONS constraint but overlooked alert_HISTORY. This pins the
+// code's inserted alert_type to a migration that widens the alert_history
+// constraint, so the two can't silently drift apart again.
+test('alert_type inserted into alert_history is covered by an alert_history constraint migration', () => {
+  assert.ok(/alert_type/.test(SRC) && /'health_check'/.test(SRC),
+    'processHealthCheckResult must insert alert_type=\'health_check\'');
+
+  const migDir = join(here, '..', 'migrations');
+  const constraintMigs = readdirSync(migDir)
+    .filter(f => f.endsWith('.sql'))
+    .map(f => readFileSync(join(migDir, f), 'utf8'))
+    .filter(sql => /ADD CONSTRAINT alert_history_alert_type_check/.test(sql));
+  assert.ok(constraintMigs.length > 0,
+    'expected at least one migration that (re)defines alert_history_alert_type_check');
+  const latestAllows = constraintMigs.some(sql => /alert_history_alert_type_check[\s\S]*'health_check'/.test(sql));
+  assert.ok(latestAllows,
+    "a migration must add 'health_check' to alert_history_alert_type_check (see 20260704_alert_history_allow_health_check.sql)");
 });

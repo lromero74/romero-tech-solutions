@@ -483,7 +483,7 @@ function analyzeConfluence(indicators, configurations) {
 export async function detectAndCreateAlerts(agentId, currentMetric) {
   try {
     // Load active alert configurations
-    const configurations = await alertConfigService.getAllConfigurations();
+    const configurations = await alertConfigService.getAllConfigs();
     const activeConfigs = configurations.filter(c => c.enabled);
 
     if (activeConfigs.length === 0) {
