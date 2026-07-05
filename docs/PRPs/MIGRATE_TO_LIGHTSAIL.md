@@ -50,8 +50,12 @@ MeshCentral (via a dedicated cloudflared tunnel on the box). Both live.
 **⏳ Remaining:**
 1. ✅ **MeshCentral migrated & live** (2026-07-04) — see the MeshCentral
    section. Agents on Lightsail via a dedicated cloudflared tunnel.
-2. Write-delta: ~30 min of agent metrics landed on fedora between dump and
-   cutover (small metrics-history gap, non-critical).
+2. ✅ **Write-delta backfilled** (2026-07-05) — the dump→cutover gap was
+   actually ~11.8h (not 30 min): Lightsail's dump-era `agent_metrics` ended
+   2026-07-04 05:10 UTC, fedora ran to 16:59 UTC. Recovered all **709 rows**
+   (1 agent) via CSV export from fedora's postgres-box → idempotent
+   `ON CONFLICT DO NOTHING` load into Lightsail. Timeline now continuous;
+   fedora's DB still holds the source rows until decommission.
 3. After a standby window: drop `romerotechsolutions` DB from fedora
    postgres-box (leave `authentik`), fully decommission fedora RTS.
 
