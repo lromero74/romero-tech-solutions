@@ -260,7 +260,7 @@ class SubscriberManagementService {
         u.first_name,
         u.last_name,
         u.email as user_email,
-        u.preferred_language as user_preferred_language,
+        u.language_preference as user_preferred_language,
         b.business_name,
         ad.device_name as agent_name
       FROM client_alert_subscriptions cas

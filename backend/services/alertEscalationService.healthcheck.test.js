@@ -127,3 +127,21 @@ test('alert_type inserted into alert_history is covered by an alert_history cons
   assert.ok(latestAllows,
     "a migration must add 'health_check' to alert_history_alert_type_check (see 20260704_alert_history_allow_health_check.sql)");
 });
+
+// REGRESSION (2026-07-05): SECOND stacked mismatch behind the alert_type one.
+// Health-check alerts insert severity in {info,warning,critical} (only
+// warning/critical actually fire), but alert_history_severity_check only
+// permitted {low,medium,high,critical}. Postgres reports the first failing
+// constraint, so this stayed hidden until alert_type was widened. Pins the
+// health-check severity domain to a migration that widens the severity check.
+test("alert_history severity constraint covers the health-check 'warning' severity", () => {
+  const migDir = join(here, '..', 'migrations');
+  const sevMigs = readdirSync(migDir)
+    .filter(f => f.endsWith('.sql'))
+    .map(f => readFileSync(join(migDir, f), 'utf8'))
+    .filter(sql => /ADD CONSTRAINT alert_history_severity_check/.test(sql));
+  assert.ok(sevMigs.length > 0,
+    'expected a migration that (re)defines alert_history_severity_check');
+  assert.ok(sevMigs.some(sql => /alert_history_severity_check[\s\S]*'warning'/.test(sql)),
+    "a migration must add 'warning' to alert_history_severity_check (see 20260705_alert_history_allow_health_check_severities.sql)");
+});

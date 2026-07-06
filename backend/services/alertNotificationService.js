@@ -196,7 +196,7 @@ class AlertNotificationService {
         u.last_name,
         u.email as default_email,
         u.phone as default_phone,
-        u.preferred_language as user_language
+        u.language_preference as user_language
       FROM client_alert_subscriptions cas
       JOIN users u ON cas.user_id = u.id
       WHERE cas.enabled = true
