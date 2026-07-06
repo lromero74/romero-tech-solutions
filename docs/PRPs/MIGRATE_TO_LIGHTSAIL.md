@@ -46,6 +46,15 @@ MeshCentral (via a dedicated cloudflared tunnel on the box). Both live.
   on fedora, ~55×/hr each): confluence-detection `getAllConfigs` typo +
   missing `health_check` value in the `alert_history` constraint
   (`20260704_alert_history_allow_health_check.sql`). Verified 0 errors post-fix.
+- **Three MORE stacked bugs fixed (2026-07-05)** once the above let alerts
+  actually flow (each fix revealed the next; all pre-existing on fedora):
+  (a) `alert_history_severity_check` didn't allow `warning`
+  (`20260705_...severities.sql`); (b) `alertNotificationService.js` +
+  `subscriberManagementService.js` selected `u.preferred_language` but the
+  users column is `language_preference`; (c) `.env` `AGENT_BINARIES_DIR`
+  still pointed at `/home/louis/agent-downloads` (fedora's user) → repointed
+  to `/home/ubuntu/agent-downloads` and copied version.json + current-version
+  (1.34.3) binaries (44 MB). **RTS backend error rate: 543/hr → 0.**
 
 **⏳ Remaining:**
 1. ✅ **MeshCentral migrated & live** (2026-07-04) — see the MeshCentral
@@ -56,7 +65,12 @@ MeshCentral (via a dedicated cloudflared tunnel on the box). Both live.
    (1 agent) via CSV export from fedora's postgres-box → idempotent
    `ON CONFLICT DO NOTHING` load into Lightsail. Timeline now continuous;
    fedora's DB still holds the source rows until decommission.
-3. After a standby window: drop `romerotechsolutions` DB from fedora
+3. **Historical agent binaries** — only the current version (1.34.3, 44 MB)
+   was copied to Lightsail; fedora still holds ~5 GB / 117 old versions in
+   `~/agent-downloads`. Direct download links to old versions will 404 on
+   Lightsail. Decide before decommission: bulk-copy them (disk has room) or
+   let them go (agents auto-update to current, so low value).
+4. After a standby window: drop `romerotechsolutions` DB from fedora
    postgres-box (leave `authentik`), fully decommission fedora RTS.
 
 **Rollback:** flip the 4 CF records back to the tunnel CNAME
