@@ -25,6 +25,50 @@ const getAgentBinariesDir = () => {
     : '/tmp/agent-binaries';
 };
 
+export const AGENT_VERSION_RE = /^v?\d+\.\d+\.\d+$/;
+export const AGENT_ARCH_RE = /^(amd64|arm64|386)$/;
+export const AGENT_LINUX_FORMATS = new Set(['deb', 'rpm', 'pkg.tar.zst']);
+
+export const normalizePlatform = (platform) => {
+  const platformMap = {
+    darwin: 'macos',
+    macos: 'macos',
+    windows: 'windows',
+    linux: 'linux',
+  };
+
+  if (typeof platform !== 'string') {
+    return null;
+  }
+
+  return platformMap[platform.toLowerCase()] || null;
+};
+
+export const normalizeAgentVersion = (version) => {
+  if (typeof version !== 'string' || !AGENT_VERSION_RE.test(version)) {
+    return null;
+  }
+
+  return version;
+};
+
+export const normalizeAgentArch = (arch) => {
+  if (typeof arch !== 'string' || !AGENT_ARCH_RE.test(arch)) {
+    return null;
+  }
+
+  return arch;
+};
+
+export const normalizeLinuxFormat = (format) => {
+  if (typeof format !== 'string') {
+    return 'deb';
+  }
+
+  const normalizedFormat = format.toLowerCase();
+  return AGENT_LINUX_FORMATS.has(normalizedFormat) ? normalizedFormat : null;
+};
+
 // Platform detection from User-Agent
 const detectPlatformFromUserAgent = (userAgent) => {
   if (!userAgent) return null;
@@ -144,39 +188,53 @@ const getBinaryFilename = (platform, arch, version, format = null) => {
  */
 router.get('/download/:platform', async (req, res) => {
   try {
-    let { platform } = req.params;
-    const requestedVersion = req.query.version;
-    const requestedArch = req.query.arch;
-    const requestedFormat = req.query.format; // Linux package format
+    const rawPlatform = req.params.platform;
+    const requestedVersion =
+      typeof req.query.version === 'string' ? req.query.version : null;
+    const requestedArch =
+      typeof req.query.arch === 'string' ? req.query.arch : null;
+    const requestedFormat =
+      typeof req.query.format === 'string' ? req.query.format : null; // Linux package format
     const userAgent = req.get('user-agent');
 
-    console.log(`📥 Agent download request: platform=${platform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, format=${requestedFormat || 'default'}, UA=${userAgent}`);
+    console.log(`📥 Agent download request: platform=${rawPlatform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, format=${requestedFormat || 'default'}, UA=${userAgent}`);
 
-    // Normalize platform name (darwin -> macos for directory lookup)
-    const platformMap = {
-      'darwin': 'macos',
-      'macos': 'macos',
-      'windows': 'windows',
-      'linux': 'linux'
-    };
+    const platform = normalizePlatform(rawPlatform);
 
-    const normalizedPlatform = platformMap[platform.toLowerCase()];
-
-    if (!normalizedPlatform) {
+    if (!platform) {
       return res.status(400).json({
         success: false,
-        message: `Invalid platform '${platform}'. Must be one of: darwin, macos, windows, linux`
+        message: `Invalid platform '${rawPlatform}'. Must be one of: darwin, macos, windows, linux`
       });
     }
 
-    platform = normalizedPlatform;
-
     // Detect or validate architecture
-    const arch = requestedArch || detectArchFromUserAgent(userAgent);
+    const arch = normalizeAgentArch(requestedArch || detectArchFromUserAgent(userAgent));
+    if (!arch) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid architecture. Must be one of: amd64, arm64, 386'
+      });
+    }
+
+    const resolvedFormat = platform === 'linux'
+      ? normalizeLinuxFormat(requestedFormat)
+      : 'default';
+    if (platform === 'linux' && !resolvedFormat) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid Linux format. Must be one of: deb, rpm, pkg.tar.zst'
+      });
+    }
+
     console.log(`🔍 Detected/requested architecture: ${arch}`);
 
     // Get version (latest if not specified)
-    const version = requestedVersion || await getLatestVersion(platform);
+    const versionInput =
+      requestedVersion && requestedVersion.toLowerCase() === 'latest'
+        ? null
+        : requestedVersion;
+    const version = normalizeAgentVersion(versionInput || await getLatestVersion(platform));
 
     if (!version) {
       return res.status(404).json({
@@ -189,7 +247,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Build binary path
     const binariesDir = getAgentBinariesDir();
-    const filename = getBinaryFilename(platform, arch, version, requestedFormat);
+    const filename = getBinaryFilename(platform, arch, version, resolvedFormat);
     const binaryPath = path.join(binariesDir, platform, version, filename);
 
     console.log(`📂 Binary path: ${binaryPath}`);

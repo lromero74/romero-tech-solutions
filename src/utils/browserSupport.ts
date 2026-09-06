@@ -15,11 +15,20 @@ export const isFirefoxWithModuleIssues = () => {
   const browser = detectBrowser();
   if (!browser.isFirefox) return false;
 
-  // Check if dynamic imports are working properly
+  // Check if module + modern JS feature support are available.
+  // Avoiding dynamic code execution (e.g. Function / eval) keeps
+  // Firefox probing safe while preserving behavior for known-good browsers.
   try {
-    // Test if we can create a dynamic import
-    new Function('return import("data:text/javascript,export default true")')();
-    return false; // Dynamic imports work
+    const testScript = document.createElement('script');
+    testScript.type = 'module';
+
+    const supportsModuleScripts = testScript.type === 'module';
+    const hasModernJsFeatures =
+      typeof Symbol === 'function' &&
+      typeof Promise === 'function' &&
+      typeof requestAnimationFrame === 'function';
+
+    return !supportsModuleScripts || !hasModernJsFeatures;
   } catch (error) {
     console.warn('Firefox dynamic import issues detected:', error);
     return true; // Dynamic imports have issues
