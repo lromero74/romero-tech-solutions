@@ -1,11 +1,16 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { attachmentContentDisposition } from '../utils/httpSecurity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+const SEMVER_WITH_PREFIX_RE = /^v?\d+\.\d+\.\d+$/;
+const ALLOWED_ARCHES = ['amd64', 'arm64', '386'];
+const ALLOWED_FORMATS = ['deb', 'rpm', 'pkg.tar.zst'];
 
 const router = express.Router();
 
@@ -145,9 +150,15 @@ const getBinaryFilename = (platform, arch, version, format = null) => {
 router.get('/download/:platform', async (req, res) => {
   try {
     let { platform } = req.params;
-    const requestedVersion = req.query.version;
-    const requestedArch = req.query.arch;
-    const requestedFormat = req.query.format; // Linux package format
+    const requestedVersion = typeof req.query.version === 'string'
+      ? req.query.version.trim()
+      : null;
+    const requestedArch = typeof req.query.arch === 'string'
+      ? req.query.arch.toLowerCase().trim()
+      : null;
+    const requestedFormat = typeof req.query.format === 'string'
+      ? req.query.format.toLowerCase().trim()
+      : null; // Linux package format
     const userAgent = req.get('user-agent');
 
     console.log(`📥 Agent download request: platform=${platform}, version=${requestedVersion || 'latest'}, arch=${requestedArch || 'auto-detect'}, format=${requestedFormat || 'default'}, UA=${userAgent}`);
@@ -173,6 +184,26 @@ router.get('/download/:platform', async (req, res) => {
 
     // Detect or validate architecture
     const arch = requestedArch || detectArchFromUserAgent(userAgent);
+    if (!ALLOWED_ARCHES.includes(arch)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid arch '${arch}'. Must be one of: ${ALLOWED_ARCHES.join(', ')}`
+      });
+    }
+
+    if (requestedVersion && !SEMVER_WITH_PREFIX_RE.test(requestedVersion)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid version '${requestedVersion}'. Use semver like 1.2.3 or v1.2.3`
+      });
+    }
+
+    if (requestedFormat && !ALLOWED_FORMATS.includes(requestedFormat)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid format '${requestedFormat}'. Must be one of: ${ALLOWED_FORMATS.join(', ')}`
+      });
+    }
     console.log(`🔍 Detected/requested architecture: ${arch}`);
 
     // Get version (latest if not specified)
@@ -209,7 +240,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Set appropriate headers
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(filename));
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Agent-Version', version);
     res.setHeader('X-Agent-Platform', platform);
@@ -217,7 +248,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Stream the file
     console.log(`✅ Sending agent binary: ${filename} (${Math.round(stats.size / 1024 / 1024)}MB)`);
-    const fileStream = (await import('fs')).default.createReadStream(binaryPath);
+    const fileStream = createReadStream(binaryPath);
     fileStream.pipe(res);
 
     // Log download completion

@@ -33,6 +33,7 @@ import {
   sendTrialVerificationEmail,
   getOrCreateTrialUser
 } from '../utils/trialEmailVerificationUtils.js';
+import { sanitizeRelativeRedirectPath } from '../utils/redirectSafety.js';
 
 const router = express.Router();
 
@@ -1434,8 +1435,9 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     };
 
     // Include redirect path if provided
-    if (redirect) {
-      tokenPayload.redirect = redirect;
+    const safeRedirect = sanitizeRelativeRedirectPath(redirect);
+    if (safeRedirect) {
+      tokenPayload.redirect = safeRedirect;
     }
 
     const magicToken = jwt.sign(
@@ -1446,7 +1448,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
 
     const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
-    const redirectInfo = redirect ? ` → ${redirect}` : '';
+    const redirectInfo = safeRedirect ? ` → ${safeRedirect}` : '';
     console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})${redirectInfo}`);
 
     res.json({
@@ -1457,7 +1459,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
         expires_in: '10m',
         agent_name: agent.device_name,
         business_name: agent.business_name,
-        redirect: redirect || null
+        redirect: safeRedirect || null
       }
     });
 

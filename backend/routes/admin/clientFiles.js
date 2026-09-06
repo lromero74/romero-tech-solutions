@@ -4,6 +4,7 @@ import clientFileBrowserService from '../../services/clientFileBrowserService.js
 import { getPool } from '../../config/database.js';
 import fs from 'fs/promises';
 import { createReadStream } from 'fs';
+import { attachmentContentDisposition } from '../../utils/httpSecurity.js';
 
 const router = express.Router();
 
@@ -368,7 +369,7 @@ router.get('/businesses/:businessId/files/:fileId/download',
 
       // Set headers for download
       res.setHeader('Content-Type', fileRecord.content_type || 'application/octet-stream');
-      res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_filename}"`);
+      res.setHeader('Content-Disposition', attachmentContentDisposition(fileRecord.original_filename));
 
       // Stream file to response
       const fileStream = createReadStream(fileRecord.file_path);

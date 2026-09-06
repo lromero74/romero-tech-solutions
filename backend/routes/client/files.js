@@ -12,6 +12,7 @@ import virusScanService from '../../services/virusScanService.js';
 import quotaManagementService from '../../services/quotaManagementService.js';
 import { getPool } from '../../config/database.js';
 import { websocketService } from '../../services/websocketService.js';
+import { attachmentContentDisposition } from '../../utils/httpSecurity.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
@@ -534,7 +535,7 @@ router.get('/:fileId/download', authenticateClient, async (req, res) => {
 
     // Set headers for download
     res.setHeader('Content-Type', fileRecord.content_type);
-    res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_filename}"`);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(fileRecord.original_filename));
 
     // Stream file to response
     const fileStream = createReadStream(fileRecord.file_path);
