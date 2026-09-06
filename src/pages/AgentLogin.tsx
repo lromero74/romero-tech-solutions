@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useEnhancedAuth } from '../contexts/EnhancedAuthContext';
 import { CheckCircle, AlertCircle, ArrowRight } from 'lucide-react';
 import { apiService } from '../services/apiService';
+import { getSafeInternalPath } from '../utils/urlSafety';
 
 interface AgentLoginProps {
   onSuccess: () => void;
@@ -62,7 +63,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           // asked for. That was the bug behind the user's report
           // of being dropped on "the Dashboard" with a back link
           // when clicking "Schedule Service Request" in the tray.
-          const tokenRedirect = result.redirect || null;
+          const tokenRedirect = getSafeInternalPath(result.redirect);
           const skipAgentDetails = tokenRedirect === '/schedule-service';
           if (result.user.agentId && !skipAgentDetails) {
             sessionStorage.setItem('pendingAgentId', result.user.agentId);
@@ -76,7 +77,7 @@ const AgentLogin: React.FC<AgentLoginProps> = ({ onSuccess }) => {
           await setUserFromTrustedDevice(result.user, result.session?.sessionToken);
 
           // Extract redirect path from JWT token if present
-          const redirect = result.redirect || null;
+          const redirect = getSafeInternalPath(result.redirect);
           console.log('🔀 Redirect path from token:', redirect);
 
           // Check profile completion if redirect requires it
