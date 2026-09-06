@@ -1,6 +1,7 @@
 import express from 'express';
 import { getPool } from '../../config/database.js';
 import { websocketService } from '../../services/websocketService.js';
+import { resolveSortParameters } from '../../utils/sortValidation.js';
 
 const router = express.Router();
 
@@ -102,6 +103,12 @@ router.get('/invoices', async (req, res) => {
       sortBy = 'issue_date',
       sortOrder = 'DESC'
     } = req.query;
+    const { safeSortBy, safeSortOrder } = resolveSortParameters({
+      sortBy,
+      sortOrder,
+      allowedSortBy: ['invoice_number', 'issue_date', 'due_date', 'payment_date', 'payment_status', 'total_amount', 'created_at', 'updated_at'],
+      defaultSortBy: 'issue_date'
+    });
 
     const pool = await getPool();
     const offset = (parseInt(page) - 1) * parseInt(limit);
@@ -167,7 +174,7 @@ router.get('/invoices', async (req, res) => {
       JOIN businesses b ON i.business_id = b.id
       JOIN service_requests sr ON i.service_request_id = sr.id
       ${whereClause}
-      ORDER BY i.${sortBy} ${sortOrder}
+      ORDER BY i.${safeSortBy} ${safeSortOrder}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 

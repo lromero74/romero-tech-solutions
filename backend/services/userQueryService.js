@@ -7,6 +7,7 @@
  */
 
 import { query } from '../config/database.js';
+import { resolveSortParameters } from '../utils/sortValidation.js';
 
 /**
  * Build the base employee query with all necessary joins
@@ -139,6 +140,13 @@ export async function buildUserListQuery(filters, pagination, sorting) {
     const { page = 1, limit = 10 } = pagination;
     const { sortBy = 'created_at', sortOrder = 'DESC' } = sorting;
     const offset = (page - 1) * limit;
+    const allowedSortColumns = ['created_at', 'updated_at', 'first_name', 'last_name', 'email', 'business_name', 'employee_number', 'department_detailed', 'phone', 'last_login', 'is_active'];
+    const { safeSortBy, safeSortOrder } = resolveSortParameters({
+      sortBy,
+      sortOrder,
+      allowedSortBy: allowedSortColumns,
+      defaultSortBy: 'created_at'
+    });
 
     let queryParams = [];
     let paramCount = 0;
@@ -181,7 +189,7 @@ export async function buildUserListQuery(filters, pagination, sorting) {
     // Build final query with sorting and pagination
     const finalQuery = `
       ${combinedQuery}
-      ORDER BY ${sortBy} ${sortOrder}
+      ORDER BY ${safeSortBy} ${safeSortOrder}
       LIMIT $${paramCount - 1} OFFSET $${paramCount}
     `;
 
@@ -217,12 +225,20 @@ export function buildSortingAndPagination(sorting, pagination, queryParams, para
   const { sortBy = 'created_at', sortOrder = 'DESC' } = sorting;
   const { limit = 10, offset = 0 } = pagination;
 
+  const allowedSortColumns = ['created_at', 'updated_at', 'first_name', 'last_name', 'email', 'business_name', 'employee_number', 'department_detailed', 'phone', 'last_login', 'is_active'];
+  const { safeSortBy, safeSortOrder } = resolveSortParameters({
+    sortBy,
+    sortOrder,
+    allowedSortBy: allowedSortColumns,
+    defaultSortBy: 'created_at'
+  });
+
   paramCount++;
   queryParams.push(limit);
   paramCount++;
   queryParams.push(offset);
 
-  const clause = `ORDER BY ${sortBy} ${sortOrder} LIMIT $${paramCount - 1} OFFSET $${paramCount}`;
+  const clause = `ORDER BY ${safeSortBy} ${safeSortOrder} LIMIT $${paramCount - 1} OFFSET $${paramCount}`;
 
   return {
     clause,

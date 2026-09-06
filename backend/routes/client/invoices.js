@@ -2,6 +2,7 @@ import express from 'express';
 import { getPool } from '../../config/database.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware } from '../../middleware/clientMiddleware.js';
+import { resolveSortParameters } from '../../utils/sortValidation.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
@@ -27,6 +28,13 @@ router.get('/', authenticateClient, async (req, res) => {
       sortBy = 'issue_date',
       sortOrder = 'DESC',
     } = req.query;
+
+    const { safeSortBy, safeSortOrder } = resolveSortParameters({
+      sortBy,
+      sortOrder,
+      allowedSortBy: ['issue_date', 'due_date', 'payment_date', 'created_at', 'updated_at', 'invoice_number', 'payment_status', 'total_amount'],
+      defaultSortBy: 'issue_date'
+    });
 
     const offset = (parseInt(page) - 1) * parseInt(limit);
 
@@ -78,7 +86,7 @@ router.get('/', authenticateClient, async (req, res) => {
       JOIN users u ON b.id = u.business_id
       JOIN service_requests sr ON i.service_request_id = sr.id
       WHERE ${whereClause}
-      ORDER BY i.${sortBy} ${sortOrder}
+      ORDER BY i.${safeSortBy} ${safeSortOrder}
       LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
     `;
 
