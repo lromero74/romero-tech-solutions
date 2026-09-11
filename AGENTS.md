@@ -2,6 +2,8 @@
 
 This file is the authoritative source of truth for working on RTS. Read it fully before making changes. **Review this file before each new task.**
 
+**Local checkout (Mac):** `/Users/louis/RomeroTechSolutions/romero-tech-solutions`
+
 ## Development Philosophy
 
 - **No stubs.** If you can't implement it now, don't fake it with a placeholder — say so explicitly.
@@ -184,7 +186,9 @@ Always use `./service.sh` from the project root. Never call `systemctl` directly
 
 ## Local Dev (mac)
 
-The legacy local-dev path (`./restart-services.sh`) still exists but is no longer the production deploy path. Use it for laptop development; testbot is the production environment.
+Working copy: `/Users/louis/RomeroTechSolutions/romero-tech-solutions` (moved out of `~/New/01_Projects/` on 2026-09-11). The old path is a reverse shim.
+
+The legacy local-dev path (`./restart-services.sh`) still exists but is no longer the production deploy path. Use it for laptop development; fedora.local is the production environment.
 
 ```bash
 npm run dev                          # Vite frontend (HMR)
@@ -349,7 +353,7 @@ location.reload();
 
 ## RTS Monitoring Agent
 
-Codebase: `/Users/louis/New/01_Projects/rts-monitoring-agent` (Go, separate repo). When updating the agent:
+Codebase: `/Users/louis/RomeroTechSolutions/rts-monitoring-agent` (Go, separate repo). When updating the agent:
 - Build installers for ALL supported systems together
 - The user experience must be similar across all OS versions
 - Bump the agent version on each rebuild
