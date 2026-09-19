@@ -11,6 +11,7 @@ import { validateFileUpload, sanitizeInputMiddleware } from '../../utils/inputVa
 import virusScanService from '../../services/virusScanService.js';
 import quotaManagementService from '../../services/quotaManagementService.js';
 import { getPool } from '../../config/database.js';
+import { parseCappedLimit } from '../../utils/sortValidation.js';
 import { websocketService } from '../../services/websocketService.js';
 import { attachmentContentDisposition } from '../../utils/httpSecurity.js';
 
@@ -328,7 +329,7 @@ router.get('/', authenticateClient, async (req, res) => {
     const folderId = req.query.folderId || null;
     const search = req.query.search || '';
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseCappedLimit(req.query.limit, 20);
     const offset = (page - 1) * limit;
 
     let query = `
