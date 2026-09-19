@@ -43,6 +43,7 @@ import {
   markResetTokenAsUsed,
   sendPasswordResetEmail
 } from '../utils/mfaUtils.js';
+import { sanitizeRelativeRedirectPath } from '../utils/redirectSafety.js';
 import {
   employeeLoginLimiter,
   clearEmployeeLoginAttempts,
@@ -2608,6 +2609,7 @@ router.post('/agent-magic-login', async (req, res) => {
     }
 
     const { agent_id, user_id, business_id, pending_guest_id, redirect } = decoded;
+    const safeRedirect = sanitizeRelativeRedirectPath(redirect);
 
     // For device_management tokens, we need to look up business_id from the user
     let effectiveBusinessId = business_id;
@@ -2726,7 +2728,7 @@ router.post('/agent-magic-login', async (req, res) => {
       agentId: agent_id  // Link to the specific agent that opened dashboard
     };
 
-    const redirectInfo = redirect ? ` → ${redirect}` : '';
+    const redirectInfo = safeRedirect ? ` → ${safeRedirect}` : '';
     console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})${redirectInfo}`);
 
     res.status(200).json({
@@ -2737,7 +2739,7 @@ router.post('/agent-magic-login', async (req, res) => {
         sessionToken: session.sessionToken,
         expiresAt: session.expiresAt
       },
-      redirect: redirect || null // Include redirect path if present
+      redirect: safeRedirect || null // Include redirect path if present
     });
 
   } catch (error) {

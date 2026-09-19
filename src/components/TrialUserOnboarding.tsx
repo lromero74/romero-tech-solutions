@@ -9,7 +9,7 @@ import {
 } from 'lucide-react';
 import { useLanguage } from '../contexts/LanguageContext';
 import { apiService } from '../services/apiService';
-import { getSafeInternalPath } from '../utils/urlSafety';
+import { sanitizeRelativeDashboardRedirect } from '../utils/redirectSafety';
 
 interface OnboardingFormData {
   businessName: string;
@@ -29,7 +29,7 @@ const TrialUserOnboarding: React.FC = () => {
 
   // Get next path from URL query parameters
   const params = new URLSearchParams(window.location.search);
-  const nextPath = getSafeInternalPath(params.get('next')) || '/dashboard';
+  const nextPath = sanitizeRelativeDashboardRedirect(params.get('next'));
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');

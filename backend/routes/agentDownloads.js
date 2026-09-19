@@ -1,8 +1,10 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import { createReadStream } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { attachmentContentDisposition } from '../utils/httpSecurity.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -267,7 +269,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Set appropriate headers
     res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Disposition', attachmentContentDisposition(filename));
     res.setHeader('Content-Length', stats.size);
     res.setHeader('X-Agent-Version', version);
     res.setHeader('X-Agent-Platform', platform);
@@ -275,7 +277,7 @@ router.get('/download/:platform', async (req, res) => {
 
     // Stream the file
     console.log(`✅ Sending agent binary: ${filename} (${Math.round(stats.size / 1024 / 1024)}MB)`);
-    const fileStream = (await import('fs')).default.createReadStream(binaryPath);
+    const fileStream = createReadStream(binaryPath);
     fileStream.pipe(res);
 
     // Log download completion
