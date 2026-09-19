@@ -1546,7 +1546,7 @@ router.post('/change-password', async (req, res) => {
 });
 
 // Resend MFA code for client login
-router.post('/resend-client-mfa', async (req, res) => {
+router.post('/resend-client-mfa', mfaVerifyLimiter, async (req, res) => {
   try {
     const { email } = req.body;
 
@@ -1843,7 +1843,7 @@ router.post('/update-mfa-method', async (req, res) => {
 });
 
 // POST /api/auth/send-mfa-code - Send MFA code via selected method(s)
-router.post('/send-mfa-code', async (req, res) => {
+router.post('/send-mfa-code', mfaVerifyLimiter, async (req, res) => {
   try {
     const { userId, deliveryMethod } = req.body;
 

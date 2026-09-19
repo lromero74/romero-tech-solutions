@@ -243,7 +243,7 @@ router.post('/disable', authenticateClient, async (req, res) => {
 });
 
 // Send MFA login code (for future login flow)
-router.post('/send-login-code', async (req, res) => {
+router.post('/send-login-code', mfaVerifyLimiter, async (req, res) => {
   try {
     const pool = await getPool();
     const { email } = req.body;
