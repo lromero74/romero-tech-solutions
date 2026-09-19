@@ -4,6 +4,7 @@ import { existsSync } from 'fs';
 import { promisify } from 'util';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
+import { parseCappedLimit } from '../utils/sortValidation.js';
 import { getSecurityStats, SECURITY_EVENTS } from '../utils/securityMonitoring.js';
 import { validateEnvironmentConfig, validateDatabaseSecurity } from '../utils/productionHardening.js';
 
@@ -151,7 +152,7 @@ router.get('/health', authMiddleware, requirePermission('manage.security_session
 // GET /api/security/events - Get recent security events (admin only)
 router.get('/events', authMiddleware, requirePermission('manage.security_sessions.enable'), async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 50;
+    const limit = parseCappedLimit(req.query.limit, 50);
     const eventType = req.query.type; // Optional filter by event type
 
     // In a production system, this would query a database

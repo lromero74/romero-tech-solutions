@@ -8,6 +8,7 @@ import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware, requireClientAccess } from '../../middleware/clientMiddleware.js';
 import { sanitizeInputMiddleware, validateFileUpload } from '../../utils/inputValidation.js';
 import { getPool } from '../../config/database.js';
+import { parseCappedLimit } from '../../utils/sortValidation.js';
 import { generateRequestNumber } from '../../utils/requestNumberGenerator.js';
 import { sendServiceRequestNotificationToTechnicians, sendServiceRequestConfirmationToClient, sendNoteAdditionNotification } from '../../services/emailService.js';
 import { initializeServiceRequestWorkflow } from '../../services/workflowService.js';
@@ -409,7 +410,7 @@ router.get('/', async (req, res) => {
     const businessId = req.user.businessId;
     const clientId = req.user.id; // authMiddleware sets req.user.id
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 20;
+    const limit = parseCappedLimit(req.query.limit, 20);
     const offset = (page - 1) * limit;
     const hideClosed = req.query.hideClosed === 'true'; // Get hideClosed filter
 
