@@ -2,6 +2,14 @@
 
 This file is the authoritative source of truth for working on RTS. Read it fully before making changes. **Review this file before each new task.**
 
+## Session Start: Deferred Work Check
+
+**At the start of each session, read `docs/DEFERRED_WORK.md` and ask Louis
+whether any listed proposal should be implemented.** Those items are
+deliberately unbuilt (each needs his product decision or a coordinated
+release) — never start one unasked, and never let the list go stale: if a
+proposal gets built, remove it from the doc in the same change.
+
 **Local checkout (Mac):** `/Users/louis/RomeroTechSolutions/romero-tech-solutions`
 
 ## Development Philosophy
@@ -367,6 +375,7 @@ Codebase: `/Users/louis/RomeroTechSolutions/rts-monitoring-agent` (Go, separate 
 | Document | Purpose |
 |---|---|
 | `AGENTS.md` | This file — start here |
+| `docs/DEFERRED_WORK.md` | Proposals awaiting Louis's go-ahead — read at session start and ask |
 | `.Codex-musings.md` | Continuity journal across sessions |
 | `service.sh` | Production lifecycle script |
 | `.Codex/commands/*.md` | Slash commands |
