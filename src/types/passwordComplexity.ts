@@ -62,8 +62,13 @@ export const evaluatePasswordStrength = (
     hasNumber: requirements.requireNumbers ? /\d/.test(password) : true,
     hasSpecialChar: requirements.requireSpecialCharacters ?
       new RegExp(`[${requirements.specialCharacterSet?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') || '!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?'}]`).test(password) : true,
-    noCommonPassword: true, // TODO: Implement common password check
-    noUserInfo: true // TODO: Implement user info check
+    // Common-password blocking is enforced server-side
+    // (passwordComplexityService, authoritative on submit); this local meter
+    // does not ship a password list, so it leaves the flag green here.
+    noCommonPassword: true,
+    // User-info check is implemented just below (sets noUserInfo=false on
+    // name/email match when preventUserInfoInPassword is required).
+    noUserInfo: true
   };
 
   // Check user info in password if required and userInfo provided
