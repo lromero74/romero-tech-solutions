@@ -1,5 +1,6 @@
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { translationService } from './translationService.js';
+import { logger } from '../utils/logger.js';
 
 class SMSService {
   constructor() {
@@ -152,7 +153,7 @@ class SMSService {
         }
       };
 
-      console.log(`📱 Sending SMS to ${formattedPhone}: ${message.substring(0, 50)}...`);
+      logger.debug(`📱 Sending SMS to ${formattedPhone}: ${message.substring(0, 50)}...`);
 
       // Send SMS via SNS
       const command = new PublishCommand(params);
@@ -161,7 +162,7 @@ class SMSService {
       // Record send for rate limiting
       this.recordSMSSend(formattedPhone);
 
-      console.log(`✅ SMS sent successfully. MessageId: ${result.MessageId}`);
+      logger.debug(`✅ SMS sent successfully. MessageId: ${result.MessageId}`);
 
       return {
         success: true,
@@ -170,7 +171,7 @@ class SMSService {
       };
 
     } catch (error) {
-      console.error('❌ Error sending SMS:', error);
+      logger.error('❌ Error sending SMS:', error);
       throw new Error(`Failed to send SMS: ${error.message}`);
     }
   }
@@ -193,7 +194,7 @@ class SMSService {
       });
 
     } catch (error) {
-      console.error('❌ Error sending MFA SMS:', error);
+      logger.error('❌ Error sending MFA SMS:', error);
       throw error;
     }
   }
@@ -216,7 +217,7 @@ class SMSService {
       });
 
     } catch (error) {
-      console.error('❌ Error sending phone verification SMS:', error);
+      logger.error('❌ Error sending phone verification SMS:', error);
       throw error;
     }
   }

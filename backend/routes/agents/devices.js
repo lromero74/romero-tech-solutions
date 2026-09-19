@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { query } from '../../config/database.js';
@@ -55,7 +56,7 @@ router.post('/registration-tokens', authMiddleware, requireEmployee, async (req,
     });
 
   } catch (error) {
-    console.error('Create registration token error:', error);
+    logger.error('Create registration token error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create registration token',
@@ -205,7 +206,7 @@ router.get('/', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('List agents error:', error);
+    logger.error('List agents error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agents',
@@ -287,7 +288,7 @@ router.get('/:agent_id/policies', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get agent policies error:', error);
+    logger.error('Get agent policies error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agent policies',
@@ -352,7 +353,7 @@ router.get('/:agent_id', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get agent details error:', error);
+    logger.error('Get agent details error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agent details',
@@ -374,7 +375,7 @@ router.put('/:agent_id/deactivate', authMiddleware, async (req, res) => {
     const { agent_id } = req.params;
     const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
-    console.log(`⏸️  DEACTIVATE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}`);
+    logger.debug(`⏸️  DEACTIVATE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}`);
 
     // Verify ownership/access to this agent
     let accessCheckQuery = `
@@ -413,7 +414,7 @@ router.put('/:agent_id/deactivate', authMiddleware, async (req, res) => {
       [agent_id]
     );
 
-    console.log(`⏸️  Agent deactivated: ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+    logger.debug(`⏸️  Agent deactivated: ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
 
     res.json({
       success: true,
@@ -425,7 +426,7 @@ router.put('/:agent_id/deactivate', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Deactivate agent error:', error);
+    logger.error('Deactivate agent error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to deactivate agent',
@@ -448,7 +449,7 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
     const { agent_id } = req.params;
     const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
-    console.log(`🗑️  DELETE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}, business_id=${req.user.business_id}`);
+    logger.debug(`🗑️  DELETE agent request: agent_id=${agent_id}, user_id=${req.user.id}, role=${req.user.role}, business_id=${req.user.business_id}`);
 
     // Verify ownership/access to this agent
     let accessCheckQuery = `
@@ -463,11 +464,11 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
       accessCheckQuery += ' AND (ad.trial_user_id = $2 OR ad.business_id = $3)';
       accessParams.push(req.user.id);
       accessParams.push(req.user.business_id);
-      console.log(`🔍 Client access check: trial_user_id=${req.user.id}, business_id=${req.user.business_id}`);
+      logger.debug(`🔍 Client access check: trial_user_id=${req.user.id}, business_id=${req.user.business_id}`);
     }
 
     const accessResult = await query(accessCheckQuery, accessParams);
-    console.log(`🔍 Access check result: found ${accessResult.rows.length} agents`, accessResult.rows.length > 0 ? accessResult.rows[0] : 'none');
+    logger.debug(`🔍 Access check result: found ${accessResult.rows.length} agents`, accessResult.rows.length > 0 ? accessResult.rows[0] : 'none');
 
     if (accessResult.rows.length === 0) {
       return res.status(404).json({
@@ -490,7 +491,7 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
       [agent_id]
     );
 
-    console.log(`🗑️  Agent removed (soft deleted): ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
+    logger.debug(`🗑️  Agent removed (soft deleted): ${agent.device_name} (${agent_id}) by user ${req.user.email}`);
 
     // Cleanup: also remove the matching node from MeshCentral so
     // the orphan device record doesn't linger as a connectable
@@ -501,10 +502,10 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
     try {
       const result = await meshcentralService.removeDeviceByName(agent.device_name);
       if (result.removed > 0) {
-        console.log(`🗑️  MeshCentral cleanup: removed ${result.removed} node(s) named "${agent.device_name}"`);
+        logger.debug(`🗑️  MeshCentral cleanup: removed ${result.removed} node(s) named "${agent.device_name}"`);
       }
     } catch (mcErr) {
-      console.warn(`⚠ MeshCentral cleanup for "${agent.device_name}" failed (non-fatal):`, mcErr.message);
+      logger.warn(`⚠ MeshCentral cleanup for "${agent.device_name}" failed (non-fatal):`, mcErr.message);
     }
 
     res.json({
@@ -517,7 +518,7 @@ router.delete('/:agent_id', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Deactivate agent error:', error);
+    logger.error('Deactivate agent error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to deactivate agent',
@@ -632,7 +633,7 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
       ? Math.round((1 - actualPoints / (hoursInt * 60)) * 100)
       : 0;
 
-    console.log(`📊 Metrics query for agent ${agent_id}: ${hoursInt}h range, ` +
+    logger.debug(`📊 Metrics query for agent ${agent_id}: ${hoursInt}h range, ` +
                 `${aggregationInterval ? aggregationInterval + ' aggregation' : 'raw data'}, ` +
                 `${actualPoints} points returned (${reductionPercent}% reduction)`);
 
@@ -650,7 +651,7 @@ router.get('/:agent_id/metrics/history', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get metrics history error:', error);
+    logger.error('Get metrics history error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch metrics history',
@@ -735,7 +736,7 @@ router.get('/:agent_id/alerts', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get agent alerts error:', error);
+    logger.error('Get agent alerts error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agent alerts',
@@ -826,7 +827,7 @@ router.patch('/:agent_id', authMiddleware, requireEmployee, async (req, res) => 
       values
     );
 
-    console.log(`✅ Agent ${agent_id} updated successfully by ${req.user.id}`);
+    logger.debug(`✅ Agent ${agent_id} updated successfully by ${req.user.id}`);
 
     res.json({
       success: true,
@@ -834,7 +835,7 @@ router.patch('/:agent_id', authMiddleware, requireEmployee, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Update agent error:', error);
+    logger.error('Update agent error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update agent',
@@ -895,7 +896,7 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
       [newToken, agent_id]
     );
 
-    console.log(`🔑 Token regenerated for agent ${agent.device_name} (${agent_id}) by ${req.user.first_name} ${req.user.last_name} (${userRole})`);
+    logger.debug(`🔑 Token regenerated for agent ${agent.device_name} (${agent_id}) by ${req.user.first_name} ${req.user.last_name} (${userRole})`);
 
     res.json({
       success: true,
@@ -906,7 +907,7 @@ router.post('/:agent_id/regenerate-token', authMiddleware, requireEmployee, asyn
     });
 
   } catch (error) {
-    console.error('Regenerate token error:', error);
+    logger.error('Regenerate token error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to regenerate token',

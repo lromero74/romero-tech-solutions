@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../../utils/logger.js';
 import { getPool } from '../../../config/database.js';
 import filterPresetService from '../../../services/filterPresetService.js';
 
@@ -45,14 +46,14 @@ router.get('/service-requests', async (req, res) => {
             const presetClause = filterPresetService.buildWhereClause(preset.criteria);
             conditions.push(presetClause);
           } else {
-            console.warn(`Preset filter not found: ${presetName}`);
+            logger.warn(`Preset filter not found: ${presetName}`);
             // Fallback to exact match
             conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
             params.push(status);
             paramIndex++;
           }
         } catch (error) {
-          console.error('Error applying preset filter:', error);
+          logger.error('Error applying preset filter:', error);
           // Fallback to exact match
           conditions.push(`LOWER(srs.name) = LOWER($${paramIndex})`);
           params.push(status);
@@ -187,12 +188,12 @@ router.get('/service-requests', async (req, res) => {
     params.push(parseInt(limit), offset);
     const result = await pool.query(query, params);
 
-    console.log('📊 [Service Requests] Query returned:', result.rows.length, 'rows');
-    console.log('📊 [Service Requests] Sample row:', result.rows[0]);
+    logger.debug('📊 [Service Requests] Query returned:', result.rows.length, 'rows');
+    logger.debug('📊 [Service Requests] Sample row:', result.rows[0]);
 
     const totalCount = result.rows.length > 0 ? parseInt(result.rows[0].total_count) : 0;
 
-    console.log('📊 [Service Requests] Total count:', totalCount);
+    logger.debug('📊 [Service Requests] Total count:', totalCount);
 
     // Helper function to calculate cost with tier breakdown
     const calculateCost = async (date, timeStart, timeEnd, businessId, clientId, createdAt, durationMinutes = null) => {
@@ -281,7 +282,7 @@ router.get('/service-requests', async (req, res) => {
             multiplier: parseFloat(matchingTier.rate_multiplier)
           } : { tierName: 'Standard', multiplier: 1.0 };
 
-          console.log(`🔍 Tier lookup: ${timeString} (${hour}:${minute}) → ${result.tierName} @ ${result.multiplier}x`);
+          logger.debug(`🔍 Tier lookup: ${timeString} (${hour}:${minute}) → ${result.tierName} @ ${result.multiplier}x`);
           return result;
         };
 
@@ -363,7 +364,7 @@ router.get('/service-requests', async (req, res) => {
           isFirstRequest
         };
       } catch (error) {
-        console.error('Error calculating cost:', error.message);
+        logger.error('Error calculating cost:', error.message);
         return null;
       }
     };
@@ -393,7 +394,7 @@ router.get('/service-requests', async (req, res) => {
           costTimeStart = formatTime(startDateTime);
           costTimeEnd = formatTime(endDateTime);
 
-          console.log(`🕐 [SR-${row.request_number}] Calculating cost:`, {
+          logger.debug(`🕐 [SR-${row.request_number}] Calculating cost:`, {
             utc_datetime: startDateTime.toISOString(),
             utc_hours: startDateTime.getUTCHours(),
             costTimeStart,
@@ -458,7 +459,7 @@ router.get('/service-requests', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching service requests:', error);
+    logger.error('Error fetching service requests:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch service requests',
@@ -494,7 +495,7 @@ router.get('/service-requests/closure-reasons', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching closure reasons:', error);
+    logger.error('Error fetching closure reasons:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch closure reasons',
@@ -592,8 +593,8 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
 
     const timeEntriesResult = await pool.query(timeEntriesQuery, [id]);
 
-    console.log('🔍 Time entries found:', timeEntriesResult.rows.length);
-    console.log('📊 Time entries data:', JSON.stringify(timeEntriesResult.rows, null, 2));
+    logger.debug('🔍 Time entries found:', timeEntriesResult.rows.length);
+    logger.debug('📊 Time entries data:', JSON.stringify(timeEntriesResult.rows, null, 2));
 
     if (timeEntriesResult.rows.length === 0) {
       return res.json({
@@ -656,7 +657,7 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
         }
       }
 
-      console.log('⏱️  Processing entry:', {
+      logger.debug('⏱️  Processing entry:', {
         start_time: entry.start_time,
         end_time: entry.end_time,
         duration_minutes: entry.duration_minutes,
@@ -700,7 +701,7 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
       }
     }
 
-    console.log('📈 Total chronological minutes:', chronologicalMinutes.length);
+    logger.debug('📈 Total chronological minutes:', chronologicalMinutes.length);
 
     // Apply first-time client discount (waive first 60 minutes)
     let waivedMinutes = 0;
@@ -772,7 +773,7 @@ router.get('/service-requests/:id/time-breakdown', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error calculating time breakdown:', error);
+    logger.error('Error calculating time breakdown:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to calculate time breakdown',
@@ -811,7 +812,7 @@ router.get('/service-requests/statuses', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching service request statuses:', error);
+    logger.error('Error fetching service request statuses:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch service request statuses',
@@ -835,7 +836,7 @@ router.get('/service-requests/filter-presets', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching filter presets:', error);
+    logger.error('Error fetching filter presets:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch filter presets',
@@ -880,7 +881,7 @@ router.get('/service-requests/technicians', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching technicians:', error);
+    logger.error('Error fetching technicians:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch technicians',
@@ -959,7 +960,7 @@ router.get('/service-requests/:id/files', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching service request files:', error);
+    logger.error('Error fetching service request files:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch files',

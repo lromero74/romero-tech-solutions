@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { query } from '../../config/database.js';
 import { authenticateAgent, requireAgentMatch } from '../../middleware/agentAuthMiddleware.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
@@ -133,7 +134,7 @@ router.post('/:agent_id/inventory/hardware', authenticateAgent, requireAgentMatc
       ]
     );
 
-    console.log(`💾 Hardware inventory received for agent ${agent_id}`);
+    logger.debug(`💾 Hardware inventory received for agent ${agent_id}`);
 
     res.json({
       success: true,
@@ -141,7 +142,7 @@ router.post('/:agent_id/inventory/hardware', authenticateAgent, requireAgentMatc
     });
 
   } catch (error) {
-    console.error('Agent hardware inventory upload error:', error);
+    logger.error('Agent hardware inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Hardware inventory upload failed',
@@ -255,7 +256,7 @@ router.post('/:agent_id/inventory/software', authenticateAgent, requireAgentMatc
       insertedCount = uniqueSoftware.size;
     }
 
-    console.log(`💿 Software inventory received for agent ${agent_id}: ${insertedCount} packages (${software.length - insertedCount} duplicates removed)`);
+    logger.debug(`💿 Software inventory received for agent ${agent_id}: ${insertedCount} packages (${software.length - insertedCount} duplicates removed)`);
 
     res.json({
       success: true,
@@ -266,7 +267,7 @@ router.post('/:agent_id/inventory/software', authenticateAgent, requireAgentMatc
     });
 
   } catch (error) {
-    console.error('Agent software inventory upload error:', error);
+    logger.error('Agent software inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Software inventory upload failed',
@@ -360,7 +361,7 @@ router.post('/:agent_id/inventory/storage', authenticateAgent, requireAgentMatch
       upsertedCount++;
     }
 
-    console.log(`💾 Storage inventory received for agent ${agent_id}: ${upsertedCount} devices`);
+    logger.debug(`💾 Storage inventory received for agent ${agent_id}: ${upsertedCount} devices`);
 
     res.json({
       success: true,
@@ -371,7 +372,7 @@ router.post('/:agent_id/inventory/storage', authenticateAgent, requireAgentMatch
     });
 
   } catch (error) {
-    console.error('Agent storage inventory upload error:', error);
+    logger.error('Agent storage inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Storage inventory upload failed',
@@ -428,7 +429,7 @@ router.get('/:agent_id/inventory/hardware', authMiddleware, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Get hardware inventory error:', error);
+    logger.error('Get hardware inventory error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch hardware inventory',
@@ -527,7 +528,7 @@ router.get('/:agent_id/inventory/software', authMiddleware, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Get software inventory error:', error);
+    logger.error('Get software inventory error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch software inventory',
@@ -598,7 +599,7 @@ router.get('/:agent_id/inventory/storage', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get storage inventory error:', error);
+    logger.error('Get storage inventory error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch storage inventory',

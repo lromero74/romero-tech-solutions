@@ -13,6 +13,7 @@
  */
 
 import { query } from '../config/database.js';
+import { logger } from '../utils/logger.js';
 
 // In-memory tracking for real-time rate limiting
 const employeeLoginAttempts = new Map();
@@ -33,7 +34,7 @@ export const employeeLoginLimiter = async (req, res, next) => {
   try {
     // Check for suspicious patterns first
     if (await detectSuspiciousPatterns(clientIP, email, userAgent)) {
-      console.warn(`🚨 Suspicious employee login pattern detected from IP: ${clientIP}, Email: ${email}`);
+      logger.warn(`🚨 Suspicious employee login pattern detected from IP: ${clientIP}, Email: ${email}`);
       await logSecurityEvent('suspicious_employee_login_pattern', {
         ip: clientIP,
         email: email,
@@ -63,7 +64,7 @@ export const employeeLoginLimiter = async (req, res, next) => {
 
     // Check if rate limit exceeded
     if (recentAttempts.length >= maxAttempts) {
-      console.warn(`🚨 Employee login rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
+      logger.warn(`🚨 Employee login rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
 
       // Log security event
       await logSecurityEvent('employee_login_rate_limit_exceeded', {
@@ -91,7 +92,7 @@ export const employeeLoginLimiter = async (req, res, next) => {
     next();
 
   } catch (error) {
-    console.error('❌ Error in employee login rate limiter:', error);
+    logger.error('❌ Error in employee login rate limiter:', error);
     // SECURITY FIX: Fail closed - deny access during rate limiter errors
     // This prevents bypassing rate limiting during database outages
     return res.status(503).json({
@@ -108,7 +109,7 @@ export const employeeLoginLimiter = async (req, res, next) => {
 export const clearEmployeeLoginAttempts = (clientIP, email) => {
   const trackingKey = `${clientIP}:${email}`;
   employeeLoginAttempts.delete(trackingKey);
-  console.log(`✅ Cleared employee login attempts for IP: ${clientIP}, Email: ${email}`);
+  logger.debug(`✅ Cleared employee login attempts for IP: ${clientIP}, Email: ${email}`);
 };
 
 /**
@@ -123,7 +124,7 @@ export const recordFailedEmployeeLogin = async (clientIP, email, reason) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Error recording failed employee login:', error);
+    logger.error('❌ Error recording failed employee login:', error);
   }
 };
 
@@ -188,7 +189,7 @@ async function detectSuspiciousPatterns(clientIP, email, userAgent) {
     return false;
 
   } catch (error) {
-    console.error('❌ Error detecting suspicious patterns:', error);
+    logger.error('❌ Error detecting suspicious patterns:', error);
     return false; // Fail open
   }
 }
@@ -213,7 +214,7 @@ async function logSecurityEvent(eventType, eventData) {
       JSON.stringify(eventData)
     ]);
   } catch (error) {
-    console.error('❌ Error logging security event:', error);
+    logger.error('❌ Error logging security event:', error);
     // Don't throw - logging failures shouldn't block authentication
   }
 }
@@ -286,7 +287,7 @@ export const getEmployeeLoginStats = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error getting employee login stats:', error);
+    logger.error('❌ Error getting employee login stats:', error);
     res.status(500).json({
       success: false,
       error: 'Failed to retrieve employee login statistics'
@@ -327,7 +328,7 @@ export const cleanupEmployeeLoginTracking = () => {
     }
   }
 
-  console.log(`🧹 Employee login tracking cleanup completed. Active tracking: ${employeeLoginAttempts.size} IPs, ${suspiciousPatterns.size} pattern entries`);
+  logger.warn(`🧹 Employee login tracking cleanup completed. Active tracking: ${employeeLoginAttempts.size} IPs, ${suspiciousPatterns.size} pattern entries`);
 };
 
 // Run cleanup every 15 minutes. unref()ed so importing this module never

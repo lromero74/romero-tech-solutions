@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { query } from '../../config/database.js';
 import { sessionService } from '../../services/sessionService.js';
 import {
@@ -102,7 +103,7 @@ mfaVerifyRouter.post('/verify-admin-mfa', mfaVerifyLimiter, async (req, res) => 
       SET is_active = false, updated_at = CURRENT_TIMESTAMP
       WHERE user_id = $1 AND is_active = true
     `, [user.id]);
-    console.log(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
+    logger.warn(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
 
     // Create a new session for the user
     const userAgent = req.get('User-Agent');
@@ -141,7 +142,7 @@ mfaVerifyRouter.post('/verify-admin-mfa', mfaVerifyLimiter, async (req, res) => 
 
     res.cookie('sessionToken', session.sessionToken, cookieOptions);
 
-    console.log(`✅ Admin login successful with MFA for: ${user.email}`);
+    logger.debug(`✅ Admin login successful with MFA for: ${user.email}`);
 
     res.status(200).json({
       success: true,
@@ -154,7 +155,7 @@ mfaVerifyRouter.post('/verify-admin-mfa', mfaVerifyLimiter, async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Admin MFA verification error:', error);
+    logger.error('Admin MFA verification error:', error);
     res.status(500).json({
       success: false,
       message: 'Verification failed',
@@ -232,7 +233,7 @@ mfaVerifyRouter.post('/verify-client-mfa', mfaVerifyLimiter, async (req, res) =>
       SET is_active = false, updated_at = CURRENT_TIMESTAMP
       WHERE user_id = $1 AND is_active = true
     `, [user.id]);
-    console.log(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
+    logger.warn(`🔒 Invalidated all existing sessions for user ${user.email} after MFA verification`);
 
     // Create a new session for the client
     const userAgent = req.get('User-Agent');
@@ -274,7 +275,7 @@ mfaVerifyRouter.post('/verify-client-mfa', mfaVerifyLimiter, async (req, res) =>
       isFirstAdmin: false
     };
 
-    console.log(`✅ Client login successful with MFA for: ${user.email}`);
+    logger.debug(`✅ Client login successful with MFA for: ${user.email}`);
 
     res.status(200).json({
       success: true,
@@ -287,7 +288,7 @@ mfaVerifyRouter.post('/verify-client-mfa', mfaVerifyLimiter, async (req, res) =>
     });
 
   } catch (error) {
-    console.error('Client MFA verification error:', error);
+    logger.error('Client MFA verification error:', error);
     res.status(500).json({
       success: false,
       message: 'Verification failed',
@@ -340,12 +341,12 @@ router.post('/resend-client-mfa', mfaVerifyLimiter, async (req, res) => {
 
     // Skip sending email for test accounts
     if (user.is_test_account) {
-      console.log(`🧪 TEST ACCOUNT: Skipping MFA email resend for client ${user.email}. Code: ${mfaCode}`);
+      logger.debug(`🧪 TEST ACCOUNT: Skipping MFA email resend for client ${user.email}. Code: ${mfaCode}`);
       message = `Test account - MFA code: ${mfaCode}`;
     } else {
       // Send MFA email with user's preferred language
       await sendMfaEmail(user.email, user.first_name, mfaCode, userLanguage, 'client');
-      console.log(`🔐 Client MFA code resent to ${user.email}: ${userLanguage}`);
+      logger.debug(`🔐 Client MFA code resent to ${user.email}: ${userLanguage}`);
     }
 
     res.status(200).json({
@@ -354,7 +355,7 @@ router.post('/resend-client-mfa', mfaVerifyLimiter, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error resending client MFA code:', error);
+    logger.error('Error resending client MFA code:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to resend MFA code',
@@ -424,7 +425,7 @@ router.post('/verify-phone', async (req, res) => {
     // Send SMS verification code
     await sendPhoneVerificationSMS(phoneNumber, user.first_name, verificationCode, userLanguage);
 
-    console.log(`📱 Phone verification code sent to ${phoneNumber} for user ${userId}`);
+    logger.debug(`📱 Phone verification code sent to ${phoneNumber} for user ${userId}`);
 
     res.status(200).json({
       success: true,
@@ -433,7 +434,7 @@ router.post('/verify-phone', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in phone verification:', error);
+    logger.error('Error in phone verification:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send verification code',
@@ -510,7 +511,7 @@ router.post('/confirm-phone', async (req, res) => {
       WHERE id = $2
     `, [phoneNumber, userId]);
 
-    console.log(`✅ Phone number ${phoneNumber} verified for user ${userId}`);
+    logger.debug(`✅ Phone number ${phoneNumber} verified for user ${userId}`);
 
     res.status(200).json({
       success: true,
@@ -518,7 +519,7 @@ router.post('/confirm-phone', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error confirming phone verification:', error);
+    logger.error('Error confirming phone verification:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to verify phone number',
@@ -577,7 +578,7 @@ router.post('/update-mfa-method', async (req, res) => {
       WHERE id = $2
     `, [mfaMethod, userId]);
 
-    console.log(`🔧 MFA method updated to '${mfaMethod}' for user ${userId}`);
+    logger.debug(`🔧 MFA method updated to '${mfaMethod}' for user ${userId}`);
 
     res.status(200).json({
       success: true,
@@ -586,7 +587,7 @@ router.post('/update-mfa-method', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating MFA method:', error);
+    logger.error('Error updating MFA method:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update MFA method',
@@ -697,7 +698,7 @@ router.post('/send-mfa-code', mfaVerifyLimiter, async (req, res) => {
       });
     }
 
-    console.log(`🔐 MFA code sent via ${requestedMethod} for user ${userId}`);
+    logger.debug(`🔐 MFA code sent via ${requestedMethod} for user ${userId}`);
 
     res.status(200).json({
       success: true,
@@ -707,7 +708,7 @@ router.post('/send-mfa-code', mfaVerifyLimiter, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error sending MFA code:', error);
+    logger.error('Error sending MFA code:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send MFA code',
@@ -744,7 +745,7 @@ router.get('/sms-stats/:phoneNumber', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error getting SMS stats:', error);
+    logger.error('Error getting SMS stats:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get SMS statistics',

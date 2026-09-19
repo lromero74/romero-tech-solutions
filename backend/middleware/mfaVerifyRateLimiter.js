@@ -11,6 +11,7 @@
  */
 
 import { query } from '../config/database.js';
+import { logger } from '../utils/logger.js';
 
 // Exported for the eviction regression test (mirrors attemptTracker.js).
 export const mfaVerifyAttempts = new Map();
@@ -35,7 +36,7 @@ async function logSecurityEvent(eventType, eventData) {
       JSON.stringify(eventData)
     ]);
   } catch (error) {
-    console.error('❌ Error logging MFA verify security event:', error);
+    logger.error('❌ Error logging MFA verify security event:', error);
   }
 }
 
@@ -67,7 +68,7 @@ export const mfaVerifyLimiter = async (req, res, next) => {
     }
 
     if (recentAttempts.length >= MAX_ATTEMPTS) {
-      console.warn(`🚨 MFA verify rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
+      logger.warn(`🚨 MFA verify rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
       await logSecurityEvent('mfa_verify_rate_limit_exceeded', {
         ip: clientIP,
         email: email,
@@ -91,7 +92,7 @@ export const mfaVerifyLimiter = async (req, res, next) => {
 
     next();
   } catch (error) {
-    console.error('❌ Error in MFA verify rate limiter:', error);
+    logger.error('❌ Error in MFA verify rate limiter:', error);
     return res.status(503).json({
       success: false,
       message: 'Service temporarily unavailable. Please try again in a few moments.',

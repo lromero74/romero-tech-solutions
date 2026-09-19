@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import crypto from 'crypto';
 import { query } from '../../config/database.js';
@@ -96,7 +97,7 @@ router.post('/trial/send-verification', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error sending trial verification email:', error);
+    logger.error('❌ Error sending trial verification email:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to send verification code',
@@ -162,7 +163,7 @@ router.post('/trial/verify-email', async (req, res) => {
       WHERE id = $1
     `, [userId]);
 
-    console.log(`✅ Email verified for ${email} (user_id: ${userId}, business_id: ${businessId})`);
+    logger.debug(`✅ Email verified for ${email} (user_id: ${userId}, business_id: ${businessId})`);
 
     // FREEMIUM: Check device limit before creating agent
     const userResult = await query(`
@@ -227,7 +228,7 @@ router.post('/trial/verify-email', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'online', true, NOW(), NOW())
     `, [agentId, businessId, deviceName, deviceType, osType, osVersion || null, agentToken, agentVersion]);
 
-    console.log(`✅ Free tier agent created: ${agentId} for ${email}`);
+    logger.debug(`✅ Free tier agent created: ${agentId} for ${email}`);
 
     // Return full registration details
     res.json({
@@ -247,7 +248,7 @@ router.post('/trial/verify-email', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error in free tier registration:', error);
+    logger.error('❌ Error in free tier registration:', error);
     res.status(500).json({
       success: false,
       message: 'Registration failed',
@@ -313,7 +314,7 @@ router.post('/trial/resend-verification', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error resending trial verification email:', error);
+    logger.error('❌ Error resending trial verification email:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to resend verification code',
@@ -634,8 +635,8 @@ router.post('/trial/heartbeat', async (req, res) => {
       daysRemaining = 30;
       trialStatus = 'active';
 
-      console.log(`✅ New trial agent registered: ${device_name} (${trial_id}) - Expires: ${trialEndDate.toISOString()}`);
-      console.log(`📧 Trial user: ${trial_email} - Business: ${businessId} (UNIFIED ARCHITECTURE)`);
+      logger.debug(`✅ New trial agent registered: ${device_name} (${trial_id}) - Expires: ${trialEndDate.toISOString()}`);
+      logger.debug(`📧 Trial user: ${trial_email} - Business: ${businessId} (UNIFIED ARCHITECTURE)`);
 
       // Note: User account already created by getOrCreateTrialUser() with proper business linkage
       // No need for separate user creation - UNIFIED ARCHITECTURE handles this
@@ -674,7 +675,7 @@ router.post('/trial/heartbeat', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial heartbeat error:', error);
+    logger.error('Trial heartbeat error:', error);
     res.status(500).json({
       success: false,
       message: 'Heartbeat processing failed',
@@ -800,7 +801,7 @@ router.post('/trial/metrics', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial metrics upload error:', error);
+    logger.error('Trial metrics upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Metrics upload failed',
@@ -978,10 +979,10 @@ router.post('/trial/convert', async (req, res) => {
       // COMMIT TRANSACTION
       await query('COMMIT');
 
-      console.log(`✅ Trial agent converted successfully: ${trial_id} → ${newAgentId}`);
-      console.log(`   Device: ${trialAgent.device_name}`);
-      console.log(`   Business: ${tokenData.business_id}`);
-      console.log(`   Metrics migrated: ${metricsMigrated}`);
+      logger.debug(`✅ Trial agent converted successfully: ${trial_id} → ${newAgentId}`);
+      logger.debug(`   Device: ${trialAgent.device_name}`);
+      logger.debug(`   Business: ${tokenData.business_id}`);
+      logger.debug(`   Metrics migrated: ${metricsMigrated}`);
 
       res.json({
         success: true,
@@ -1003,7 +1004,7 @@ router.post('/trial/convert', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Trial conversion error:', error);
+    logger.error('Trial conversion error:', error);
     res.status(500).json({
       success: false,
       message: 'Trial conversion failed',
@@ -1099,7 +1100,7 @@ router.get('/trial/status/:trial_id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get trial status error:', error);
+    logger.error('Get trial status error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get trial status',
@@ -1204,7 +1205,7 @@ router.post('/trial/inventory/software', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial software inventory upload error:', error);
+    logger.error('Trial software inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Software inventory upload failed',
@@ -1313,7 +1314,7 @@ router.post('/trial/inventory/storage', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial storage inventory upload error:', error);
+    logger.error('Trial storage inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Storage inventory upload failed',
@@ -1426,7 +1427,7 @@ router.post('/trial/inventory/hardware', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial hardware inventory upload error:', error);
+    logger.error('Trial hardware inventory upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Hardware inventory upload failed',

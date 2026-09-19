@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import bcrypt from 'bcryptjs';
 import { query } from '../../config/database.js';
 import { sessionService } from '../../services/sessionService.js';
@@ -116,7 +117,7 @@ router.post('/login', async (req, res) => {
       // Perform dummy password comparison for consistent timing
       await bcrypt.compare(password, DUMMY_BCRYPT_HASH);
 
-      console.log(`🚫 Login denied for terminated employee: ${user.email}`);
+      logger.warn(`🚫 Login denied for terminated employee: ${user.email}`);
       recordFailedAttempt(clientIP);
       await auditLogService.logEvent(AUDIT_EVENTS.LOGIN_FAILURE, user.id, {
         email: user.email,
@@ -202,7 +203,7 @@ router.post('/login', async (req, res) => {
 
           // Skip sending email for test accounts
           if (user.is_test_account) {
-            console.log(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
+            logger.debug(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
             message = `Test account login - MFA code: ${mfaCode}`;
           } else {
             await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
@@ -217,7 +218,7 @@ router.post('/login', async (req, res) => {
             mfaEmail: user.mfa_email || user.email
           });
         } catch (error) {
-          console.error('Error sending client MFA code:', error);
+          logger.error('Error sending client MFA code:', error);
           return res.status(500).json({
             success: false,
             message: 'Failed to send verification code. Please try again.'
@@ -277,7 +278,7 @@ router.post('/login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Login error:', error);
+    logger.error('Login error:', error);
 
     res.status(500).json({
       success: false,
@@ -323,7 +324,7 @@ router.post('/logout', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Logout error:', error);
+    logger.error('Logout error:', error);
 
     res.status(500).json({
       success: false,
@@ -367,7 +368,7 @@ router.get('/validate-session', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Session validation error:', error);
+    logger.error('Session validation error:', error);
 
     res.status(500).json({
       success: false,
@@ -422,7 +423,7 @@ router.post('/heartbeat', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Session heartbeat error:', error);
+    logger.error('Session heartbeat error:', error);
 
     res.status(500).json({
       success: false,
@@ -456,7 +457,7 @@ router.post('/extend-session', async (req, res) => {
       const timeRemainingMinutes = Math.max(0, Math.ceil(timeRemainingMs / (1000 * 60)));
       const timeRemainingSeconds = Math.max(0, Math.ceil(timeRemainingMs / 1000));
 
-      console.log(`🔄 Session extended for user: ${session.userEmail}`);
+      logger.debug(`🔄 Session extended for user: ${session.userEmail}`);
 
       res.status(200).json({
         success: true,
@@ -479,7 +480,7 @@ router.post('/extend-session', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Session extension error:', error);
+    logger.error('Session extension error:', error);
 
     res.status(500).json({
       success: false,
@@ -511,7 +512,7 @@ router.get('/check-admin', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Check admin error:', error);
+    logger.error('Check admin error:', error);
 
     res.status(500).json({
       success: false,
@@ -527,7 +528,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
 
   try {
     const { email, password, deviceFingerprint } = req.body;
-    console.log('🔍 ADMIN-LOGIN-MFA REQUEST:', { email, hasPassword: !!password, deviceFingerprint: deviceFingerprint ? `${deviceFingerprint.substring(0, 16)}...` : 'MISSING' });
+    logger.debug('🔍 ADMIN-LOGIN-MFA REQUEST:', { email, hasPassword: !!password, deviceFingerprint: deviceFingerprint ? `${deviceFingerprint.substring(0, 16)}...` : 'MISSING' });
 
     // Validate and sanitize inputs
     const validation = validateLoginInputs({ email, password });
@@ -543,7 +544,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     // SECURITY: Check if account is locked due to too many failed attempts
     const lockStatus = await checkAccountLockStatus(sanitizedEmail, 'employee');
     if (lockStatus.isLocked) {
-      console.log(`🔒 Login attempt for locked account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
+      logger.warn(`🔒 Login attempt for locked account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
       return res.status(423).json({
         success: false,
         message: `Account temporarily locked due to multiple failed login attempts. Please try again in ${lockStatus.remainingMinutes} minutes or reset your password.`,
@@ -588,7 +589,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
 
     // Check if employee is terminated
     if (user.employee_status === 'terminated') {
-      console.log(`🚫 Login denied for terminated admin: ${user.email}`);
+      logger.warn(`🚫 Login denied for terminated admin: ${user.email}`);
       await recordFailedEmployeeLogin(clientIP, email, 'account_terminated');
       return res.status(401).json({
         success: false,
@@ -639,7 +640,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
         const trustedDevice = await checkTrustedDevice(user.id, 'employee', deviceFingerprint);
 
         if (trustedDevice) {
-          console.log(`🔐 Trusted device detected for ${user.email}, skipping MFA and creating session`);
+          logger.debug(`🔐 Trusted device detected for ${user.email}, skipping MFA and creating session`);
 
           // Create session for trusted device login
           const sessionData = await sessionService.createSession(
@@ -685,7 +686,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
             timeFormatPreference: user.time_format_preference || '12h'
           };
 
-          console.log(`✅ Session created for trusted device login: ${sessionData.sessionToken.substring(0, 20)}...`);
+          logger.debug(`✅ Session created for trusted device login: ${sessionData.sessionToken.substring(0, 20)}...`);
 
           return res.json({
             success: true,
@@ -699,10 +700,10 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
             }
           });
         } else {
-          console.log(`🔓 Device not trusted for ${user.email}, proceeding with MFA`);
+          logger.debug(`🔓 Device not trusted for ${user.email}, proceeding with MFA`);
         }
       } catch (error) {
-        console.error('Error checking trusted device:', error);
+        logger.error('Error checking trusted device:', error);
         // Continue with MFA flow if trusted device check fails
       }
     }
@@ -717,11 +718,11 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     // Send MFA via both email and SMS (skip for test accounts)
     try {
       if (user.is_test_account) {
-        console.log(`🧪 TEST ACCOUNT: Skipping MFA email/SMS for ${user.email}. Code: ${mfaCode}`);
+        logger.debug(`🧪 TEST ACCOUNT: Skipping MFA email/SMS for ${user.email}. Code: ${mfaCode}`);
         // For test accounts, skip email/SMS but allow login to proceed
         message = `Test account login - MFA code: ${mfaCode}`;
       } else {
-        console.log(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: all`);
+        logger.debug(`🚀 DEBUG: About to send MFA with phone: ${user.phone}, email: ${user.email}, deliveryMethod: all`);
         const deliveryResult = await sendMfaCode({
           email: user.email,
           phoneNumber: user.phone, // Use phone from employees table
@@ -733,7 +734,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
           codeType: 'login',
           userId: user.id // Pass userId for push notifications
         });
-        console.log(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
+        logger.debug(`🚀 DEBUG: MFA deliveryResult:`, deliveryResult);
 
         // Check if at least one delivery method succeeded
         if (!deliveryResult.success) {
@@ -774,7 +775,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Admin login MFA error:', error);
+    logger.error('Admin login MFA error:', error);
     res.status(500).json({
       success: false,
       message: 'Login failed',

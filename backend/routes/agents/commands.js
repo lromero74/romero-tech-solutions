@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../config/database.js';
 import { authenticateAgent, requireAgentMatch } from '../../middleware/agentAuthMiddleware.js';
@@ -89,7 +90,7 @@ router.get('/:agent_id/commands/list', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get agent commands list error:', error);
+    logger.error('Get agent commands list error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch agent commands',
@@ -143,7 +144,7 @@ router.get('/:agent_id/commands', authenticateAgent, requireAgentMatch, async (r
     });
 
   } catch (error) {
-    console.error('Get agent commands error:', error);
+    logger.error('Get agent commands error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch commands',
@@ -186,11 +187,11 @@ router.post('/:agent_id/commands/:command_id/started', authenticateAgent, requir
       const requestedBy = cmdRow.rows[0]?.requested_by;
       if (requestedBy) websocketService.broadcastToUser(requestedBy, message);
     } catch (wsErr) {
-      console.error('agent.command.progress broadcast failed:', wsErr);
+      logger.error('agent.command.progress broadcast failed:', wsErr);
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('Command started notification error:', error);
+    logger.error('Command started notification error:', error);
     // Don't 5xx the agent — this endpoint is informational.
     res.json({ success: false, message: error?.message });
   }
@@ -237,12 +238,12 @@ router.post('/:agent_id/commands/:command_id/progress', authenticateAgent, requi
       const requestedBy = cmdRow.rows[0]?.requested_by;
       if (requestedBy) websocketService.broadcastToUser(requestedBy, wsMessage);
     } catch (wsErr) {
-      console.error('agent.command.progress broadcast failed:', wsErr);
+      logger.error('agent.command.progress broadcast failed:', wsErr);
     }
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Command progress notification error:', error);
+    logger.error('Command progress notification error:', error);
     res.json({ success: false, message: error?.message });
   }
 });
@@ -302,11 +303,11 @@ router.post('/:agent_id/commands/:command_id/reboot-cancelled', authenticateAgen
       const requestedBy = cmdRow.rows[0]?.requested_by;
       if (requestedBy) websocketService.broadcastToUser(requestedBy, message);
     } catch (wsErr) {
-      console.error('reboot-cancelled broadcast failed:', wsErr);
+      logger.error('reboot-cancelled broadcast failed:', wsErr);
     }
     res.json({ success: true });
   } catch (error) {
-    console.error('reboot-cancelled notification error:', error);
+    logger.error('reboot-cancelled notification error:', error);
     res.json({ success: false, message: error?.message });
   }
 });
@@ -392,7 +393,7 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
     } catch (wsErr) {
       // Never let websocket failure block the result write — the row
       // is already persisted; the dashboard will catch up on next poll.
-      console.error('agent.command.completed broadcast failed:', wsErr);
+      logger.error('agent.command.completed broadcast failed:', wsErr);
     }
 
     res.json({
@@ -401,7 +402,7 @@ router.post('/:agent_id/commands/:command_id/result', authenticateAgent, require
     });
 
   } catch (error) {
-    console.error('Command result submission error:', error);
+    logger.error('Command result submission error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to submit command result',
@@ -494,7 +495,7 @@ router.post('/:agent_id/commands', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Create command error:', error);
+    logger.error('Create command error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create command',

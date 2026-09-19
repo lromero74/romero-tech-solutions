@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../../utils/logger.js';
 import filterPresetService from '../../../services/filterPresetService.js';
 
 const router = express.Router();
@@ -31,7 +32,7 @@ router.post('/service-requests/filter-presets', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error creating filter preset:', error);
+    logger.error('Error creating filter preset:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to create filter preset',
@@ -58,7 +59,7 @@ router.put('/service-requests/filter-presets/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating filter preset:', error);
+    logger.error('Error updating filter preset:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to update filter preset',
@@ -83,7 +84,7 @@ router.delete('/service-requests/filter-presets/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting filter preset:', error);
+    logger.error('Error deleting filter preset:', error);
     res.status(500).json({
       success: false,
       message: error.message || 'Failed to delete filter preset',
@@ -106,7 +107,7 @@ router.get('/service-requests/filter-presets/all', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching all filter presets:', error);
+    logger.error('Error fetching all filter presets:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch filter presets',

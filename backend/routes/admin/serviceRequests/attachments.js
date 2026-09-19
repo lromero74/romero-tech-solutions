@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../../utils/logger.js';
 import { getPool } from '../../../config/database.js';
 import { websocketService } from '../../../services/websocketService.js';
 
@@ -85,7 +86,7 @@ router.delete('/service-requests/:requestId/files/:fileId', async (req, res) => 
     });
 
   } catch (error) {
-    console.error('Error deleting file:', error);
+    logger.error('Error deleting file:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to delete file',
@@ -176,7 +177,7 @@ router.patch('/service-requests/:requestId/files/:fileId/rename', async (req, re
     });
 
   } catch (error) {
-    console.error('Error renaming file:', error);
+    logger.error('Error renaming file:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to rename file',

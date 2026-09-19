@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { query } from '../../config/database.js';
 import { authenticateAgent, requireAgentMatch } from '../../middleware/agentAuthMiddleware.js';
 import { authMiddleware, requireEmployee } from '../../middleware/authMiddleware.js';
@@ -128,13 +129,13 @@ router.post('/:agent_id/check-result', authenticateAgent, requireAgentMatch, asy
         payload,
         device_name: agentRows[0].device_name,
       }).catch(err => {
-        console.error(`❌ processHealthCheckResult failed for agent ${agent_id} check ${check_type}:`, err);
+        logger.error(`❌ processHealthCheckResult failed for agent ${agent_id} check ${check_type}:`, err);
       });
     }
 
     res.json({ success: true });
   } catch (error) {
-    console.error('Agent check-result upload error:', error);
+    logger.error('Agent check-result upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to ingest check result',
@@ -157,7 +158,7 @@ router.get('/:agent_id/health-checks',
       `, [agent_id]);
       res.json({ success: true, data: rows });
     } catch (error) {
-      console.error('Health checks fetch error:', error);
+      logger.error('Health checks fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch health checks' });
     }
   }
@@ -184,7 +185,7 @@ router.get('/:agent_id/health-checks/:check_type/history',
       `, [agent_id, check_type, days]);
       res.json({ success: true, data: rows });
     } catch (error) {
-      console.error('Health check history fetch error:', error);
+      logger.error('Health check history fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch history' });
     }
   }
@@ -209,7 +210,7 @@ router.get('/:agent_id/disk-forecast',
       const severity = forecast ? forecastSeverity(forecast.days_until_full) : null;
       res.json({ success: true, data: { forecast, history, severity } });
     } catch (error) {
-      console.error('Disk forecast fetch error:', error);
+      logger.error('Disk forecast fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch disk forecast' });
     }
   }
@@ -224,7 +225,7 @@ router.get('/:agent_id/baselines',
       const baselines = await getBaselines(agent_id);
       res.json({ success: true, data: baselines });
     } catch (error) {
-      console.error('Baselines fetch error:', error);
+      logger.error('Baselines fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch baselines' });
     }
   }
@@ -240,7 +241,7 @@ router.get('/:agent_id/wan-ip-history',
       const rows = await getWanIpHistory(agent_id, limit);
       res.json({ success: true, data: rows });
     } catch (error) {
-      console.error('WAN IP history fetch error:', error);
+      logger.error('WAN IP history fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch WAN IP history' });
     }
   }
@@ -255,7 +256,7 @@ router.get('/:agent_id/smart-trend',
       const trend = await getSmartTrend(agent_id);
       res.json({ success: true, data: trend });
     } catch (error) {
-      console.error('SMART trend fetch error:', error);
+      logger.error('SMART trend fetch error:', error);
       res.status(500).json({ success: false, message: 'Failed to fetch SMART trend' });
     }
   }
@@ -280,7 +281,7 @@ router.get('/aggregation-levels', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Get aggregation levels error:', error);
+    logger.error('Get aggregation levels error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve aggregation levels',
@@ -303,7 +304,7 @@ router.put('/:agent_id/aggregation-level', authMiddleware, async (req, res) => {
     const { aggregation_level } = req.body;
     const isEmployee = req.user.role !== 'customer' && req.user.role !== 'client';
 
-    console.log(`⚙️  UPDATE aggregation level: agent=${agent_id}, level=${aggregation_level}, user=${req.user.email}`);
+    logger.debug(`⚙️  UPDATE aggregation level: agent=${agent_id}, level=${aggregation_level}, user=${req.user.email}`);
 
     // Verify ownership/access to this agent
     let accessCheckQuery = `
@@ -343,7 +344,7 @@ router.put('/:agent_id/aggregation-level', authMiddleware, async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Update agent aggregation level error:', error);
+    logger.error('Update agent aggregation level error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update aggregation level',
@@ -408,7 +409,7 @@ router.get('/:agent_id/aggregation-settings', authMiddleware, async (req, res) =
     });
 
   } catch (error) {
-    console.error('Get agent aggregation settings error:', error);
+    logger.error('Get agent aggregation settings error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to retrieve aggregation settings',
@@ -429,7 +430,7 @@ router.post('/:agent_id/backfill-candles', authMiddleware, requireEmployee, asyn
     const { agent_id } = req.params;
     const { days_back = 7 } = req.body;
 
-    console.log(`📦 BACKFILL CANDLES: agent=${agent_id}, days=${days_back}, user=${req.user.email}`);
+    logger.debug(`📦 BACKFILL CANDLES: agent=${agent_id}, days=${days_back}, user=${req.user.email}`);
 
     // Verify agent exists
     const agentResult = await query(
@@ -455,7 +456,7 @@ router.post('/:agent_id/backfill-candles', authMiddleware, requireEmployee, asyn
     });
 
   } catch (error) {
-    console.error('Backfill candles error:', error);
+    logger.error('Backfill candles error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to backfill candles',
@@ -576,7 +577,7 @@ router.get('/packages/vulnerabilities', authMiddleware, async (req, res) => {
     osvCache.set(cacheKey, { fetchedAt: Date.now(), payload });
     return res.json(payload);
   } catch (error) {
-    console.error('OSV vulnerability lookup error:', error);
+    logger.error('OSV vulnerability lookup error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to look up vulnerabilities',

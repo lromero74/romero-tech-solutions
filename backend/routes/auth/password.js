@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { query } from '../../config/database.js';
 import {
   validatePasswordComplexity,
@@ -73,7 +74,7 @@ router.post('/forgot-password', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Forgot password error:', error);
+    logger.error('Forgot password error:', error);
 
     res.status(500).json({
       success: false,
@@ -122,7 +123,7 @@ router.post('/reset-password', async (req, res) => {
         };
       }
     } catch (error) {
-      console.warn('Could not get user info for password validation:', error.message);
+      logger.warn('Could not get user info for password validation:', error.message);
     }
 
     // Validate password against complexity requirements
@@ -152,7 +153,7 @@ router.post('/reset-password', async (req, res) => {
     const table = ALLOWED_USER_TABLES[tokenData.user_type];
 
     if (!table) {
-      console.error(`Invalid user type for password reset: ${tokenData.user_type}`);
+      logger.error(`Invalid user type for password reset: ${tokenData.user_type}`);
       return res.status(500).json({
         success: false,
         message: SECURITY_MESSAGES.SERVER_ERROR
@@ -177,7 +178,7 @@ router.post('/reset-password', async (req, res) => {
     // End all existing sessions for this user
     await sessionService.endAllUserSessions(tokenData.user_id);
 
-    console.log(`🔐 Password reset successful for ${email}`);
+    logger.debug(`🔐 Password reset successful for ${email}`);
 
     res.status(200).json({
       success: true,
@@ -185,7 +186,7 @@ router.post('/reset-password', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Reset password error:', error);
+    logger.error('Reset password error:', error);
 
     res.status(500).json({
       success: false,
@@ -218,7 +219,7 @@ router.post('/validate-password', async (req, res) => {
       ...validation
     });
   } catch (error) {
-    console.error('Error validating password:', error);
+    logger.error('Error validating password:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to validate password',
@@ -246,7 +247,7 @@ router.post('/password-history', async (req, res) => {
       message: 'Password added to history successfully'
     });
   } catch (error) {
-    console.error('Error adding password to history:', error);
+    logger.error('Error adding password to history:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to add password to history',
@@ -274,7 +275,7 @@ router.post('/password-history/check', async (req, res) => {
       isInHistory
     });
   } catch (error) {
-    console.error('Error checking password history:', error);
+    logger.error('Error checking password history:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to check password history',
@@ -302,7 +303,7 @@ router.get('/password-expiration/:userId', async (req, res) => {
       ...expirationInfo
     });
   } catch (error) {
-    console.error('Error getting password expiration info:', error);
+    logger.error('Error getting password expiration info:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to get password expiration info',
@@ -395,7 +396,7 @@ router.post('/change-password', async (req, res) => {
     const table = ALLOWED_USER_TABLES[user.user_type];
 
     if (!table) {
-      console.error(`Invalid user type for password update: ${user.user_type}`);
+      logger.error(`Invalid user type for password update: ${user.user_type}`);
       return res.status(500).json({
         success: false,
         message: SECURITY_MESSAGES.SERVER_ERROR
@@ -417,14 +418,14 @@ router.post('/change-password', async (req, res) => {
     // End all other sessions for this user
     await sessionService.endAllUserSessions(userId);
 
-    console.log(`🔐 Password changed successfully for user ${user.email}`);
+    logger.debug(`🔐 Password changed successfully for user ${user.email}`);
 
     res.status(200).json({
       success: true,
       message: 'Password changed successfully'
     });
   } catch (error) {
-    console.error('Error changing password:', error);
+    logger.error('Error changing password:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to change password',

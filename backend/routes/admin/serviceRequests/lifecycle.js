@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../../utils/logger.js';
 import { getPool } from '../../../config/database.js';
 import { websocketService } from '../../../services/websocketService.js';
 // NOTE: pushRoutes is imported lazily inside the reschedule handler (not at
@@ -82,7 +83,7 @@ router.get('/service-requests/:id', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching service request:', error);
+    logger.error('Error fetching service request:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch service request',
@@ -213,18 +214,18 @@ router.put('/service-requests/:id/assign', async (req, res) => {
     }
 
     // Broadcast service request update via WebSocket
-    console.log('🔍 [ASSIGN] Attempting to broadcast WebSocket update...');
+    logger.debug('🔍 [ASSIGN] Attempting to broadcast WebSocket update...');
     const websocketService = req.app.get('websocketService');
-    console.log('🔍 [ASSIGN] websocketService exists:', !!websocketService);
+    logger.debug('🔍 [ASSIGN] websocketService exists:', !!websocketService);
     if (websocketService) {
-      console.log('🔍 [ASSIGN] Calling broadcastServiceRequestUpdate for SR:', id);
+      logger.debug('🔍 [ASSIGN] Calling broadcastServiceRequestUpdate for SR:', id);
       websocketService.broadcastServiceRequestUpdate(id, 'updated', {
         action: 'assigned',
         assignedTechnicianId: technicianId
       });
-      console.log('✅ [ASSIGN] Broadcast completed');
+      logger.debug('✅ [ASSIGN] Broadcast completed');
     } else {
-      console.log('❌ [ASSIGN] websocketService not available on req.app!');
+      logger.warn('❌ [ASSIGN] websocketService not available on req.app!');
     }
 
     res.json({
@@ -234,7 +235,7 @@ router.put('/service-requests/:id/assign', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error assigning service request:', error);
+    logger.error('Error assigning service request:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to assign service request',
@@ -331,11 +332,11 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
     const newNote = noteResult.rows[0];
 
     // Broadcast service request update via WebSocket with note data
-    console.log('🔍 [ADMIN-ACKNOWLEDGE] Attempting to broadcast WebSocket update...');
+    logger.debug('🔍 [ADMIN-ACKNOWLEDGE] Attempting to broadcast WebSocket update...');
     const websocketService = req.app.get('websocketService');
-    console.log('🔍 [ADMIN-ACKNOWLEDGE] websocketService exists:', !!websocketService);
+    logger.debug('🔍 [ADMIN-ACKNOWLEDGE] websocketService exists:', !!websocketService);
     if (websocketService) {
-      console.log('🔍 [ADMIN-ACKNOWLEDGE] Calling broadcastServiceRequestUpdate for SR:', id);
+      logger.debug('🔍 [ADMIN-ACKNOWLEDGE] Calling broadcastServiceRequestUpdate for SR:', id);
       websocketService.broadcastServiceRequestUpdate(id, 'updated', {
         status: 'acknowledged',
         assignedTechnician: employeeId,
@@ -350,9 +351,9 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
           is_visible_to_client: newNote.is_visible_to_client
         }
       });
-      console.log('✅ [ADMIN-ACKNOWLEDGE] Broadcast completed');
+      logger.debug('✅ [ADMIN-ACKNOWLEDGE] Broadcast completed');
     } else {
-      console.log('❌ [ADMIN-ACKNOWLEDGE] websocketService not available on req.app!');
+      logger.warn('❌ [ADMIN-ACKNOWLEDGE] websocketService not available on req.app!');
     }
 
     res.json({
@@ -362,7 +363,7 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error acknowledging service request:', error);
+    logger.error('Error acknowledging service request:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to acknowledge service request',
@@ -376,7 +377,7 @@ router.put('/service-requests/:id/acknowledge', async (req, res) => {
  * Start or stop a time tracking entry for a service request
  */
 router.put('/service-requests/:id/time-entry', async (req, res) => {
-  console.log('🎯 TIME ENTRY ROUTE HIT:', { id: req.params.id, action: req.body.action, userId: req.user?.id });
+  logger.debug('🎯 TIME ENTRY ROUTE HIT:', { id: req.params.id, action: req.body.action, userId: req.user?.id });
   try {
     const { id } = req.params;
     const { action } = req.body; // 'start' or 'stop'
@@ -485,11 +486,11 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
       const newNote = noteResult.rows[0];
 
       // Broadcast service request update via WebSocket with note data
-      console.log('🔍 [TIME-ENTRY-START] Attempting to broadcast WebSocket update...');
+      logger.debug('🔍 [TIME-ENTRY-START] Attempting to broadcast WebSocket update...');
       const websocketService = req.app.get('websocketService');
-      console.log('🔍 [TIME-ENTRY-START] websocketService exists:', !!websocketService);
+      logger.debug('🔍 [TIME-ENTRY-START] websocketService exists:', !!websocketService);
       if (websocketService) {
-        console.log('🔍 [TIME-ENTRY-START] Calling broadcastServiceRequestUpdate for SR:', id);
+        logger.debug('🔍 [TIME-ENTRY-START] Calling broadcastServiceRequestUpdate for SR:', id);
         websocketService.broadcastServiceRequestUpdate(id, 'updated', {
           action: 'time_entry_started',
           statusId: startedStatusId,
@@ -504,9 +505,9 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
             is_visible_to_client: newNote.is_visible_to_client
           }
         });
-        console.log('✅ [TIME-ENTRY-START] Broadcast completed');
+        logger.debug('✅ [TIME-ENTRY-START] Broadcast completed');
       } else {
-        console.log('❌ [TIME-ENTRY-START] websocketService not available on req.app!');
+        logger.warn('❌ [TIME-ENTRY-START] websocketService not available on req.app!');
       }
 
       res.json({
@@ -602,11 +603,11 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
       const newNote = noteResult.rows[0];
 
       // Broadcast service request update via WebSocket with note data
-      console.log('🔍 [TIME-ENTRY-STOP] Attempting to broadcast WebSocket update...');
+      logger.debug('🔍 [TIME-ENTRY-STOP] Attempting to broadcast WebSocket update...');
       const websocketServiceStop = req.app.get('websocketService');
-      console.log('🔍 [TIME-ENTRY-STOP] websocketService exists:', !!websocketServiceStop);
+      logger.debug('🔍 [TIME-ENTRY-STOP] websocketService exists:', !!websocketServiceStop);
       if (websocketServiceStop) {
-        console.log('🔍 [TIME-ENTRY-STOP] Calling broadcastServiceRequestUpdate for SR:', id);
+        logger.debug('🔍 [TIME-ENTRY-STOP] Calling broadcastServiceRequestUpdate for SR:', id);
         websocketServiceStop.broadcastServiceRequestUpdate(id, 'updated', {
           action: 'time_entry_stopped',
           statusId: pausedStatusId,
@@ -621,9 +622,9 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
             is_visible_to_client: newNote.is_visible_to_client
           }
         });
-        console.log('✅ [TIME-ENTRY-STOP] Broadcast completed');
+        logger.debug('✅ [TIME-ENTRY-STOP] Broadcast completed');
       } else {
-        console.log('❌ [TIME-ENTRY-STOP] websocketService not available on req.app!');
+        logger.warn('❌ [TIME-ENTRY-STOP] websocketService not available on req.app!');
       }
 
       res.json({
@@ -643,7 +644,7 @@ router.put('/service-requests/:id/time-entry', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Error managing time entry:', error);
+    logger.error('Error managing time entry:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to manage time entry',
@@ -705,17 +706,17 @@ router.put('/service-requests/:id/status', async (req, res) => {
     }
 
     // Broadcast service request update via WebSocket
-    console.log('🔍 [STATUS-UPDATE] Attempting to broadcast WebSocket update...');
+    logger.debug('🔍 [STATUS-UPDATE] Attempting to broadcast WebSocket update...');
     const websocketService = req.app.get('websocketService');
-    console.log('🔍 [STATUS-UPDATE] websocketService exists:', !!websocketService);
+    logger.debug('🔍 [STATUS-UPDATE] websocketService exists:', !!websocketService);
     if (websocketService) {
-      console.log('🔍 [STATUS-UPDATE] Calling broadcastServiceRequestUpdate for SR:', id);
+      logger.debug('🔍 [STATUS-UPDATE] Calling broadcastServiceRequestUpdate for SR:', id);
       websocketService.broadcastServiceRequestUpdate(id, 'updated', {
         statusId: statusId
       });
-      console.log('✅ [STATUS-UPDATE] Broadcast completed');
+      logger.debug('✅ [STATUS-UPDATE] Broadcast completed');
     } else {
-      console.log('❌ [STATUS-UPDATE] websocketService not available on req.app!');
+      logger.warn('❌ [STATUS-UPDATE] websocketService not available on req.app!');
     }
 
     res.json({
@@ -725,7 +726,7 @@ router.put('/service-requests/:id/status', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating service request status:', error);
+    logger.error('Error updating service request status:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update service request status',
@@ -952,7 +953,7 @@ router.put('/service-requests/:id/close', async (req, res) => {
     const closeTimeEntriesResult = await pool.query(closeTimeEntriesQuery, [closedAt, id]);
 
     if (closeTimeEntriesResult.rowCount > 0) {
-      console.log(`⏱️ Closed ${closeTimeEntriesResult.rowCount} open time entries for service request ${id}`);
+      logger.debug(`⏱️ Closed ${closeTimeEntriesResult.rowCount} open time entries for service request ${id}`);
     }
 
     // Log closure in history
@@ -1361,11 +1362,11 @@ router.put('/service-requests/:id/close', async (req, res) => {
     } // End of invoice generation (only for completed requests)
 
     // Broadcast service request status change to all admins/employees
-    console.log('🔍 [CLOSE] Attempting to broadcast WebSocket update...');
+    logger.debug('🔍 [CLOSE] Attempting to broadcast WebSocket update...');
     const websocketService = req.app.get('websocketService');
-    console.log('🔍 [CLOSE] websocketService exists:', !!websocketService);
+    logger.debug('🔍 [CLOSE] websocketService exists:', !!websocketService);
     if (websocketService) {
-      console.log('🔍 [CLOSE] Calling broadcastServiceRequestUpdate for SR:', id);
+      logger.debug('🔍 [CLOSE] Calling broadcastServiceRequestUpdate for SR:', id);
       websocketService.broadcastServiceRequestUpdate(id, 'updated', {
         action: 'closed',
         statusChanged: true,
@@ -1376,9 +1377,9 @@ router.put('/service-requests/:id/close', async (req, res) => {
         statusId: completedStatusId,
         closureReason: closureReasonName
       });
-      console.log('✅ [CLOSE] Broadcast completed');
+      logger.debug('✅ [CLOSE] Broadcast completed');
     } else {
-      console.log('❌ [CLOSE] websocketService not available on req.app!');
+      logger.warn('❌ [CLOSE] websocketService not available on req.app!');
     }
 
     res.json({
@@ -1396,8 +1397,8 @@ router.put('/service-requests/:id/close', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error closing service request:', error);
-    console.error('Error stack:', error.stack);
+    logger.error('Error closing service request:', error);
+    logger.error('Error stack:', error.stack);
     res.status(500).json({
       success: false,
       message: 'Failed to close service request',
@@ -1417,7 +1418,7 @@ router.post('/service-requests/:id/uncancel', async (req, res) => {
     const { reason } = req.body;
     const pool = await getPool();
 
-    console.log(`📋 Admin uncancelling service request ${id}...`);
+    logger.debug(`📋 Admin uncancelling service request ${id}...`);
 
     // Get service request details
     const serviceRequestQuery = `
@@ -1522,7 +1523,7 @@ router.post('/service-requests/:id/uncancel', async (req, res) => {
       true
     ]);
 
-    console.log(`✅ Service request ${serviceRequest.request_number} restored by ${employeeName}`);
+    logger.debug(`✅ Service request ${serviceRequest.request_number} restored by ${employeeName}`);
 
     res.json({
       success: true,
@@ -1535,7 +1536,7 @@ router.post('/service-requests/:id/uncancel', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error uncancelling service request:', error);
+    logger.error('❌ Error uncancelling service request:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to uncancel service request',
@@ -1698,7 +1699,7 @@ detailsRoutes.patch('/service-requests/:id/details', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error updating service request details:', error);
+    logger.error('Error updating service request details:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to update service request details',
@@ -1718,7 +1719,7 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
     const { id } = req.params;
     const { requestedDatetime, requestedDurationMinutes } = req.body;
 
-    console.log('📅 [Admin] Reschedule request:', { id, requestedDatetime, requestedDurationMinutes });
+    logger.debug('📅 [Admin] Reschedule request:', { id, requestedDatetime, requestedDurationMinutes });
 
     // Validate inputs
     if (!requestedDatetime || !requestedDurationMinutes) {
@@ -1795,7 +1796,7 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
 
     const updatedRequest = updateResult.rows[0];
 
-    console.log('✅ [Admin] Service request rescheduled:', updatedRequest.request_number);
+    logger.debug('✅ [Admin] Service request rescheduled:', updatedRequest.request_number);
 
     // Send WebSocket notification to client and technicians
     try {
@@ -1808,14 +1809,14 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
         updatedAt: updatedRequest.updated_at
       });
     } catch (wsError) {
-      console.error('Failed to send WebSocket notification:', wsError);
+      logger.error('Failed to send WebSocket notification:', wsError);
       // Don't fail the request if WebSocket fails
     }
 
     // Send push notification to employees
     const sendReschedulePushNotification = async () => {
       try {
-        console.log(`🔔 [Admin Reschedule] Starting push notification process for ${updatedRequest.request_number}`);
+        logger.debug(`🔔 [Admin Reschedule] Starting push notification process for ${updatedRequest.request_number}`);
 
         // Get service request details for notification
         const detailsQuery = await pool.query(`
@@ -1862,15 +1863,15 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
         };
 
         const { sendNotificationToEmployees, sendNotificationToUser } = await import('../../pushRoutes.js');
-        console.log(`🔔 [Admin Reschedule] Calling sendNotificationToEmployees for ${updatedRequest.request_number}`);
+        logger.debug(`🔔 [Admin Reschedule] Calling sendNotificationToEmployees for ${updatedRequest.request_number}`);
         const result = await sendNotificationToEmployees(
           'service_request_updated',
           notificationData,
           'view.service_requests.enable'
         );
-        console.log(`✅ [Admin Reschedule] Push notification result for ${updatedRequest.request_number}:`, result);
+        logger.debug(`✅ [Admin Reschedule] Push notification result for ${updatedRequest.request_number}:`, result);
       } catch (notificationError) {
-        console.error(`⚠️ [Admin Reschedule] Failed to send push notification for ${updatedRequest.request_number}:`, notificationError);
+        logger.error(`⚠️ [Admin Reschedule] Failed to send push notification for ${updatedRequest.request_number}:`, notificationError);
         // Don't fail the request if notification fails
       }
     };
@@ -1881,7 +1882,7 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
     // Also send push notification to the client
     const sendClientPushNotification = async () => {
       try {
-        console.log(`🔔 [Admin Reschedule] Starting client push notification for ${updatedRequest.request_number}`);
+        logger.debug(`🔔 [Admin Reschedule] Starting client push notification for ${updatedRequest.request_number}`);
 
         // Get client ID for this service request
         const clientQuery = await pool.query(`
@@ -1892,7 +1893,7 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
 
         const clientId = clientQuery.rows[0]?.client_id;
         if (!clientId) {
-          console.log(`⚠️ [Admin Reschedule] No client ID found for ${updatedRequest.request_number}`);
+          logger.warn(`⚠️ [Admin Reschedule] No client ID found for ${updatedRequest.request_number}`);
           return;
         }
 
@@ -1927,11 +1928,11 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
           }
         };
 
-        console.log(`🔔 [Admin Reschedule] Calling sendNotificationToUser for client ${clientId}`);
+        logger.debug(`🔔 [Admin Reschedule] Calling sendNotificationToUser for client ${clientId}`);
         const result = await sendNotificationToUser(clientId, clientNotificationData, false);
-        console.log(`✅ [Admin Reschedule] Client push notification result for ${updatedRequest.request_number}:`, result);
+        logger.debug(`✅ [Admin Reschedule] Client push notification result for ${updatedRequest.request_number}:`, result);
       } catch (notificationError) {
-        console.error(`⚠️ [Admin Reschedule] Failed to send client push notification for ${updatedRequest.request_number}:`, notificationError);
+        logger.error(`⚠️ [Admin Reschedule] Failed to send client push notification for ${updatedRequest.request_number}:`, notificationError);
         // Don't fail the request if notification fails
       }
     };
@@ -1946,7 +1947,7 @@ rescheduleRoutes.patch('/service-requests/:id/reschedule', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ [Admin] Error rescheduling service request:', error);
+    logger.error('❌ [Admin] Error rescheduling service request:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to reschedule service request'

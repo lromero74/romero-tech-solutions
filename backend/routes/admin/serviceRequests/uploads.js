@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../../utils/logger.js';
 import multer from 'multer';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -24,7 +25,7 @@ async function ensureDirectoryExists(dirPath) {
     await fs.access(dirPath);
   } catch {
     await fs.mkdir(dirPath, { recursive: true });
-    console.log(`📁 Created directory: ${dirPath}`);
+    logger.debug(`📁 Created directory: ${dirPath}`);
   }
 }
 
@@ -61,7 +62,7 @@ const storage = multer.diskStorage({
 
       cb(null, secureFilename);
     } catch (error) {
-      console.error('Error generating filename:', error);
+      logger.error('Error generating filename:', error);
       cb(error, null);
     }
   }
@@ -148,7 +149,7 @@ async function ensureServiceRequestFolder(businessId, requestNumber) {
       ]
     );
     parentFolderId = createParentResult.rows[0].id;
-    console.log(`📁 Created "Service Requests" parent folder for business ${businessId}`);
+    logger.debug(`📁 Created "Service Requests" parent folder for business ${businessId}`);
   }
 
   // Step 2: Ensure service request subfolder exists
@@ -187,7 +188,7 @@ async function ensureServiceRequestFolder(businessId, requestNumber) {
       ]
     );
     srFolderId = createSrFolderResult.rows[0].id;
-    console.log(`📁 Created folder for service request ${requestNumber}`);
+    logger.debug(`📁 Created folder for service request ${requestNumber}`);
   }
 
   return srFolderId;
@@ -223,7 +224,7 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
     if (requestCheck.rows.length === 0) {
       // Cleanup uploaded files
       await Promise.all(req.files.map(file =>
-        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+        fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err))
       ));
 
       return res.status(404).json({
@@ -237,12 +238,12 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
 
     // Ensure folder structure exists for this service request
     const serviceRequestFolderId = await ensureServiceRequestFolder(businessId, requestNumber);
-    console.log(`📁 [Admin] Files will be organized in folder: ${requestNumber}`);
+    logger.debug(`📁 [Admin] Files will be organized in folder: ${requestNumber}`);
 
     // Calculate total upload size
     totalSizeBytes = req.files.reduce((sum, file) => sum + file.size, 0);
 
-    console.log(`📤 [Admin] Processing ${req.files.length} file(s) upload for service request ${requestNumber}`);
+    logger.debug(`📤 [Admin] Processing ${req.files.length} file(s) upload for service request ${requestNumber}`);
 
     // Check quota
     const quotaCheck = await quotaManagementService.checkQuotaAvailability(
@@ -254,7 +255,7 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
 
     if (!quotaCheck.canUpload) {
       await Promise.all(req.files.map(file =>
-        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+        fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err))
       ));
 
       return res.status(413).json({
@@ -267,7 +268,7 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
     // Process each file
     for (const file of req.files) {
       try {
-        console.log(`🔍 Processing file: ${file.originalname} (${quotaManagementService.formatBytes(file.size)})`);
+        logger.debug(`🔍 Processing file: ${file.originalname} (${quotaManagementService.formatBytes(file.size)})`);
 
         // Perform virus scan
         const scanResult = await virusScanService.scanFile(file.path, {
@@ -287,12 +288,12 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
             scanId: scanResult.scanId
           });
 
-          console.log(`🚨 Infected file quarantined: ${file.originalname}`);
+          logger.warn(`🚨 Infected file quarantined: ${file.originalname}`);
           continue;
         }
 
         if (!scanResult.scanSuccess) {
-          await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+          await fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err));
 
           failedFiles.push({
             originalName: file.originalname,
@@ -300,7 +301,7 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
             scanId: scanResult.scanId
           });
 
-          console.log(`❌ Scan failed for file: ${file.originalname}`);
+          logger.warn(`❌ Scan failed for file: ${file.originalname}`);
           continue;
         }
 
@@ -349,9 +350,9 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
             uploadedAt: uploadResult.createdAt
           });
 
-          console.log(`✅ File uploaded successfully: ${file.originalname}`);
+          logger.debug(`✅ File uploaded successfully: ${file.originalname}`);
         } else {
-          await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+          await fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err));
 
           failedFiles.push({
             originalName: file.originalname,
@@ -360,9 +361,9 @@ router.post('/service-requests/:id/files/upload', upload.array('files', 5), asyn
         }
 
       } catch (error) {
-        console.error(`❌ Error processing file ${file.originalname}:`, error);
+        logger.error(`❌ Error processing file ${file.originalname}:`, error);
 
-        await fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err));
+        await fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err));
 
         failedFiles.push({
           originalName: file.originalname,
@@ -423,7 +424,7 @@ ${fileList}
         true
       ]);
 
-      console.log(`📝 Created auto-note for ${uploadedFiles.length} uploaded file(s)`);
+      logger.debug(`📝 Created auto-note for ${uploadedFiles.length} uploaded file(s)`);
 
       // Broadcast file upload to admins/employees and client via WebSocket
       websocketService.broadcastServiceRequestUpdate(serviceRequestId, 'updated', {
@@ -447,12 +448,12 @@ ${fileList}
     });
 
   } catch (error) {
-    console.error('❌ [Admin] File upload error:', error);
+    logger.error('❌ [Admin] File upload error:', error);
 
     // Cleanup all uploaded files on error
     if (req.files) {
       await Promise.all(req.files.map(file =>
-        fs.unlink(file.path).catch(err => console.error('Failed to cleanup file:', err))
+        fs.unlink(file.path).catch(err => logger.error('Failed to cleanup file:', err))
       ));
     }
 

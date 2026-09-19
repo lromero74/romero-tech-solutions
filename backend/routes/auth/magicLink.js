@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import jwt from 'jsonwebtoken';
 import { v5 as uuidv5 } from 'uuid';
 import { query } from '../../config/database.js';
@@ -96,7 +97,7 @@ router.post('/trusted-device-login', async (req, res) => {
 
     // Check if employee is terminated (for employee accounts only)
     if (user.user_type === 'employee' && user.employee_status === 'terminated') {
-      console.log(`🚫 Trusted device login denied for terminated employee: ${user.email}`);
+      logger.warn(`🚫 Trusted device login denied for terminated employee: ${user.email}`);
       return res.status(401).json({
         success: false,
         message: 'Account access has been terminated. Please contact your administrator.'
@@ -132,7 +133,7 @@ router.post('/trusted-device-login', async (req, res) => {
     }
 
     // Create session (same as MFA verification)
-    console.log('🔐 Creating new session for user:', user.email);
+    logger.debug('🔐 Creating new session for user:', user.email);
     const sessionData = await sessionService.createSession(user.id, user.email, req.headers['user-agent'], req.ip);
 
     // Get session timeout from database (or fallback to config)
@@ -148,7 +149,7 @@ router.post('/trusted-device-login', async (req, res) => {
     });
 
 
-    console.log(`✅ Trusted device login successful for: ${user.email} (${user.user_type})`);
+    logger.debug(`✅ Trusted device login successful for: ${user.email} (${user.user_type})`);
 
     // Return user data appropriate for user type
     const userData = {
@@ -184,7 +185,7 @@ router.post('/trusted-device-login', async (req, res) => {
       }
     };
 
-    console.log('📤 Sending trusted device login response:', {
+    logger.debug('📤 Sending trusted device login response:', {
       success: responsePayload.success,
       userEmail: responsePayload.user.email,
       hasSessionToken: !!responsePayload.session.sessionToken,
@@ -195,7 +196,7 @@ router.post('/trusted-device-login', async (req, res) => {
     res.json(responsePayload);
 
   } catch (error) {
-    console.error('Trusted device login error:', error);
+    logger.error('Trusted device login error:', error);
     res.status(500).json({
       success: false,
       message: 'Authentication failed',
@@ -237,7 +238,7 @@ router.post('/client-login', async (req, res) => {
     // SECURITY: Check if account is locked due to too many failed attempts
     const lockStatus = await checkAccountLockStatus(sanitizedEmail, 'client');
     if (lockStatus.isLocked) {
-      console.log(`🔒 Login attempt for locked client account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
+      logger.warn(`🔒 Login attempt for locked client account: ${sanitizedEmail}, locked for ${lockStatus.remainingMinutes} more minutes`);
       return res.status(423).json({
         success: false,
         message: `Account temporarily locked due to multiple failed login attempts. Please try again in ${lockStatus.remainingMinutes} minutes or reset your password.`,
@@ -250,7 +251,7 @@ router.post('/client-login', async (req, res) => {
     const emailDomain = sanitizedEmail.toLowerCase().split('@')[1];
     if (emailDomain === 'romerotechsolutions.com') {
       recordFailedAttempt(clientIP);
-      console.log(`⚠️ Company email domain used for client login: ${sanitizedEmail}`);
+      logger.warn(`⚠️ Company email domain used for client login: ${sanitizedEmail}`);
       return res.status(403).json({
         success: false,
         message: 'Client login using @romerotechsolutions.com email addresses is not permitted.'
@@ -330,7 +331,7 @@ router.post('/client-login', async (req, res) => {
 
         // Skip sending email for test accounts
         if (user.is_test_account) {
-          console.log(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
+          logger.debug(`🧪 TEST ACCOUNT: Skipping MFA email for client ${user.email}. Code: ${mfaCode}`);
           message = `Test account login - MFA code: ${mfaCode}`;
         } else {
           await sendMfaEmail(user.mfa_email || user.email, user.first_name, mfaCode, userLanguage, 'client');
@@ -345,7 +346,7 @@ router.post('/client-login', async (req, res) => {
           mfaEmail: user.mfa_email || user.email
         });
       } catch (error) {
-        console.error('Error sending client MFA code:', error);
+        logger.error('Error sending client MFA code:', error);
         return res.status(500).json({
           success: false,
           message: 'Failed to send verification code. Please try again.'
@@ -398,7 +399,7 @@ router.post('/client-login', async (req, res) => {
       profileCompleted: user.profile_completed || false
     };
 
-    console.log(`✅ Client login successful: ${user.email}`);
+    logger.debug(`✅ Client login successful: ${user.email}`);
 
     res.status(200).json({
       success: true,
@@ -411,7 +412,7 @@ router.post('/client-login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Client login error:', error);
+    logger.error('Client login error:', error);
 
     res.status(500).json({
       success: false,
@@ -456,12 +457,12 @@ router.post('/trial-magic-login', async (req, res) => {
 
     const { trial_id, access_code } = decoded;
 
-    console.log('🔐 Trial magic-link login attempt:', { trial_id, access_code });
+    logger.debug('🔐 Trial magic-link login attempt:', { trial_id, access_code });
 
     // Convert trial_id to UUID for database lookup
     const trialUUID = uuidv5(`trial-${trial_id}`, 'a8f5f167-d5e9-4c91-a3d2-7e5c8f9b1c4a');
 
-    console.log('🔑 Looking for trial agent with UUID:', trialUUID);
+    logger.debug('🔑 Looking for trial agent with UUID:', trialUUID);
 
     // Find trial agent device and associated user (UNIFIED ARCHITECTURE + FREEMIUM MODEL)
     const agentResult = await query(`
@@ -476,10 +477,10 @@ router.post('/trial-magic-login', async (req, res) => {
       WHERE ad.id = $1 AND ad.is_trial = true AND ad.is_active = true
     `, [trialUUID]);
 
-    console.log('📊 Query result:', { rowCount: agentResult.rows.length, rows: agentResult.rows });
+    logger.debug('📊 Query result:', { rowCount: agentResult.rows.length, rows: agentResult.rows });
 
     if (agentResult.rows.length === 0) {
-      console.log('❌ Trial account not found for UUID:', trialUUID);
+      logger.warn('❌ Trial account not found for UUID:', trialUUID);
       return res.status(404).json({
         success: false,
         message: 'Trial account not found',
@@ -528,7 +529,7 @@ router.post('/trial-magic-login', async (req, res) => {
         ON CONFLICT (id) DO NOTHING
       `, [user.id, user.email, user.first_name, user.last_name, '', 'client', user.email_verified]);
 
-      console.log(`✅ Created users table entry for trial user: ${user.email}`);
+      logger.debug(`✅ Created users table entry for trial user: ${user.email}`);
     }
 
     // Create session for trial user
@@ -579,8 +580,8 @@ router.post('/trial-magic-login', async (req, res) => {
       profileCompleted: user.profile_completed || false
     };
 
-    console.log(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);
-    console.log('📊 Trial userData:', JSON.stringify(userData, null, 2));
+    logger.debug(`✅ Trial magic-link login successful: ${user.email} (${trial_id})`);
+    logger.debug('📊 Trial userData:', JSON.stringify(userData, null, 2));
 
     res.status(200).json({
       success: true,
@@ -593,7 +594,7 @@ router.post('/trial-magic-login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Trial magic-link login error:', error);
+    logger.error('Trial magic-link login error:', error);
 
     res.status(500).json({
       success: false,
@@ -653,7 +654,7 @@ router.post('/agent-magic-login', async (req, res) => {
 
     // Handle Guest Promotion if pending_guest_id is present
     if (pending_guest_id) {
-      console.log(`🎁 Promoting guest agent ${pending_guest_id} for user ${user_id}`);
+      logger.debug(`🎁 Promoting guest agent ${pending_guest_id} for user ${user_id}`);
       
       // Look up service location for this business (default to first active one)
       const locationResult = await query(
@@ -757,7 +758,7 @@ router.post('/agent-magic-login', async (req, res) => {
     };
 
     const redirectInfo = safeRedirect ? ` → ${safeRedirect}` : '';
-    console.log(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})${redirectInfo}`);
+    logger.debug(`✅ Agent magic-link login successful: ${user.email} (agent: ${agent_id})${redirectInfo}`);
 
     res.status(200).json({
       success: true,
@@ -771,7 +772,7 @@ router.post('/agent-magic-login', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Agent magic-link login error:', error);
+    logger.error('Agent magic-link login error:', error);
 
     res.status(500).json({
       success: false,

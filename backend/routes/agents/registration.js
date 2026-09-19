@@ -1,4 +1,5 @@
 import express from 'express';
+import { logger } from '../../utils/logger.js';
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { query } from '../../config/database.js';
@@ -139,7 +140,7 @@ router.post('/register', async (req, res) => {
       [agentId, tokenData.id]
     );
 
-    console.log(`✅ Agent registered successfully: ${device_name} (${agentId})`);
+    logger.debug(`✅ Agent registered successfully: ${device_name} (${agentId})`);
 
     res.json({
       success: true,
@@ -153,7 +154,7 @@ router.post('/register', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Agent registration error:', error);
+    logger.error('Agent registration error:', error);
     res.status(500).json({
       success: false,
       message: 'Agent registration failed',
@@ -224,14 +225,14 @@ router.post('/:agent_id/release-registration', authenticateAgent, requireAgentMa
     // Drop the orphan device row.
     await query(`DELETE FROM agent_devices WHERE id = $1`, [agent_id]);
 
-    console.log(`↩️  Registration released: agent ${agent_id} (token freed, orphan row deleted)`);
+    logger.debug(`↩️  Registration released: agent ${agent_id} (token freed, orphan row deleted)`);
 
     res.json({
       success: true,
       message: 'Registration released'
     });
   } catch (error) {
-    console.error('Release registration error:', error);
+    logger.error('Release registration error:', error);
     res.status(500).json({
       success: false,
       message: 'Release registration failed',
@@ -322,7 +323,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     const magicLinkUrl = `https://www.romerotechsolutions.com/agent/login?token=${magicToken}`;
 
     const redirectInfo = safeRedirect ? ` → ${safeRedirect}` : '';
-    console.log(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})${redirectInfo}`);
+    logger.debug(`🔗 Generated agent magic-link for ${agent.device_name} (agent: ${agent_id}, user: ${user.email})${redirectInfo}`);
 
     res.json({
       success: true,
@@ -337,7 +338,7 @@ router.post('/:agent_id/dashboard-link', authenticateAgent, requireAgentMatch, a
     });
 
   } catch (error) {
-    console.error('Agent dashboard-link error:', error);
+    logger.error('Agent dashboard-link error:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to generate dashboard link',
@@ -457,7 +458,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
           [agent_id, row.agent_version || null]
         );
       } catch (sweepErr) {
-        console.warn('⚠ Failed to sweep stale install_update rows:', sweepErr.message);
+        logger.warn('⚠ Failed to sweep stale install_update rows:', sweepErr.message);
       }
 
       // Re-derive the open-command-types set AFTER the sweep so the
@@ -486,7 +487,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
         // Read failure here doesn't block the heartbeat — the
         // dashboard simply falls back to the (stale) local state
         // and a page refresh fixes it.
-        console.warn('⚠ Failed to derive openCommandTypes:', e.message);
+        logger.warn('⚠ Failed to derive openCommandTypes:', e.message);
       }
 
       try {
@@ -504,7 +505,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
           openCommandTypes,
         });
       } catch (broadcastErr) {
-        console.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
+        logger.warn('⚠ Failed to broadcast agent-status-update:', broadcastErr.message);
       }
     }
 
@@ -563,7 +564,7 @@ router.post('/:agent_id/heartbeat', authenticateAgent, requireAgentMatch, async 
     });
 
   } catch (error) {
-    console.error('Agent heartbeat error:', error);
+    logger.error('Agent heartbeat error:', error);
     res.status(500).json({
       success: false,
       message: 'Heartbeat processing failed',
@@ -612,7 +613,7 @@ router.post('/:agent_id/status', authenticateAgent, requireAgentMatch, async (re
     );
 
     // Log the status change
-    console.log(`📊 Agent ${agent_id} status changed to: ${status}${reason ? ` (reason: ${reason})` : ''}`);
+    logger.debug(`📊 Agent ${agent_id} status changed to: ${status}${reason ? ` (reason: ${reason})` : ''}`);
 
     res.json({
       success: true,
@@ -624,7 +625,7 @@ router.post('/:agent_id/status', authenticateAgent, requireAgentMatch, async (re
     });
 
   } catch (error) {
-    console.error('Agent status update error:', error);
+    logger.error('Agent status update error:', error);
     res.status(500).json({
       success: false,
       message: 'Status update failed',
@@ -665,8 +666,8 @@ router.post('/:agent_id/uninstall', authenticateAgent, requireAgentMatch, async 
 
     if (agentResult.rows.length > 0) {
       const agent = agentResult.rows[0];
-      console.log(`🗑️  Agent uninstalled: ${agent.device_name} (${agent.device_type}) - Business: ${agent.business_id}`);
-      console.log(`   Keep data: ${keepData ? 'Yes' : 'No'}`);
+      logger.debug(`🗑️  Agent uninstalled: ${agent.device_name} (${agent.device_type}) - Business: ${agent.business_id}`);
+      logger.debug(`   Keep data: ${keepData ? 'Yes' : 'No'}`);
     }
 
     res.json({
@@ -679,7 +680,7 @@ router.post('/:agent_id/uninstall', authenticateAgent, requireAgentMatch, async 
     });
 
   } catch (error) {
-    console.error('Agent uninstall notification error:', error);
+    logger.error('Agent uninstall notification error:', error);
     res.status(500).json({
       success: false,
       message: 'Uninstall notification failed',
@@ -910,10 +911,10 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
             severity: 'warning',
             payload: f,
             device_name: _agentDeviceName,
-          }).catch(err => console.error(`❌ anomaly alert dispatch failed:`, err));
+          }).catch(err => logger.error(`❌ anomaly alert dispatch failed:`, err));
         }
       })
-      .catch(err => console.error(`❌ anomaly evaluation failed for agent ${agent_id}:`, err));
+      .catch(err => logger.error(`❌ anomaly evaluation failed for agent ${agent_id}:`, err));
 
     // Broadcast metrics update to all connected admin clients via WebSocket
     // Get agent device info for the broadcast
@@ -932,7 +933,7 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
           metrics: latestMetric,
           timestamp: new Date().toISOString()
         });
-        console.log(`📊 Broadcasted agent metrics update for agent ${agent_id} via WebSocket`);
+        logger.debug(`📊 Broadcasted agent metrics update for agent ${agent_id} via WebSocket`);
 
         // Broadcast any triggered alerts
         if (triggeredAlerts.length > 0) {
@@ -944,7 +945,7 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
               timestamp: new Date().toISOString()
             });
           }
-          console.log(`🚨 Broadcasted ${triggeredAlerts.length} alert(s) for agent ${agent_id} via WebSocket`);
+          logger.warn(`🚨 Broadcasted ${triggeredAlerts.length} alert(s) for agent ${agent_id} via WebSocket`);
         }
       }
     }
@@ -959,7 +960,7 @@ router.post('/:agent_id/metrics', authenticateAgent, requireAgentMatch, async (r
     });
 
   } catch (error) {
-    console.error('Agent metrics upload error:', error);
+    logger.error('Agent metrics upload error:', error);
     res.status(500).json({
       success: false,
       message: 'Metrics upload failed',
