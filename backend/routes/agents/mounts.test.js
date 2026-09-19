@@ -23,6 +23,8 @@ test('aggregate mounts all sub-routers in registration order', () => {
     'trialRoutes',
     'registrationRoutes',
     'inventoryRoutes',
-    'commandsRoutes'
+    'commandsRoutes',
+    'devicesRoutes',
+    'monitoringRoutes'
   ]);
 });
