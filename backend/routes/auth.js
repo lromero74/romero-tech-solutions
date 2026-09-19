@@ -54,6 +54,8 @@ import {
   checkFailedAttempts
 } from './auth/attemptTracker.js';
 
+const router = express.Router();
+
 // Session endpoints live in ./auth/session.js; mounted here to preserve
 // the original route registration order.
 router.use(sessionRoutes);
