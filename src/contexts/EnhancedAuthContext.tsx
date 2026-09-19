@@ -8,6 +8,19 @@ import { systemSettingsService } from '../services/systemSettingsService';
 import ConfirmationDialog from '../components/common/ConfirmationDialog';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
 
+/**
+ * MFA prompt gate: clients use a separate authentication flow and are
+ * exempt; every other role is prompted whenever the system setting is on.
+ * Fail-closed on unknown roles — an unrecognized role must never silently
+ * skip MFA the way the old admin/technician/sales allow-list did for
+ * executive and manager.
+ */
+export const shouldPromptMfaForRole = (role: unknown, mfaRequired: boolean): boolean => {
+  if (role === 'client') return false;
+  if (!mfaRequired) return false;
+  return true;
+};
+
 interface EnhancedAuthContextType {
   user: AuthUser | null;
   authUser: AuthUser | null; // Alias for backwards compatibility
@@ -96,30 +109,15 @@ export const EnhancedAuthProvider: React.FC<EnhancedAuthProviderProps> = ({ chil
   const timeoutUserRoleRef = useRef<UserRole | null>(null); // Store user role for timeout redirect
 
   // Helper function to determine if a user requires MFA
-  // NOTE: These role checks are appropriate here because:
-  // 1. They check against RBAC permission 'require.mfa.enable' via backend
-  // 2. The backend enforces MFA based on that permission for each role
-  // 3. This is authentication/security boundary logic, not operational permissions
+  // NOTE: the gate is a deny-list, not an allow-list: every employee role
+  // gets MFA when the setting is on. An allow-list silently exempts new
+  // roles (it previously skipped executive/manager entirely).
   const requiresMfa = async (user: AuthUser | unknown): Promise<boolean> => {
     if (!user) return false;
 
-    // Clients are not subject to MFA (they have separate authentication flow)
-    if (user.role === 'client') {
-      return false;
-    }
-
     try {
-      // Check if MFA is required based on system settings
-      // Backend checks 'require.mfa.enable' permission for the user's role
       const mfaRequired = await systemSettingsService.getMfaRequired();
-
-      // MFA applies to all employees when enabled in system settings
-      // These roles have 'require.mfa.enable' permission in RBAC system
-      if (mfaRequired && (user.role === 'admin' || user.role === 'technician' || user.role === 'sales')) {
-        return true;
-      }
-
-      return false;
+      return shouldPromptMfaForRole((user as AuthUser).role, mfaRequired);
     } catch (error: any) {
       // If permission denied (403), default to false (no MFA required)
       if (error.message?.includes('Insufficient permissions') || error.message?.includes('403')) {
