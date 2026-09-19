@@ -8,20 +8,7 @@ fake success, no broken UX, no security hole).
 **Agents: read this file at the start of each session and ask Louis whether
 any item should be implemented.** Do not start one unasked.
 
-## 1. Stripe payment integration (+ trial upgrade path)
-
-- **Status quo:** trial users clicking Upgrade get an honest "coming soon —
-  contact support" message; `POST /api/.../upgrade` returns upgrade details
-  with `message: 'Upgrade details calculated. Payment integration pending.'`
-  Frontend: `src/components/client/TrialDevicesManager.tsx`.
-  Backend: `backend/routes/subscription.js` (`TODO: Integrate with payment
-  processor (Stripe, etc.)`).
-- **Needed to implement:** live Stripe account + keys, pricing/product
-  decisions, a checkout flow, and a client-facing billing/upgrade page (none
-  exists today — there is nowhere to link the button yet).
-- **Decision needed:** Stripe account + price list + approve the checkout UX.
-
-## 2. Admin detail modals (scripts, policies, packages, schedules, deployments)
+## 1. Admin detail modals (scripts, policies, packages, schedules, deployments)
 
 - **Status quo:** `PolicyAutomationDashboard` / `SoftwareDeploymentDashboard`
   accept `onView*Details` callback props, but nothing invokes them, and no
@@ -32,7 +19,7 @@ any item should be implemented.** Do not start one unasked.
   drawer may cover all five).
 - **Decision needed:** scope/content of each detail view.
 
-## 3. On-demand inventory scan (`refresh_inventory` agent command)
+## 2. On-demand inventory scan (`refresh_inventory` agent command)
 
 - **Status quo:** `POST /api/admin/assets/scan/:agent_id` honestly answers
   `501 SCAN_NOT_SUPPORTED` — the Go agent (`rts-monitoring-agent`) has no
@@ -47,7 +34,7 @@ any item should be implemented.** Do not start one unasked.
   agent repo rules: all installers together, version bump every rebuild).
   Verify on-device before shipping — do not land untested.
 
-## 4. Client push notifications + client live-update feed
+## 3. Client push notifications + client live-update feed
 
 - **Status quo:** employees get real browser push via `push_subscriptions`
   (`backend/services/alertPush.js`). Client push is still a logged skip
@@ -58,7 +45,7 @@ any item should be implemented.** Do not start one unasked.
   socket tracking in the websocket service, per-client payload format.
 - **Decision needed:** priority vs. employee channels that already work.
 
-## 5. MeshCentral relay URL for remote control
+## 4. MeshCentral relay URL for remote control
 
 - **Status quo:** `POST /agents/:agent_id/wayland/start`
   (`backend/routes/remoteControl.js`) returns `relay_url: null` with a
@@ -71,6 +58,9 @@ any item should be implemented.** Do not start one unasked.
 
 ## Resolved during the audit (for context, not action)
 
+- Stripe subscriptions (v1.109.43): hosted-checkout upgrades, webhook
+  activation/downgrade, real cancel, trial button wired. Live-verified with
+  a create+expire probe (no charge).
 - Unmounted mock stubs deleted (`EmergencyAlerts`, `ClientRegistration`,
   frontend `emailService`) — pinned gone by
   `src/__tests__/noMockStubs.test.ts`.
