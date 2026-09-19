@@ -34,7 +34,23 @@ export const parseCappedLimit = (value, defaultValue = DEFAULT_LIST_LIMIT, maxVa
   return Math.min(parsed, maxValue);
 };
 
+export const DEFAULT_LIST_PAGE = 1;
+export const MAX_LIST_PAGE = 1000;
+
+// Parse a client-supplied page number (`?page=`) into a safe integer.
+// Missing, non-numeric, and sub-1 values fall back to page 1 (a page of 0
+// or less would produce a negative OFFSET and a 500); absurdly deep pages
+// are clamped so one request cannot force a near-full-table OFFSET scan.
+export const parseCappedPage = (value, defaultValue = DEFAULT_LIST_PAGE, maxValue = MAX_LIST_PAGE) => {
+  const parsed = parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return defaultValue;
+  }
+  return Math.min(parsed, maxValue);
+};
+
 export default {
   resolveSortParameters,
-  parseCappedLimit
+  parseCappedLimit,
+  parseCappedPage
 };

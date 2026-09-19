@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveSortParameters, parseCappedLimit } from './sortValidation.js';
+import { resolveSortParameters, parseCappedLimit, parseCappedPage } from './sortValidation.js';
 
 test('resolveSortParameters keeps allowed sort columns and ORDER', () => {
   const result = resolveSortParameters({
@@ -52,4 +52,13 @@ test('parseCappedLimit falls back to the default for missing or invalid input', 
   assert.equal(parseCappedLimit('abc', 20), 20);
   assert.equal(parseCappedLimit('0', 20), 20);
   assert.equal(parseCappedLimit('-5', 20), 20);
+});
+
+test('parseCappedPage keeps sane pages and clamps the rest', () => {
+  assert.equal(parseCappedPage('3'), 3);
+  assert.equal(parseCappedPage(undefined), 1);
+  assert.equal(parseCappedPage('abc'), 1);
+  assert.equal(parseCappedPage('0'), 1);
+  assert.equal(parseCappedPage('-5'), 1);
+  assert.equal(parseCappedPage('1000000'), 1000);
 });
