@@ -8,6 +8,7 @@ import { websocketService } from './websocketService.js';
 import { emailService } from './emailService.js';
 import { alertTranslationService } from './alertTranslationService.js';
 import { twilioService } from './twilioService.js';
+import { deliverEmployeeBrowserPush } from './alertPush.js';
 import {
   buildEmployeeAlertHTML,
   buildEmployeeAlertText,
@@ -319,10 +320,28 @@ class AlertNotificationService {
         }
       }
 
-      // Browser push notification (future)
+      // Browser push notification via the employee's subscribed devices
       if (subscriber.notify_browser) {
-        console.log(`🔔 Browser push notification queued for ${recipientEmail} (not yet implemented)`);
-        // TODO: Implement browser push notifications
+        try {
+          const pushResult = await deliverEmployeeBrowserPush({
+            employeeId: subscriber.employee_id,
+            alert,
+          });
+          if (pushResult.skipped) {
+            // No subscribed devices (or VAPID unconfigured) — nothing to
+            // report; the preference stands until a device subscribes.
+          } else if (pushResult.failed > 0 && pushResult.sent === 0) {
+            await this._logNotification(alert, subscriber, 'employee', 'push', 'failed', 'en', 'all endpoints failed');
+            failed++;
+          } else {
+            await this._logNotification(alert, subscriber, 'employee', 'push', 'sent', 'en');
+            sent++;
+          }
+        } catch (error) {
+          console.error(`❌ Browser push notification failed for ${recipientEmail}:`, error);
+          await this._logNotification(alert, subscriber, 'employee', 'push', 'failed', 'en', error.message);
+          failed++;
+        }
       }
     }
 
