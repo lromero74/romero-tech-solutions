@@ -62,9 +62,14 @@ class SMSService {
 
     const messages = this.sentMessages.get(phoneNumber);
 
-    // Remove messages older than 24 hours
+    // Remove messages older than 24 hours. Drop the key when nothing
+    // remains so the map cannot grow one entry per phone number forever.
     const recentMessages = messages.filter(timestamp => now - timestamp < oneDay);
-    this.sentMessages.set(phoneNumber, recentMessages);
+    if (recentMessages.length === 0) {
+      this.sentMessages.delete(phoneNumber);
+    } else {
+      this.sentMessages.set(phoneNumber, recentMessages);
+    }
 
     // Check hourly limit
     const hourlyMessages = recentMessages.filter(timestamp => now - timestamp < oneHour);
@@ -97,6 +102,19 @@ class SMSService {
     }
 
     this.sentMessages.get(phoneNumber).push(Date.now());
+  }
+
+  /**
+   * Delete numbers whose every timestamp has expired. Recording re-adds the
+   * key, so idle numbers can only be evicted by sweeping.
+   */
+  sweepOldEntries(now = Date.now()) {
+    const oneDay = 24 * 60 * 60 * 1000;
+    for (const [phoneNumber, timestamps] of this.sentMessages.entries()) {
+      if (!timestamps.some(timestamp => now - timestamp < oneDay)) {
+        this.sentMessages.delete(phoneNumber);
+      }
+    }
   }
 
   /**
@@ -238,3 +256,7 @@ class SMSService {
 
 export const smsService = new SMSService();
 export default smsService;
+
+// Sweep expired numbers hourly. unref()ed so importing this module never
+// holds the event loop open.
+setInterval(() => smsService.sweepOldEntries(), 60 * 60 * 1000).unref();

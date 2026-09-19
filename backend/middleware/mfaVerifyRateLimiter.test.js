@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mfaVerifyLimiter, clearMfaVerifyAttempts } from './mfaVerifyRateLimiter.js';
+import { mfaVerifyLimiter, clearMfaVerifyAttempts, mfaVerifyAttempts } from './mfaVerifyRateLimiter.js';
 
 const makeReq = (email = 'user@example.com', ip = '9.9.9.9') => ({
   ip,
@@ -57,6 +57,34 @@ test('mfaVerifyLimiter tracks email addresses independently', async () => {
   let nextCalled = false;
   await mfaVerifyLimiter(req, makeRes(), () => { nextCalled = true; });
   assert.equal(nextCalled, true);
+});
+
+test('mfaVerifyLimiter evicts fully-expired keys instead of leaking them', async () => {
+  const ip = '8.8.8.8';
+  const email = 'evict@example.com';
+  clearMfaVerifyAttempts(ip, email);
+  const req = makeReq(email, ip);
+  let nextCalled = false;
+  await mfaVerifyLimiter(req, makeRes(), () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+  // Age the entry past the window, hit again: allowed AND stale timestamps
+  // pruned (only the fresh attempt remains — the request itself re-records).
+  mfaVerifyAttempts.set(`${ip}:${email}`, [Date.now() - 16 * 60 * 1000]);
+  nextCalled = false;
+  await mfaVerifyLimiter(req, makeRes(), () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+  const kept = mfaVerifyAttempts.get(`${ip}:${email}`);
+  assert.equal(kept.length, 1);
+  assert.ok(Date.now() - kept[0] < 15 * 60 * 1000);
+});
+
+test('sweepMfaVerifyAttempts deletes fully-expired idle keys', async () => {
+  const { sweepMfaVerifyAttempts } = await import('./mfaVerifyRateLimiter.js');
+  mfaVerifyAttempts.set('1.1.1.1:stale@example.com', [Date.now() - 16 * 60 * 1000]);
+  mfaVerifyAttempts.set('2.2.2.2:fresh@example.com', [Date.now()]);
+  sweepMfaVerifyAttempts();
+  assert.equal(mfaVerifyAttempts.has('1.1.1.1:stale@example.com'), false);
+  assert.equal(mfaVerifyAttempts.has('2.2.2.2:fresh@example.com'), true);
 });
 
 test('mfaVerifyLimiter keys userId bodies independently (code issuance has no email)', async () => {

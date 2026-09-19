@@ -12,7 +12,8 @@
 
 import { query } from '../config/database.js';
 
-const mfaVerifyAttempts = new Map();
+// Exported for the eviction regression test (mirrors attemptTracker.js).
+export const mfaVerifyAttempts = new Map();
 
 const WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 5;
@@ -57,7 +58,13 @@ export const mfaVerifyLimiter = async (req, res, next) => {
     const recentAttempts = mfaVerifyAttempts
       .get(trackingKey)
       .filter(attemptTime => now - attemptTime < WINDOW_MS);
-    mfaVerifyAttempts.set(trackingKey, recentAttempts);
+    // Drop the key when nothing remains — otherwise the map grows one entry
+    // per unique IP forever (same pattern as cleanupEmployeeLoginTracking).
+    if (recentAttempts.length === 0) {
+      mfaVerifyAttempts.delete(trackingKey);
+    } else {
+      mfaVerifyAttempts.set(trackingKey, recentAttempts);
+    }
 
     if (recentAttempts.length >= MAX_ATTEMPTS) {
       console.warn(`🚨 MFA verify rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
@@ -100,3 +107,18 @@ export const mfaVerifyLimiter = async (req, res, next) => {
 export const clearMfaVerifyAttempts = (clientIP, email, userId) => {
   mfaVerifyAttempts.delete(`${clientIP}:${email || userId || 'unknown'}`);
 };
+
+/**
+ * Delete keys whose every attempt has expired. Runs on an unref()ed interval
+ * so idle keys (IPs never seen again) cannot grow the map forever — the
+ * request path alone cannot evict them because each request re-records.
+ */
+export const sweepMfaVerifyAttempts = (now = Date.now()) => {
+  for (const [key, attempts] of mfaVerifyAttempts.entries()) {
+    if (!attempts.some(attemptTime => now - attemptTime < WINDOW_MS)) {
+      mfaVerifyAttempts.delete(key);
+    }
+  }
+};
+
+setInterval(sweepMfaVerifyAttempts, 15 * 60 * 1000).unref();

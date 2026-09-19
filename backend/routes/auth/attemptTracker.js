@@ -36,7 +36,13 @@ const checkFailedAttempts = (clientIP) => {
 
   const attempts = failedAttempts.get(clientIP);
   const recentAttempts = attempts.filter(attemptTime => now - attemptTime < windowMs);
-  failedAttempts.set(clientIP, recentAttempts);
+  // Drop the key when nothing remains — otherwise the map grows one entry
+  // per unique IP forever (same pattern as cleanupEmployeeLoginTracking).
+  if (recentAttempts.length === 0) {
+    failedAttempts.delete(clientIP);
+  } else {
+    failedAttempts.set(clientIP, recentAttempts);
+  }
 
   if (recentAttempts.length >= maxAttempts) {
     return {
@@ -48,4 +54,21 @@ const checkFailedAttempts = (clientIP) => {
   return { blocked: false };
 };
 
-export { failedAttempts, recordFailedAttempt, clearFailedAttempts, checkFailedAttempts };
+/**
+ * Delete keys whose every attempt has expired. Runs on an unref()ed interval
+ * so idle keys (IPs never seen again) cannot grow the map forever — the
+ * request path alone cannot evict them because recording re-adds the key.
+ */
+const sweepAttemptTracker = (now = Date.now()) => {
+  const windowMs = 15 * 60 * 1000; // 15 minutes
+  for (const [key, attempts] of failedAttempts.entries()) {
+    if (!attempts.some(attemptTime => now - attemptTime < windowMs)) {
+      failedAttempts.delete(key);
+    }
+  }
+};
+
+// unref()ed so importing this module never holds the event loop open.
+setInterval(sweepAttemptTracker, 15 * 60 * 1000).unref();
+
+export { failedAttempts, recordFailedAttempt, clearFailedAttempts, checkFailedAttempts, sweepAttemptTracker };
