@@ -2,7 +2,7 @@ import express from 'express';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { requirePermission } from '../../middleware/permissionMiddleware.js';
 import { getPool } from '../../config/database.js';
-import { parseCappedLimit } from '../../utils/sortValidation.js';
+import { parseCappedLimit, parseCappedPage } from '../../utils/sortValidation.js';
 
 const router = express.Router();
 
@@ -277,7 +277,7 @@ router.get('/stats', async (req, res) => {
  */
 router.get('/notification-log', async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
+    const page = parseCappedPage(req.query.page);
     const limit = parseCappedLimit(req.query.limit, 50);
     const offset = (page - 1) * limit;
 
