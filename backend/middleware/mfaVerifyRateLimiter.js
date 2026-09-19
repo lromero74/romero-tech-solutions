@@ -1,0 +1,100 @@
+/**
+ * MFA Code Verification Rate Limiter
+ *
+ * Throttles pre-auth MFA code verification endpoints
+ * (/verify-admin-mfa, /verify-client-mfa, client /verify-login).
+ * MFA codes are 6 digits (10^6 space, 5-minute TTL): without throttling,
+ * an attacker can brute-force a code inside its validity window.
+ *
+ * Tracking is per IP+email in a sliding 15-minute window. Fails closed:
+ * limiter errors deny the request rather than bypassing the throttle.
+ */
+
+import { query } from '../config/database.js';
+
+const mfaVerifyAttempts = new Map();
+
+const WINDOW_MS = 15 * 60 * 1000;
+const MAX_ATTEMPTS = 5;
+
+async function logSecurityEvent(eventType, eventData) {
+  try {
+    await query(`
+      INSERT INTO security_logs (
+        event_type,
+        ip_address,
+        user_agent,
+        event_data,
+        created_at
+      ) VALUES ($1, $2, $3, $4, CURRENT_TIMESTAMP)
+    `, [
+      eventType,
+      eventData.ip,
+      eventData.userAgent || 'Unknown',
+      JSON.stringify(eventData)
+    ]);
+  } catch (error) {
+    console.error('❌ Error logging MFA verify security event:', error);
+  }
+}
+
+export const mfaVerifyLimiter = async (req, res, next) => {
+  const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
+  const userAgent = req.get?.('User-Agent') || 'Unknown';
+  const { email } = req.body || {};
+
+  const now = Date.now();
+
+  try {
+    const trackingKey = `${clientIP}:${email || 'unknown'}`;
+
+    if (!mfaVerifyAttempts.has(trackingKey)) {
+      mfaVerifyAttempts.set(trackingKey, []);
+    }
+
+    const recentAttempts = mfaVerifyAttempts
+      .get(trackingKey)
+      .filter(attemptTime => now - attemptTime < WINDOW_MS);
+    mfaVerifyAttempts.set(trackingKey, recentAttempts);
+
+    if (recentAttempts.length >= MAX_ATTEMPTS) {
+      console.warn(`🚨 MFA verify rate limit exceeded for IP: ${clientIP}, Email: ${email}`);
+      await logSecurityEvent('mfa_verify_rate_limit_exceeded', {
+        ip: clientIP,
+        email: email,
+        attempts: recentAttempts.length,
+        maxAttempts: MAX_ATTEMPTS,
+        userAgent: userAgent
+      });
+
+      const retryAfter = Math.ceil((recentAttempts[0] + WINDOW_MS - now) / 1000);
+
+      return res.status(429).json({
+        success: false,
+        message: 'Too many verification attempts. Please request a new code and try again later.',
+        code: 'MFA_VERIFY_RATE_LIMIT_EXCEEDED',
+        retryAfter: retryAfter
+      });
+    }
+
+    recentAttempts.push(now);
+    mfaVerifyAttempts.set(trackingKey, recentAttempts);
+
+    next();
+  } catch (error) {
+    console.error('❌ Error in MFA verify rate limiter:', error);
+    return res.status(503).json({
+      success: false,
+      message: 'Service temporarily unavailable. Please try again in a few moments.',
+      code: 'SERVICE_UNAVAILABLE'
+    });
+  }
+};
+
+/**
+ * Clear tracked attempts, e.g. after a successful verification or a fresh
+ * code issuance, so legitimate users are not throttled by stale failures.
+ */
+export const clearMfaVerifyAttempts = (clientIP, email) => {
+  mfaVerifyAttempts.delete(`${clientIP}:${email || 'unknown'}`);
+};

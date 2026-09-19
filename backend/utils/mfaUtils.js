@@ -10,13 +10,7 @@ import { sendNotificationToUser, sendNotificationToEmployees } from '../routes/p
  * Reusable MFA-related utility functions extracted from auth routes
  */
 
-/**
- * Generate a 6-digit MFA code
- * @returns {string} 6-digit MFA code
- */
-export function generateMfaCode() {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-}
+
 
 /**
  * Generate a secure reset token
@@ -489,11 +483,7 @@ export async function sendClientMfaEmail(email, firstName, mfaCode, codeType = '
  * Generate backup codes for client MFA
  * @returns {string[]} Array of 10 backup codes
  */
-export function generateClientBackupCodes() {
-  return Array.from({ length: 10 }, () =>
-    Math.random().toString(36).substring(2, 10).toUpperCase()
-  );
-}
+
 
 /**
  * SMS MFA FUNCTIONS
