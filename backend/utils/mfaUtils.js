@@ -3,7 +3,9 @@ import { query } from '../config/database.js';
 import { emailService } from '../services/emailService.js';
 import { smsService } from '../services/smsService.js';
 import twilioSmsService from '../services/twilioSmsService.js';
-import { sendNotificationToUser, sendNotificationToEmployees } from '../routes/pushRoutes.js';
+// NOTE: pushRoutes is imported lazily inside sendMfaPush (never statically:
+// utils must not load routes at import time — it crashes test/CLI loads that
+// lack web-push env and inverts the services → routes dependency direction.
 
 /**
  * MFA (Multi-Factor Authentication) Utilities
@@ -170,7 +172,8 @@ export async function sendMfaPush(userId, firstName, mfaCode, userType = 'employ
       ]
     };
 
-    // Send notification to the user
+    // Send notification to the user (lazy import: see note at top of file)
+    const { sendNotificationToUser } = await import('../routes/pushRoutes.js');
     const result = await sendNotificationToUser(userId, notificationData, isEmployee);
 
     if (result.sent > 0) {
