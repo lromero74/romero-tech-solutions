@@ -20,6 +20,34 @@ import { apiService } from '../../services/apiService';
 
 const mockedApi = apiService as jest.Mocked<typeof apiService>;
 
+describe('adminService.updateService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('PUTs /admin/services/:id with partial updates', async () => {
+    mockedApi.put.mockResolvedValue({
+      success: true,
+      data: { service: { id: 'svc-1', name: 'Renamed' } },
+    } as any);
+    const result = await adminService.updateService('svc-1', { name: 'Renamed' });
+    expect(mockedApi.put).toHaveBeenCalledWith('/admin/services/svc-1', { name: 'Renamed' });
+    expect(result).toEqual({ id: 'svc-1', name: 'Renamed' });
+  });
+});
+
+describe('adminService.deleteService', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('DELETEs /admin/services/:id', async () => {
+    mockedApi.delete.mockResolvedValue({ success: true } as any);
+    await adminService.deleteService('svc-1');
+    expect(mockedApi.delete).toHaveBeenCalledWith('/admin/services/svc-1');
+  });
+});
+
 describe('adminService.updateServiceRequest', () => {
   beforeEach(() => {
     jest.clearAllMocks();

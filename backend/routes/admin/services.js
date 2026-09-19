@@ -1,12 +1,13 @@
 import express from 'express';
 import { query } from '../../config/database.js';
+import { logger } from '../../utils/logger.js';
 
 const router = express.Router();
 
 // GET /services - Get all services
 router.get('/services', async (req, res) => {
   try {
-    console.log('🔍 Fetching all services...');
+    logger.debug('🔍 Fetching all services...');
 
     // Check if services table exists first, create if it doesn't
     const tableCheck = await query(`
@@ -16,7 +17,7 @@ router.get('/services', async (req, res) => {
     `);
 
     if (tableCheck.rows.length === 0) {
-      console.log('📋 Creating services table...');
+      logger.debug('📋 Creating services table...');
       await query(`
         CREATE TABLE IF NOT EXISTS services (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -30,7 +31,7 @@ router.get('/services', async (req, res) => {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      console.log('✅ Services table created');
+      logger.debug('✅ Services table created');
     }
 
     const result = await query(`
@@ -49,7 +50,7 @@ router.get('/services', async (req, res) => {
       ORDER BY name
     `);
 
-    console.log(`📋 Found ${result.rows.length} services`);
+    logger.debug(`📋 Found ${result.rows.length} services`);
 
     res.status(200).json({
       success: true,
@@ -60,7 +61,7 @@ router.get('/services', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error fetching services:', error);
+    logger.error('❌ Error fetching services:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to fetch services',
@@ -74,7 +75,7 @@ router.post('/services', async (req, res) => {
   try {
     const { name, description, basePrice, estimatedHours, icon } = req.body;
 
-    console.log('🆕 Creating new service:', { name, description, basePrice, estimatedHours, icon });
+    logger.debug('🆕 Creating new service:', { name, description, basePrice, estimatedHours, icon });
 
     // Validate input
     if (!name || !description) {
@@ -92,7 +93,7 @@ router.post('/services', async (req, res) => {
     `);
 
     if (tableCheck.rows.length === 0) {
-      console.log('📋 Creating services table...');
+      logger.debug('📋 Creating services table...');
       await query(`
         CREATE TABLE IF NOT EXISTS services (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -106,7 +107,7 @@ router.post('/services', async (req, res) => {
           updated_at TIMESTAMP DEFAULT NOW()
         )
       `);
-      console.log('✅ Services table created');
+      logger.debug('✅ Services table created');
     }
 
     const result = await query(`
@@ -125,7 +126,7 @@ router.post('/services', async (req, res) => {
     `, [name, description, parseFloat(basePrice) || 0, parseFloat(estimatedHours) || 0, icon || null]);
 
     const newService = result.rows[0];
-    console.log('✅ Service created successfully:', newService);
+    logger.debug('✅ Service created successfully:', newService);
 
     res.status(201).json({
       success: true,
@@ -136,7 +137,7 @@ router.post('/services', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('❌ Error creating service:', error);
+    logger.error('❌ Error creating service:', error);
     res.status(500).json({
       success: false,
       message: 'Failed to create service',
@@ -145,5 +146,70 @@ router.post('/services', async (req, res) => {
   }
 });
 
+
+// PUT /services/:id - Update a service
+router.put('/services/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, basePrice, estimatedHours, icon, isActive } = req.body;
+
+    const current = await query(`SELECT id FROM services WHERE id = $1`, [id]);
+    if (current.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+
+    const updates = [];
+    const params = [];
+    let idx = 1;
+    const set = (col, val) => { updates.push(`${col} = $${idx++}`); params.push(val); };
+    if (name !== undefined) set('name', name);
+    if (description !== undefined) set('description', description);
+    if (basePrice !== undefined) set('base_price', parseFloat(basePrice) || 0);
+    if (estimatedHours !== undefined) set('estimated_hours', parseFloat(estimatedHours) || 0);
+    if (icon !== undefined) set('icon', icon);
+    if (isActive !== undefined) set('is_active', !!isActive);
+    if (updates.length === 0) {
+      return res.status(400).json({ success: false, message: 'No fields to update' });
+    }
+    updates.push(`updated_at = NOW()`);
+
+    const result = await query(`
+      UPDATE services SET ${updates.join(', ')} WHERE id = $${idx}
+      RETURNING
+        id, name, description,
+        base_price as "basePrice", estimated_hours as "estimatedHours",
+        icon, is_active as "isActive",
+        created_at as "createdAt", updated_at as "updatedAt"
+    `, [...params, id]);
+
+    res.json({ success: true, data: { service: result.rows[0] }, message: 'Service updated successfully' });
+  } catch (error) {
+    logger.error('Error updating service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to update service',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// DELETE /services/:id - Delete a service (no inbound FKs reference services)
+router.delete('/services/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await query(`DELETE FROM services WHERE id = $1 RETURNING id`, [id]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Service not found' });
+    }
+    res.json({ success: true, message: 'Service deleted successfully' });
+  } catch (error) {
+    logger.error('Error deleting service:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete service',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
 
 export default router;

@@ -419,6 +419,36 @@ export class AdminService {
     }
   }
 
+  // Update service
+  async updateService(serviceId: string, updates: {
+    name?: string;
+    description?: string;
+    basePrice?: number;
+    estimatedHours?: number;
+    icon?: string;
+    isActive?: boolean;
+  }): Promise<Service> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.put(`/admin/services/${serviceId}`, updates);
+      return result.data.service;
+    } catch (error) {
+      console.error('Error updating service:', error);
+      throw error;
+    }
+  }
+
+  // Delete service
+  async deleteService(serviceId: string): Promise<void> {
+    try {
+      const apiService = await this.getApiService();
+      await apiService.delete(`/admin/services/${serviceId}`);
+    } catch (error) {
+      console.error('Error deleting service:', error);
+      throw error;
+    }
+  }
+
   // Get services
   async getServices(): Promise<{ services: Service[] }> {
     try {

@@ -12,7 +12,9 @@ test('services router exposes only service catalog endpoints', () => {
     .map(layer => `${Object.keys(layer.route.methods).filter(m => m !== '_all')[0].toUpperCase()} ${layer.route.path}`)
     .sort();
   assert.deepEqual(routes, [
+    'DELETE /services/:id',
     'GET /services',
-    'POST /services'
+    'POST /services',
+    'PUT /services/:id'
   ]);
 });

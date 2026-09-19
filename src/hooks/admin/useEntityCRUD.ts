@@ -82,8 +82,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           result = await adminService.updateBusiness(id, updates);
           break;
         case 'services':
-          // TODO: Add updateService method to adminService
-          throw new Error('updateService not yet implemented');
+          result = await adminService.updateService(id, updates);
+          break;
         case 'serviceRequests':
           result = await adminService.updateServiceRequest(id, updates);
           break;
@@ -120,8 +120,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           result = await adminService.deleteBusiness(id);
           break;
         case 'services':
-          // TODO: Add deleteService method to adminService
-          throw new Error('deleteService not yet implemented');
+          result = await adminService.deleteService(id);
+          break;
         case 'serviceRequests':
           // TODO: Add deleteServiceRequest method to adminService
           throw new Error('deleteServiceRequest not yet implemented');
