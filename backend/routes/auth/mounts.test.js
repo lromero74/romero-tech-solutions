@@ -27,3 +27,17 @@ test('every mounted sub-router is imported', () => {
     );
   }
 });
+
+// A splice slip during the magic-link split silently dropped four of these
+// mounts (suite stayed green — slice tests only import sub-routers). Pin the
+// complete mount list and order so it cannot happen again.
+test('aggregate mounts all sub-routers in registration order', () => {
+  const mounts = [...src.matchAll(/router\.use\((\w+)\)/g)].map(m => m[1]);
+  assert.deepEqual(mounts, [
+    'sessionRoutes',
+    'mfaVerifyRouter',
+    'passwordRoutes',
+    'mfaRoutes',
+    'magicLinkRoutes'
+  ]);
+});
