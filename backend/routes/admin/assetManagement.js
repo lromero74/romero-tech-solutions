@@ -280,35 +280,17 @@ router.get('/changes/:agent_id', authMiddleware, requireEmployee, async (req, re
 
 /**
  * POST /api/admin/assets/scan/:agent_id
- * Trigger an immediate asset inventory scan on an agent
- *
- * TODO: Implementation - sends command to agent to perform full inventory scan
+ * On-demand inventory scans are not supported: the agent firmware has no
+ * inventory-scan command (it uploads hardware/software inventory on its own
+ * 24h ticker). This endpoint answers 501 honestly instead of a fake
+ * success until the agent learns an on-demand scan command.
  */
 router.post('/scan/:agent_id', authMiddleware, requireEmployee, async (req, res) => {
-  try {
-    const { agent_id } = req.params;
-    const { scan_type = 'full' } = req.body; // full, hardware_only, software_only
-
-    // TODO: Send command to agent to perform inventory scan
-    // This would use the existing remote command infrastructure
-
-    res.json({
-      success: true,
-      message: 'Inventory scan initiated',
-      data: {
-        agent_id,
-        scan_type,
-        status: 'pending'
-      }
-    });
-  } catch (error) {
-    console.error('Trigger inventory scan error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to initiate inventory scan',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
+  return res.status(501).json({
+    success: false,
+    message: 'On-demand inventory scans are not supported by the agent; inventory uploads automatically every 24 hours',
+    code: 'SCAN_NOT_SUPPORTED'
+  });
 });
 
 export default router;

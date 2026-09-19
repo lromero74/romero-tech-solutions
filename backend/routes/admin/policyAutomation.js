@@ -10,6 +10,7 @@ import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { query } from '../../config/database.js';
 import { authMiddleware, requireEmployee } from '../../middleware/authMiddleware.js';
+import { buildPolicyRunCommand, fetchPolicyWithScript, agentExists, queuePolicyExecution } from './policyExecution.js';
 
 const router = express.Router();
 
@@ -428,12 +429,31 @@ router.post('/policies/:policy_id/assign', authMiddleware, requireEmployee, asyn
       [uuidv4(), policy_id, agent_device_id, business_id, req.user.id]
     );
 
-    // TODO: If run_immediately is true, trigger policy execution
+    // run_immediately queues the policy on the target agent right away
+    // (business-wide assignments have no single agent to run on).
+    let immediateExecution = null;
+    if (run_immediately && agent_device_id) {
+      const found = await fetchPolicyWithScript(policy_id);
+      if (found && (await agentExists(agent_device_id))) {
+        try {
+          const built = buildPolicyRunCommand({
+            policy: found.policy,
+            script: found.script,
+            agentDeviceId: agent_device_id,
+            requestedBy: req.user.id,
+          });
+          const { commandId, executionId } = await queuePolicyExecution(built, result.rows[0].id);
+          immediateExecution = { command_id: commandId, execution_id: executionId, status: 'pending' };
+        } catch (immediateError) {
+          immediateExecution = { status: 'failed', message: immediateError.message };
+        }
+      }
+    }
 
     res.json({
       success: true,
       message: 'Policy assigned successfully',
-      data: result.rows[0]
+      data: { ...result.rows[0], immediate_execution: immediateExecution }
     });
   } catch (error) {
     console.error('Assign policy error:', error);
@@ -489,15 +509,37 @@ router.post('/policies/:policy_id/execute', authMiddleware, requireEmployee, asy
     const { policy_id } = req.params;
     const { agent_device_id } = req.body;
 
-    // TODO: Implement actual policy execution logic
-    // This would send the script to the agent via the command system
+    const found = await fetchPolicyWithScript(policy_id);
+    if (!found) {
+      return res.status(404).json({ success: false, message: 'Policy not found' });
+    }
+    let built;
+    try {
+      built = buildPolicyRunCommand({
+        policy: found.policy,
+        script: found.script,
+        agentDeviceId: agent_device_id,
+        requestedBy: req.user.id,
+      });
+    } catch (validationError) {
+      return res.status(validationError.statusCode || 400).json({
+        success: false,
+        message: validationError.message,
+      });
+    }
+    if (!(await agentExists(agent_device_id))) {
+      return res.status(404).json({ success: false, message: 'Agent not found' });
+    }
+    const { commandId, executionId } = await queuePolicyExecution(built);
 
     res.json({
       success: true,
-      message: 'Policy execution initiated',
+      message: 'Policy execution queued',
       data: {
         policy_id,
         agent_device_id,
+        command_id: commandId,
+        execution_id: executionId,
         status: 'pending'
       }
     });

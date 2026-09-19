@@ -6,7 +6,6 @@ import { AdminDataProvider, useAdminData } from '../contexts/AdminDataContext';
 import SessionWarning from '../components/common/SessionWarning';
 import SessionCountdownTimer from '../components/admin/SessionCountdownTimer';
 import { systemSettingsService } from '../services/systemSettingsService';
-// import EmergencyAlerts from '../components/admin/EmergencyAlerts'; // Removed - mock data moved to .plans/templates/
 import { AdminSidebar } from '../components/admin';
 import { AdminViewRouter } from '../components/admin/shared/AdminViewRouter';
 import { AdminModalManager } from '../components/admin/shared/AdminModalManager';
@@ -409,9 +408,6 @@ const AdminDashboardContent: React.FC = () => {
             onLogout={signOut}
           />
         )}
-
-        {/* Emergency Alerts - Disabled: mock data moved to .plans/templates/ */}
-        {/* {user && <EmergencyAlerts />} */}
 
         {/* Sticky Header */}
         <header className="bg-white dark:bg-gray-800 shadow-sm border-b border-gray-200 dark:border-gray-700 sticky top-0 z-30">
