@@ -11,6 +11,9 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(here, 'agents.js'), 'utf8');
+// The metrics POST moved to agents/registration.js in the god-file split;
+// the anomaly-hook assertions follow the route, not the old file.
+const REG_SRC = readFileSync(join(here, 'agents', 'registration.js'), 'utf8');
 
 function findRoute(method, path) {
   const start = SRC.indexOf(`router.${method}('${path}'`);
@@ -62,20 +65,26 @@ test('GET /:agent_id/wan-ip-history requires view.agent_trends.enable', () => {
 test('Anomaly evaluation hook is wired into metrics POST', () => {
   // The hook is fire-and-forget — must call evaluateMetricsForAnomalies and
   // route any returned anomalies through processHealthCheckResult.
-  assert.ok(/evaluateMetricsForAnomalies\(agent_id, latestMetric\)/.test(SRC),
+  assert.ok(/evaluateMetricsForAnomalies\(agent_id, latestMetric\)/.test(REG_SRC),
     'metrics POST must call evaluateMetricsForAnomalies');
   // Closure bug guard: the .then callback must NOT reference `agentInfo`
   // (declared LATER in the handler — would hit TDZ if the promise resolves
   // before the await). Snapshot req.agent locally instead.
-  const evalIdx = SRC.indexOf('evaluateMetricsForAnomalies(agent_id, latestMetric)');
-  const broadcastIdx = SRC.indexOf('Broadcast metrics update', evalIdx);
-  const closureBlock = SRC.slice(evalIdx, broadcastIdx);
+  const evalIdx = REG_SRC.indexOf('evaluateMetricsForAnomalies(agent_id, latestMetric)');
+  const broadcastIdx = REG_SRC.indexOf('Broadcast metrics update', evalIdx);
+  const closureBlock = REG_SRC.slice(evalIdx, broadcastIdx);
   assert.ok(!/agentInfo\.rows/.test(closureBlock),
     'anomaly .then closure must NOT reference agentInfo (TDZ); use req.agent locals');
 });
 
 test('Imports include the three Stage 2 services', () => {
   assert.ok(/from\s+['"]\.\.\/services\/diskForecastService\.js['"]/.test(SRC));
-  assert.ok(/from\s+['"]\.\.\/services\/anomalyDetectionService\.js['"]/.test(SRC));
+  // anomalyDetectionService moved with the metrics route to registration.js;
+  // paths differ by one directory level from the agents/ subfolder.
+  assert.ok(
+    /from\s+['"]\.\.\/services\/anomalyDetectionService\.js['"]/.test(SRC) ||
+    /from\s+['"]\.\.\/\.\.\/services\/anomalyDetectionService\.js['"]/.test(REG_SRC),
+    'anomalyDetectionService must be imported by agents.js or agents/registration.js'
+  );
   assert.ok(/from\s+['"]\.\.\/services\/wanIpService\.js['"]/.test(SRC));
 });
