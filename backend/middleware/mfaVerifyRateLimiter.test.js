@@ -58,3 +58,27 @@ test('mfaVerifyLimiter tracks email addresses independently', async () => {
   await mfaVerifyLimiter(req, makeRes(), () => { nextCalled = true; });
   assert.equal(nextCalled, true);
 });
+
+test('mfaVerifyLimiter keys userId bodies independently (code issuance has no email)', async () => {
+  clearMfaVerifyAttempts('9.9.9.9', undefined);
+  const reqFor = (userId) => ({
+    ip: '9.9.9.9',
+    body: { userId },
+    get: () => 'test-agent',
+    connection: {}
+  });
+  for (let i = 0; i < 5; i++) {
+    let nextCalled = false;
+    await mfaVerifyLimiter(reqFor('user-A'), makeRes(), () => { nextCalled = true; });
+    assert.equal(nextCalled, true);
+  }
+  let blocked = false;
+  const blockedRes = makeRes();
+  await mfaVerifyLimiter(reqFor('user-A'), blockedRes, () => {});
+  blocked = blockedRes.statusCode === 429;
+  assert.equal(blocked, true);
+
+  let otherOk = false;
+  await mfaVerifyLimiter(reqFor('user-B'), makeRes(), () => { otherOk = true; });
+  assert.equal(otherOk, true);
+});

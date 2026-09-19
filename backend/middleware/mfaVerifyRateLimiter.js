@@ -41,12 +41,14 @@ async function logSecurityEvent(eventType, eventData) {
 export const mfaVerifyLimiter = async (req, res, next) => {
   const clientIP = req.ip || req.connection?.remoteAddress || 'unknown';
   const userAgent = req.get?.('User-Agent') || 'Unknown';
-  const { email } = req.body || {};
+  const { email, userId } = req.body || {};
 
   const now = Date.now();
 
   try {
-    const trackingKey = `${clientIP}:${email || 'unknown'}`;
+    // Code-issuance endpoints send userId instead of email; key on whichever
+    // identity the body carries so one sender cannot burn another's budget.
+    const trackingKey = `${clientIP}:${email || userId || 'unknown'}`;
 
     if (!mfaVerifyAttempts.has(trackingKey)) {
       mfaVerifyAttempts.set(trackingKey, []);
@@ -95,6 +97,6 @@ export const mfaVerifyLimiter = async (req, res, next) => {
  * Clear tracked attempts, e.g. after a successful verification or a fresh
  * code issuance, so legitimate users are not throttled by stale failures.
  */
-export const clearMfaVerifyAttempts = (clientIP, email) => {
-  mfaVerifyAttempts.delete(`${clientIP}:${email || 'unknown'}`);
+export const clearMfaVerifyAttempts = (clientIP, email, userId) => {
+  mfaVerifyAttempts.delete(`${clientIP}:${email || userId || 'unknown'}`);
 };
