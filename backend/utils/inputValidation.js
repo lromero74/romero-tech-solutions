@@ -321,25 +321,6 @@ export const sanitizeText = (input) => {
 };
 
 /**
- * Validate phone numbers
- * @param {string} phone - Phone number to validate
- * @returns {object} - {isValid: boolean, sanitized: string}
- */
-export const validatePhone = (phone) => {
-  if (!phone || typeof phone !== 'string') {
-    return { isValid: false, sanitized: '' };
-  }
-
-  // Remove all non-digit characters
-  const sanitized = phone.replace(/\D/g, '');
-
-  // Check if it's a valid US phone number (10 digits)
-  const isValid = /^[1-9]\d{9}$/.test(sanitized);
-
-  return { isValid, sanitized };
-};
-
-/**
  * Validate ZIP codes
  * @param {string} zipCode - ZIP code to validate
  * @returns {object} - {isValid: boolean, sanitized: string}
@@ -505,7 +486,6 @@ export default {
   sanitizeHtml,
   sanitizeText,
   validateEmail,
-  validatePhone,
   validateZipCode,
   validateUrl,
   validateFileUpload,

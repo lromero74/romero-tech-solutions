@@ -6,6 +6,7 @@
  */
 
 import { query } from '../config/database.js';
+import { validateEmail as validateEmailFormat } from './inputValidation.js';
 
 /**
  * Validate employee roles against the database
@@ -159,24 +160,19 @@ export function validateRequiredFields(userData, isClient = false) {
 }
 
 /**
- * Validate email format
+ * Validate email format for user create/update flows.
+ * Delegates the format rule to inputValidation so signup and admin user
+ * management accept the same addresses; maps to this module's
+ * { isValid, message } shape because admin/users.js renders `.message`.
  * @param {string} email - Email to validate
  * @returns {Object} Validation result
  */
 export function validateEmail(email) {
-  if (!email) {
+  const format = validateEmailFormat(email);
+  if (!format.isValid) {
     return {
       isValid: false,
-      message: 'Email is required'
-    };
-  }
-
-  // Basic email format validation
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  if (!emailRegex.test(email)) {
-    return {
-      isValid: false,
-      message: 'Invalid email format'
+      message: format.error
     };
   }
 
