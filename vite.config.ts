@@ -32,8 +32,9 @@ export default defineConfig({
     // }
   },
   build: {
-    // Generate source maps for better debugging
-    sourcemap: true,
+    // No source maps in production: they double download size on mobile and
+    // publish full source. Run `vite build --sourcemap` locally when needed.
+    sourcemap: false,
     // Optimize bundle size with strategic code splitting
     rollupOptions: {
       output: {

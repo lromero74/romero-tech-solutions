@@ -28,6 +28,10 @@ global.ResizeObserver = class ResizeObserver {
   disconnect() {}
 };
 
+// jsdom has no Element.scrollTo; components call it inside timers that can
+// fire after a test file's own mocks tear down, so stub it globally.
+Element.prototype.scrollTo = function () {};
+
 // Mock IntersectionObserver
 global.IntersectionObserver = class IntersectionObserver {
   root = null;

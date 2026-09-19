@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
+import LoadingSpinner from './components/common/LoadingSpinner';
 import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { EnhancedAuthProvider, useEnhancedAuth } from './contexts/EnhancedAuthContext';
 import { NotificationProvider } from './contexts/NotificationContext';
@@ -8,8 +9,16 @@ import Footer from './components/Footer';
 import ParticleBackground from './components/common/ParticleBackground';
 import AdminRegistration from './components/AdminRegistration';
 import UnauthenticatedDashboard from './components/UnauthenticatedDashboard';
-import AdminDashboard from './pages/AdminDashboard';
-import ClientDashboard from './pages/ClientDashboard';
+// Split the two heaviest authenticated views into their own chunks so the
+// public pages (and login) don't pay their download/parse cost upfront.
+const AdminDashboard = lazy(() => import('./pages/AdminDashboard'));
+const ClientDashboard = lazy(() => import('./pages/ClientDashboard'));
+
+const DashboardFallback = () => (
+  <div className="flex items-center justify-center min-h-screen">
+    <LoadingSpinner size="lg" text="Loading dashboard..." />
+  </div>
+);
 import { ClientThemeProvider } from './contexts/ClientThemeContext';
 import { ClientLanguageProvider } from './contexts/ClientLanguageContext';
 import ClientLogin from './pages/ClientLogin';
@@ -97,7 +106,11 @@ function AppContent() {
 
       // All authenticated employees access the same dashboard
       // Permission system inside AdminDashboard controls what they can see/do
-      return <AdminDashboard />;
+      return (
+        <Suspense fallback={<DashboardFallback />}>
+          <AdminDashboard />
+        </Suspense>
+      );
     }
 
     // Handle technician page
@@ -185,7 +198,9 @@ function AppContent() {
           <ClientLanguageProvider>
             <ClientThemeProvider>
               <NotificationProvider>
-                <ClientDashboard onNavigate={setCurrentPage} />
+                <Suspense fallback={<DashboardFallback />}>
+                  <ClientDashboard onNavigate={setCurrentPage} />
+                </Suspense>
               </NotificationProvider>
             </ClientThemeProvider>
           </ClientLanguageProvider>
@@ -243,7 +258,9 @@ function AppContent() {
           <ClientLanguageProvider>
             <ClientThemeProvider>
               <NotificationProvider>
-                <ClientDashboard onNavigate={setCurrentPage} />
+                <Suspense fallback={<DashboardFallback />}>
+                  <ClientDashboard onNavigate={setCurrentPage} />
+                </Suspense>
               </NotificationProvider>
             </ClientThemeProvider>
           </ClientLanguageProvider>
@@ -253,7 +270,11 @@ function AppContent() {
       // All authenticated employees (Admin, Technician, Executive, Sales) use AdminDashboard
       // Permission system inside AdminDashboard controls what they can see/do
       if (isAdmin || isTechnician || isExecutive || isSales) {
-        return <AdminDashboard />;
+        return (
+          <Suspense fallback={<DashboardFallback />}>
+            <AdminDashboard />
+          </Suspense>
+        );
       }
 
       // Fallback for authenticated users without recognized roles
