@@ -1,7 +1,7 @@
 import express from 'express';
 import { v4 as uuidv4, v5 as uuidv5 } from 'uuid';
 import crypto from 'crypto';
-import { query } from '../config/database.js';
+import { query } from '../../config/database.js';
 import jwt from 'jsonwebtoken';
 import {
   generateTrialVerificationCode,
@@ -10,7 +10,7 @@ import {
   validateTrialEmailVerificationCode,
   sendTrialVerificationEmail,
   getOrCreateTrialUser
-} from '../utils/trialEmailVerificationUtils.js';
+} from '../../utils/trialEmailVerificationUtils.js';
 
 const router = express.Router();
 
