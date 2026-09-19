@@ -11,23 +11,26 @@ import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = readFileSync(join(here, 'agents.js'), 'utf8');
-// The metrics POST moved to agents/registration.js in the god-file split;
-// the anomaly-hook assertions follow the route, not the old file.
+// God-file split: routes now live across agents.js and agents/*.js. These are
+// wire-contract guards (auth gates, validation), so SRC covers every router
+// file — file layout itself is pinned by agents/mounts.test.js.
 const REG_SRC = readFileSync(join(here, 'agents', 'registration.js'), 'utf8');
+const MON_SRC = readFileSync(join(here, 'agents', 'monitoring.js'), 'utf8');
+const ALL_SRC = SRC + '\n' + REG_SRC + '\n' + MON_SRC;
 
 function findRoute(method, path) {
-  const start = SRC.indexOf(`router.${method}('${path}'`);
+  const start = ALL_SRC.indexOf(`router.${method}('${path}'`);
   if (start < 0) return null;
   let depth = 0;
   let i = start;
-  for (; i < SRC.length; i++) {
-    const c = SRC[i];
+  for (; i < ALL_SRC.length; i++) {
+    const c = ALL_SRC[i];
     if (c === '(') depth++;
     else if (c === ')') {
       depth--;
       if (depth === 0) {
-        const semi = SRC.indexOf(';', i);
-        return SRC.slice(start, semi >= 0 ? semi + 1 : i + 1);
+        const semi = ALL_SRC.indexOf(';', i);
+        return ALL_SRC.slice(start, semi >= 0 ? semi + 1 : i + 1);
       }
     }
   }
@@ -65,26 +68,25 @@ test('GET /:agent_id/wan-ip-history requires view.agent_trends.enable', () => {
 test('Anomaly evaluation hook is wired into metrics POST', () => {
   // The hook is fire-and-forget — must call evaluateMetricsForAnomalies and
   // route any returned anomalies through processHealthCheckResult.
-  assert.ok(/evaluateMetricsForAnomalies\(agent_id, latestMetric\)/.test(REG_SRC),
+  assert.ok(/evaluateMetricsForAnomalies\(agent_id, latestMetric\)/.test(ALL_SRC),
     'metrics POST must call evaluateMetricsForAnomalies');
   // Closure bug guard: the .then callback must NOT reference `agentInfo`
   // (declared LATER in the handler — would hit TDZ if the promise resolves
   // before the await). Snapshot req.agent locally instead.
-  const evalIdx = REG_SRC.indexOf('evaluateMetricsForAnomalies(agent_id, latestMetric)');
-  const broadcastIdx = REG_SRC.indexOf('Broadcast metrics update', evalIdx);
-  const closureBlock = REG_SRC.slice(evalIdx, broadcastIdx);
+  const evalIdx = ALL_SRC.indexOf('evaluateMetricsForAnomalies(agent_id, latestMetric)');
+  const broadcastIdx = ALL_SRC.indexOf('Broadcast metrics update', evalIdx);
+  const closureBlock = ALL_SRC.slice(evalIdx, broadcastIdx);
   assert.ok(!/agentInfo\.rows/.test(closureBlock),
     'anomaly .then closure must NOT reference agentInfo (TDZ); use req.agent locals');
 });
 
 test('Imports include the three Stage 2 services', () => {
-  assert.ok(/from\s+['"]\.\.\/services\/diskForecastService\.js['"]/.test(SRC));
-  // anomalyDetectionService moved with the metrics route to registration.js;
-  // paths differ by one directory level from the agents/ subfolder.
-  assert.ok(
-    /from\s+['"]\.\.\/services\/anomalyDetectionService\.js['"]/.test(SRC) ||
-    /from\s+['"]\.\.\/\.\.\/services\/anomalyDetectionService\.js['"]/.test(REG_SRC),
-    'anomalyDetectionService must be imported by agents.js or agents/registration.js'
-  );
-  assert.ok(/from\s+['"]\.\.\/services\/wanIpService\.js['"]/.test(SRC));
+  // Router files live at two depths (routes/ and routes/agents/), so accept
+  // either ../services/ or ../../services/ import paths.
+  for (const svc of ['diskForecastService', 'anomalyDetectionService', 'wanIpService']) {
+    assert.ok(
+      new RegExp(`from\\s+['"]\\.\\./(\\.\\./)?services\\/${svc}\\.js['"]`).test(ALL_SRC),
+      `${svc} must be imported by one of the agents router files`
+    );
+  }
 });

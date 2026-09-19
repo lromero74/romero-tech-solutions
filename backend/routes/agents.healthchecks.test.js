@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SRC = readFileSync(join(here, 'agents.js'), 'utf8');
+// Health-check routes moved to agents/monitoring.js in the god-file split;
+// assertions follow the routes, not the old file.
+const SRC = readFileSync(join(here, 'agents', 'monitoring.js'), 'utf8');
 
 // Locate a route handler block by method + path. Returns the source slice
 // from `router.METHOD('PATH'` to the closing `});` of the same handler.
