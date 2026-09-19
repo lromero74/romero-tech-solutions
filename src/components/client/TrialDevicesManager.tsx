@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HardDrive, Trash2, AlertCircle, CheckCircle, Loader, Activity, Settings, Pause, Play } from 'lucide-react';
 import { RoleBasedStorage } from '../../utils/roleBasedStorage';
+import { startSubscriptionUpgrade } from '../../services/subscriptionService';
 import { AuthUser } from '../../types/database';
 import apiService from '../../services/apiService';
 import { useClientLanguage } from '../../contexts/ClientLanguageContext';
@@ -52,6 +53,8 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
   const [actionType, setActionType] = useState<'deactivate' | 'remove'>('remove');
   const [pricing, setPricing] = useState<SubscriptionPricing[]>([]);
   const [startingPrice, setStartingPrice] = useState<string>('9.99'); // Default fallback
+  const [upgrading, setUpgrading] = useState(false);
+  const [upgradeError, setUpgradeError] = useState<string | null>(null);
 
   // Get device limit from user's subscription tier
   const deviceLimit = authUser.devicesAllowed || 2;
@@ -117,6 +120,24 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
     } catch (err) {
       console.error('Error fetching pricing:', err);
       // Keep default fallback price
+    }
+  };
+
+  const handleUpgrade = async () => {
+    setUpgrading(true);
+    setUpgradeError(null);
+    try {
+      const sessionToken = RoleBasedStorage.getItem('sessionToken');
+      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+      await startSubscriptionUpgrade({
+        apiBaseUrl,
+        sessionToken: sessionToken || '',
+        targetTier: 'subscribed',
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : t('devices.errors.upgradeFailed', undefined, 'Could not start checkout. Please try again.');
+      setUpgradeError(message);
+      setUpgrading(false);
     }
   };
 
@@ -278,14 +299,17 @@ const TrialDevicesManager: React.FC<TrialDevicesManagerProps> = ({ authUser, onD
                 {t('devices.trialManager.freePlanDescription', { deviceLimit }, `Monitor up to ${deviceLimit} devices with full monitoring and alerting. Need more devices?`)}
               </p>
               <button
-                onClick={() => {
-                  // TODO: Navigate to upgrade page or show upgrade modal
-                  alert(t('devices.trialManager.upgradeComingSoon', {}, 'Upgrade feature coming soon! Contact support@romerotechsolutions.com for now.'));
-                }}
-                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors"
+                onClick={handleUpgrade}
+                disabled={upgrading}
+                className="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {t('devices.trialManager.upgradeButton', { price: startingPrice }, `Upgrade - Starting at $${startingPrice}/month`)}
+                {upgrading
+                  ? t('devices.trialManager.upgradeRedirecting', undefined, 'Opening secure checkout…')
+                  : t('devices.trialManager.upgradeButton', { price: startingPrice }, `Upgrade - Starting at $${startingPrice}/month`)}
               </button>
+              {upgradeError && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">{upgradeError}</p>
+              )}
             </div>
           </div>
         </div>

@@ -57,7 +57,7 @@ import { operatorRouter as patchApprovalsOperatorRouter, agentRouter as patchApp
 import securityActionsRoutes from './routes/securityActions.js';
 import { stage4FeatureGate } from './middleware/stage4FeatureGate.js';
 import { authenticateAgent, requireAgentMatch } from './middleware/agentAuthMiddleware.js';
-import subscriptionRoutes from './routes/subscription.js';
+import subscriptionRoutes, { subscriptionWebhookRouter } from './routes/subscription.js';
 
 // Import session service for cleanup
 import { sessionService } from './services/sessionService.js';
@@ -267,9 +267,10 @@ app.use('/api', apiVersioningMiddleware('1.0', ['1.0']));
 // Input sanitization middleware
 app.use(sanitizeInputMiddleware);
 
-// IMPORTANT: Stripe webhook must be registered BEFORE body parsing
-// It needs access to raw request body for signature verification
+// IMPORTANT: Stripe webhooks must be registered BEFORE body parsing
+// They need access to raw request body for signature verification
 app.use('/api/client/payments', webhookRouter);
+app.use('/api/subscription', subscriptionWebhookRouter);
 
 // Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
