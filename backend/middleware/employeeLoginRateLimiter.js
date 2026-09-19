@@ -330,5 +330,7 @@ export const cleanupEmployeeLoginTracking = () => {
   console.log(`🧹 Employee login tracking cleanup completed. Active tracking: ${employeeLoginAttempts.size} IPs, ${suspiciousPatterns.size} pattern entries`);
 };
 
-// Run cleanup every 15 minutes
-setInterval(cleanupEmployeeLoginTracking, 15 * 60 * 1000);
+// Run cleanup every 15 minutes. unref()ed so importing this module never
+// holds the event loop open (blocked the backend suite once routers were
+// split into files that import it directly).
+setInterval(cleanupEmployeeLoginTracking, 15 * 60 * 1000).unref();
