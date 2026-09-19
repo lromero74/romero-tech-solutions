@@ -177,6 +177,40 @@ router.post('/service-requests', async (req, res) => {
 });
 
 /**
+ * DELETE /api/admin/service-requests/:id
+ * Soft-delete a service request (sets soft_delete, keeps history/notes
+ * rows intact; list queries already filter soft_delete = false).
+ */
+router.delete('/service-requests/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const pool = await getPool();
+    const deletedBy = req.employeeId || req.user?.id || null;
+    const result = await pool.query(`
+      UPDATE service_requests
+      SET soft_delete = true, deleted_at = NOW(), deleted_by_user_id = $2
+      WHERE id = $1 AND soft_delete = false
+      RETURNING id
+    `, [id, deletedBy]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ success: false, message: 'Service request not found' });
+    }
+
+    const ws = req.app.get('websocketService');
+    if (ws) ws.broadcastServiceRequestUpdate(id, 'deleted', {});
+
+    res.json({ success: true, message: 'Service request deleted successfully' });
+  } catch (error) {
+    logger.error('Error deleting service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete service request',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+/**
  * PUT /api/admin/service-requests/:id/assign
  * Assign service request to technician
  */

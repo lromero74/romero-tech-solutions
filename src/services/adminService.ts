@@ -528,6 +528,18 @@ export class AdminService {
     }
   }
 
+  // Soft-delete a service request (backend: DELETE
+  // /admin/service-requests/:id)
+  async deleteServiceRequest(serviceRequestId: string): Promise<void> {
+    try {
+      const apiService = await this.getApiService();
+      await apiService.delete(`/admin/service-requests/${serviceRequestId}`);
+    } catch (error) {
+      console.error('Error deleting service request:', error);
+      throw error;
+    }
+  }
+
   // Get employees with real-time login status
   async getEmployeesWithLoginStatus(): Promise<{ employees: User[] }> {
     try {

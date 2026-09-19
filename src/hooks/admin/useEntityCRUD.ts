@@ -123,8 +123,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           result = await adminService.deleteService(id);
           break;
         case 'serviceRequests':
-          // TODO: Add deleteServiceRequest method to adminService
-          throw new Error('deleteServiceRequest not yet implemented');
+          result = await adminService.deleteServiceRequest(id);
+          break;
         case 'serviceLocations':
           result = await adminService.deleteServiceLocation(id);
           break;

@@ -91,3 +91,15 @@ describe('adminService.updateServiceRequest', () => {
     expect(result).toEqual({ id: 'sr-1', title: 'New title' });
   });
 });
+
+describe('adminService.deleteServiceRequest', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('DELETEs /admin/service-requests/:id', async () => {
+    mockedApi.delete.mockResolvedValue({ success: true } as any);
+    await adminService.deleteServiceRequest('sr-1');
+    expect(mockedApi.delete).toHaveBeenCalledWith('/admin/service-requests/sr-1');
+  });
+});
