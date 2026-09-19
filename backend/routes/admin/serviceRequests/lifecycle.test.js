@@ -14,6 +14,7 @@ function routeList(router) {
 test('lifecycle router exposes detail and status-transition endpoints', () => {
   assert.deepEqual(routeList(lifecycleRouter), [
     'GET /service-requests/:id',
+    'POST /service-requests',
     'POST /service-requests/:id/uncancel',
     'PUT /service-requests/:id/acknowledge',
     'PUT /service-requests/:id/assign',

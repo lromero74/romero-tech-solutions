@@ -2,6 +2,7 @@ import express from 'express';
 import { logger } from '../../../utils/logger.js';
 import { getPool } from '../../../config/database.js';
 import { websocketService } from '../../../services/websocketService.js';
+import { generateRequestNumber } from '../../../utils/requestNumberGenerator.js';
 // NOTE: pushRoutes is imported lazily inside the reschedule handler (not at
 // module top) because it configures web-push at load and crashes without
 // VAPID keys — same pattern as utils/mfaUtils.js.
@@ -88,6 +89,89 @@ router.get('/service-requests/:id', async (req, res) => {
       success: false,
       message: 'Failed to fetch service request',
       error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+    });
+  }
+});
+
+/**
+ * POST /api/admin/service-requests
+ * Create a service request as an employee (admin supplies business/client/
+ * location; numbering and Submitted default mirror the client create flow).
+ */
+router.post('/service-requests', async (req, res) => {
+  try {
+    const {
+      title, description, business_id: businessId, client_id: clientId,
+      service_location_id: serviceLocationId,
+      urgency_level_id: urgencyLevelId, priority_level_id: priorityLevelId,
+      service_type_id: serviceTypeId,
+      requested_datetime: requestedDatetime,
+      requested_duration_minutes: requestedDuration,
+      primary_contact_name: primaryContactName,
+      primary_contact_phone: primaryContactPhone,
+      primary_contact_email: primaryContactEmail
+    } = req.body;
+
+    if (!title || !businessId || !clientId || !serviceLocationId) {
+      return res.status(400).json({
+        success: false,
+        message: 'title, business_id, client_id and service_location_id are required'
+      });
+    }
+
+    const pool = await getPool();
+    const requestNumber = await generateRequestNumber(pool);
+
+    const statusResult = await pool.query(`
+      SELECT id FROM service_request_statuses
+      WHERE name = 'Submitted' AND is_active = true
+      ORDER BY display_order ASC, created_at ASC LIMIT 1
+    `);
+    if (statusResult.rows.length === 0) {
+      return res.status(500).json({ success: false, message: 'No default service request status found.' });
+    }
+
+    let finalPriorityLevelId = priorityLevelId;
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!finalPriorityLevelId || !uuidRegex.test(finalPriorityLevelId)) {
+      const priorityResult = await pool.query(`
+        SELECT id FROM priority_levels WHERE name = 'Medium' ORDER BY created_at ASC LIMIT 1
+      `);
+      if (priorityResult.rows.length === 0) {
+        return res.status(500).json({ success: false, message: 'No default priority level found.' });
+      }
+      finalPriorityLevelId = priorityResult.rows[0].id;
+    }
+
+    const createdBy = req.employeeId || req.user?.id || null;
+    const result = await pool.query(`
+      INSERT INTO service_requests (
+        request_number, title, description, client_id, business_id,
+        service_location_id, created_by_user_id, requested_datetime,
+        requested_duration_minutes, urgency_level_id, priority_level_id,
+        status_id, primary_contact_name, primary_contact_phone,
+        primary_contact_email, service_type_id
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
+      RETURNING id, request_number, created_at
+    `, [
+      requestNumber, title, description || '', clientId, businessId,
+      serviceLocationId, createdBy, requestedDatetime || null,
+      requestedDuration || null, urgencyLevelId || null, finalPriorityLevelId,
+      statusResult.rows[0].id, primaryContactName || null,
+      primaryContactPhone || null, primaryContactEmail || null,
+      serviceTypeId || null
+    ]);
+
+    const ws = req.app.get('websocketService');
+    if (ws) ws.broadcastServiceRequestUpdate(result.rows[0].id, 'created', { requestNumber });
+
+    res.status(201).json({ success: true, data: result.rows[0], message: 'Service request created successfully' });
+  } catch (error) {
+    logger.error('Error creating service request:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create service request',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 });

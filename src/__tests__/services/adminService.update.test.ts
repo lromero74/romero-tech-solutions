@@ -20,6 +20,28 @@ import { apiService } from '../../services/apiService';
 
 const mockedApi = apiService as jest.Mocked<typeof apiService>;
 
+describe('adminService.createServiceRequest', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('POSTs /admin/service-requests with the payload', async () => {
+    mockedApi.post.mockResolvedValue({
+      success: true,
+      data: { id: 'sr-1', request_number: 'SR-2026-00001' },
+    } as any);
+    const payload = {
+      title: 'Fix sink',
+      business_id: 'b1',
+      client_id: 'c1',
+      service_location_id: 'l1',
+    };
+    const result = await adminService.createServiceRequest(payload);
+    expect(mockedApi.post).toHaveBeenCalledWith('/admin/service-requests', payload);
+    expect(result).toEqual({ id: 'sr-1', request_number: 'SR-2026-00001' });
+  });
+});
+
 describe('adminService.updateService', () => {
   beforeEach(() => {
     jest.clearAllMocks();

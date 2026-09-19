@@ -485,6 +485,33 @@ export class AdminService {
     }
   }
 
+  // Create service request as an employee (backend: POST
+  // /admin/service-requests; numbering and Submitted default mirror client flow)
+  async createServiceRequest(data: {
+    title: string;
+    description?: string;
+    business_id: string;
+    client_id: string;
+    service_location_id: string;
+    urgency_level_id?: string;
+    priority_level_id?: string;
+    service_type_id?: string;
+    requested_datetime?: string;
+    requested_duration_minutes?: number;
+    primary_contact_name?: string;
+    primary_contact_phone?: string;
+    primary_contact_email?: string;
+  }): Promise<{ id: string; request_number: string; created_at: string }> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.post('/admin/service-requests', data);
+      return result.data;
+    } catch (error) {
+      console.error('Error creating service request:', error);
+      throw error;
+    }
+  }
+
   // Update service request title/description (backend: PATCH
   // /admin/service-requests/:id/details, with change tracking)
   async updateServiceRequest(serviceRequestId: string, updates: {

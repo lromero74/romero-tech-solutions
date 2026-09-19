@@ -47,8 +47,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           result = await adminService.createService(data);
           break;
         case 'serviceRequests':
-          // TODO: Add createServiceRequest method to adminService
-          throw new Error('createServiceRequest not yet implemented');
+          result = await adminService.createServiceRequest(data);
+          break;
         case 'serviceLocations':
           result = await adminService.createServiceLocation(data);
           break;
