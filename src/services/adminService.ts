@@ -455,6 +455,22 @@ export class AdminService {
     }
   }
 
+  // Update service request title/description (backend: PATCH
+  // /admin/service-requests/:id/details, with change tracking)
+  async updateServiceRequest(serviceRequestId: string, updates: {
+    title?: string;
+    description?: string;
+  }): Promise<ServiceRequest> {
+    try {
+      const apiService = await this.getApiService();
+      const result = await apiService.patch(`/admin/service-requests/${serviceRequestId}/details`, updates);
+      return result.data;
+    } catch (error) {
+      console.error('Error updating service request:', error);
+      throw error;
+    }
+  }
+
   // Get employees with real-time login status
   async getEmployeesWithLoginStatus(): Promise<{ employees: User[] }> {
     try {

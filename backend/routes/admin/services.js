@@ -145,29 +145,5 @@ router.post('/services', async (req, res) => {
   }
 });
 
-// GET /service-requests - Get all service requests (demo data for now)
-router.get('/service-requests', async (req, res) => {
-  try {
-    console.log('🔍 Fetching service requests...');
-
-    // For now, return empty array since service requests table doesn't exist yet
-    // This matches the frontend expectation
-    res.status(200).json({
-      success: true,
-      data: {
-        serviceRequests: []
-      },
-      message: 'Service requests retrieved successfully (demo mode)'
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching service requests:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to fetch service requests',
-      error: process.env.NODE_ENV === 'development' ? error.message : undefined
-    });
-  }
-});
 
 export default router;

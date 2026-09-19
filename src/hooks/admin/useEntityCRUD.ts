@@ -85,8 +85,8 @@ export const useEntityCRUD = <T extends { id: string; isActive?: boolean; softDe
           // TODO: Add updateService method to adminService
           throw new Error('updateService not yet implemented');
         case 'serviceRequests':
-          // TODO: Add updateServiceRequest method to adminService
-          throw new Error('updateServiceRequest not yet implemented');
+          result = await adminService.updateServiceRequest(id, updates);
+          break;
         case 'serviceLocations':
           result = await adminService.updateServiceLocation(id, updates);
           break;
