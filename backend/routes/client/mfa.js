@@ -2,18 +2,21 @@ import express from 'express';
 import { getPool } from '../../config/database.js';
 import { authMiddleware } from '../../middleware/authMiddleware.js';
 import { clientContextMiddleware } from '../../middleware/clientMiddleware.js';
+import { mfaVerifyLimiter } from '../../middleware/mfaVerifyRateLimiter.js';
 
 // Create composite middleware for client routes
 const authenticateClient = [authMiddleware, clientContextMiddleware];
 
 import {
-  generateMfaCode,
   storeClientMfaCode,
   validateClientMfaCode,
   markClientMfaCodeAsUsed,
-  sendClientMfaEmail,
-  generateClientBackupCodes
+  sendClientMfaEmail
 } from '../../utils/mfaUtils.js';
+import {
+  generateMfaCode,
+  generateClientBackupCodes
+} from '../../utils/inputValidation.js';
 import { emailService } from '../../services/emailService.js';
 
 const router = express.Router();
@@ -300,7 +303,7 @@ router.post('/send-login-code', async (req, res) => {
 });
 
 // Verify MFA login code
-router.post('/verify-login', async (req, res) => {
+router.post('/verify-login', mfaVerifyLimiter, async (req, res) => {
   try {
     const { email, code } = req.body;
 

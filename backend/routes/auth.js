@@ -24,10 +24,10 @@ import {
   validateMfaCode as validateMfaCodeFormat,
   validateDeviceFingerprint,
   sanitizeString,
-  validateLoginInputs
+  validateLoginInputs,
+  generateMfaCode
 } from '../utils/inputValidation.js';
 import {
-  generateMfaCode,
   generateResetToken,
   storeMfaCode,
   validateMfaCode,
@@ -50,6 +50,7 @@ import {
   recordFailedEmployeeLogin,
   getEmployeeLoginStats
 } from '../middleware/employeeLoginRateLimiter.js';
+import { mfaVerifyLimiter } from '../middleware/mfaVerifyRateLimiter.js';
 import {
   checkAccountLockStatus,
   recordFailedLoginAttempt,
@@ -854,7 +855,7 @@ router.post('/admin-login-mfa', employeeLoginLimiter, async (req, res) => {
 });
 
 // POST /api/auth/verify-admin-mfa - Verify MFA code and complete admin login
-router.post('/verify-admin-mfa', async (req, res) => {
+router.post('/verify-admin-mfa', mfaVerifyLimiter, async (req, res) => {
   try {
     const { email, mfaCode } = req.body;
 
@@ -997,7 +998,7 @@ router.post('/verify-admin-mfa', async (req, res) => {
 });
 
 // POST /api/auth/verify-client-mfa - Verify MFA code and complete client login
-router.post('/verify-client-mfa', async (req, res) => {
+router.post('/verify-client-mfa', mfaVerifyLimiter, async (req, res) => {
   try {
     const { email, mfaCode } = req.body;
 

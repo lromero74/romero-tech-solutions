@@ -1,5 +1,6 @@
 import DOMPurify from 'isomorphic-dompurify';
 import validator from 'validator';
+import crypto from 'crypto';
 
 /**
  * Enhanced Input Validation Utilities
@@ -321,6 +322,26 @@ export const sanitizeText = (input) => {
 };
 
 /**
+ * Generate a 6-digit MFA/verification code using a CSPRNG. Math.random()
+ * must never be used here: its output is predictable, shrinking the 10^6
+ * code space for anyone who can observe a few outputs.
+ * @returns {string} 6-digit code
+ */
+export function generateMfaCode() {
+  return crypto.randomInt(100000, 1000000).toString();
+}
+
+/**
+ * Generate MFA backup codes (10 x 8-char uppercase hex, 48 bits each).
+ * @returns {string[]} Array of 10 backup codes
+ */
+export function generateClientBackupCodes() {
+  return Array.from({ length: 10 }, () =>
+    crypto.randomBytes(6).toString('hex').toUpperCase().slice(0, 8)
+  );
+}
+
+/**
  * Validate ZIP codes
  * @param {string} zipCode - ZIP code to validate
  * @returns {object} - {isValid: boolean, sanitized: string}
@@ -486,6 +507,8 @@ export default {
   sanitizeHtml,
   sanitizeText,
   validateEmail,
+  generateMfaCode,
+  generateClientBackupCodes,
   validateZipCode,
   validateUrl,
   validateFileUpload,
