@@ -1,8 +1,6 @@
 import {
-  signUp,
   signOut
 } from 'aws-amplify/auth';
-import { CognitoIdentityProviderClient, SignUpCommand, ConfirmSignUpCommand, ResendConfirmationCodeCommand } from '@aws-sdk/client-cognito-identity-provider';
 import { AuthUser, UserRole, SignupRequest, LoginRequest } from '../types/database';
 import { getCurrentDeviceFingerprint } from '../utils/deviceFingerprinting';
 
@@ -19,25 +17,10 @@ interface SessionData {
   session?: Record<string, unknown>;
   message?: string;
 }
-
-interface CognitoResponse {
-  UserSub?: string;
-  [key: string]: unknown;
-}
-import { databaseService } from './databaseService';
-import CryptoJS from 'crypto-js';
 import { RoleBasedStorage } from '../utils/roleBasedStorage';
 import { apiService } from './apiService';
 
 export class AuthService {
-  private cognitoClient: CognitoIdentityProviderClient;
-
-  constructor() {
-    this.cognitoClient = new CognitoIdentityProviderClient({
-      region: import.meta.env.VITE_AWS_REGION || 'us-east-1'
-    });
-  }
-
   // Use RoleBasedStorage utility for all localStorage operations
   private setStorageItem(key: string, value: string, role?: UserRole | string): void {
     RoleBasedStorage.setItem(key, value, role);
@@ -53,20 +36,6 @@ export class AuthService {
 
   private clearRoleStorage(role: UserRole | string): void {
     RoleBasedStorage.clearRoleStorage(role);
-  }
-
-  // Calculate SECRET_HASH for Cognito requests
-  private calculateSecretHash(username: string): string {
-    const clientSecret = import.meta.env.VITE_AWS_USER_POOL_CLIENT_SECRET;
-    const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
-
-    if (!clientSecret) {
-      throw new Error('Client secret not configured');
-    }
-
-    const message = username + clientId;
-    const hash = CryptoJS.HmacSHA256(message, clientSecret);
-    return CryptoJS.enc.Base64.stringify(hash);
   }
 
   // Check if any admin users exist
@@ -98,46 +67,29 @@ export class AuthService {
     }
   }
 
-  // Sign up new user (admin path only)
+  // First-admin bootstrap (fresh installs only): the backend creates a real
+  // employees row + admin role. DB auth is authoritative — a Cognito-only
+  // account could never sign in, so signup goes through the backend.
   async signUpAdmin(userData: SignupRequest): Promise<SignUpResult> {
     try {
-      // Check if this will be the first admin
-      const hasAdmins = await this.hasAdminUsers();
-      const isFirstAdmin = !hasAdmins;
-
-      // Create Cognito user using AWS SDK with SECRET_HASH
-      const secretHash = this.calculateSecretHash(userData.email);
-      const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
-
-      const command = new SignUpCommand({
-        ClientId: clientId,
-        Username: userData.email,
-        Password: userData.password,
-        SecretHash: secretHash,
-        UserAttributes: [
-          {
-            Name: 'email',
-            Value: userData.email
-          },
-          {
-            Name: 'name',
-            Value: userData.name
-          }
-        ]
+      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api'}/auth/bootstrap-admin`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: userData.name,
+          email: userData.email,
+          password: userData.password,
+        }),
       });
 
-      const response = await this.cognitoClient.send(command);
+      const data = await response.json();
+      if (!response.ok || !data.success) {
+        throw new Error(data.message || 'Failed to create admin account');
+      }
 
-      // TODO: Create user record in database when backend is available
-      // await databaseService.createUser({
-      //   cognitoId: response.UserSub,
-      //   email: userData.email,
-      //   name: userData.name,
-      //   role: 'admin',
-      //   isActive: true
-      // });
-
-      return { user: { userId: response.UserSub }, isFirstAdmin };
+      return { user: { userId: data.user.id }, isFirstAdmin: true };
     } catch (error) {
       console.error('Error signing up admin:', error);
       throw error;
@@ -549,50 +501,6 @@ export class AuthService {
     }
   }
 
-  // Create user by admin
-  async createUserByAdmin(userData: {
-    email: string;
-    name: string;
-    role: UserRole;
-    temporaryPassword: string;
-    additionalData?: Record<string, unknown>;
-  }): Promise<CognitoResponse> {
-    try {
-      // Create Cognito user with temporary password
-      const secretHash = this.calculateSecretHash(userData.email);
-      const { user } = await signUp({
-        username: userData.email,
-        password: userData.temporaryPassword,
-        options: {
-          userAttributes: {
-            email: userData.email,
-            name: userData.name,
-            'custom:role': userData.role,
-            'custom:createdByAdmin': 'true'
-          },
-          clientMetadata: {
-            SECRET_HASH: secretHash
-          }
-        }
-      });
-
-      // Create user record in database
-      await databaseService.createUser({
-        cognitoId: user.userId,
-        email: userData.email,
-        name: userData.name,
-        role: userData.role,
-        isActive: true,
-        ...userData.additionalData
-      });
-
-      return user;
-    } catch (error) {
-      console.error('Error creating user by admin:', error);
-      throw error;
-    }
-  }
-
   // Check if user has permission
   hasPermission(userRole: UserRole, requiredRole: UserRole | UserRole[]): boolean {
     const roleHierarchy = {
@@ -633,45 +541,6 @@ export class AuthService {
       return user?.role === 'admin' || user?.role === 'technician';
     } catch {
       return false;
-    }
-  }
-
-  // Confirm sign up
-  async confirmSignUp(username: string, confirmationCode: string): Promise<CognitoResponse> {
-    try {
-      const secretHash = this.calculateSecretHash(username);
-      const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
-
-      const command = new ConfirmSignUpCommand({
-        ClientId: clientId,
-        Username: username,
-        ConfirmationCode: confirmationCode,
-        SecretHash: secretHash
-      });
-
-      return await this.cognitoClient.send(command);
-    } catch (error) {
-      console.error('Error confirming sign up:', error);
-      throw error;
-    }
-  }
-
-  // Resend confirmation code
-  async resendConfirmationCode(username: string): Promise<CognitoResponse> {
-    try {
-      const secretHash = this.calculateSecretHash(username);
-      const clientId = import.meta.env.VITE_AWS_USER_POOL_CLIENT_ID;
-
-      const command = new ResendConfirmationCodeCommand({
-        ClientId: clientId,
-        Username: username,
-        SecretHash: secretHash
-      });
-
-      return await this.cognitoClient.send(command);
-    } catch (error) {
-      console.error('Error resending confirmation code:', error);
-      throw error;
     }
   }
 

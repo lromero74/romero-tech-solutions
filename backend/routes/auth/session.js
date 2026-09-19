@@ -32,6 +32,7 @@ import {
   clearFailedAttempts,
   checkFailedAttempts
 } from './attemptTracker.js';
+import { hasAnyAdmin, createBootstrapAdmin } from './bootstrap.js';
 
 const router = express.Router();
 
@@ -485,6 +486,47 @@ router.post('/extend-session', async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Session extension failed',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
+  }
+});
+
+// POST /api/auth/bootstrap-admin - Create the first admin on a fresh install.
+// Single-use by construction: refused with 403 once any admin role exists.
+// Rate-limited like the other pre-auth endpoints.
+router.post('/bootstrap-admin', employeeLoginLimiter, async (req, res) => {
+  try {
+    if (await hasAnyAdmin()) {
+      return res.status(403).json({
+        success: false,
+        message: 'An admin already exists'
+      });
+    }
+
+    const { name, email, password } = req.body || {};
+    try {
+      const employee = await createBootstrapAdmin({ name, email, password });
+      await auditLogService.logEvent(AUDIT_EVENTS.ACCOUNT_CREATED, employee.id, {
+        email: employee.email,
+        method: 'bootstrap',
+      });
+      return res.status(201).json({
+        success: true,
+        message: 'First admin account created successfully! You can now sign in.',
+        user: { id: employee.id, email: employee.email }
+      });
+    } catch (validationError) {
+      return res.status(validationError.statusCode || 400).json({
+        success: false,
+        message: validationError.message,
+        feedback: validationError.feedback
+      });
+    }
+  } catch (error) {
+    logger.error('Bootstrap admin error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create admin account',
       error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }

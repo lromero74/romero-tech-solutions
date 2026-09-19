@@ -19,11 +19,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
   const [hasAdminUsers, setHasAdminUsers] = useState<boolean | null>(null);
   const [canConnectToBackend, setCanConnectToBackend] = useState<boolean>(true);
   const [isSignUp, setIsSignUp] = useState(true);
-  const [showVerification, setShowVerification] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [showMfaVerification, setShowMfaVerification] = useState(false);
-  const [verificationCode, setVerificationCode] = useState('');
   const [resetCode, setResetCode] = useState('');
   const [mfaCode, setMfaCode] = useState('');
   const [mfaEmail, setMfaEmail] = useState('');
@@ -31,7 +29,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
   const [mfaPhoneNumber, setMfaPhoneNumber] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
-  const [pendingEmail, setPendingEmail] = useState('');
   const [resetEmail, setResetEmail] = useState('');
   const [formData, setFormData] = useState({
     name: '',
@@ -64,7 +61,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
       setMfaPassword(savedData.mfaPassword || '');
       setMfaPhoneNumber(savedData.mfaPhoneNumber || '');
       setShowMfaVerification(savedData.showMfaVerification || false);
-      setPendingEmail(savedData.pendingEmail || '');
       setIsSignUp(savedData.isSignUp !== undefined ? savedData.isSignUp : true);
       console.log('📱 Restored form data after app switch');
     }
@@ -82,7 +78,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
       mfaPassword,
       mfaPhoneNumber,
       showMfaVerification,
-      pendingEmail,
       isSignUp
     }));
 
@@ -165,22 +160,17 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
 
     try {
       if (isSignUp) {
-        const result = await signUpAdmin({
+        // First-admin bootstrap: the backend creates a verified employees
+        // row + admin role, so the account can sign in immediately.
+        await signUpAdmin({
           name: formData.name,
           email: formData.email,
           password: formData.password
         });
 
-        if (result.isFirstAdmin) {
-          setSuccess('First admin account created successfully! You can now sign in.');
-          setIsSignUp(false);
-          setFormData({ name: '', email: formData.email, password: '', confirmPassword: '' });
-        } else {
-          setSuccess('Admin account created successfully! Please check your email for a verification code.');
-          setPendingEmail(formData.email);
-          setShowVerification(true);
-          setFormData({ name: '', email: '', password: '', confirmPassword: '' });
-        }
+        setSuccess('First admin account created successfully! You can now sign in.');
+        setIsSignUp(false);
+        setFormData({ name: '', email: formData.email, password: '', confirmPassword: '' });
       } else {
         try {
           const user = await signIn(formData.email, formData.password);
@@ -290,69 +280,15 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
     } catch (error: unknown) {
       console.error('Authentication error:', error);
 
-      if (error && typeof error === 'object' && 'name' in error && error.name === 'UserNotConfirmedException') {
-        setSuccess('Please check your email for a verification code to confirm your account.');
-        setPendingEmail(formData.email);
-        setShowVerification(true);
-        setErrors({});
-      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'NotAuthorizedException') {
+      // Backend (DB-backed) auth returns plain Errors — surface the message.
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'An error occurred. Please try again.';
+      if (/invalid email or password/i.test(errorMessage)) {
         setErrors({ password: 'Invalid email or password.' });
-      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'UsernameExistsException') {
+      } else if (/already exists/i.test(errorMessage)) {
         setErrors({ email: 'An account with this email already exists.' });
       } else {
-        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'An error occurred. Please try again.';
         setErrors({ general: errorMessage });
       }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleVerifyCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (!verificationCode.trim()) {
-      setErrors({ verificationCode: 'Verification code is required' });
-      return;
-    }
-
-    setIsLoading(true);
-    setErrors({});
-
-    try {
-      await authService.confirmSignUp(pendingEmail, verificationCode);
-      setSuccess('Email verified successfully! You can now sign in.');
-      setShowVerification(false);
-      setIsSignUp(false);
-      setFormData({ name: '', email: pendingEmail, password: '', confirmPassword: '' });
-      setVerificationCode('');
-      setPendingEmail('');
-    } catch (error: unknown) {
-      console.error('Verification error:', error);
-      if (error && typeof error === 'object' && 'name' in error && error.name === 'CodeMismatchException') {
-        setErrors({ verificationCode: 'Invalid verification code. Please try again.' });
-      } else if (error && typeof error === 'object' && 'name' in error && error.name === 'ExpiredCodeException') {
-        setErrors({ verificationCode: 'Verification code has expired. Please request a new one.' });
-      } else {
-        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Verification failed. Please try again.';
-        setErrors({ verificationCode: errorMessage });
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleResendCode = async () => {
-    setIsLoading(true);
-    setErrors({});
-
-    try {
-      await authService.resendConfirmationCode(pendingEmail);
-      setSuccess('New verification code sent to your email.');
-    } catch (error: unknown) {
-      console.error('Resend code error:', error);
-      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to resend code. Please try again.';
-      setErrors({ verificationCode: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -376,12 +312,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
       setShowResetPassword(true);
     } catch (error: unknown) {
       console.error('Forgot password error:', error);
-      if (error && typeof error === 'object' && 'name' in error && error.name === 'UserNotFoundException') {
-        setErrors({ resetEmail: 'No account found with this email address.' });
-      } else {
-        const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to send reset code. Please try again.';
-        setErrors({ resetEmail: errorMessage });
-      }
+      // Backend auth returns plain Errors — surface the message.
+      const errorMessage = error && typeof error === 'object' && 'message' in error && typeof error.message === 'string' ? error.message : 'Failed to send reset code. Please try again.';
+      setErrors({ resetEmail: errorMessage });
     } finally {
       setIsLoading(false);
     }
@@ -545,11 +478,9 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
   };
 
   const resetAllStates = () => {
-    setShowVerification(false);
     setShowForgotPassword(false);
     setShowResetPassword(false);
     setShowMfaVerification(false);
-    setVerificationCode('');
     setResetCode('');
     setMfaCode('');
     setMfaEmail('');
@@ -726,8 +657,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
           <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
             {showMfaVerification
               ? 'Multi-Factor Verification'
-              : showVerification
-              ? 'Verify Your Email'
               : showForgotPassword
               ? 'Reset Password'
               : showResetPassword
@@ -740,8 +669,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
           <p className="mt-2 text-sm text-gray-600">
             {showMfaVerification
               ? `Enter the verification code sent to your email (${mfaEmail})${mfaPhoneNumber ? ` and phone number (${mfaPhoneNumber})` : ' and phone number'}`
-              : showVerification
-              ? `Enter the verification code sent to ${pendingEmail}`
               : showForgotPassword
               ? 'Enter your email address to receive a password reset code'
               : showResetPassword
@@ -1013,72 +940,6 @@ const AdminRegistration: React.FC<AdminRegistrationProps> = ({ onSuccess, curren
                 className="w-full text-sm text-gray-600 hover:text-gray-500"
               >
                 ← Back to Login
-              </button>
-            </div>
-          </form>
-        ) : showVerification ? (
-          <form className="mt-8 space-y-6" onSubmit={handleVerifyCode}>
-            <div>
-              <label htmlFor="verificationCode" className="block text-sm font-medium text-gray-700">
-                Verification Code
-              </label>
-              <div className="mt-1 relative">
-                <input
-                  id="verificationCode"
-                  name="verificationCode"
-                  type="text"
-                  required
-                  value={verificationCode}
-                  onChange={(e) => setVerificationCode(e.target.value)}
-                  className={`appearance-none relative block w-full px-3 py-2 pl-10 border ${
-                    errors.verificationCode ? 'border-red-300' : 'border-gray-300'
-                  } placeholder-gray-500 text-gray-900 rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm`}
-                  placeholder="Enter the 6-digit code"
-                  maxLength={6}
-                />
-                <Key className="h-5 w-5 text-gray-400 absolute left-3 top-2.5" />
-              </div>
-              {errors.verificationCode && <p className="mt-1 text-sm text-red-600">{errors.verificationCode}</p>}
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? (
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                ) : (
-                  <>
-                    <CheckCircle className="h-5 w-5 mr-2" />
-                    Verify Email
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div className="text-center space-y-2">
-              <button
-                type="button"
-                onClick={handleResendCode}
-                disabled={isLoading}
-                className="text-sm text-blue-600 hover:text-blue-500 disabled:opacity-50"
-              >
-                Resend verification code
-              </button>
-              <br />
-              <button
-                type="button"
-                onClick={() => {
-                  setShowVerification(false);
-                  setVerificationCode('');
-                  setPendingEmail('');
-                  setErrors({});
-                }}
-                className="text-sm text-gray-600 hover:text-gray-500"
-              >
-                Back to sign in
               </button>
             </div>
           </form>

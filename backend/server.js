@@ -349,6 +349,7 @@ const conditionalCsrfProtection = (req, res, next) => {
   // NOTE: When middleware is mounted at /api/auth, req.path does NOT include the /api/auth prefix
   const preAuthEndpoints = [
     '/admin-login-mfa',
+    '/bootstrap-admin',
     '/verify-admin-mfa',
     '/verify-client-mfa',
     '/login',

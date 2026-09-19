@@ -19,17 +19,45 @@ import {
 const router = express.Router();
 
 /**
- * Helper function to validate scope access (placeholder for future RBAC integration)
- * TODO: Integrate with existing RBAC permission system
- * @param {string} employeeId - Employee UUID
+ * Validate subscription scope IDs reference live rows. Employees are global
+ * by design (not tied to a business), so who-may-subscribe is enforced by
+ * the route layer (manage_all-or-self) — this validates the what: unknown
+ * or soft-deleted scope targets 404 here instead of blowing up on the FK
+ * with a 500 at INSERT time.
  * @param {object} scope - { business_id, service_location_id, agent_id }
- * @returns {Promise<boolean>} - True if employee has access to the scope
+ * @param {Function} queryFn - Injectable query (defaults to the pool); tests pass a fake.
+ * @returns {Promise<{ok: boolean, code?: number, message?: string}>}
  */
-async function canAccessScope(employeeId, scope) {
-  // For now, allow all non-technician employees to access all scopes
-  // This will be enhanced with proper RBAC checks in future iterations
-  // TODO: Check against employee_businesses, employee_locations, etc.
-  return true;
+export async function validateSubscriptionScope(scope, queryFn = query) {
+  const { business_id, service_location_id, agent_id } = scope || {};
+  if (business_id) {
+    const result = await queryFn(
+      'SELECT id FROM businesses WHERE id = $1 AND COALESCE(soft_delete, false) = false',
+      [business_id]
+    );
+    if (result.rows.length === 0) {
+      return { ok: false, code: 404, message: 'Business not found' };
+    }
+  }
+  if (service_location_id) {
+    const result = await queryFn(
+      'SELECT id FROM service_locations WHERE id = $1',
+      [service_location_id]
+    );
+    if (result.rows.length === 0) {
+      return { ok: false, code: 404, message: 'Service location not found' };
+    }
+  }
+  if (agent_id) {
+    const result = await queryFn(
+      'SELECT id FROM agent_devices WHERE id = $1 AND soft_delete = false',
+      [agent_id]
+    );
+    if (result.rows.length === 0) {
+      return { ok: false, code: 404, message: 'Agent not found' };
+    }
+  }
+  return { ok: true };
 }
 
 /**
@@ -277,13 +305,14 @@ router.post('/subscriptions', authMiddleware, requireEmployee, requirePermission
       });
     }
 
-    // Validate scope access (ensures employee can only subscribe to accessible resources)
+    // Validate scope targets reference live rows (who-may-subscribe is
+    // enforced by requirePermissionOrSelf at the route layer)
     const scope = { business_id, service_location_id, agent_id };
-    const hasAccess = await canAccessScope(req.user.id, scope);
-    if (!hasAccess) {
-      return res.status(403).json({
+    const scopeCheck = await validateSubscriptionScope(scope);
+    if (!scopeCheck.ok) {
+      return res.status(scopeCheck.code).json({
         success: false,
-        message: 'You do not have permission to subscribe to this resource'
+        message: scopeCheck.message
       });
     }
 
@@ -398,13 +427,13 @@ router.put('/subscriptions/:id', authMiddleware, requireEmployee, requirePermiss
       });
     }
 
-    // Validate scope access if changing scope
+    // Validate scope targets if changing scope (absent fields are skipped)
     const scope = { business_id, service_location_id, agent_id };
-    const hasAccess = await canAccessScope(req.user.id, scope);
-    if (!hasAccess) {
-      return res.status(403).json({
+    const scopeCheck = await validateSubscriptionScope(scope);
+    if (!scopeCheck.ok) {
+      return res.status(scopeCheck.code).json({
         success: false,
-        message: 'You do not have permission to subscribe to this resource'
+        message: scopeCheck.message
       });
     }
 

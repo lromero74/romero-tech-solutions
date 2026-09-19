@@ -531,8 +531,8 @@ router.get('/subscriptions', requirePermission('alert_subscriptions.view_own'), 
         // Can view any employee's subscriptions
         targetEmployeeId = employee_id;
       } else if (canViewTeam) {
-        // TODO: Check if target employee is in requester's team
-        // For now, allow if user has view_team permission
+        // NOTE: no team-membership model exists (employees are global by
+        // design), so view_team permission alone grants team-scope reads.
         targetEmployeeId = employee_id;
       } else {
         return res.status(403).json({

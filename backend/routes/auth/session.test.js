@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import sessionRouter from './session.js';
 
 // Guards the auth.js → auth/session.js split: the sub-router must load
-// (all relative imports resolve) and expose exactly the 7 session endpoints.
+// (all relative imports resolve) and expose exactly the 8 session endpoints.
 test('session router exposes all session endpoints', () => {
   const routes = sessionRouter.stack
     .filter(layer => layer.route)
@@ -12,13 +12,14 @@ test('session router exposes all session endpoints', () => {
       methods: Object.keys(layer.route.methods).filter(m => m !== '_all')
     }));
 
-  assert.equal(routes.length, 7);
+  assert.equal(routes.length, 8);
 
   const paths = routes.map(r => `${r.methods[0].toUpperCase()} ${r.path}`).sort();
   assert.deepEqual(paths, [
     'GET /check-admin',
     'GET /validate-session',
     'POST /admin-login-mfa',
+    'POST /bootstrap-admin',
     'POST /extend-session',
     'POST /heartbeat',
     'POST /login',
