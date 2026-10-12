@@ -382,3 +382,7 @@ Codebase: `/Users/louis/RomeroTechSolutions/rts-monitoring-agent` (Go, separate 
 | `.Codex/agents/*.md` | Proactively-called agents |
 | `backend/migrations/` | All schema migrations (sequential) |
 | `~/.Codex/projects/-Users-louis/memory/reference_testbot_romerotechsolutions_stack.md` | Out-of-tree testbot config (fail2ban filters, sudoers, jail.local stanzas) |
+
+## Outside agents push here: fetch before you act (Louis, 2026-10-12)
+
+"There is a Muse agent running in the cloud that will occasionally do evolution updates of a given repo. We'll have to make sure to do fetches/pulls occasionally and not assume our main/branches are the most up-to-date." Always `git fetch` before every review, merge, branch cut, and subagent brief (state the base sha); re-fetch right before any push/merge/tag and STOP if the base moved. Never assume local main/branches are current — multiple agents and the prod host push here.
