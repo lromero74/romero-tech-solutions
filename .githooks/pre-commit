@@ -9,6 +9,11 @@
 # internal/freetier/trial.go that had been live in source for
 # ~6 months before being noticed during dead-code cleanup. Hook
 # would have caught it at commit time.
+# PURPOSE.md is a per-branch working note and must NEVER be committed (Louis 2026-11-01).
+if git diff --cached --name-only --diff-filter=ACMR | grep -qE '(^|/)PURPOSE\.md$'; then
+    echo "x PURPOSE.md must never be committed. Unstage it:  git reset HEAD -- PURPOSE.md" >&2
+    exit 1
+fi
 
 set -euo pipefail
 

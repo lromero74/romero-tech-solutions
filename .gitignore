@@ -77,3 +77,4 @@ backend/uploads/
 # Local-only working dirs (scratch outputs, outbound campaign drafts)
 outputs/
 outreach/
+PURPOSE.md
